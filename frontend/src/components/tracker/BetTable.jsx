@@ -92,7 +92,7 @@ function downloadCSV(bets) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `titibet-bets-${new Date().toISOString().slice(0, 10)}.csv`
+  a.download = `Qwantej-bets-${new Date().toISOString().slice(0, 10)}.csv`
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)

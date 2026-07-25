@@ -13,7 +13,7 @@ Why this matters:
 
 Usage:
   cd backend
-  python ../scripts/calibrate_market_bounds.py [--db titibet.db] [--min-samples 10] [--percentile 5]
+  python ../scripts/calibrate_market_bounds.py [--db Qwantej.db] [--min-samples 10] [--percentile 5]
 
 Output:
   Prints a Python dict suitable for copy-pasting into config.py.
@@ -30,7 +30,7 @@ from collections import defaultdict
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--db",          default="titibet.db", help="Path to SQLite DB (default: titibet.db)")
+    p.add_argument("--db",          default="Qwantej.db", help="Path to SQLite DB (default: Qwantej.db)")
     p.add_argument("--min-samples", type=int, default=10,  help="Minimum settled bets required per market (default: 10)")
     p.add_argument("--percentile",  type=int, default=5,   help="Tail percentile to cut (default: 5 → 5th–95th)")
     p.add_argument("--confidence",  default=None,           help="Filter to a specific confidence tier (High/Medium/Low)")
@@ -60,7 +60,7 @@ def main() -> None:
         conn = sqlite3.connect(args.db)
     except sqlite3.OperationalError as exc:
         print(f"ERROR: Cannot open database '{args.db}': {exc}", file=sys.stderr)
-        print("Run from the backend/ directory, or pass --db path/to/titibet.db", file=sys.stderr)
+        print("Run from the backend/ directory, or pass --db path/to/Qwantej.db", file=sys.stderr)
         sys.exit(1)
 
     conn.row_factory = sqlite3.Row

@@ -1,7 +1,7 @@
 ﻿"""
 poisson.py — Poisson probability engine.
 
-Ported from TiTiBet/src/utils/rules.js and probability.js.
+Ported from Qwantej/src/utils/rules.js and probability.js.
 
 The core innovation: lambda is derived from CS odds *ratios*, so the bookmaker's
 overround factor cancels out:

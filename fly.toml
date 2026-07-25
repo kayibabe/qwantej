@@ -1,9 +1,9 @@
-# fly.toml app configuration file generated for titibet on 2026-06-21T06:11:18Z
+﻿# fly.toml app configuration file generated for Qwantej on 2026-06-21T06:11:18Z
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'titibet'
+app = 'Qwantej'
 primary_region = 'jnb'
 
 [build]
@@ -12,12 +12,12 @@ primary_region = 'jnb'
     VITE_TELEGRAM_FREE_URL = "https://t.me/+my_LDCUEt8dlMTRk"
 
 [env]
-  CORS_ORIGINS = 'https://titibet.fly.dev,https://titibet.app,https://www.titibet.app'
-  DB_URL = 'sqlite+aiosqlite:////data/titibet.db'
+  CORS_ORIGINS = 'https://Qwantej.fly.dev,https://Qwantej.app,https://www.Qwantej.app'
+  DB_URL = 'sqlite+aiosqlite:////data/Qwantej.db'
   PORT = '8000'
   SKIP_STARTUP_SYNC = 'false'
   SYNC_TIMES = '04:00,19:00,23:00'
-  APP_URL = 'https://titibet.fly.dev'
+  APP_URL = 'https://Qwantej.fly.dev'
   # Persist the API-Football response cache on the volume so redeploys don't wipe it.
   API_CACHE_DIR = '/data/.cache/api_football'
   # Persist fitted ZINB/Glicko-2 models on the volume so redeploys/restarts don't
@@ -37,7 +37,7 @@ primary_region = 'jnb'
   MAX_LEAGUE_ODDS_CALLS = '25'
 
 [[mounts]]
-  source = 'titibet_data'
+  source = 'Qwantej_data'
   destination = '/data'
 
 [http_service]

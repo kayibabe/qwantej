@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect } from 'react';
 
-const STORAGE_KEY = 'titibet_onboarding_v1';
+const STORAGE_KEY = 'Qwantej_onboarding_v1';
 
 export function useOnboarding(user) {
   const [show, setShow] = useState(false);

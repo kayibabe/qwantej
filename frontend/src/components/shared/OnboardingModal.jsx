@@ -6,7 +6,7 @@ const TG_URL = import.meta.env.VITE_TELEGRAM_FREE_URL
 const BASE_STEPS = [
   {
     icon: TrendingUp,
-    title: 'Welcome to TiTiBet',
+    title: 'Welcome to Qwantej',
     body: 'We analyse live odds using two AI models (Bayesian + Poisson) to surface the highest-value football bets.',
     iconColor: 'text-indigo-400',
     iconBg: 'bg-indigo-500/15 border-indigo-500/30',
@@ -30,7 +30,7 @@ const BASE_STEPS = [
 const TG_STEP = {
   icon: Send,
   title: 'Get Picks on Telegram',
-  body: "Join TiTiBet Free on Telegram and receive today's top picks every morning — straight to your phone, before kickoff.",
+  body: "Join Qwantej Free on Telegram and receive today's top picks every morning — straight to your phone, before kickoff.",
   iconColor: 'text-sky-400',
   iconBg: 'bg-sky-500/15 border-sky-500/30',
   telegramUrl: TG_URL,
@@ -98,7 +98,7 @@ export default function OnboardingModal({ onComplete }) {
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-400 text-sm font-semibold hover:bg-sky-500/25 transition-colors -mt-1"
             >
               <Send size={14} />
-              Join TiTiBet Free on Telegram
+              Join Qwantej Free on Telegram
             </a>
           )}
 

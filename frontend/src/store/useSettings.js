@@ -21,7 +21,7 @@ function applyTheme(theme) {
 export function useSettings() {
   const [settings, setSettings] = useState(() => {
     try {
-      const saved = localStorage.getItem('titibet_settings')
+      const saved = localStorage.getItem('Qwantej_settings')
       const merged = saved ? { ...DEFAULTS, ...JSON.parse(saved) } : DEFAULTS
       applyTheme(merged.theme)
       return merged
@@ -31,7 +31,7 @@ export function useSettings() {
   })
 
   useEffect(() => {
-    localStorage.setItem('titibet_settings', JSON.stringify(settings))
+    localStorage.setItem('Qwantej_settings', JSON.stringify(settings))
     applyTheme(settings.theme)
   }, [settings])
 

@@ -36,7 +36,7 @@ from app.models.bet import TrackedBet
 from app.models.fixture import Fixture
 from app.models.learning_proposal import LearningProposal
 
-logger = logging.getLogger("titibet.strategy_pipeline")
+logger = logging.getLogger("Qwantej.strategy_pipeline")
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 

@@ -195,7 +195,7 @@ async def sync(
 # ── Track pick ────────────────────────────────────────────────────────────────
 
 import logging as _logging
-_track_log = _logging.getLogger("titibet.track_pick")
+_track_log = _logging.getLogger("Qwantej.track_pick")
 
 
 @router.post("/track-pick", response_model=BetOut)

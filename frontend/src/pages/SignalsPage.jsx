@@ -256,7 +256,7 @@ export default function SignalsPage({ settings, onDeepDive, onUpgrade, onNavigat
   const [filtersOpen, setFiltersOpen]   = useState(false)
   const [viewMode, setViewMode]         = useState('all') // 'all' | 'value_band'
 
-  const getSavedIds = () => { try { return JSON.parse(localStorage.getItem('titibet_saved_signals_v1') || '[]') } catch { return [] } }
+  const getSavedIds = () => { try { return JSON.parse(localStorage.getItem('Qwantej_saved_signals_v1') || '[]') } catch { return [] } }
   const [syncing, setSyncing]       = useState(false)
   const [computing, setComputing]   = useState(false)
   const [trackingSignal, setTrackingSignal] = useState(null)

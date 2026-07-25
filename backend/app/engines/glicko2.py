@@ -1,4 +1,4 @@
-"""
+﻿"""
 Glicko-2 team rating system.
 Ported from qsbip/models/ratings/glicko2.py.
 
@@ -7,7 +7,7 @@ Tracks three quantities per team:
   RD — rating deviation   (uncertainty; shrinks as more games played)
   σ  — volatility     (consistency; adapts to inconsistent performers)
 
-Used in titibet to compute a rating-difference feature (glicko_r_diff)
+Used in Qwantej to compute a rating-difference feature (glicko_r_diff)
 for each fixture, which augments signal quality scoring.
 RD naturally models injury absences and new-promoted teams.
 """

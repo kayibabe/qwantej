@@ -1,4 +1,4 @@
-"""
+﻿"""
 auto_tracker.py — Backend auto-tracking of system signals and ACCAs.
 
 Creates TrackedBet rows (user_id=None) for every qualifying signal on a date.
@@ -43,7 +43,7 @@ from app.services.acca_builder import (
     build_acca_candidates, build_accumulator, _ACCA_WIN_PROB_FLOOR,
 )
 
-logger = logging.getLogger("titibet.auto_tracker")
+logger = logging.getLogger("Qwantej.auto_tracker")
 
 FLAT_STAKE = 50_000.0
 

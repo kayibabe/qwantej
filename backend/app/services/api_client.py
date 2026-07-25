@@ -1,7 +1,7 @@
 ﻿"""
 api_client.py — API-Football HTTP client.
 
-Merged from FootBet api_client.py and TiTiBet api_football.py.
+Merged from FootBet api_client.py and Qwantej api_football.py.
 Fetches fixtures + all market types (CS, goals O/U, BTTS, 1X2, FH CS, corners).
 All market snapshot rows are stored flat for later engine processing.
 
@@ -28,7 +28,7 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 
-logger = logging.getLogger("titibet.api_client")
+logger = logging.getLogger("Qwantej.api_client")
 
 from app.core.config import get_settings
 

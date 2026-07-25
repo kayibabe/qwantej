@@ -1,8 +1,8 @@
-"""
+﻿"""
 settle_pending.py — Force-refresh stale fixtures and settle all Pending bets.
 
 Run from the backend/ directory with the virtual environment active:
-  cd D:\WebApps\titibet\backend
+  cd D:\WebApps\Qwantej\backend
   python ..\tools\settle_pending.py
 
 The script calls API-Football to get the actual match results for every

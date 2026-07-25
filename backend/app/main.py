@@ -31,7 +31,7 @@ from app.scheduler import get_scheduler
 import app.models.user  # noqa: F401 — ensures users table is created by init_db
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
-logger = logging.getLogger("titibet")
+logger = logging.getLogger("Qwantej")
 settings = get_settings()
 
 
@@ -106,7 +106,7 @@ async def lifespan(app: FastAPI):
 
     scheduler = get_scheduler()
     scheduler.start()
-    logger.info("TiTiBet starting up — scheduler running %d jobs", len(scheduler.get_jobs()))
+    logger.info("Qwantej starting up — scheduler running %d jobs", len(scheduler.get_jobs()))
 
     # Run the startup sync (catch-up settlement + today's ingestion + signal compute)
     # in the background so it never blocks app startup or health checks. startup_sync
@@ -253,10 +253,10 @@ async def lifespan(app: FastAPI):
 
     yield
     scheduler.shutdown(wait=False)
-    logger.info("TiTiBet shut down.")
+    logger.info("Qwantej shut down.")
 
 
-app = FastAPI(title="TiTiBet", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Qwantej", version="1.0.0", lifespan=lifespan)
 
 # Order matters: CORS first so preflight OPTIONS requests are handled before auth check.
 app.add_middleware(

@@ -35,7 +35,7 @@ class Signal(Base):
     bayesian_odds_outlier: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     bayesian_consensus_odd: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
-    # ── Poisson engine outputs (ported from TiTiBet rules.js) ──
+    # ── Poisson engine outputs (ported from Qwantej rules.js) ──
     poisson_lambda_h: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     poisson_lambda_a: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     poisson_lambda_total: Mapped[Optional[float]] = mapped_column(Float, nullable=True)

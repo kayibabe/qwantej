@@ -1,6 +1,6 @@
 ﻿"""
 settlement.py — Auto-settlement for tracked bets based on match scores.
-Ported from TiTiBet settlement.py. Supports all active markets.
+Ported from Qwantej settlement.py. Supports all active markets.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Fixture, TrackedBet
 
-logger = logging.getLogger("titibet.settlement")
+logger = logging.getLogger("Qwantej.settlement")
 
 # Imported lazily (inside settle_bets_for_date) to avoid circular imports.
 # Computes closing odds + CLV for each just-settled bet from market_snapshots.

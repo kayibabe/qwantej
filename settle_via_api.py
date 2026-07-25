@@ -1,5 +1,5 @@
-"""
-Calls the running TiTiBet API to:
+﻿"""
+Calls the running Qwantej API to:
 1. Sync June 1-2 fixtures (within free plan window)
 2. Mark completed May fixtures as FT in the DB (direct fix)
 3. Run settlement
@@ -30,7 +30,7 @@ headers = {"Authorization": f"Bearer {token}"} if token else {}
 
 # ── Step 2: Fix May fixtures with scores but non-final status ─────────────────
 p("\nStep 2: Fixing May fixtures with scores but non-final status...")
-DB = r'D:\WebApps\titibet\backend\titibet.db'
+DB = r'D:\WebApps\Qwantej\backend\Qwantej.db'
 # Note: this will fail if server has exclusive lock. Try anyway.
 try:
     con = sqlite3.connect(DB, timeout=5)

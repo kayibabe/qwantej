@@ -1,11 +1,11 @@
-import ast, sys
+﻿import ast, sys
 
 files = [
-    r'D:\WebApps\titibet\backend\app\services\signal_engine.py',
-    r'D:\WebApps\titibet\backend\app\core\config.py',
-    r'D:\WebApps\titibet\backend\app\services\strategy_tracker.py',
-    r'D:\WebApps\titibet\backend\app\routers\signals.py',
-    r'D:\WebApps\titibet\backend\app\scheduler.py',
+    r'D:\WebApps\Qwantej\backend\app\services\signal_engine.py',
+    r'D:\WebApps\Qwantej\backend\app\core\config.py',
+    r'D:\WebApps\Qwantej\backend\app\services\strategy_tracker.py',
+    r'D:\WebApps\Qwantej\backend\app\routers\signals.py',
+    r'D:\WebApps\Qwantej\backend\app\scheduler.py',
 ]
 ok = True
 for f in files:

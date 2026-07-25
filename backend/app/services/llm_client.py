@@ -1,9 +1,9 @@
-"""
+﻿"""
 llm_client.py — Shared multi-provider LLM client for pipeline agents.
 
 Provider cascade for analysis pipelines (loss analysis + strategy):
   1. Groq        — GROQ_API_KEY           — primary free fast Llama inference
-  2. Claude      — TITIBET_CLAUDE_KEY      — highest quality, paid
+  2. Claude      — Qwantej_CLAUDE_KEY      — highest quality, paid
   3. Gemini      — GEMINI_API_KEY          — free, no card required
   4. Cerebras    — CEREBRAS_API_KEY        — free, very fast Llama
   5. Mistral     — MISTRAL_API_KEY         — free open-mistral-nemo
@@ -91,7 +91,7 @@ async def call_llm(
 
     keys = {
         "groq":     settings.groq_api_key,
-        "claude":   settings.titibet_claude_key,
+        "claude":   settings.Qwantej_claude_key,
         "gemini":   settings.gemini_api_key,
         "cerebras": settings.cerebras_api_key,
         "mistral":  settings.mistral_api_key,

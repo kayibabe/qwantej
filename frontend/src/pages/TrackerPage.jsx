@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+﻿import React, { useState, useEffect, useMemo } from 'react'
 import { RefreshCw, CheckCircle, TrendingUp, Lock, Upload, Settings2, Bot, User, Layers, ListChecks, ArrowRight, FileUp } from 'lucide-react'
 import { useTracker } from '../store/useTracker'
 import { syncData, computeCLV, deduplicateBets, normalizeStakes } from '../api/tracker'
@@ -457,7 +457,7 @@ export default function TrackerPage({ user, settings, onUpgrade }) {
           <div>
             <h2 className="text-lg font-bold text-[var(--text-h)] mb-2">No picks tracked yet</h2>
             <p className="text-sm text-[var(--text)] opacity-65 max-w-sm leading-relaxed">
-              Track a signal and TiTiBet records the odds, monitors the result, and builds your P&amp;L history automatically.
+              Track a signal and Qwantej records the odds, monitors the result, and builds your P&amp;L history automatically.
             </p>
           </div>
           <ol className="flex flex-col sm:flex-row items-stretch gap-3 w-full max-w-sm">
@@ -475,7 +475,7 @@ export default function TrackerPage({ user, settings, onUpgrade }) {
           </ol>
           <div className="flex items-center gap-3 flex-wrap justify-center">
             <button
-              onClick={() => window.dispatchEvent(new CustomEvent('titibet:navigate', { detail: 'signals' }))}
+              onClick={() => window.dispatchEvent(new CustomEvent('Qwantej:navigate', { detail: 'signals' }))}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[var(--accent)] hover:opacity-90 text-white text-sm font-semibold transition-opacity"
             >
               Go to Signals

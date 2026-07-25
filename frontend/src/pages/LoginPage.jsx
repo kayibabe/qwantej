@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -34,8 +34,8 @@ export default function LoginPage({ onSwitch, onForgot, onBack }) {
         <div className="mb-8 text-center">
           <div className="flex flex-col items-center gap-1 mb-1">
             <div className="flex items-center justify-center gap-2">
-              <img src="/falcon.png" alt="TiTiBet" style={{ width: '44px', height: '44px', objectFit: 'contain' }} />
-              <span className="text-2xl font-bold text-[var(--text-h)] tracking-tight">TiTiBet</span>
+              <img src="/falcon.png" alt="Qwantej" style={{ width: '44px', height: '44px', objectFit: 'contain' }} />
+              <span className="text-2xl font-bold text-[var(--text-h)] tracking-tight">Qwantej</span>
             </div>
             <span className="block text-[10px] text-[var(--accent)] font-semibold tracking-widest uppercase opacity-80">
               Intelligence Platform

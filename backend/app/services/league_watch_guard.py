@@ -1,4 +1,4 @@
-"""
+﻿"""
 league_watch_guard.py — Automated league performance monitoring.
 
 Checks leagues in LEAGUE_WATCHLIST against BacktestResult and TrackedBet history.
@@ -32,7 +32,7 @@ from app.core.config import (
 )
 from app.models.learning_proposal import LearningProposal
 
-logger = logging.getLogger("titibet.watch_guard")
+logger = logging.getLogger("Qwantej.watch_guard")
 
 _CHANGE_TYPE = "league_suppression"
 

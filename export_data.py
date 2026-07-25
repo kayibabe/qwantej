@@ -1,4 +1,4 @@
-"""
+﻿"""
 Exports users and tracked_bets from the local DB as SQL INSERT statements,
 then prints a base64-encoded string you can paste into the VM via SSH.
 
@@ -8,7 +8,7 @@ import base64
 import sqlite3
 from pathlib import Path
 
-DB = Path("backend/titibet.db")
+DB = Path("backend/Qwantej.db")
 OUT = Path("seed_data.sql")
 
 conn = sqlite3.connect(str(DB))
@@ -54,4 +54,4 @@ print(f"\nWritten to {OUT} ({len(sql):,} bytes)")
 b64 = base64.b64encode(sql.encode()).decode()
 print(f"Base64 length: {len(b64)} chars\n")
 print("=== RUN THIS ON THE VM ===")
-print(f'python3 -c "import base64,sqlite3; sql=base64.b64decode(\'{b64}\').decode(); conn=sqlite3.connect(\'/data/titibet.db\'); conn.executescript(sql); conn.close(); print(\'done\')"')
+print(f'python3 -c "import base64,sqlite3; sql=base64.b64decode(\'{b64}\').decode(); conn=sqlite3.connect(\'/data/Qwantej.db\'); conn.executescript(sql); conn.close(); print(\'done\')"')

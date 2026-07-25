@@ -203,7 +203,7 @@ export default function AccountPage({ onUpgrade }) {
           </p>
           <div className="flex flex-col gap-2">
             <a
-              href="https://t.me/TiTiBetFree"
+              href="https://t.me/QwantejFree"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-[var(--border)] text-sm font-medium text-[var(--text-h)] hover:bg-[var(--code-bg)] transition-colors w-fit"
@@ -213,7 +213,7 @@ export default function AccountPage({ onUpgrade }) {
             </a>
             {!isFree && (
               <a
-                href="https://t.me/TiTiBetPro"
+                href="https://t.me/QwantejPro"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-[var(--border)] text-sm font-medium text-[var(--text-h)] hover:bg-[var(--code-bg)] transition-colors w-fit"

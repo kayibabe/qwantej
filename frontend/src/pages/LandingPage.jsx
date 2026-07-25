@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import {
   TrendingUp, Shield, Zap, BarChart3, CheckCircle, Lock,
   ChevronRight, Clock, Trophy, Globe, Users, Activity,
@@ -209,7 +209,7 @@ function LandingNav({ onSignIn, onSignUp }) {
           <div className="w-7 h-7 rounded-lg bg-purple-500/30 border border-purple-500/40 flex items-center justify-center">
             <TrendingUp className="w-4 h-4 text-purple-400" />
           </div>
-          <span className="font-bold text-white text-base tracking-tight">TiTiBet</span>
+          <span className="font-bold text-white text-base tracking-tight">Qwantej</span>
         </div>
 
         {/* Desktop links */}
@@ -503,7 +503,7 @@ export default function LandingPage({ onSignIn, onSignUp }) {
                 <div className="w-6 h-6 rounded-md bg-purple-500/30 border border-purple-500/40 flex items-center justify-center">
                   <TrendingUp className="w-3.5 h-3.5 text-purple-400" />
                 </div>
-                <span className="font-bold text-white text-sm">TiTiBet</span>
+                <span className="font-bold text-white text-sm">Qwantej</span>
               </div>
               <p className="text-xs text-white/30 leading-relaxed max-w-[200px]">
                 AI-powered football signals built on data, not hype.
@@ -544,9 +544,9 @@ export default function LandingPage({ onSignIn, onSignUp }) {
           </div>
 
           <div className="border-t border-white/8 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <p className="text-[10px] text-white/20">© 2025 TiTiBet. All rights reserved.</p>
+            <p className="text-[10px] text-white/20">© 2025 Qwantej. All rights reserved.</p>
             <p className="text-[10px] text-white/20 text-center sm:text-right max-w-md">
-              TiTiBet provides statistical analysis only. Not financial or betting advice. Gamble responsibly. 18+ only.
+              Qwantej provides statistical analysis only. Not financial or betting advice. Gamble responsibly. 18+ only.
             </p>
           </div>
         </div>

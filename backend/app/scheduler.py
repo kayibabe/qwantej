@@ -45,7 +45,7 @@ from app.services.telegram import (
     push_ingestion_alert,
 )
 
-logger = logging.getLogger("titibet.scheduler")
+logger = logging.getLogger("Qwantej.scheduler")
 settings = get_settings()
 
 _scheduler: AsyncIOScheduler | None = None

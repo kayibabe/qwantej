@@ -9,7 +9,7 @@ import path from 'path'
  *
  * public/sw.js uses the placeholder string '__SW_VERSION__'.
  * After Vite copies public/ to dist/, this plugin overwrites dist/sw.js
- * with the placeholder replaced by 'titibet-<epoch-ms>'.
+ * with the placeholder replaced by 'Qwantej-<epoch-ms>'.
  *
  * Effect: every `npm run build` auto-bumps the service-worker cache version,
  * so browsers always pick up the new assets without a hard refresh.
@@ -23,7 +23,7 @@ function swVersion() {
     closeBundle() {
       const swPath = path.resolve(__dirname, 'dist', 'sw.js')
       if (!fs.existsSync(swPath)) return
-      const version = `titibet-${Date.now()}`
+      const version = `Qwantej-${Date.now()}`
       const content = fs.readFileSync(swPath, 'utf8')
       // Match the quoted JS string literal: const CACHE_VERSION = '__SW_VERSION__'
       const updated = content.replace("'__SW_VERSION__'", `'${version}'`)

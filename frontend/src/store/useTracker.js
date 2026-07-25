@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+﻿import { useState, useEffect, useCallback, useRef } from 'react'
 import { fetchBets } from '../api/tracker'
 
 // Module-level cache — survives component unmount/remount (page navigation).
@@ -9,7 +9,7 @@ let _listeners = []
 // ── sessionStorage hydration ──────────────────────────────────────────────────
 // Seed the in-memory cache from the previous session so the tracker shows
 // data immediately on page reload instead of a blank spinner.
-const _STORAGE_KEY  = 'titibet_bets_cache'
+const _STORAGE_KEY  = 'Qwantej_bets_cache'
 const _STORAGE_TTL  = 10 * 60 * 1000   // treat stored bets as fresh for 10 min
 try {
   const raw = sessionStorage.getItem(_STORAGE_KEY)

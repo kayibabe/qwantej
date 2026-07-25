@@ -64,7 +64,7 @@ def _base_html(title: str, body: str) -> str:
              style="background:#1a1d27;border-radius:12px;border:1px solid #2d3148;overflow:hidden">
         <tr>
           <td style="background:#4f46e5;padding:20px 32px">
-            <span style="color:#fff;font-size:20px;font-weight:700;letter-spacing:-0.5px">TiTiBet</span>
+            <span style="color:#fff;font-size:20px;font-weight:700;letter-spacing:-0.5px">Qwantej</span>
             <span style="color:#a5b4fc;font-size:11px;margin-left:8px;text-transform:uppercase;letter-spacing:2px">Intelligence Platform</span>
           </td>
         </tr>
@@ -72,7 +72,7 @@ def _base_html(title: str, body: str) -> str:
         <tr>
           <td style="padding:16px 32px;border-top:1px solid #2d3148">
             <p style="color:#64748b;font-size:11px;margin:0">
-              TiTiBet · Value Betting Intelligence Platform · Malawi<br>
+              Qwantej · Value Betting Intelligence Platform · Malawi<br>
               This email was sent to {"{email}"}. If you didn't expect it, you can ignore it.
             </p>
           </td>
@@ -95,21 +95,21 @@ async def send_welcome(to: str, name: str) -> None:
       <div style="margin-top:24px;padding:16px 20px;background:#0f172a;border:1px solid #1e3a5f;border-radius:8px">
         <p style="color:#e2e8f0;font-weight:600;margin:0 0 6px">📲 Get free daily picks on Telegram</p>
         <p style="color:#94a3b8;font-size:13px;margin:0 0 14px;line-height:1.5">
-          Join <strong style="color:#e2e8f0">TiTiBet Free</strong> on Telegram to receive today's
+          Join <strong style="color:#e2e8f0">Qwantej Free</strong> on Telegram to receive today's
           top picks every morning — straight to your phone.
         </p>
         <a href="{s.telegram_free_invite_url}"
            style="display:inline-block;padding:10px 22px;background:#229ED9;color:#fff;
                   border-radius:8px;text-decoration:none;font-weight:600;font-size:13px">
-          Join TiTiBet Free on Telegram →
+          Join Qwantej Free on Telegram →
         </a>
       </div>"""
-        telegram_text = f"\n\nJoin TiTiBet Free on Telegram for daily picks: {s.telegram_free_invite_url}"
+        telegram_text = f"\n\nJoin Qwantej Free on Telegram for daily picks: {s.telegram_free_invite_url}"
 
     body_html = f"""
       <h2 style="color:#e2e8f0;margin:0 0 16px">Welcome, {display}! 🎯</h2>
       <p style="color:#94a3b8;line-height:1.6">
-        Your TiTiBet account is ready. You're on the <strong style="color:#e2e8f0">Free</strong> plan —
+        Your Qwantej account is ready. You're on the <strong style="color:#e2e8f0">Free</strong> plan —
         explore value signals, track bets, and run backtests.
       </p>
       <p style="color:#94a3b8;line-height:1.6;margin-top:12px">
@@ -118,19 +118,19 @@ async def send_welcome(to: str, name: str) -> None:
       </p>{telegram_block}
       <a href="{s.app_url}" style="display:inline-block;margin-top:24px;padding:12px 28px;
          background:#4f46e5;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">
-        Open TiTiBet
+        Open Qwantej
       </a>
     """
-    body_text = f"Welcome to TiTiBet, {display}!\n\nYour account is ready. Visit {s.app_url} to get started.{telegram_text}"
-    html = _base_html("Welcome to TiTiBet", body_html).replace("{email}", to)
-    await send_email(to, "Welcome to TiTiBet 🎯", html, body_text)
+    body_text = f"Welcome to Qwantej, {display}!\n\nYour account is ready. Visit {s.app_url} to get started.{telegram_text}"
+    html = _base_html("Welcome to Qwantej", body_html).replace("{email}", to)
+    await send_email(to, "Welcome to Qwantej 🎯", html, body_text)
 
 
 async def send_password_reset(to: str, reset_url: str) -> None:
     body_html = f"""
       <h2 style="color:#e2e8f0;margin:0 0 16px">Reset your password</h2>
       <p style="color:#94a3b8;line-height:1.6">
-        We received a request to reset your TiTiBet password.
+        We received a request to reset your Qwantej password.
         Click the button below — the link expires in <strong style="color:#e2e8f0">1 hour</strong>.
       </p>
       <a href="{reset_url}" style="display:inline-block;margin-top:24px;padding:12px 28px;
@@ -141,9 +141,9 @@ async def send_password_reset(to: str, reset_url: str) -> None:
         If you didn't request this, ignore this email — your password won't change.
       </p>
     """
-    body_text = f"Reset your TiTiBet password:\n\n{reset_url}\n\nThis link expires in 1 hour."
-    html = _base_html("Reset your TiTiBet password", body_html).replace("{email}", to)
-    await send_email(to, "Reset your TiTiBet password", html, body_text)
+    body_text = f"Reset your Qwantej password:\n\n{reset_url}\n\nThis link expires in 1 hour."
+    html = _base_html("Reset your Qwantej password", body_html).replace("{email}", to)
+    await send_email(to, "Reset your Qwantej password", html, body_text)
 
 
 async def send_payment_confirmation(to: str, name: str, tier: str, expires_at: str) -> None:
@@ -167,4 +167,4 @@ async def send_payment_confirmation(to: str, name: str, tier: str, expires_at: s
     """
     body_text = f"Hi {display}, your {tier_cap} subscription is active until {expires_at}. Visit {s.app_url}"
     html = _base_html(f"You're on {tier_cap}!", body_html).replace("{email}", to)
-    await send_email(to, f"TiTiBet {tier_cap} subscription activated ✅", html, body_text)
+    await send_email(to, f"Qwantej {tier_cap} subscription activated ✅", html, body_text)

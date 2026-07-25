@@ -114,12 +114,12 @@ export default function AppShell({ activePage, onNavigate, children }) {
           <div className="shrink-0 w-9 h-9">
             <img
               src="/falcon.png"
-              alt="TiTiBet"
+              alt="Qwantej"
               className="w-full h-full object-contain"
             />
           </div>
           <div className="leading-none">
-            <span className="text-base font-bold text-[var(--text-h)] tracking-tight">TiTiBet</span>
+            <span className="text-base font-bold text-[var(--text-h)] tracking-tight">Qwantej</span>
             <span className="block text-[10px] text-[var(--accent)] font-semibold tracking-widest uppercase mt-0.5 opacity-80">
               Intelligence Platform
             </span>

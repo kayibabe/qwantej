@@ -1,5 +1,5 @@
-"""
-Uploads titibet.db to the Fly.io volume in chunks.
+﻿"""
+Uploads Qwantej.db to the Fly.io volume in chunks.
 Compresses with gzip first (330 MB → ~50 MB).
 Run from the project root: python upload_db.py
 """
@@ -11,10 +11,10 @@ import time
 import tempfile
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent / "backend" / "titibet.db"
-APP = "titibet"
+DB_PATH = Path(__file__).parent / "backend" / "Qwantej.db"
+APP = "Qwantej"
 MACHINE_ID = "9185dd66f652e8"
-REMOTE = "/data/titibet.db"
+REMOTE = "/data/Qwantej.db"
 CHUNK_SIZE = 20 * 1024 * 1024  # 20 MB per chunk
 MAX_RETRIES = 5
 
@@ -61,7 +61,7 @@ else:
 
 # Always wipe old parts before starting
 print("Clearing old part files from VM...")
-ssh("find /data -name 'titibet.db.part*' -delete 2>/dev/null; echo cleared")
+ssh("find /data -name 'Qwantej.db.part*' -delete 2>/dev/null; echo cleared")
 time.sleep(2)
 
 # Upload chunks
@@ -70,7 +70,7 @@ print(f"Uploading {n} chunks...", flush=True)
 
 with tempfile.TemporaryDirectory() as tmp:
     for i in range(n):
-        name = f"titibet.db.part{i:03d}"
+        name = f"Qwantej.db.part{i:03d}"
         remote_path = f"/data/{name}"
         start = i * CHUNK_SIZE
         chunk_data = data[start : start + CHUNK_SIZE]
@@ -93,17 +93,17 @@ with tempfile.TemporaryDirectory() as tmp:
 
 # Verify parts exist on VM
 print("Verifying parts on VM...")
-out = ssh("ls -la /data/titibet.db.part* 2>&1")
+out = ssh("ls -la /data/Qwantej.db.part* 2>&1")
 print(out.strip())
 
 # Concatenate and decompress using Python on the VM (avoids shell escaping issues)
 print("Concatenating and decompressing on VM...")
 py = (
     "import gzip, pathlib; "
-    "parts = sorted(pathlib.Path('/data').glob('titibet.db.part*')); "
+    "parts = sorted(pathlib.Path('/data').glob('Qwantej.db.part*')); "
     "print(f'Found {len(parts)} parts'); "
     "data = b''.join(p.read_bytes() for p in parts); "
-    "pathlib.Path('/data/titibet.db').write_bytes(gzip.decompress(data)); "
+    "pathlib.Path('/data/Qwantej.db').write_bytes(gzip.decompress(data)); "
     "[p.unlink() for p in parts]; "
     "print('done')"
 )
@@ -123,4 +123,4 @@ if check != "ok":
 
 print("Restarting machine...")
 subprocess.run(["flyctl", "machine", "restart", MACHINE_ID])
-print("Done! Visit https://titibet.fly.dev")
+print("Done! Visit https://Qwantej.fly.dev")

@@ -35,7 +35,7 @@ from app.core.config import get_league_tier, DISABLED_LEAGUES
 from app.models import Fixture, MarketSnapshot, IngestionRun
 from app.services import api_client
 
-logger = logging.getLogger("titibet.ingestion")
+logger = logging.getLogger("Qwantej.ingestion")
 
 FINAL_STATUSES = {"FT", "AET", "PEN"}
 

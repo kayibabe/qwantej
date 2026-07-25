@@ -1,5 +1,5 @@
 ﻿/**
- * TiTiBet Service Worker
+ * Qwantej Service Worker
  *
  * Strategy:
  *  - /api/*         → Network-only (never cache live data)

@@ -1,10 +1,10 @@
-"""
-telegram.py — Telegram Bot integration for TiTiBet signal alerts.
+﻿"""
+telegram.py — Telegram Bot integration for Qwantej signal alerts.
 
 Pushes signal digests to two named channels after every sync:
 
-  TiTiBet Free     — limited/blurred teaser of the day's picks
-  TiTiBet Pro      — top-ranked signals, full detail
+  Qwantej Free     — limited/blurred teaser of the day's picks
+  Qwantej Pro      — top-ranked signals, full detail
 
 Setup
 -----
@@ -41,7 +41,7 @@ from app.models import Signal, Fixture
 from app.models.bet import TrackedBet
 from app.services.signal_engine import _get_underperforming_leagues, get_learned_market_ceilings
 
-logger   = logging.getLogger("titibet.telegram")
+logger   = logging.getLogger("Qwantej.telegram")
 settings = get_settings()
 
 TELEGRAM_API = "https://api.telegram.org"
@@ -308,7 +308,7 @@ async def push_kickoff_alerts(db: AsyncSession) -> int:
     """
     if not settings.telegram_bot_token:
         return 0
-    targets = _configured_titibet_channels()
+    targets = _configured_Qwantej_channels()
     if not targets:
         return 0
 
@@ -355,7 +355,7 @@ async def push_kickoff_alerts(db: AsyncSession) -> int:
         try:
             ok = await _send_to(chat_id, text)
         except Exception as _exc:
-            logger.warning('TiTiBet Telegram [%s] send failed: %s', channel_type, _exc)
+            logger.warning('Qwantej Telegram [%s] send failed: %s', channel_type, _exc)
             ok = False
         if ok:
             sent += 1
@@ -513,8 +513,8 @@ async def _query_tracked_acca(db: AsyncSession, run_date: date) -> dict | None:
         return None
 
 
-def _configured_titibet_channels() -> list[tuple[str, str]]:
-    """Return (chat_id, channel_type) pairs for the two named TiTiBet channels."""
+def _configured_Qwantej_channels() -> list[tuple[str, str]]:
+    """Return (chat_id, channel_type) pairs for the two named Qwantej channels."""
     channels: list[tuple[str, str]] = []
     if settings.telegram_free_chat_id:
         channels.append((settings.telegram_free_chat_id, "free"))
@@ -637,7 +637,7 @@ def build_signal_digest(
     is_free = channel_type == "free"
     reveal_fixture_ids = reveal_fixture_ids or set()
     now = now or datetime.now(tz=timezone.utc)
-    title = "TiTiBet Free — Tonight &amp; Overnight" if is_free else "TiTiBet Pro — Tonight &amp; Overnight"
+    title = "Qwantej Free — Tonight &amp; Overnight" if is_free else "Qwantej Pro — Tonight &amp; Overnight"
 
     parts = [
         f"🌙 <b>{title}</b>",
@@ -699,7 +699,7 @@ async def push_signal_digest(db: AsyncSession, free_reveal_count: int = FREE_REV
     """
     if not settings.telegram_bot_token:
         return 0
-    targets = _configured_titibet_channels()
+    targets = _configured_Qwantej_channels()
     if not targets:
         return 0
 
@@ -808,7 +808,7 @@ def build_tomorrow_message(
     """
     is_free = channel_type == "free"
     reveal_fixture_ids = reveal_fixture_ids or set()
-    title = "TiTiBet Free" if is_free else "TiTiBet Pro"
+    title = "Qwantej Free" if is_free else "Qwantej Pro"
     date_label = run_date.strftime("%a %d %b %Y")
     if rows:
         subtitle = f"Full slate for tomorrow · {len(rows)} pick{'s' if len(rows) != 1 else ''} · place your bets tonight"
@@ -865,7 +865,7 @@ def build_tomorrow_message(
 async def push_tomorrow_digest(db: AsyncSession, run_date: date | None = None) -> int:
     """
     Broadcast tomorrow's full single-match slate plus the AI Advisory's Acca-of-
-    the-Day to TiTiBet Free and Pro. Called by the 19:00 UTC (21:00 CAT) evening
+    the-Day to Qwantej Free and Pro. Called by the 19:00 UTC (21:00 CAT) evening
     sync job, after tomorrow's fixtures/odds/signals are ingested and the advisory
     cache is warmed. Pro sees everything in clear; Free sees `FREE_REVEAL_COUNT`
     randomly chosen matches revealed, the rest hidden with a non-revealable
@@ -874,7 +874,7 @@ async def push_tomorrow_digest(db: AsyncSession, run_date: date | None = None) -
     """
     if not settings.telegram_bot_token:
         return 0
-    targets = [(cid, ct) for cid, ct in _configured_titibet_channels() if ct in ("free", "pro")]
+    targets = [(cid, ct) for cid, ct in _configured_Qwantej_channels() if ct in ("free", "pro")]
     if not targets:
         return 0
 
@@ -950,7 +950,7 @@ def build_value_band_message(
     date_label = run_date.strftime("%a %d %b %Y")
     count = len(rows)
     parts = [
-        f"◆ <b>TiTiBet Pro — Value Band Picks</b>",
+        f"◆ <b>Qwantej Pro — Value Band Picks</b>",
         f"<i>{date_label} · {count} pick{'s' if count != 1 else ''} · Poisson edge at 1.65–2.09 · 91–98% WR historically</i>",
     ]
     for i, (sig, fix) in enumerate(rows, 1):
@@ -1157,7 +1157,7 @@ def build_results_message(
     hit_rate = round(won / (won + lost) * 100) if (won + lost) > 0 else 0
 
     parts = [
-        f"📊 <b>TiTiBet — Results</b>",
+        f"📊 <b>Qwantej — Results</b>",
         f"<i>{date_label} · {total} picks · Hit rate: {hit_rate}%</i>",
     ]
 
@@ -1222,7 +1222,7 @@ async def push_results_report(
     """
     if not settings.telegram_bot_token:
         return False
-    channels = _configured_titibet_channels()
+    channels = _configured_Qwantej_channels()
     if not channels:
         return False
 
@@ -1309,7 +1309,7 @@ async def push_morning_digest(db: AsyncSession, free_reveal_count: int = FREE_RE
     """
     if not settings.telegram_bot_token:
         return 0
-    targets = _configured_titibet_channels()
+    targets = _configured_Qwantej_channels()
     if not targets:
         return 0
 
@@ -1357,7 +1357,7 @@ async def push_morning_digest(db: AsyncSession, free_reveal_count: int = FREE_RE
         if evening_sent:
             # Confirmation mode: replace header to signal this is a refreshed confirmation,
             # not a new announcement. ACCA is still included (updated by stale-odds guard).
-            title_key = "TiTiBet Free" if channel_type == "free" else "TiTiBet Pro"
+            title_key = "Qwantej Free" if channel_type == "free" else "Qwantej Pro"
             text = text.replace(
                 f"🌙 <b>{title_key} — Tonight &amp; Overnight</b>",
                 f"✅ <b>{title_key} — Today's Picks Confirmed · {date_label}</b>",

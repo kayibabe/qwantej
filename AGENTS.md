@@ -1,10 +1,10 @@
-﻿# TiTiBet — Codex Agent Context
+﻿# Qwantej — Codex Agent Context
 
 This file gives any Codex agent (or new session) instant full context. Read it before touching any code.
 
 ## What this project is
 
-TiTiBet is a football betting signals platform. It ingests live fixture and odds data from API-Football, runs two probabilistic models (Bayesian + Poisson) to generate signals, scores and ranks them, and surfaces the best picks to subscribers via a React web app. A self-learning pipeline analyses settled losses, detects patterns, and proposes threshold adjustments that are validated by a backtester before being written to the DB.
+Qwantej is a football betting signals platform. It ingests live fixture and odds data from API-Football, runs two probabilistic models (Bayesian + Poisson) to generate signals, scores and ranks them, and surfaces the best picks to subscribers via a React web app. A self-learning pipeline analyses settled losses, detects patterns, and proposes threshold adjustments that are validated by a backtester before being written to the DB.
 
 ---
 
@@ -26,7 +26,7 @@ TiTiBet is a football betting signals platform. It ingests live fixture and odds
 ## Directory layout
 
 ```
-titibet/
+Qwantej/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py              # FastAPI app, middleware, router mounts, lifespan
@@ -67,7 +67,7 @@ titibet/
 │   │       ├── analytics.py             # ROI, CLV, streak, market breakdown stats
 │   │       ├── clv.py                   # Closing Line Value helpers (_BET_TO_SELECTION, _MARKET_TYPE_SCOPE)
 │   │       ├── accumulator_generator.py # Builds recommended accumulator tickets from signals
-│   │       ├── recommended_tickets.py   # load_titibet_tickets — General, Free, Pro named tickets
+│   │       ├── recommended_tickets.py   # load_Qwantej_tickets — General, Free, Pro named tickets
 │   │       ├── loss_analysis_agent.py   # 4-agent AI pipeline (Loss Analyst → Pattern Detector → Threshold Tuner → Backtester)
 │   │       ├── performance_intelligence.py # Soft-overlay constants for signal scoring
 │   │       ├── backtester.py            # Historical signal backtest runner
@@ -200,7 +200,7 @@ mv .git/HEAD.lock .git/HEAD.lock.bak
 
 **Committing from CMD** (Desktop Commander shell, since bash can't delete lock files):
 ```cmd
-D: && cd WebApps\titibet && git add -A && git commit -F commitmsg.txt
+D: && cd WebApps\Qwantej && git add -A && git commit -F commitmsg.txt
 ```
 Write commit message to `commitmsg.txt` first — CMD mangles `-m "..."` with colons/dots.
 
@@ -211,7 +211,7 @@ Write commit message to `commitmsg.txt` first — CMD mangles `-m "..."` with co
 ## Environment variables (backend/.env)
 
 ```
-DATABASE_URL=sqlite+aiosqlite:///./titibet.db
+DATABASE_URL=sqlite+aiosqlite:///./Qwantej.db
 JWT_SECRET=<secret>
 JWT_ALGORITHM=HS256
 API_FOOTBALL_KEY=<key>

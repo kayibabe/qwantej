@@ -561,13 +561,13 @@ function ExplainPanel({ fixtureId, market, onClose }) {
 }
 
 
-const SAVED_KEY = 'titibet_saved_signals_v1'
+const SAVED_KEY = 'Qwantej_saved_signals_v1'
 const getSaved = () => { try { return JSON.parse(localStorage.getItem(SAVED_KEY) || '[]') } catch { return [] } }
 
 // ── Main card ─────────────────────────────────────────────────────────────────
 // Persist engine-breakdown open/closed across cards for the session, so power
 // users who want the math don't have to re-open it on every card.
-const ENGINE_OPEN_KEY = 'titibet_engine_breakdown_open_v1'
+const ENGINE_OPEN_KEY = 'Qwantej_engine_breakdown_open_v1'
 const getEngineOpen = () => { try { return sessionStorage.getItem(ENGINE_OPEN_KEY) === '1' } catch { return false } }
 
 export default function SignalCard({ signal, rank, isPro = true, isTracked = false, isAutoTracked = false, onTrackPick, onDeepDive }) {

@@ -1,4 +1,4 @@
-"""
+﻿"""
 ZINB — Zero-Inflated Negative Binomial Goal Model.
 Ported from qsbip/models/goal_model/zinb.py.
 
@@ -8,7 +8,7 @@ forgetting down-weights older matches (decay_rate per week).
 
 Falls back gracefully if scipy/numpy are unavailable or data is insufficient.
 
-Usage in titibet:
+Usage in Qwantej:
     model = ZINBGoalModel()
     model.fit(matches)                         # list of dicts from DB
     mu_h, mu_a = model.predict_goals(home_id, away_id)

@@ -33,7 +33,7 @@ export default function ForgotPasswordPage({ onBack }) {
     <div className="min-h-screen flex items-center justify-center bg-[var(--bg-page)] px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-[var(--text-h)]">TiTiBet</h1>
+          <h1 className="text-2xl font-bold text-[var(--text-h)]">Qwantej</h1>
           <p className="text-sm text-[var(--text)] opacity-75 mt-1">Reset your password</p>
         </div>
 

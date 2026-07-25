@@ -2,7 +2,7 @@
 
 const AuthContext = createContext(null)
 
-const TOKEN_KEY = 'titibet_token'
+const TOKEN_KEY = 'Qwantej_token'
 const API_BASE = import.meta.env.VITE_API_BASE || ''
 
 function normalizeApiError(payload, fallback) {
@@ -32,7 +32,7 @@ function normalizeApiError(payload, fallback) {
 async function parseErrorResponse(res, fallback) {
   const payload = await res.json().catch(() => null)
   if (res.status === 404) {
-    return 'TiTiBet auth endpoint is unavailable. Check that the TiTiBet backend is running on the configured API port.'
+    return 'Qwantej auth endpoint is unavailable. Check that the Qwantej backend is running on the configured API port.'
   }
   return normalizeApiError(payload, fallback)
 }

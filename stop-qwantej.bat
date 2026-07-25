@@ -1,10 +1,10 @@
-@echo off
+﻿@echo off
 setlocal enabledelayedexpansion
-title TiTiBet Shutdown
+title Qwantej Shutdown
 color 0E
 
 echo ============================================================
-echo                     TiTiBet Shutdown
+echo                     Qwantej Shutdown
 echo ============================================================
 echo.
 
@@ -12,9 +12,9 @@ set BACKEND_PORT=8010
 set FRONTEND_PORT=5173
 set /a KILLED=0
 
-:: Must match the paths set in start-titibet.bat
-set "BPID=%TEMP%\titibet-backend.pid"
-set "FPID=%TEMP%\titibet-frontend.pid"
+:: Must match the paths set in start-Qwantej.bat
+set "BPID=%TEMP%\Qwantej-backend.pid"
+set "FPID=%TEMP%\Qwantej-frontend.pid"
 
 :: -- 1. Kill the backend server process by port --------------------
 echo [1/3] Stopping backend  (port %BACKEND_PORT%)...
@@ -37,15 +37,15 @@ for /f "tokens=5" %%a in ('netstat -aon 2^>nul ^| findstr ":%FRONTEND_PORT% " ^|
 )
 if !FRONTEND_KILLED! equ 0 echo       Nothing found on port %FRONTEND_PORT%.
 
-REM -- 2. Close the CMD console windows opened by start-titibet ------
+REM -- 2. Close the CMD console windows opened by start-Qwantej ------
 REM
-REM PRIMARY -- PID files written by start-titibet.bat at launch time.
-REM This works even after Vite has renamed the "TiTiBet-Frontend" console title
+REM PRIMARY -- PID files written by start-Qwantej.bat at launch time.
+REM This works even after Vite has renamed the "Qwantej-Frontend" console title
 REM to its own banner, which caused the old title-match to silently miss it.
 REM
 REM FALLBACK -- title-match for windows that somehow weren't captured in PID files
-REM (e.g. backend window, which uvicorn never renames, may still show TiTiBet-*).
-echo [3/3] Closing TiTiBet console windows...
+REM (e.g. backend window, which uvicorn never renames, may still show Qwantej-*).
+echo [3/3] Closing Qwantej console windows...
 set /a WINDOWS_CLOSED=0
 
 if exist "%BPID%" (
@@ -70,15 +70,15 @@ if exist "%FPID%" (
     echo       No frontend PID file found -- relying on fallback.
 )
 
-:: Fallback: catch any lingering TiTiBet-* titled windows
-powershell -NoProfile -Command "$extra = 0; Get-Process -Name cmd -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like 'TiTiBet-*' } | ForEach-Object { Write-Host ('      Fallback close: ' + $_.MainWindowTitle); Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue; $extra++ }; if ($extra -gt 0) { Write-Host ('      Closed ' + $extra + ' additional window(s) by title.') }"
+:: Fallback: catch any lingering Qwantej-* titled windows
+powershell -NoProfile -Command "$extra = 0; Get-Process -Name cmd -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like 'Qwantej-*' } | ForEach-Object { Write-Host ('      Fallback close: ' + $_.MainWindowTitle); Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue; $extra++ }; if ($extra -gt 0) { Write-Host ('      Closed ' + $extra + ' additional window(s) by title.') }"
 
 :: -- Summary --------------------------------------------------------
 echo.
 if !KILLED! gtr 0 (
     echo [OK] Terminated !KILLED! server process^(es^) and closed !WINDOWS_CLOSED! console window^(s^).
 ) else (
-    echo [INFO] No TiTiBet server processes were found running.
+    echo [INFO] No Qwantej server processes were found running.
 )
 echo.
 echo ============================================================

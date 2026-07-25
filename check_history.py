@@ -1,6 +1,6 @@
-import sqlite3, sys
+﻿import sqlite3, sys
 
-DB = r'D:\WebApps\titibet\backend\titibet.db'
+DB = r'D:\WebApps\Qwantej\backend\Qwantej.db'
 con = sqlite3.connect(DB)
 cur = con.cursor()
 

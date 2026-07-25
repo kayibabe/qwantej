@@ -38,8 +38,8 @@ export default function App() {
 
   useEffect(() => {
     function handler(e) { setActivePage(e.detail) }
-    window.addEventListener('titibet:navigate', handler)
-    return () => window.removeEventListener('titibet:navigate', handler)
+    window.addEventListener('Qwantej:navigate', handler)
+    return () => window.removeEventListener('Qwantej:navigate', handler)
   }, [])
 
   if (loading) {

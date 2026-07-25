@@ -1,10 +1,10 @@
-"""
+﻿"""
 BOS 2.0 — Match Stability Index.
 Ported from betapp/backend/models/bos.py.
 
 Produces a Stability Index (SI) that quantifies how "stable" (low-scoring,
 defensively oriented) a fixture is expected to be. High SI → good candidate
-for Under and BTTS-No markets. Used in titibet as a quality gate and signal
+for Under and BTTS-No markets. Used in Qwantej as a quality gate and signal
 enrichment layer.
 
 SI = D + B + H + M   (threshold ≥ 75 by default)

@@ -2,7 +2,7 @@
 advisor_service.py — Multi-model AI advisory council with provider chain fallback.
 
 Provider priority per advisor (first configured key with available quota wins):
-  1. Anthropic Claude  — TITIBET_CLAUDE_KEY      — highest quality, paid
+  1. Anthropic Claude  — Qwantej_CLAUDE_KEY      — highest quality, paid
   2. Google Gemini     — GEMINI_API_KEY         — free, no card required (aistudio.google.com)
   3. Cerebras          — CEREBRAS_API_KEY       — free, very fast Llama inference
   4. Groq              — GROQ_API_KEY           — free Llama/Mixtral, daily limits
@@ -602,7 +602,7 @@ async def _call_advisor(
     """
     full_context = context + extra_context if extra_context else context
     keys = {
-        "claude":   settings.titibet_claude_key,
+        "claude":   settings.Qwantej_claude_key,
         "gemini":   settings.gemini_api_key,
         "cerebras": settings.cerebras_api_key,
         "groq":     settings.groq_api_key,
@@ -1249,7 +1249,7 @@ async def get_advisor_insights(
             return cached
 
     configured_keys = [
-        settings.titibet_claude_key,
+        settings.Qwantej_claude_key,
         settings.gemini_api_key,
         settings.cerebras_api_key,
         settings.groq_api_key,
@@ -1261,7 +1261,7 @@ async def get_advisor_insights(
             "message": (
                 "AI advisors are disabled — no provider keys configured.\n"
                 "Add at least one to backend/.env:\n"
-                "  TITIBET_CLAUDE_KEY=sk-ant-...      (console.anthropic.com)\n"
+                "  Qwantej_CLAUDE_KEY=sk-ant-...      (console.anthropic.com)\n"
                 "  GEMINI_API_KEY=AIza...           (aistudio.google.com/apikey — free)\n"
                 "  CEREBRAS_API_KEY=csk-...         (inference.cerebras.ai — free)\n"
                 "  GROQ_API_KEY=gsk_...             (console.groq.com — free)\n"
@@ -1928,7 +1928,7 @@ async def track_acca_for_user(
 # ── Conversational chat ───────────────────────────────────────────────────────
 
 _CHAT_SYSTEM = (
-    "You are TiTiBet's AI football betting assistant. "
+    "You are Qwantej's AI football betting assistant. "
     "You help pro subscribers understand today's signals, evaluate picks, and think through betting decisions. "
     "Be concise (2-4 sentences unless detail is genuinely needed), analytical, and honest about uncertainty. "
     "You know the system uses Bayesian + Poisson dual-model signals. "
@@ -1957,7 +1957,7 @@ async def chat_with_advisor(
     """
     messages = [*history, {"role": "user", "content": question}]
     keys = {
-        "claude":   settings.titibet_claude_key,
+        "claude":   settings.Qwantej_claude_key,
         "gemini":   settings.gemini_api_key,
         "cerebras": settings.cerebras_api_key,
         "groq":     settings.groq_api_key,

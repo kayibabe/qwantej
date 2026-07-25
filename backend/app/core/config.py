@@ -1,5 +1,5 @@
-"""
-config.py -- Unified configuration merging FootBet + TiTiBet settings.
+﻿"""
+config.py -- Unified configuration merging FootBet + Qwantej settings.
 All thresholds are tunable here without touching business logic.
 """
 from __future__ import annotations
@@ -24,13 +24,13 @@ class Settings(BaseSettings):
     # Groq AI advisor — free at console.groq.com. Leave empty to disable.
     groq_api_key: str = ""
     # AI Advisory council providers — configure at least one. Leave unused keys empty.
-    # Uses TITIBET_CLAUDE_KEY (not ANTHROPIC_API_KEY) to avoid clashing with
+    # Uses Qwantej_CLAUDE_KEY (not ANTHROPIC_API_KEY) to avoid clashing with
     # the Claude Code session token injected into the system environment.
-    titibet_claude_key: str = ""   # console.anthropic.com
+    Qwantej_claude_key: str = ""   # console.anthropic.com
     gemini_api_key: str = ""       # aistudio.google.com/apikey  (free, no card)
     cerebras_api_key: str = ""     # inference.cerebras.ai       (free, very fast)
     mistral_api_key: str = ""      # console.mistral.ai          (free tier)
-    db_url: str = "sqlite+aiosqlite:///./titibet.db"
+    db_url: str = "sqlite+aiosqlite:///./Qwantej.db"
     backend_port: int = 8010
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
@@ -96,19 +96,19 @@ class Settings(BaseSettings):
     # Email (SMTP)
     smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587
-    smtp_user: str = ""           # e.g. noreply@titibet.com
+    smtp_user: str = ""           # e.g. noreply@Qwantej.com
     smtp_password: str = ""       # app password or SMTP password
-    smtp_from_name: str = "TiTiBet"
+    smtp_from_name: str = "Qwantej"
     smtp_from_email: str = ""     # defaults to smtp_user if empty
-    app_url: str = "https://www.titibet.com"
+    app_url: str = "https://www.Qwantej.com"
 
-    # Telegram Bot — @titibet_alerts (shared across all channels)
+    # Telegram Bot — @Qwantej_alerts (shared across all channels)
     telegram_bot_token: str = ""   # from @BotFather
 
     # ── Named ticket channels ───────────────────────────────────────────────
-    # TiTiBet Free     — limited/blurred teaser of the day's picks
+    # Qwantej Free     — limited/blurred teaser of the day's picks
     telegram_free_chat_id: str = ""
-    # TiTiBet Pro      — top-ranked signals, full detail
+    # Qwantej Pro      — top-ranked signals, full detail
     telegram_pro_chat_id: str = ""
 
 
@@ -116,7 +116,7 @@ class Settings(BaseSettings):
     paystack_secret_key: str = ""          # sk_live_... or sk_test_...
     paystack_public_key: str = ""          # pk_live_... or pk_test_...
     # Callback URL after Paystack payment — frontend route that reads ?reference=
-    paystack_callback_url: str = "https://www.titibet.com/payment/callback"
+    paystack_callback_url: str = "https://www.Qwantej.com/payment/callback"
     # Paystack plan codes — create these in your Paystack dashboard first
     paystack_plan_pro_monthly: str = ""
     paystack_plan_pro_yearly: str = ""
@@ -930,7 +930,7 @@ def get_league_tier(league_name: str, country: str = "") -> int:
 
 
 # =============================================================================
-# Poisson rule thresholds (ported from TiTiBet rules.js v7)
+# Poisson rule thresholds (ported from Qwantej rules.js v7)
 # All values tunable here without touching engine code.
 # =============================================================================
 

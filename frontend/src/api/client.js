@@ -1,5 +1,5 @@
 ﻿const API_KEY = import.meta.env.VITE_API_KEY || ''
-const TOKEN_KEY = 'titibet_token'
+const TOKEN_KEY = 'Qwantej_token'
 
 export async function apiFetch(url, options = {}) {
   const headers = { ...(options.headers || {}) }

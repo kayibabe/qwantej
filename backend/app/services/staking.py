@@ -1,6 +1,6 @@
-"""
+﻿"""
 staking.py -- Kelly + unit-based staking recommendations.
-Ported from FootBet odds_engine.py (Kelly) + TiTiBet tracker (unit staking).
+Ported from FootBet odds_engine.py (Kelly) + Qwantej tracker (unit staking).
 """
 from __future__ import annotations
 import math

@@ -204,7 +204,7 @@ async def deactivate_user(
 
 @router.get("/telegram/status")
 async def telegram_status(_admin: User = Depends(_require_admin)):
-    """Show Telegram config for the two named TiTiBet channels."""
+    """Show Telegram config for the two named Qwantej channels."""
     cfg = get_settings()
     return {
         "bot_token_set":   bool(cfg.telegram_bot_token),
@@ -216,7 +216,7 @@ async def telegram_status(_admin: User = Depends(_require_admin)):
 @router.post("/telegram/test")
 async def telegram_test(_admin: User = Depends(_require_admin)):
     """
-    Send a test message to both TiTiBet Telegram channels.
+    Send a test message to both Qwantej Telegram channels.
     Returns per-channel success/failure.
     """
     cfg = get_settings()
@@ -225,8 +225,8 @@ async def telegram_test(_admin: User = Depends(_require_admin)):
         raise HTTPException(400, "TELEGRAM_BOT_TOKEN is not set in .env")
 
     channels = [
-        ("TiTiBet Free",    cfg.telegram_free_chat_id),
-        ("TiTiBet Pro",     cfg.telegram_pro_chat_id),
+        ("Qwantej Free",    cfg.telegram_free_chat_id),
+        ("Qwantej Pro",     cfg.telegram_pro_chat_id),
     ]
     channels = [(label, cid) for label, cid in channels if cid]
 
@@ -236,7 +236,7 @@ async def telegram_test(_admin: User = Depends(_require_admin)):
     results = []
     for label, chat_id in channels:
         text = (
-            f"<b>TiTiBet — Test message</b>\n\n"
+            f"<b>Qwantej — Test message</b>\n\n"
             f"This is the <b>{label}</b> channel.\n"
             f"Signal digests will be pushed here after each daily sync."
         )
@@ -252,7 +252,7 @@ async def telegram_preview(
     _admin: User = Depends(_require_admin),
 ):
     """
-    Preview what each TiTiBet channel would receive today, without sending.
+    Preview what each Qwantej channel would receive today, without sending.
     Returns per-channel pick list for the admin UI.
     """
     from datetime import date as _date
@@ -292,7 +292,7 @@ async def telegram_preview(
     result = []
     for channel_type, chat_id in channels_config:
         result.append({
-            "label":      f"TiTiBet {channel_type.title()}",
+            "label":      f"Qwantej {channel_type.title()}",
             "emoji":      "📋",
             "profile":    "balanced",
             "chat_id":    chat_id,

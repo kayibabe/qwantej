@@ -1,10 +1,10 @@
-﻿# TiTiBet — Claude Agent Context
+﻿# Qwantej — Claude Agent Context
 
 This file gives any Claude agent (or new session) instant full context. Read it before touching any code.
 
 ## What this project is
 
-TiTiBet is a football betting signals platform. It ingests live fixture and odds data from API-Football, runs two probabilistic models (Bayesian + Poisson) to generate signals, scores and ranks them, and surfaces the best picks to subscribers via a React web app. A self-learning pipeline analyses settled losses, detects patterns, and proposes threshold adjustments that are validated by a backtester before being written to the DB.
+Qwantej is a football betting signals platform. It ingests live fixture and odds data from API-Football, runs two probabilistic models (Bayesian + Poisson) to generate signals, scores and ranks them, and surfaces the best picks to subscribers via a React web app. A self-learning pipeline analyses settled losses, detects patterns, and proposes threshold adjustments that are validated by a backtester before being written to the DB.
 
 ---
 
@@ -26,7 +26,7 @@ TiTiBet is a football betting signals platform. It ingests live fixture and odds
 ## Directory layout
 
 ```
-titibet/
+Qwantej/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py              # FastAPI app, middleware, router mounts, lifespan
@@ -213,7 +213,7 @@ mv .git/HEAD.lock .git/HEAD.lock.bak
 
 **Committing from CMD** (Desktop Commander shell, since bash can't delete lock files):
 ```cmd
-D: && cd WebApps\titibet && git add -A && git commit -F commitmsg.txt
+D: && cd WebApps\Qwantej && git add -A && git commit -F commitmsg.txt
 ```
 Write commit message to `commitmsg.txt` first — CMD mangles `-m "..."` with colons/dots.
 
@@ -224,7 +224,7 @@ Write commit message to `commitmsg.txt` first — CMD mangles `-m "..."` with co
 ## Environment variables (backend/.env)
 
 ```
-DATABASE_URL=sqlite+aiosqlite:///./titibet.db
+DATABASE_URL=sqlite+aiosqlite:///./Qwantej.db
 JWT_SECRET=<secret>
 JWT_ALGORITHM=HS256
 API_FOOTBALL_KEY=<key>
