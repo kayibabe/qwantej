@@ -361,7 +361,8 @@ async def list_signals(
         rows = [
             (sig, fix) for sig, fix in rows
             if not (
-                sig.dual_confidence == "High"
+                sig.poisson_rule_key != "hybrid_b"  # Hybrid B: own odds tiers
+                and sig.dual_confidence == "High"
                 and sig.dual_agreement == "Both"
                 and sig.market in DUAL_HIGH_ODDS_CEILING
                 and (sig.bayesian_best_odd or 0.0) >= DUAL_HIGH_ODDS_CEILING[sig.market]
@@ -370,12 +371,14 @@ async def list_signals(
 
     # Learned odds ceilings from Pipeline A — applies to ALL signals in the market,
     # not just Both+High. Accepted proposals are backed by a P&L backtest (n >= 20).
+    # Hybrid B exempt: ceilings were learned on the old engine's signal population.
     learned_ceilings = await get_learned_market_ceilings(db)
     if learned_ceilings:
         rows = [
             (sig, fix) for sig, fix in rows
             if not (
-                sig.market in learned_ceilings
+                sig.poisson_rule_key != "hybrid_b"
+                and sig.market in learned_ceilings
                 and (sig.bayesian_best_odd or 0.0) >= learned_ceilings[sig.market]
             )
         ]
@@ -409,7 +412,9 @@ async def list_signals(
     })
     rows = [
         (sig, fix) for sig, fix in rows
-        if sig.dual_confidence != "Low"                                  # B-1
+        # B-1 — Hybrid B exempt: its LOW tier (odds 1.10–1.24, K50k) is a
+        # legitimate stake level per the spec, not an engine-failure grade.
+        if (sig.dual_confidence != "Low" or sig.poisson_rule_key == "hybrid_b")
         and not sig.contradiction                                        # B-3
         and not (                                                        # B-2
             sig.market in _WOMEN_UNIVERSAL_MARKETS
@@ -499,12 +504,15 @@ async def list_signals(
         prov_counts: dict[str, int] = {}
         prov_capped: list = []
         for r in results:
-            lg_lower = (r.league or "").lower().strip()
-            if lg_lower in provisional_leagues:
-                n = prov_counts.get(lg_lower, 0)
-                if n >= 1:
-                    continue
-                prov_counts[lg_lower] = n + 1
+            # Hybrid B exempt from diversity caps — the engine's own filters
+            # (xG thresholds, blacklists, EP) already bound the daily slate.
+            if r.selected_market is None:
+                lg_lower = (r.league or "").lower().strip()
+                if lg_lower in provisional_leagues:
+                    n = prov_counts.get(lg_lower, 0)
+                    if n >= 1:
+                        continue
+                    prov_counts[lg_lower] = n + 1
             prov_capped.append(r)
         results = prov_capped
 
@@ -514,7 +522,7 @@ async def list_signals(
     tier3_league_counts: dict[str, int] = {}
     capped: list = []
     for r in results:
-        if (r.league_tier or 3) >= 3:
+        if r.selected_market is None and (r.league_tier or 3) >= 3:  # Hybrid B exempt
             n = tier3_league_counts.get(r.league or "", 0)
             if n >= MAX_SIGNALS_PER_TIER3_LEAGUE:
                 continue
@@ -530,7 +538,7 @@ async def list_signals(
         mkt_capped: list = []
         for r in results:
             mkt_cap = MAX_SIGNALS_PER_MARKET.get(r.market or "", 0)
-            if mkt_cap:
+            if mkt_cap and r.selected_market is None:  # Hybrid B exempt
                 n = mkt_counts.get(r.market or "", 0)
                 if n >= mkt_cap:
                     continue
