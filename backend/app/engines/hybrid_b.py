@@ -77,6 +77,7 @@ def evaluate(
     league: str,
     bos_stability: str,
     country: str = "",
+    home_xga: Optional[float] = None,
     recency_xg_away: Optional[float] = None,
     away_season_xg: Optional[float] = None,
     team_news_alert: bool = False,
@@ -95,12 +96,21 @@ def evaluate(
     bos_stability       : "Stable" | "Unstable" | "Unknown" (from BOS engine)
     recency_xg_away     : 5-match rolling average xG for the away team
     away_season_xg      : season-average xG for the away team (Poisson lambda proxy)
+    home_xga            : home team's genuine defensive vulnerability — rolling
+                          goals-conceded average from form data. None when the
+                          home team lacks form history; falls back to the
+                          away_xg proxy (documented in module docstring). The
+                          Bonus Booster is only meaningful with the genuine
+                          value — the proxy always exceeds the 1.4 threshold
+                          because Filter 1 requires away_xg ≥ 1.50.
     team_news_alert     : True when away team is confirmed resting key starters
     weather_alert       : True when venue forecast shows heavy rain (≥10mm/hr)
                           or high winds (≥50km/h) at kickoff — Phase 6 Rule 5
     """
-    # home_xga = away_xg (see module docstring)
-    home_xga: float = away_xg
+    # Genuine goals-conceded form when available; away_xg proxy as last resort.
+    home_xga_is_genuine = home_xga is not None
+    if home_xga is None:
+        home_xga = away_xg
     league_lower = (league or "").lower().strip()
     country_lower = (country or "").lower().strip()
 
@@ -218,8 +228,15 @@ def evaluate(
     tier_cfg = HYBRID_B_STAKE_LEVELS[selected_tier]
     recommended_stake: float = tier_cfg["base_stake"]
 
-    # Bonus Booster: HIGH tier + home_xga ≥ 1.4 → bonus_stake (K100k)
-    if selected_tier == "HIGH" and home_xga >= HYBRID_B_HOME_XGA_BONUS_THRESHOLD:
+    # Bonus Booster: HIGH tier + home_xga ≥ 1.4 → bonus_stake (K100k).
+    # Requires GENUINE goals-conceded data — the away_xg proxy always clears
+    # the 1.4 threshold (Filter 1 guarantees away_xg ≥ 1.50), which would
+    # grant the bonus to every HIGH-tier pick and defeat its purpose.
+    if (
+        selected_tier == "HIGH"
+        and home_xga_is_genuine
+        and home_xga >= HYBRID_B_HOME_XGA_BONUS_THRESHOLD
+    ):
         recommended_stake = tier_cfg["bonus_stake"]
 
     # ── Phase 5: Recency form advisory stake adjustment ───────────────────

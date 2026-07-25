@@ -88,8 +88,8 @@ async def get_team_form_lambdas(
     n = n or int(R["rolling_form_games"])
     min_games = int(R["form_min_games"])
 
-    home_goals = await _fetch_team_goals(db, home_team, before_date, n)
-    away_goals = await _fetch_team_goals(db, away_team, before_date, n)
+    home_goals, home_conceded = await _fetch_team_goals(db, home_team, before_date, n)
+    away_goals, away_conceded = await _fetch_team_goals(db, away_team, before_date, n)
 
     if len(home_goals) < min_games or len(away_goals) < min_games:
         # Not enough data — caller will fall back to CS-only lambdas
@@ -109,6 +109,11 @@ async def get_team_form_lambdas(
         "lambda_total": lam_h + lam_a,
         "games_h": len(home_goals),
         "games_a": len(away_goals),
+        # Defensive form — goals CONCEDED per game, same exponential weighting.
+        # conceded_h is the home team's genuine defensive vulnerability (Hybrid B
+        # home xGA); independent of the away team's attacking numbers.
+        "conceded_h": _exp_weighted_avg(home_conceded),
+        "conceded_a": _exp_weighted_avg(away_conceded),
     }
 
 
@@ -117,16 +122,16 @@ async def _fetch_team_goals(
     team: str,
     before_date: date,
     n: int,
-) -> list[float]:
+) -> tuple[list[float], list[float]]:
     """
-    Fetch goals scored by *team* in its last n completed fixtures before before_date,
-    constrained to within form_max_lookback_days (default 90) of before_date.
+    Fetch goals scored AND conceded by *team* in its last n completed fixtures
+    before before_date, constrained to within form_max_lookback_days (default 90).
 
     The lookback window prevents previous-season results from polluting current-season
     form estimates — particularly important at the start of a new campaign where a
     team's squad, manager, or playing style may have changed significantly over summer.
 
-    Returns a list of goal counts, most-recent first.
+    Returns (scored, conceded) — two parallel lists, most-recent first.
     """
     max_days = int(R.get("form_max_lookback_days", 90))
     cutoff_date = before_date - timedelta(days=max_days)
@@ -153,10 +158,13 @@ async def _fetch_team_goals(
     fixtures: list[Fixture] = list(result.scalars().all())
 
     goals: list[float] = []
+    conceded: list[float] = []
     for fx in fixtures:
         if fx.home_team == team:
-            goals.append(float(fx.home_score))  # type: ignore[arg-type]
+            goals.append(float(fx.home_score))      # type: ignore[arg-type]
+            conceded.append(float(fx.away_score))   # type: ignore[arg-type]
         else:
-            goals.append(float(fx.away_score))  # type: ignore[arg-type]
+            goals.append(float(fx.away_score))      # type: ignore[arg-type]
+            conceded.append(float(fx.home_score))   # type: ignore[arg-type]
 
-    return goals  # already ordered most-recent first by the query
+    return goals, conceded  # already ordered most-recent first by the query

@@ -755,6 +755,10 @@ async def compute_signals_for_date(db: AsyncSession, run_date: date) -> int:
             league=fixture.league or "",
             bos_stability=_hb_bos,
             country=fixture.country or "",
+            # Genuine home defensive vulnerability: rolling goals-conceded
+            # average for the home team. None → engine falls back to the
+            # away_xg proxy and withholds the Bonus Booster.
+            home_xga=(form_lambdas or {}).get("conceded_h") if form_lambdas else None,
             recency_xg_away=_hb_recency_xg_away,
             away_season_xg=_hb_away_season_xg,
         )
