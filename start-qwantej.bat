@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 setlocal enabledelayedexpansion
 title Qwantej Launcher
 color 0A
@@ -28,6 +28,24 @@ if not defined PYTHON (
 )
 echo [OK] Python : %PYTHON%
 
+:: -- Validate backend entry point -----------------------------------
+if not exist "%~dp0backend\run.py" (
+    echo [ERROR] backend\run.py not found. Are you running from the Qwantej root folder?
+    pause & exit /b 1
+)
+if not exist "%~dp0backend\app\main.py" (
+    echo [ERROR] backend\app\main.py not found. Repository may be incomplete.
+    pause & exit /b 1
+)
+echo [OK] Backend  : %~dp0backend\run.py
+
+:: -- Validate frontend entry point ----------------------------------
+if not exist "%~dp0frontend\package.json" (
+    echo [ERROR] frontend\package.json not found. Repository may be incomplete.
+    pause & exit /b 1
+)
+echo [OK] Frontend : %~dp0frontend\package.json
+
 :: -- Port conflict check --------------------------------------------
 netstat -aon 2>nul | findstr ":8010 " | findstr "LISTENING" >nul
 if not errorlevel 1 (
@@ -39,7 +57,7 @@ if not errorlevel 1 (
       "exit 1"
     if errorlevel 1 (
         echo [ERROR] Port 8010 is occupied by a different service.
-        echo         Stop that service or change BACKEND_PORT before starting Qwantej.
+        echo         Stop that service or run stop-Qwantej.bat before starting Qwantej.
         pause & exit /b 1
     )
     echo [OK] Existing service on port 8010 is Qwantej.
@@ -69,9 +87,14 @@ cd /d "%~dp0backend"
 netstat -aon 2>nul | findstr ":8010 " | findstr "LISTENING" >nul
 if errorlevel 1 (
     start "Qwantej-Backend" cmd /k "%PYTHON% run.py"
-    REM Capture the new cmd window PID immediately, before the title can change.
-    REM Note: | inside a double-quoted CMD string is literal -- no ^ needed here.
-    powershell -NoProfile -Command "Start-Sleep -Milliseconds 400; $p = Get-Process cmd -ErrorAction SilentlyContinue | Where-Object {$_.MainWindowTitle -eq 'Qwantej-Backend'} | Sort-Object StartTime -Descending | Select-Object -First 1; if ($p) { $p.Id | Out-File '%BPID%' -Encoding ascii -NoNewline; Write-Host '      Backend console PID' $p.Id 'saved.' }"
+    :: Capture the new cmd window PID. Allow up to 2 s for the window to appear
+    :: (slow machines need more than 400 ms on first launch with no .pyc cache).
+    powershell -NoProfile -Command ^
+      "for ($i = 0; $i -lt 8; $i++) { " ^
+      "  Start-Sleep -Milliseconds 250; " ^
+      "  $p = Get-Process cmd -ErrorAction SilentlyContinue | Where-Object {$_.MainWindowTitle -eq 'Qwantej-Backend'} | Sort-Object StartTime -Descending | Select-Object -First 1; " ^
+      "  if ($p) { $p.Id | Out-File '%BPID%' -Encoding ascii -NoNewline; Write-Host '      Backend console PID' $p.Id 'saved.'; break } " ^
+      "}"
 ) else (
     echo       Reusing existing Qwantej backend on port 8010.
 )
@@ -99,9 +122,13 @@ echo       [OK] Qwantej backend is ready.
 echo [2/2] Starting frontend...
 cd /d "%~dp0frontend"
 start "Qwantej-Frontend" cmd /k "npm.cmd run dev"
-REM Capture PID immediately -- Vite renames the console title to its own banner
-REM within seconds, so title-matching at shutdown would miss this window.
-powershell -NoProfile -Command "Start-Sleep -Milliseconds 400; $p = Get-Process cmd -ErrorAction SilentlyContinue | Where-Object {$_.MainWindowTitle -eq 'Qwantej-Frontend'} | Sort-Object StartTime -Descending | Select-Object -First 1; if ($p) { $p.Id | Out-File '%FPID%' -Encoding ascii -NoNewline; Write-Host '      Frontend console PID' $p.Id 'saved.' }"
+:: Capture PID -- retry loop gives Vite up to 2 s before it renames the window.
+powershell -NoProfile -Command ^
+  "for ($i = 0; $i -lt 8; $i++) { " ^
+  "  Start-Sleep -Milliseconds 250; " ^
+  "  $p = Get-Process cmd -ErrorAction SilentlyContinue | Where-Object {$_.MainWindowTitle -eq 'Qwantej-Frontend'} | Sort-Object StartTime -Descending | Select-Object -First 1; " ^
+  "  if ($p) { $p.Id | Out-File '%FPID%' -Encoding ascii -NoNewline; Write-Host '      Frontend console PID' $p.Id 'saved.'; break } " ^
+  "}"
 
 :: Poll until Vite is actually serving (max 30s) before opening browser.
 echo       Waiting for Qwantej frontend on http://localhost:5173 ...
@@ -132,6 +159,7 @@ echo   API docs : http://localhost:8010/docs
 echo   Health   : http://localhost:8010/health
 echo.
 echo   Run stop-Qwantej.bat to shut everything down.
+echo   Close this window when you no longer need it.
 echo ============================================================
 echo.
 pause
