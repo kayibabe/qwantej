@@ -8,7 +8,7 @@ import logging
 from datetime import datetime, date, timedelta, timezone
 from typing import Callable
 
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Fixture, TrackedBet
@@ -222,6 +222,10 @@ async def settle_bets_for_date(
 
         won = condition(score_h, score_a)
         _settle_bet(bet, won)
+        # Hybrid B passive tracking (spec Phase 5 result logging): record whether
+        # the home team scored — benchmarks the never-bet Home O0.5 market.
+        if scope not in ("ht", "corners"):
+            bet.home_team_scored = score_h >= 1
         just_settled.append(bet)
         settled += 1
 
@@ -230,6 +234,26 @@ async def settle_bets_for_date(
         "skip_not_final=%d  skip_no_score=%d  skip_no_market=%d",
         settled, voided, skip_no_fixture, skip_not_final, skip_no_score, skip_no_market,
     )
+
+    # Hybrid B passive tracking: backfill Signal.home_team_scored for any signal
+    # whose fixture is final with a known score. Idempotent (only NULL rows).
+    try:
+        await db.execute(text("""
+            UPDATE signals
+            SET home_team_scored = (
+                SELECT f.home_score >= 1 FROM fixtures f
+                WHERE f.id = signals.fixture_id
+            )
+            WHERE home_team_scored IS NULL
+              AND EXISTS (
+                SELECT 1 FROM fixtures f
+                WHERE f.id = signals.fixture_id
+                  AND upper(trim(f.status)) IN ('FT', 'AET', 'PEN')
+                  AND f.home_score IS NOT NULL
+              )
+        """))
+    except Exception:  # noqa: BLE001 — non-critical enrichment
+        logger.warning("home_team_scored signal backfill failed", exc_info=True)
 
     await db.commit()
 

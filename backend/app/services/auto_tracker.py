@@ -171,6 +171,11 @@ async def auto_track_date(db: AsyncSession, run_date: date) -> int:
         if key in existing_keys:
             continue
 
+        # Hybrid B signals carry their own qualifying filters, league blacklists,
+        # odds tiers, and MWK staking — legacy market/odds gates below are bypassed
+        # for them (guarded with `not is_hybrid`).
+        is_hybrid = signal.poisson_rule_key == "hybrid_b"
+
         # Defense-in-depth: skip disabled markets and leagues.
         # signal_engine and router already filter these, but old signals in the
         # DB (generated before a market/league was retired) can still reach this loop.
@@ -179,7 +184,7 @@ async def auto_track_date(db: AsyncSession, run_date: date) -> int:
         league_lower = (fixture.league or "").lower().strip()
         if league_lower in DISABLED_LEAGUES or "friendlies" in league_lower:
             continue
-        if signal.market in {"Home Over 0.5", "Away Over 0.5", "Over 1.5", "Over 2.5"}:
+        if not is_hybrid and signal.market in {"Home Over 0.5", "Away Over 0.5", "Over 1.5", "Over 2.5"}:
             if any(k in league_lower for k in OVER_GOALS_SUPPRESSED_LEAGUES):
                 continue
         if signal.market == "Over 2.5" and fixture.league_tier in OVER25_SUPPRESSED_TIERS:
@@ -194,15 +199,17 @@ async def auto_track_date(db: AsyncSession, run_date: date) -> int:
                 continue
 
         # Skip signals below the minimum odds floor — parity with router serving gate.
+        # Hybrid B exempt: its own stake tiers enforce a 1.10 floor.
         min_odds_floor = MARKET_MIN_ODDS.get(signal.market)
-        if min_odds_floor is not None and odds < min_odds_floor:
+        if not is_hybrid and min_odds_floor is not None and odds < min_odds_floor:
             continue
 
         # Skip Both+High picks whose odds exceed the serving-time ceiling —
-        # consistent with what the router shows subscribers.
+        # consistent with what the router shows subscribers. Hybrid B exempt.
         ceiling = DUAL_HIGH_ODDS_CEILING.get(signal.market)
         if (
-            ceiling is not None
+            not is_hybrid
+            and ceiling is not None
             and signal.dual_confidence == "High"
             and signal.dual_agreement == "Both"
             and odds >= ceiling
@@ -221,8 +228,10 @@ async def auto_track_date(db: AsyncSession, run_date: date) -> int:
 
         # Away-goals suppression: primera b metropolitana and other leagues where
         # away-scoring model overestimates hit rate. Mirrors router serving gate.
+        # Hybrid B exempt — the engine has its own league blacklists.
         if (
-            signal.market in {"Away Over 0.5", "Away Over 1.5"}
+            not is_hybrid
+            and signal.market in {"Away Over 0.5", "Away Over 1.5"}
             and AWAY_GOALS_SUPPRESSED_LEAGUES
             and any(kw in league_lower for kw in AWAY_GOALS_SUPPRESSED_LEAGUES)
         ):
@@ -250,17 +259,21 @@ async def auto_track_date(db: AsyncSession, run_date: date) -> int:
 
         # BOS gate: stable/defensive fixture (bos_passed=True) contradicts any
         # Over-goals pick — the model flags low scoring but we'd be betting on goals.
+        # Hybrid B exempt — it treats Stable as favourable (conditional blacklist
+        # only fires on Unstable fixtures).
         _OVER_MARKETS = {"Home Over 0.5", "Away Over 0.5", "Over 1.5", "Over 2.5",
                          "Home Over 1.5", "Away Over 1.5"}
-        if signal.bos_passed and signal.market in _OVER_MARKETS:
+        if not is_hybrid and signal.bos_passed and signal.market in _OVER_MARKETS:
             continue
 
         # B-4 gate (mirrors router): Both+Medium only at 1.50–1.94 odds.
         # < 1.50: 53.8% WR — correct block. ≥ 1.95: thin sample, excluded pending data.
         # Full-data audit Jul-2026: 13 bets at 1.65–2.09 ran 69.2% WR — previously
         # blocked gate was wrong; ceiling raised to 1.95 to capture the viable range.
+        # Hybrid B exempt — its MEDIUM tier is odds 1.25–1.39 by design.
         if (
-            signal.dual_agreement == "Both"
+            not is_hybrid
+            and signal.dual_agreement == "Both"
             and signal.dual_confidence == "Medium"
             and not (1.50 <= (signal.bayesian_best_odd or 0.0) < 1.95)
         ):
@@ -282,33 +295,40 @@ async def auto_track_date(db: AsyncSession, run_date: date) -> int:
         confidence = signal.dual_confidence or ""
         match_name = f"{fixture.home_team} vs {fixture.away_team}"
 
-        if agreement == "Both" and confidence == "High":
-            source_rule_key   = "system_dual"
-            source_rule_label = "Dual Signal (High+Both)"
-        elif agreement == "Both":
-            source_rule_key   = "system_dual"
-            source_rule_label = f"Dual Signal ({confidence or 'Medium'}+Both)"
-        elif agreement == "Poisson Only":
-            source_rule_key   = "system_auto"
-            source_rule_label = "System Poisson Pick"
-        elif agreement == "Bayesian Only":
-            source_rule_key   = "system_auto"
-            source_rule_label = "System Bayesian Pick"
+        if is_hybrid:
+            source_rule_key   = "system_hybrid_b"
+            source_rule_label = f"Hybrid B ({signal.stake_tier or 'LOW'})"
+            # Hybrid B staking is deterministic (Phase 4/5 already applied
+            # tier logic, bonus booster, and form adjustments) — use it as-is.
+            stake = float(signal.recommended_stake or FLAT_STAKE)
         else:
-            source_rule_key   = "system_auto"
-            source_rule_label = "System Auto-Pick"
+            if agreement == "Both" and confidence == "High":
+                source_rule_key   = "system_dual"
+                source_rule_label = "Dual Signal (High+Both)"
+            elif agreement == "Both":
+                source_rule_key   = "system_dual"
+                source_rule_label = f"Dual Signal ({confidence or 'Medium'}+Both)"
+            elif agreement == "Poisson Only":
+                source_rule_key   = "system_auto"
+                source_rule_label = "System Poisson Pick"
+            elif agreement == "Bayesian Only":
+                source_rule_key   = "system_auto"
+                source_rule_label = "System Bayesian Pick"
+            else:
+                source_rule_key   = "system_auto"
+                source_rule_label = "System Auto-Pick"
 
-        # Apply active kelly_fraction_adj multiplier (from learning proposals).
-        kelly_mult = kelly_mults.get(confidence, 1.0)
-        # Halve stake for leagues confirmed to have smaller edge than modelled.
-        if league_lower in HALVED_STAKE_LEAGUES:
-            kelly_mult *= 0.5
-        stake = round(FLAT_STAKE * kelly_mult)
-        if stake != FLAT_STAKE:
-            logger.debug(
-                "auto_track: stake for %s %s confidence = %.0f (%.2f× of %.0f)",
-                signal.market, confidence, stake, kelly_mult, FLAT_STAKE,
-            )
+            # Apply active kelly_fraction_adj multiplier (from learning proposals).
+            kelly_mult = kelly_mults.get(confidence, 1.0)
+            # Halve stake for leagues confirmed to have smaller edge than modelled.
+            if league_lower in HALVED_STAKE_LEAGUES:
+                kelly_mult *= 0.5
+            stake = round(FLAT_STAKE * kelly_mult)
+            if stake != FLAT_STAKE:
+                logger.debug(
+                    "auto_track: stake for %s %s confidence = %.0f (%.2f× of %.0f)",
+                    signal.market, confidence, stake, kelly_mult, FLAT_STAKE,
+                )
 
         bet = TrackedBet(
             user_id=None,
@@ -327,6 +347,8 @@ async def auto_track_date(db: AsyncSession, run_date: date) -> int:
             signal_grade=_grade(signal.dual_quality_score),
             dual_confidence=signal.dual_confidence,
             dual_agreement=signal.dual_agreement,
+            # Hybrid B passive tracking: Home O0.5 odds at signal time (never bet)
+            home_o05_odds_logged=getattr(signal, "home_o05_odds_logged", None),
             result_status="Pending",
         )
         db.add(bet)
