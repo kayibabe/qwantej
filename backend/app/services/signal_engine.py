@@ -213,10 +213,11 @@ def _build_win_to_nil_away(snapshots: list[MarketSnapshot]) -> dict[str, dict[st
 
 
 def _best_dc_x2_odds(snapshots: list[MarketSnapshot]) -> Optional[float]:
-    """Extract the best available Double Chance X2 odds from snapshots."""
+    """Extract the best available Double Chance X2 (Draw or Away) odds from snapshots.
+    API-Football uses selection_name='Draw/Away' for the X2 double-chance market."""
     best: Optional[float] = None
     for s in snapshots:
-        if s.market_type in DOUBLE_CHANCE_MARKET_NAMES and s.selection_name == "X2":
+        if s.market_type in DOUBLE_CHANCE_MARKET_NAMES and s.selection_name == "Draw/Away":
             if s.odds and s.odds > 1.0 and (best is None or s.odds > best):
                 best = s.odds
     return best
