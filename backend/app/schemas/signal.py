@@ -108,6 +108,17 @@ class SignalOut(BaseModel):
     fatigue_home: Optional[bool] = None
     fatigue_away: Optional[bool] = None
 
+    # ── Hybrid B Strategy Engine fields ──────────────────────────────────
+    selected_market: Optional[str] = None        # "X2" | "Away O0.5"
+    ep: Optional[float] = None                   # Expected Profit (MWK) for selected market
+    stake_tier: Optional[str] = None             # HIGH / MEDIUM / LOW
+    recommended_stake: Optional[float] = None    # MWK amount
+    away_xg: Optional[float] = None
+    home_xga: Optional[float] = None
+    recency_xg_away: Optional[float] = None
+    bos_stability: Optional[str] = None          # Stable / Unstable / Unknown
+    home_o05_odds_logged: Optional[float] = None
+
     # Denormalised fixture fields (populated in router)
     home_team: Optional[str] = None
     away_team: Optional[str] = None

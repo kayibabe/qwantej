@@ -393,10 +393,10 @@ DISABLED_MARKETS: frozenset = frozenset({
     "Over 1.5",
     "Over 2.5",
     "Under 2.5",
-    "Away Over 0.5",
+    # "Away Over 0.5" — Hybrid B primary market; removed from disabled set 2026-07-25
     "Over 0.5 1H",
     "1X (Home or Draw)",
-    "X2 (Draw or Away)",
+    # "X2 (Draw or Away)" — Hybrid B primary market; removed from disabled set 2026-07-25
     "12 (Home or Away)",
     "Home Win to Nil",
     "Away Win to Nil",
@@ -624,6 +624,43 @@ MAX_DAILY_EXPOSURE: float = 0.15
 # =============================================================================
 # BOS 2.0 — Match Stability Index thresholds
 # =============================================================================
+# =============================================================================
+# Hybrid B Strategy Engine — Phase 2/4/6 constants
+# =============================================================================
+
+# Phase 2 — Qualifying filters
+HYBRID_B_MIN_AWAY_XG: float = 1.50
+HYBRID_B_MAX_HOME_AWAY_XG_RATIO: float = 2.0
+
+HYBRID_B_PERMANENT_BLACKLIST: frozenset[str] = frozenset({
+    "australia npl", "tasmania npl", "finland kakkonen",
+    "latvian cup", "brazilian carioca c",
+})
+
+HYBRID_B_CONDITIONAL_BLACKLIST: frozenset[str] = frozenset({
+    "brazil", "argentina", "latvia",
+})
+
+# Phase 4 — Dynamic staking (all amounts in MWK)
+HYBRID_B_STAKE_LEVELS: dict[str, dict] = {
+    "HIGH":   {"min_odds": 1.40, "base_stake": 75_000.0, "bonus_stake": 100_000.0},
+    "MEDIUM": {"min_odds": 1.25, "base_stake": 75_000.0, "bonus_stake":  75_000.0},
+    "LOW":    {"min_odds": 1.10, "base_stake": 50_000.0, "bonus_stake":  50_000.0},
+    "SKIP":   {"min_odds": 0.00, "base_stake":      0.0, "bonus_stake":      0.0},
+}
+HYBRID_B_HOME_XGA_BONUS_THRESHOLD: float = 1.4
+HYBRID_B_MAX_SINGLE_STAKE_PCT: float = 0.05
+
+# Phase 1 — Home O0.5 is pulled and logged only; never bet
+HYBRID_B_BET_HOME_OVER_0_5: bool = False
+
+# Phase 6 Rule 5 — Weather override. Heavy rain or high winds at kickoff → skip.
+# Checked via Open-Meteo (free, keyless) using the fixture's venue city.
+# Fail-open: any lookup failure means no alert (bet proceeds on model merit).
+HYBRID_B_WEATHER_RAIN_MM_PER_HR: float = 10.0
+HYBRID_B_WEATHER_WIND_KMH: float = 50.0
+HYBRID_B_WEATHER_CHECK_ENABLED: bool = True
+
 BOS_SI_THRESHOLD: float = 75.0   # SI ≥ 75 → fixture is stable
 BOS_O00_MAX: float = 7.0          # Hard reject if 0-0 CS odds > 7
 BOS_CMA_MAX: float = 4.0          # CMA ceiling for H-score normalisation

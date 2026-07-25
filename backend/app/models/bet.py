@@ -40,6 +40,12 @@ class TrackedBet(Base):
     closing_odds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     clv_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
+    # ── Hybrid B passive tracking fields ─────────────────────────────────────
+    # home_team_scored: populated at settlement — True when home team scored ≥1 goal
+    home_team_scored: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    # home_o05_odds_logged: Home Over 0.5 odds at signal time (logged only, never bet)
+    home_o05_odds_logged: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=func.now(), nullable=True)
     settled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

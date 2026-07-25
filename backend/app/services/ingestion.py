@@ -243,6 +243,9 @@ async def sync_date(
                     update_vals["home_score_ht"] = new_home_ht
                 if new_away_ht is not None:
                     update_vals["away_score_ht"] = new_away_ht
+                # Venue city — backfills pre-existing rows on their next sync.
+                if row.get("venue_city"):
+                    update_vals["venue_city"] = row.get("venue_city")
                 await db.execute(
                     update(Fixture)
                     .where(Fixture.external_fixture_id == ext_id)
@@ -265,6 +268,7 @@ async def sync_date(
                     away_score=row.get("away_score"),
                     home_score_ht=row.get("home_score_ht"),
                     away_score_ht=row.get("away_score_ht"),
+                    venue_city=row.get("venue_city"),
                 ))
                 fixtures_upserted += 1
 

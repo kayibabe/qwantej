@@ -83,6 +83,23 @@ class Signal(Base):
     # >14 means the rating differential may not reflect current form.
     glicko_rating_age_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
+    # ── Hybrid B Strategy Engine fields ─────────────────────────────────────
+    # xG inputs (Poisson lambda proxies when ZINB unavailable — see hybrid_b.py)
+    home_xg: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    away_xg: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    # home_xga = away_xg (away team's expected goals = goals conceded by home defense)
+    home_xga: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    recency_xg_away: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    bos_stability: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # Stable/Unstable/Unknown
+    # Market selection
+    selected_market: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)   # X2 / Away O0.5
+    ep_x2: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    ep_away_o05: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    recommended_stake: Mapped[Optional[float]] = mapped_column(Float, nullable=True)    # MWK
+    stake_tier: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)        # HIGH/MEDIUM/LOW/SKIP
+    home_o05_odds_logged: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # logged only, never bet
+    home_team_scored: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)     # populated at settlement
+
     # Candidate signals are stored for backtesting but excluded from the live feed.
     # True for Over 1.5 / Over 2.5 Bayesian-only signals awaiting performance validation.
     is_candidate: Mapped[bool] = mapped_column(Boolean, default=False)

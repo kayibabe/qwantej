@@ -65,6 +65,24 @@ COLUMN_MIGRATIONS = [
     # Allows analytics to group legs by ticket rather than by event_date alone,
     # fixing incorrect hit-rate counts when multiple tickets exist on one date.
     ("tracked_bets", "acca_ticket_id", "TEXT"),
+    # ── Hybrid B Strategy Engine — signal model fields ────────────────────────
+    ("signals", "home_xg",              "REAL"),
+    ("signals", "away_xg",              "REAL"),
+    ("signals", "home_xga",             "REAL"),
+    ("signals", "recency_xg_away",      "REAL"),
+    ("signals", "bos_stability",        "TEXT"),
+    ("signals", "selected_market",      "TEXT"),
+    ("signals", "ep_x2",                "REAL"),
+    ("signals", "ep_away_o05",          "REAL"),
+    ("signals", "recommended_stake",    "REAL"),
+    ("signals", "stake_tier",           "TEXT"),
+    ("signals", "home_o05_odds_logged", "REAL"),
+    ("signals", "home_team_scored",     "INTEGER"),
+    # ── Hybrid B — tracked_bet passive tracking fields ─────────────────────────
+    ("tracked_bets", "home_team_scored",     "INTEGER"),
+    ("tracked_bets", "home_o05_odds_logged", "REAL"),
+    # ── Hybrid B — weather override (Phase 6 Rule 5) needs venue location ──────
+    ("fixtures", "venue_city", "TEXT"),
 ]
 
 TABLE_MIGRATIONS: list[str] = [

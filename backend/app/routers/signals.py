@@ -94,90 +94,20 @@ def _system_rank(
     clv_ranks: dict[str, int] | None = None,
 ) -> tuple:
     """
-    Rank signals by evidence-backed priority order:
-      0. poisson_medium_flag   — Poisson Only + Medium confidence ranks above all else
-      1. confidence_rank       — High=3 > Medium=2 > Low=1
-      2. agreement_rank        — Both=3 > Bayesian Only=2 > Poisson Only=1
-      3. high_probability_flag — primary_prob ≥ 0.70
-      4. primary_prob          — continuous, max(bayesian, poisson)
-      5. bookmaker_support     — 3+ books = strongest price consensus
-      6. clv_market_rank       — market has consistent positive CLV history (≥10 bets)
-      7. drift_rank            — odds shortened since opening (sharp money confirmed)
-      8. dual_model_prob_flag  — both engines ≥ 0.65
-      9. glicko_certainty      — normalised |Glicko-2 rating gap| (more predictable fixtures rank higher)
-     10. tier_rank             — Tier 3 league (data: 93.1% WR for Poisson Only+Medium, stronger than Tier 1)
-     11. avg_prob              — (bayesian + poisson) / 2
-     12. quality_score         — tie-breaker only
-     13. goals_expectation     — lambda total (final tie-breaker)
-
-    Later tuple items act only as tie-breakers for earlier priorities.
+    Hybrid B ranking: recommended_stake DESC → EP DESC → away_xg DESC.
+    All three fields descending — highest stake wins, then highest expected profit,
+    then highest away xG as final tie-breaker.
     """
-    bayes_prob = sig.bayesian_prob or 0.0
-    poisson_prob = sig.poisson_prob or 0.0
-    primary_prob = max(bayes_prob, poisson_prob)
-    avg_prob = ((bayes_prob + poisson_prob) / 2.0) if bayes_prob and poisson_prob else primary_prob
-    goals_expectation = sig.poisson_lambda_total or 0.0
-    books = sig.bayesian_bookmaker_count or 0
-    quality = sig.dual_quality_score or 0.0
-
-    confidence_rank = {
-        "High": 3,
-        "Medium": 2,
-        "Low": 1,
-    }.get(sig.dual_confidence or "", 0)
-    agreement_rank = {
-        "Both": 3,
-        "Bayesian Only": 2,
-        "Poisson Only": 1,
-        "Contradiction": 0,
-    }.get(sig.dual_agreement or "", 0)
-
-    # Poisson + Medium takes top priority over everything else, including
-    # confidence/agreement combos that would otherwise outrank it.
-    poisson_medium_flag = 1 if (sig.dual_agreement == "Poisson Only" and sig.dual_confidence == "Medium") else 0
-
-    high_probability_flag = 1 if primary_prob >= 0.70 else 0
-    dual_model_probability_flag = 1 if bayes_prob >= 0.65 and poisson_prob >= 0.65 else 0
-    bookmaker_support_rank = 2 if books >= 3 else 1 if books == 2 else 0
-    # Data (pre-Jul 2, HO0.5): Tier 3 = 87.7% WR / +35.5% ROI vs Tier 1 = 79.2% / +6.9%.
-    # Poisson Only + Medium in Tier 3 hit 93.1% WR — the strongest segment in the system.
-    # Bookmaker pricing on team-total markets in Tier 3 is less efficient, producing genuine
-    # edge that the Poisson model captures. Tier 3 is boosted; Tier 1 is no longer preferred.
-    tier_rank = 1 if (fixture and (fixture.league_tier or 3) >= 3) else 0
-
-    # CLV market rank: boost markets where the model consistently beats closing line.
-    clv_market_rank = (clv_ranks or {}).get(sig.market or "", 0)
-
-    # Drift rank: negative drift = odds shortened = sharp money confirmed our pick.
-    # Threshold -3 % avoids noise from tiny market adjustments.
-    drift = sig.odds_drift_pct
-    drift_rank = 1 if (drift is not None and drift < -3.0) else 0
-
-    # Glicko-2 certainty: |rating_diff| / 400 clamped to [0, 1].
-    # A large rating gap (e.g. +300 pts) means the fixture is more predictable
-    # regardless of direction — models are more reliable in lopsided matches.
-    # Only acts as a late tie-breaker (position 9).
-    glicko_certainty = 0.0
-    if sig.glicko_r_diff is not None:
-        age = getattr(sig, "glicko_rating_age_days", None)
-        if age is None or age <= 14:
-            glicko_certainty = min(abs(sig.glicko_r_diff) / 400.0, 1.0)
-
+    recommended_stake = getattr(sig, "recommended_stake", None) or 0.0
+    ep = (
+        getattr(sig, "ep_x2", None) if getattr(sig, "selected_market", None) == "X2"
+        else getattr(sig, "ep_away_o05", None)
+    ) or 0.0
+    away_xg = getattr(sig, "away_xg", None) or 0.0
     return (
-        poisson_medium_flag,
-        confidence_rank,
-        agreement_rank,
-        high_probability_flag,
-        round(primary_prob, 6),
-        bookmaker_support_rank,
-        clv_market_rank,              # position 6 — consistent CLV edge
-        drift_rank,                   # position 7 — sharp money confirmation
-        dual_model_probability_flag,  # position 8 — both engines high prob
-        round(glicko_certainty, 4),   # position 9 — Glicko-2 match predictability
-        tier_rank,                    # position 10
-        round(avg_prob, 6),
-        round(quality, 6),            # position 12 — tie-breaker only
-        round(goals_expectation, 6),
+        round(recommended_stake, 2),
+        round(ep, 2),
+        round(away_xg, 4),
     )
 
 
@@ -297,6 +227,13 @@ def _to_signal_out(
             glicko_rating_age_days=getattr(sig, "glicko_rating_age_days", None),
         )
 
+    # Hybrid B EP — use the EP for the selected market
+    _selected = getattr(sig, "selected_market", None)
+    _ep = (
+        getattr(sig, "ep_x2", None) if _selected == "X2"
+        else getattr(sig, "ep_away_o05", None)
+    )
+
     return SignalOut(
         id=sig.id, fixture_id=sig.fixture_id, market=sig.market,
         bayesian=bayesian, poisson=poisson,
@@ -305,13 +242,22 @@ def _to_signal_out(
         dual_recommended_stake_pct=sig.dual_recommended_stake_pct,
         contradiction=sig.contradiction, computed_at=sig.computed_at,
         selection_name=sig.market,
-        # Top-level odds so Poisson-only signals (bayesian block = None) still
-        # surface their bookmaker price to the UI.
         best_odd=sig.bayesian_best_odd,
         best_bookmaker=sig.bayesian_bookmaker,
         odds_drift_pct=sig.odds_drift_pct,
         advanced=advanced,
         bookmaker_odds=bookmaker_odds,
+        # ── Hybrid B fields ──────────────────────────────────────────────────
+        selected_market=_selected,
+        ep=_ep,
+        stake_tier=getattr(sig, "stake_tier", None),
+        recommended_stake=getattr(sig, "recommended_stake", None),
+        away_xg=getattr(sig, "away_xg", None),
+        home_xga=getattr(sig, "home_xga", None),
+        recency_xg_away=getattr(sig, "recency_xg_away", None),
+        bos_stability=getattr(sig, "bos_stability", None),
+        home_o05_odds_logged=getattr(sig, "home_o05_odds_logged", None),
+        # ────────────────────────────────────────────────────────────────────
         home_team=fixture.home_team, away_team=fixture.away_team,
         league=fixture.league, league_tier=fixture.league_tier,
         country=fixture.country,
@@ -369,13 +315,13 @@ async def list_signals(
         query = query.where(Signal.market.notin_(list(DISABLED_MARKETS)))
 
     # Over-goals suppression for structurally low-scoring leagues.
-    # Even if a league is not hard-banned, Over 0.5/1.5 etc. are suppressed
-    # when the league consistently produces 0-0 / 1-0 results.
+    # Hybrid B manages its own league blacklist in the engine; "Away Over 0.5"
+    # from Hybrid B is excluded from serving-time over-goals suppression.
     if OVER_GOALS_SUPPRESSED_LEAGUES:
         _OVER_MKT_LIST = [
             "Over 1.5", "Over 2.5",
             "Home Over 0.5", "Home Over 1.5",
-            "Away Over 0.5", "Away Over 1.5",
+            "Away Over 1.5",  # Away Over 0.5 (Hybrid B) excluded from this list
         ]
         for _league_key in OVER_GOALS_SUPPRESSED_LEAGUES:
             query = query.where(
@@ -395,8 +341,9 @@ async def list_signals(
         )
 
     # Away-goals suppression for leagues with structurally poor away-scoring reliability.
+    # Hybrid B Away Over 0.5 excluded — engine has its own league blacklist.
     if AWAY_GOALS_SUPPRESSED_LEAGUES:
-        _AWAY_MKT_LIST = ["Away Over 0.5", "Away Over 1.5"]
+        _AWAY_MKT_LIST = ["Away Over 1.5"]  # Away Over 0.5 (Hybrid B) excluded
         for _league_key in AWAY_GOALS_SUPPRESSED_LEAGUES:
             query = query.where(
                 ~(
@@ -471,11 +418,13 @@ async def list_signals(
         and not (                                                        # B-4
             sig.dual_agreement == "Both"
             and sig.dual_confidence == "Medium"
+            and sig.poisson_rule_key != "hybrid_b"
             and not (1.50 <= (sig.bayesian_best_odd or 0.0) < 1.95)
         )
         and not (                                                        # B-5
             sig.dual_agreement == "Both"
             and sig.dual_confidence == "Medium"
+            and sig.poisson_rule_key != "hybrid_b"
             and (fix.league or "").lower().strip() in BOTH_MEDIUM_DISABLED_LEAGUES
         )
     ]

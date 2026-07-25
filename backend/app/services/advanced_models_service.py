@@ -364,6 +364,14 @@ class AdvancedModelsService:
         except Exception:
             return fallback_lh, fallback_la
 
+    def zinb_is_fitted(self, league: str) -> bool:
+        """True when a genuine ZINB fit exists for this league (not a fallback).
+        Callers that must distinguish model output from the Poisson/form fallback
+        (e.g. Hybrid B's season-xG baseline) should check this before trusting
+        zinb_predict's return values."""
+        model = self._zinb_models.get(league.lower().strip())
+        return model is not None and model.fitted
+
     def glicko_r_diff(self, home_team: str, away_team: str) -> Optional[float]:
         """Return home_rating - away_rating, or None if Glicko-2 not fitted."""
         if self._glicko is None:

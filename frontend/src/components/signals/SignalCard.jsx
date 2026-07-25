@@ -355,10 +355,44 @@ function useKickoff(kickoffAt, status) {
 
 // ── xG row — compact expected goals, market-aware, always visible ────────────
 function XGRow({ signal }) {
+  // Prefer Hybrid B xG fields when available
+  const isHybridB = signal.selected_market != null
+  const awayXg    = isHybridB ? signal.away_xg : null
+  const homeXga   = isHybridB ? signal.home_xga : null
+  const recency   = isHybridB ? signal.recency_xg_away : null
+
   const adv     = signal.advanced
   const lambdaH = adv?.zinb_lambda_h ?? signal.poisson?.lambda_h ?? null
   const lambdaA = adv?.zinb_lambda_a ?? signal.poisson?.lambda_a ?? null
   const market  = signal.market || ''
+
+  if (isHybridB) {
+    if (awayXg == null && homeXga == null) return null
+    const recencyWeak = recency != null && awayXg != null && recency < awayXg * 0.75
+    return (
+      <div className="flex items-center gap-2 flex-wrap text-xs text-[var(--text)]">
+        <span className="opacity-40 leading-none select-none">⚽</span>
+        {awayXg != null && (
+          <span className="font-semibold tabular-nums text-emerald-400">
+            {awayXg.toFixed(2)} away xG
+          </span>
+        )}
+        {homeXga != null && (
+          <span className="opacity-55">
+            {homeXga.toFixed(2)} home xGA
+          </span>
+        )}
+        {recencyWeak && (
+          <span
+            title="Away team's recent xG is below their season average — stake reduced"
+            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-500/15 text-orange-400 border border-orange-500/30"
+          >
+            ↓ Form
+          </span>
+        )}
+      </div>
+    )
+  }
 
   if (lambdaH == null && lambdaA == null) return null
 
@@ -395,6 +429,69 @@ function XGRow({ signal }) {
       <span className="opacity-40 leading-none select-none">⚽</span>
       <span className={`font-semibold tabular-nums ${accentColor}`}>{primary}</span>
       {secondary && <span className="opacity-40">({secondary})</span>}
+    </div>
+  )
+}
+
+// ── Hybrid B primary block — replaces ProbabilityLine for X2 / Away O0.5 ─────
+function HybridBPrimaryBlock({ signal }) {
+  const market     = signal.selected_market  // "X2" | "Away O0.5"
+  const odds       = signal.best_odd
+  const stake      = signal.recommended_stake
+  const ep         = signal.ep
+  const tier       = signal.stake_tier
+
+  const stakeLabel =
+    stake >= 100_000 ? 'K100k'
+    : stake >= 75_000 ? 'K75k'
+    : stake >= 50_000 ? 'K50k'
+    : 'K0'
+
+  const stakeStyle =
+    stake >= 100_000
+      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+      : stake >= 75_000
+        ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+        : 'bg-[var(--code-bg)] text-[var(--text-h)] border-[var(--border)]'
+
+  const marketStyle =
+    market === 'X2'
+      ? 'bg-indigo-500/12 text-indigo-300 border-indigo-500/30'
+      : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+
+  const epLabel = ep != null ? `+K${(ep / 1000).toFixed(0)}k EP` : null
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Market badge */}
+          <span className={`text-sm font-bold px-3 py-1 rounded-full border ${marketStyle}`}>
+            {market === 'X2' ? 'X2 (Draw or Away)' : 'Away Over 0.5'}
+          </span>
+          {tier && tier !== 'SKIP' && (
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${stakeStyle}`}>
+              {tier}
+            </span>
+          )}
+        </div>
+        {/* Stake amount */}
+        <span className={`text-xl font-bold tabular-nums leading-none shrink-0 px-2 py-0.5 rounded border ${stakeStyle}`}>
+          {stakeLabel}
+        </span>
+      </div>
+
+      {/* Odds · EP */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {odds != null && odds > 1 && (
+          <span className="text-sm font-bold font-mono text-[var(--accent)]">
+            @{Number(odds).toFixed(2)}
+          </span>
+        )}
+        {epLabel && (
+          <span className="text-xs font-semibold text-emerald-400">{epLabel}</span>
+        )}
+      </div>
     </div>
   )
 }
@@ -618,19 +715,29 @@ export default function SignalCard({ signal, rank, isPro = true, isTracked = fal
   const isHighProbabilityOutcome = primaryProb >= 0.7 && !isMediumConfidence
   const isUnderMarket = signal.market === 'Under 2.5'
 
+  // Hybrid B border: emerald = K100k bonus stake, amber = K75k, default = K50k
+  const isHybridB = signal.selected_market != null
+  const hbStake = signal.recommended_stake ?? 0
+  const isHybridBBonus  = isHybridB && hbStake >= 100_000
+  const isHybridBMedium = isHybridB && hbStake >= 75_000 && hbStake < 100_000
+
   return (
     <div className={`rounded-xl border bg-[var(--bg)] overflow-hidden transition-all duration-200 hover:-translate-y-0.5 ${
       isContradiction
         ? 'border-rose-400/40 border-l-4 border-l-rose-400 hover:border-rose-400/60'
-        : isBayesianOnly
-          ? 'border-violet-400/35 border-l-4 border-l-violet-400 hover:border-violet-400/55'
-          : isUnderMarket
-            ? 'border-sky-400/40 border-l-4 border-l-sky-400 hover:border-sky-400/60'
-            : isHighProbabilityOutcome
-              ? 'border-emerald-500/50 border-l-4 border-l-emerald-500 shadow-[0_8px_24px_rgba(16,185,129,0.12)] hover:shadow-[0_12px_32px_rgba(16,185,129,0.2)]'
-              : isMediumConfidence
-                ? 'border-amber-400/30 hover:border-amber-400/50 hover:shadow-[var(--shadow-card)]'
-                : 'border-[var(--border)] hover:border-[var(--accent)]/40 hover:shadow-[var(--shadow-card)]'
+        : isHybridBBonus
+          ? 'border-emerald-500/50 border-l-4 border-l-emerald-500 shadow-[0_8px_24px_rgba(16,185,129,0.12)] hover:shadow-[0_12px_32px_rgba(16,185,129,0.2)]'
+          : isHybridBMedium
+            ? 'border-amber-400/30 border-l-4 border-l-amber-400 hover:border-amber-400/50 hover:shadow-[var(--shadow-card)]'
+            : isBayesianOnly
+              ? 'border-violet-400/35 border-l-4 border-l-violet-400 hover:border-violet-400/55'
+              : isUnderMarket
+                ? 'border-sky-400/40 border-l-4 border-l-sky-400 hover:border-sky-400/60'
+                : isHighProbabilityOutcome
+                  ? 'border-emerald-500/50 border-l-4 border-l-emerald-500 shadow-[0_8px_24px_rgba(16,185,129,0.12)] hover:shadow-[0_12px_32px_rgba(16,185,129,0.2)]'
+                  : isMediumConfidence
+                    ? 'border-amber-400/30 hover:border-amber-400/50 hover:shadow-[var(--shadow-card)]'
+                    : 'border-[var(--border)] hover:border-[var(--accent)]/40 hover:shadow-[var(--shadow-card)]'
     }`}>
 
       {/* ── Header ── */}
@@ -725,18 +832,21 @@ export default function SignalCard({ signal, rank, isPro = true, isTracked = fal
           </div>
         </div>
 
-        {/* ── PRIMARY: Probability block — market chip · bar · big % · odds · agreement ── */}
-        <ProbabilityLine
-          market={signal.market}
-          confidence={signal.dual_confidence}
-          prob={primaryProb > 0 ? primaryProb : null}
-          odd={displayBestOdd}
-          bookmaker={displayBookmaker}
-          bookmakerCount={signal.bayesian?.bookmaker_count}
-          agreement={signal.dual_agreement}
-          driftPct={signal.odds_drift_pct}
-          isPro={isPro}
-        />
+        {/* ── PRIMARY: Probability block — Hybrid B or legacy ── */}
+        {isHybridB
+          ? <HybridBPrimaryBlock signal={signal} />
+          : <ProbabilityLine
+              market={signal.market}
+              confidence={signal.dual_confidence}
+              prob={primaryProb > 0 ? primaryProb : null}
+              odd={displayBestOdd}
+              bookmaker={displayBookmaker}
+              bookmakerCount={signal.bayesian?.bookmaker_count}
+              agreement={signal.dual_agreement}
+              driftPct={signal.odds_drift_pct}
+              isPro={isPro}
+            />
+        }
 
         <XGRow signal={signal} />
 
@@ -781,14 +891,26 @@ export default function SignalCard({ signal, rank, isPro = true, isTracked = fal
 
             {/* Stake recommendation (pro) or locked pill (free) */}
             {isPro ? (
-              stakePct && !isContradiction ? (
+              isHybridB && signal.recommended_stake > 0 ? (
+                <div className="flex items-center gap-2 text-xs text-[var(--text)]">
+                  <span>Recommended stake:</span>
+                  <span className={`font-bold ${hbStake >= 100_000 ? 'text-emerald-400' : hbStake >= 75_000 ? 'text-amber-400' : 'text-[var(--text-h)]'}`}>
+                    MWK {Number(signal.recommended_stake).toLocaleString()}
+                  </span>
+                  {signal.ep != null && (
+                    <span className="text-emerald-400 font-semibold">
+                      · EP +K{(signal.ep / 1000).toFixed(0)}k
+                    </span>
+                  )}
+                </div>
+              ) : stakePct && !isContradiction ? (
                 <div className="text-xs text-[var(--text)]">
                   Stake: <span className="font-semibold text-[var(--accent)]">{stakePct}</span>
                 </div>
               ) : null
             ) : (
               <div className="flex items-center gap-2">
-                <LockedPill label="Stake %" />
+                <LockedPill label="Stake" />
               </div>
             )}
           </div>

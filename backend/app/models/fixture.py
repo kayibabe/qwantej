@@ -20,6 +20,9 @@ class Fixture(Base):
     league_tier: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     season: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     status: Mapped[Optional[str]] = mapped_column(String(60), index=True, nullable=True)
+    # Venue city from API-Football fixture.venue.city — used by the Hybrid B
+    # weather override (Phase 6 Rule 5) to geocode the match location.
+    venue_city: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     home_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     away_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # Halftime scores

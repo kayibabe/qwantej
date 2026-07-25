@@ -461,6 +461,7 @@ def _parse_fixture_row(item: dict[str, Any]) -> dict[str, Any]:
         "country":       league.get("country"),
         "league":        league.get("name"),
         "kickoff_at":    dt,
+        "venue_city":    (fixture.get("venue") or {}).get("city"),
     }
 
 
