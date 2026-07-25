@@ -26,7 +26,7 @@ router = APIRouter(prefix="/api/tracker", tags=["tracker"])
 # System-generated pick keys visible to all authenticated users in their tracker.
 # Includes auto-tracked model picks, ACCA tickets, and AI advisory shadow picks.
 _SYSTEM_PICK_KEYS = [
-    "system_auto", "system_dual", "system_acca",
+    "system_auto", "system_dual", "system_acca", "system_hybrid_b",
     "scout_pick", "strategist_pick", "skeptic_pick",
 ]
 
@@ -634,7 +634,7 @@ async def normalize_stakes(
                 TrackedBet.user_id == current_user.id,
                 and_(
                     TrackedBet.user_id.is_(None),
-                    TrackedBet.source_rule_key.in_(["system_auto", "system_dual"]),
+                    TrackedBet.source_rule_key.in_(_SYSTEM_PICK_KEYS),
                 ),
             )
         )
@@ -665,7 +665,7 @@ async def deduplicate_bets(
                 TrackedBet.user_id == current_user.id,
                 and_(
                     TrackedBet.user_id.is_(None),
-                    TrackedBet.source_rule_key.in_(["system_auto", "system_dual"]),
+                    TrackedBet.source_rule_key.in_(_SYSTEM_PICK_KEYS),
                 ),
             ),
         ).order_by(TrackedBet.fixture_id, TrackedBet.market_type, TrackedBet.stake.desc(), TrackedBet.created_at.desc())
