@@ -569,21 +569,37 @@ async def compute_signals_for_date(db: AsyncSession, run_date: date) -> int:
         from app.services.advanced_models_service import AdvancedModelsService
         adv = AdvancedModelsService(db)
 
-    # Pre-delete all existing signals for today in ONE short write transaction,
-    # committed immediately before the fixture loop starts.  This keeps the loop
-    # itself entirely read-only, so other writers (user track-picks, settlement,
-    # auto-tracker) never hit SQLite's busy_timeout waiting for this session.
-    if fixtures:
-        fixture_ids_today = [f.id for f in fixtures]
-        await db.execute(delete(Signal).where(Signal.fixture_id.in_(fixture_ids_today)))
+    # Pre-delete signals only for non-final fixtures — mirror the ingestion
+    # cached_ids rule: finished fixtures (FT/AET/PEN) keep their pre-match
+    # snapshots and signals so a late manual recompute never wipes good data.
+    _FINAL_STATUSES = {"FT", "AET", "PEN"}
+    upcoming_fixtures = [f for f in fixtures if (f.status or "").upper().strip() not in _FINAL_STATUSES]
+    finished_fixtures = [f for f in fixtures if (f.status or "").upper().strip() in _FINAL_STATUSES]
+
+    if upcoming_fixtures:
+        upcoming_ids = [f.id for f in upcoming_fixtures]
+        await db.execute(delete(Signal).where(Signal.fixture_id.in_(upcoming_ids)))
         await db.commit()
 
-        # The cached AI advisory for this date embeds acca legs + odds from the
-        # signal rows just deleted — drop it so users never see an acca priced
-        # off rows that no longer exist. The next advisory request (or the
-        # scheduled cache-warm job) regenerates it from the fresh signals.
+        # Advisory cache only embeds upcoming picks — invalidate when those change.
         from app.services.advisor_service import invalidate_advisory_cache
         await invalidate_advisory_cache(db, run_date)
+
+    # Finished fixtures with existing signals are kept as-is; skip recomputing them.
+    finished_with_signal: set[int] = set()
+    if finished_fixtures:
+        finished_ids = [f.id for f in finished_fixtures]
+        sig_result = await db.execute(
+            select(Signal.fixture_id).where(Signal.fixture_id.in_(finished_ids)).distinct()
+        )
+        finished_with_signal = {row[0] for row in sig_result.all()}
+
+    # Only compute signals for upcoming fixtures + finished fixtures that lost
+    # their signals (edge case: finished before any signal was ever computed).
+    fixtures = [
+        f for f in fixtures
+        if f.id not in finished_with_signal
+    ]
 
     # Collect all new Signal objects across all fixtures before writing to DB.
     # This allows portfolio-level stake normalization (improvement #1) to run
@@ -855,4 +871,4 @@ async def compute_signals_for_date(db: AsyncSession, run_date: date) -> int:
         await db.commit()
         await asyncio.sleep(0)   # yield between batches
 
-    return count
+    return count + len(finished_with_signal)
