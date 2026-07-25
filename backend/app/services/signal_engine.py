@@ -754,6 +754,7 @@ async def compute_signals_for_date(db: AsyncSession, run_date: date) -> int:
             home_o05_odds=_hb_ho05_odds,
             league=fixture.league or "",
             bos_stability=_hb_bos,
+            country=fixture.country or "",
             recency_xg_away=_hb_recency_xg_away,
             away_season_xg=_hb_away_season_xg,
         )

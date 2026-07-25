@@ -76,6 +76,7 @@ def evaluate(
     home_o05_odds: Optional[float],
     league: str,
     bos_stability: str,
+    country: str = "",
     recency_xg_away: Optional[float] = None,
     away_season_xg: Optional[float] = None,
     team_news_alert: bool = False,
@@ -101,6 +102,7 @@ def evaluate(
     # home_xga = away_xg (see module docstring)
     home_xga: float = away_xg
     league_lower = (league or "").lower().strip()
+    country_lower = (country or "").lower().strip()
 
     def _reject(reason: str) -> HybridBResult:
         return HybridBResult(
@@ -126,10 +128,13 @@ def evaluate(
     if any(bl in league_lower for bl in HYBRID_B_PERMANENT_BLACKLIST):
         return _reject(f"F3:permanent_blacklist:{league}")
 
-    # Filter 4 — Conditional blacklist: reject when BOS Stability = Unstable
+    # Filter 4 — Conditional blacklist: reject when BOS Stability = Unstable.
+    # Entries are COUNTRY names (Brazil/Argentina/Latvia) — API-Football league
+    # strings ("Primera C", "Serie B") don't contain them, so match against the
+    # fixture country as well as the league name.
     if bos_stability == "Unstable":
-        if any(cl in league_lower for cl in HYBRID_B_CONDITIONAL_BLACKLIST):
-            return _reject(f"F4:conditional_blacklist:{league},BOS=Unstable")
+        if any(cl in league_lower or cl in country_lower for cl in HYBRID_B_CONDITIONAL_BLACKLIST):
+            return _reject(f"F4:conditional_blacklist:{country or league},BOS=Unstable")
 
     # ── Double-Loss Skip Rule ─────────────────────────────────────────────
     # Variance risk does not justify the return on very short-priced, low-scoring fixtures
