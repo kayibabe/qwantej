@@ -275,6 +275,7 @@ async def list_signals(
     min_quality: float = Query(0.0),
     sort_by: str = Query("system"),
     best_per_fixture: bool = Query(True, description="When true (default), return only the highest-ranked signal per fixture. Set false to see all signals for each game."),
+    include_finished: bool = Query(False, description="Include today's finished fixtures — results review mode. Historical dates always include them."),
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional),
 ):
@@ -289,9 +290,10 @@ async def list_signals(
 
     # For today's date: suppress signals for fixtures that have already finished.
     # Showing a completed-game signal could lead a subscriber to attempt a bet on a
-    # game that is over. Historical date queries are left unfiltered so signal review works.
+    # game that is over. Historical date queries are left unfiltered so signal review
+    # works, and include_finished=true opts into results-review mode for today.
     _FINAL_STATUSES_TUPLE = ("FT", "AET", "PEN")
-    if target_date == date.today():
+    if target_date == date.today() and not include_finished:
         query = query.where(func.upper(func.trim(Fixture.status)).notin_(list(_FINAL_STATUSES_TUPLE)))
 
     # confidence / agreement params are accepted for API backwards-compatibility

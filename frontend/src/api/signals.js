@@ -2,7 +2,7 @@ import { apiFetch } from './client'
 
 const BASE = '/api/signals'
 
-export async function fetchSignals({ date, confidence, agreement, market, min_quality, sort_by, best_per_fixture } = {}) {
+export async function fetchSignals({ date, confidence, agreement, market, min_quality, sort_by, best_per_fixture, include_finished } = {}) {
   const params = new URLSearchParams()
   if (date) params.set('date', date)
   if (confidence) params.set('confidence', confidence)
@@ -11,6 +11,7 @@ export async function fetchSignals({ date, confidence, agreement, market, min_qu
   if (min_quality != null) params.set('min_quality', min_quality)
   if (sort_by) params.set('sort_by', sort_by)
   if (best_per_fixture === false) params.set('best_per_fixture', 'false')
+  if (include_finished) params.set('include_finished', 'true')
   const res = await apiFetch(`${BASE}?${params}`)
   if (!res.ok) throw new Error(`Signals fetch failed: ${res.status}`)
   return res.json()

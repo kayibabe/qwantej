@@ -253,6 +253,7 @@ export default function SignalsPage({ settings, onDeepDive, onUpgrade, onNavigat
   const [minProb, setMinProb]       = useState('')
   const [leagueSearch, setLeagueSearch] = useState('')
   const [showSavedOnly, setShowSavedOnly] = useState(false)
+  const [showFinished, setShowFinished] = useState(false)
   const [filtersOpen, setFiltersOpen]   = useState(false)
   const [viewMode, setViewMode]         = useState('all') // 'all' | 'value_band'
 
@@ -345,9 +346,10 @@ const params = {
     market:      market     || undefined,
     sort_by:     sortBy,
     best_per_fixture: bestPerFixture,
+    include_finished: showFinished || undefined,
   }
 
-  useEffect(() => { load(params) }, [date, confidence, agreement, market, sortBy, bestPerFixture]) // eslint-disable-line
+  useEffect(() => { load(params) }, [date, confidence, agreement, market, sortBy, bestPerFixture, showFinished]) // eslint-disable-line
 const reload = () => load(params)
 
   const isToday    = date === today
@@ -854,6 +856,18 @@ const reload = () => load(params)
             </>
           )}
           <div className="ml-auto flex items-center gap-1.5">
+            <button
+              onClick={() => setShowFinished(v => !v)}
+              title={showFinished ? 'Showing finished matches too — click to hide them' : 'Include finished matches with final scores (results review)'}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-full border text-[10px] font-semibold transition-colors ${
+                showFinished
+                  ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-400'
+                  : 'border-[var(--border)] text-[var(--text)] hover:text-[var(--text-h)] hover:bg-[var(--code-bg)]'
+              }`}
+            >
+              <Clock size={10} />
+              Finished
+            </button>
             <button
               onClick={() => setShowSavedOnly(v => !v)}
               title={showSavedOnly ? 'Showing saved signals only — click to show all' : 'Show saved signals only'}
