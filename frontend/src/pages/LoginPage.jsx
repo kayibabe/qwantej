@@ -24,7 +24,7 @@ export default function LoginPage({ onSwitch, onForgot, onBack }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--bg-page)] px-4">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--bg-auth)] px-4">
       <div className="w-full max-w-sm">
         {onBack && (
           <button onClick={onBack} className="flex items-center gap-1.5 text-xs text-[var(--text)] opacity-60 hover:opacity-100 transition-opacity mb-6 cursor-pointer">
