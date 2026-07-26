@@ -11,16 +11,16 @@
   "scope": "/",
   "icons": [
     {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
+      "src": "/icon-light.png",
+      "sizes": "86x90",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
+      "src": "/icon-dark.png",
+      "sizes": "84x89",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "maskable"
     },
     {
       "src": "/qwantej-logo.svg",
@@ -37,14 +37,14 @@
       "short_name": "Signals",
       "description": "Today's value betting signals",
       "url": "/?page=signals",
-      "icons": [{ "src": "/qwantej-logo.svg", "sizes": "any" }]
+      "icons": [{ "src": "/icon-light.png", "sizes": "86x90" }]
     },
     {
       "name": "Bet Tracker",
       "short_name": "Tracker",
       "description": "Track your bets",
       "url": "/?page=tracker",
-      "icons": [{ "src": "/qwantej-logo.svg", "sizes": "any" }]
+      "icons": [{ "src": "/icon-light.png", "sizes": "86x90" }]
     }
   ]
 }

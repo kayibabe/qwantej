@@ -32,6 +32,15 @@
   --heading: system-ui, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
+  /* Logo mark colour tokens — dark default */
+  --qlogo-a: #071040;
+  --qlogo-b: #0855cc;
+  --qlogo-c: #1a8aff;
+  --qlogo-pixel: #0b6fe0;
+  --qlogo-chart: #00bfff;
+  --qlogo-dot-fill: #091845;
+  --qlogo-tagline: #38b8d8;
+
   font: 16px/150% var(--sans);
   letter-spacing: 0.15px;
   color-scheme: dark;
@@ -69,6 +78,14 @@
     --color-warning: #d97706;
     --color-warning-bg: rgba(217, 119, 6, 0.08);
     --color-warning-border: rgba(217, 119, 6, 0.3);
+    /* Logo mark colour tokens — light (system preference) */
+    --qlogo-a: #0c1a5c;
+    --qlogo-b: #1748c8;
+    --qlogo-c: #1e7aff;
+    --qlogo-pixel: #1555c8;
+    --qlogo-chart: #1060f0;
+    --qlogo-dot-fill: #ffffff;
+    --qlogo-tagline: #1555c8;
     color-scheme: light;
   }
 }
@@ -99,6 +116,14 @@
   --color-warning: #fbbf24;
   --color-warning-bg: rgba(251, 191, 36, 0.1);
   --color-warning-border: rgba(251, 191, 36, 0.3);
+  /* Logo mark colour tokens — dark manual override */
+  --qlogo-a: #071040;
+  --qlogo-b: #0855cc;
+  --qlogo-c: #1a8aff;
+  --qlogo-pixel: #0b6fe0;
+  --qlogo-chart: #00bfff;
+  --qlogo-dot-fill: #091845;
+  --qlogo-tagline: #38b8d8;
 }
 
 /* Manual light override */
@@ -127,6 +152,14 @@
   --color-warning: #d97706;
   --color-warning-bg: rgba(217, 119, 6, 0.08);
   --color-warning-border: rgba(217, 119, 6, 0.3);
+  /* Logo mark colour tokens — light manual override */
+  --qlogo-a: #0c1a5c;
+  --qlogo-b: #1748c8;
+  --qlogo-c: #1e7aff;
+  --qlogo-pixel: #1555c8;
+  --qlogo-chart: #1060f0;
+  --qlogo-dot-fill: #ffffff;
+  --qlogo-tagline: #1555c8;
 }
 
 body {
@@ -152,6 +185,24 @@ body {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* ── Theme-aware image switching ──────────────────────────────────────
+   Wrap light + dark <img> siblings in a flex container; these classes
+   hide/show the correct one based on the active colour scheme.
+   Covers: system prefers-color-scheme AND the manual data-theme toggle.
+   Default: dark (app ships dark-first).                               */
+.q-theme-light { display: none; }
+.q-theme-dark  { display: block; }
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .q-theme-light { display: block; }
+  :root:not([data-theme="dark"]) .q-theme-dark  { display: none; }
+}
+
+:root[data-theme="light"] .q-theme-light { display: block; }
+:root[data-theme="light"] .q-theme-dark  { display: none; }
+:root[data-theme="dark"]  .q-theme-light { display: none; }
+:root[data-theme="dark"]  .q-theme-dark  { display: block; }
 
 .stat-animate {
   animation: count-up 0.6s ease-out forwards;
