@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { Brain, ChevronDown, ChevronUp, Clock, TrendingDown, TrendingUp, CheckCircle2, XCircle } from 'lucide-react'
 import { fetchModelIntelligence } from '../../api/analytics'
 
@@ -35,8 +35,8 @@ const CHANGE_TYPE_META = {
   min_prob_by_agreement: {
     label: 'Min Probability',
     description: 'Minimum model probability raised for this agreement type',
-    color: 'text-violet-400',
-    bg: 'bg-violet-500/10 border-violet-500/25',
+    color: 'text-blue-400',
+    bg: 'bg-blue-500/10 border-blue-500/25',
     icon: TrendingUp,
   },
 }

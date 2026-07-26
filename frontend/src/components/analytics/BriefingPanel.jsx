@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import {
   Sparkles, TrendingUp, TrendingDown, Target, AlertTriangle,
   Zap, Shield, Crosshair, Brain, ChevronDown, ChevronUp,
@@ -303,13 +303,13 @@ export default function BriefingPanel({ data, onApplySignalFilter }) {
       {/* Header */}
       <button
         onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-indigo-600/20 via-blue-600/15 to-[var(--code-bg)] hover:from-indigo-600/25 transition-colors"
+        className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-blue-600/20 via-blue-600/15 to-[var(--code-bg)] hover:from-blue-600/25 transition-colors"
       >
         <div className="flex items-center gap-2.5">
-          <Sparkles size={14} className="text-indigo-400" />
+          <Sparkles size={14} className="text-blue-400" />
           <span className="text-sm font-semibold text-[var(--text-h)]">Intelligence Briefing</span>
           {insights.length > 0 && (
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30">
               {insights.length} insights
             </span>
           )}

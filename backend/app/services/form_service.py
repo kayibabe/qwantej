@@ -27,7 +27,7 @@ Design decisions
   partial data would skew the blend for one side only.
 - We query across home AND away appearances so we capture a team's true recent
   output regardless of venue.  Venue splits are theoretically better but require
-  more data; with only 6 games the noise outweighs the signal.
+  more data; with only 5 games the noise outweighs the signal.
 """
 from __future__ import annotations
 

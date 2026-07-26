@@ -135,7 +135,7 @@ function SystemBetFallbackCard({ bet }) {
 
       {/* Footer */}
       <div className="px-4 py-2 border-t border-[var(--border)] flex items-center gap-2">
-        <span className="flex items-center gap-1 text-xs text-violet-400 font-semibold">
+        <span className="flex items-center gap-1 text-xs text-blue-400 font-semibold">
           <Bot size={11} />
           System Pick
         </span>
@@ -589,10 +589,10 @@ const _LIVE_SET = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT'])
         {/* Card-border legend — always visible so users don't need to open filters to decode colours */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-[var(--text)] opacity-60 px-1">
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500/60 border border-emerald-400 shrink-0"></span> High prob 70%+</span>
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-violet-500/60 border border-violet-400 shrink-0"></span> Bayesian only</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-blue-500/60 border border-blue-400 shrink-0"></span> Bayesian only</span>
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-amber-500/60 border border-amber-400 shrink-0"></span> Medium conf</span>
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-500/60 border border-red-400 shrink-0"></span> Contradiction</span>
-          <span className="flex items-center gap-1"><span className="inline-flex items-center px-1.5 rounded bg-indigo-500/20 border border-indigo-400/50 text-[9px] font-bold text-indigo-300 shrink-0">1X/X2/12</span> Safer cover</span>
+          <span className="flex items-center gap-1"><span className="inline-flex items-center px-1.5 rounded bg-blue-500/20 border border-blue-400/50 text-[9px] font-bold text-blue-300 shrink-0">1X/X2/12</span> Safer cover</span>
         </div>
 
         {loading && signals.length === 0 && (
@@ -626,7 +626,7 @@ const _LIVE_SET = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT'])
           <div className="rounded-lg border border-red-500/25 bg-red-500/8 px-6 py-8 text-center">
             <p className="text-sm text-red-400 font-semibold mb-2">Failed to load signals</p>
             <p className="text-xs text-slate-400 mb-4">{typeof error === 'string' ? error : 'Something went wrong. Please try again.'}</p>
-            <button onClick={() => window.location.reload()} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm rounded-lg transition-colors">
+            <button onClick={() => window.location.reload()} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
               Retry
             </button>
           </div>
@@ -718,14 +718,14 @@ const _LIVE_SET = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT'])
               {supplementalSignals.length > 0 && (
                 <>
                   <div className="flex items-center gap-3 pt-2">
-                    <div className="flex-1 h-px bg-violet-400/20" />
-                    <div className="flex items-center gap-2 px-3 py-1 rounded-full border border-violet-400/30 bg-violet-500/8">
-                      <span className="text-[10px] font-bold text-violet-400 tracking-wide uppercase">Supplemental Picks</span>
+                    <div className="flex-1 h-px bg-blue-400/20" />
+                    <div className="flex items-center gap-2 px-3 py-1 rounded-full border border-blue-400/30 bg-blue-500/8">
+                      <span className="text-[10px] font-bold text-blue-400 tracking-wide uppercase">Supplemental Picks</span>
                     </div>
-                    <div className="flex-1 h-px bg-violet-400/20" />
+                    <div className="flex-1 h-px bg-blue-400/20" />
                   </div>
-                  <div className="rounded-lg border border-violet-400/25 bg-violet-500/6 px-4 py-3 text-xs text-[var(--text)] leading-relaxed">
-                    <span className="font-semibold text-violet-300">Bayesian model only</span>
+                  <div className="rounded-lg border border-blue-400/25 bg-blue-500/6 px-4 py-3 text-xs text-[var(--text)] leading-relaxed">
+                    <span className="font-semibold text-blue-300">Bayesian model only</span>
                     {' — '}our Bayesian engine found High-confidence value here, but the Poisson model didn&apos;t confirm. One engine vs two: treat these as lower-conviction picks and size stakes accordingly.
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -765,10 +765,10 @@ const _LIVE_SET = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT'])
 
               {/* Upgrade banner */}
               {!isPro && allOrdered.length > freeSlice && (
-                <div className="rounded-lg border border-indigo-500/30 bg-indigo-500/8 px-4 py-3 text-center text-sm space-y-1">
+                <div className="rounded-lg border border-blue-500/30 bg-blue-500/8 px-4 py-3 text-center text-sm space-y-1">
                   <div>
                     <span className="text-slate-300">Viewing <strong className="text-white">{freeSlice} of {allOrdered.length}</strong> signals. </span>
-                    <button onClick={onUpgrade} className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2 font-medium">
+                    <button onClick={onUpgrade} className="text-blue-400 hover:text-blue-300 underline underline-offset-2 font-medium">
                       Upgrade to Pro →
                     </button>
                   </div>

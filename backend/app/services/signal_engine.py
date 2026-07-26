@@ -47,6 +47,7 @@ from app.engines import dual_engine
 from app.engines import bos as bos_engine
 from app.engines import hybrid_b as hybrid_b_engine
 from app.services import weather_service
+from app.services import lineup_service
 from app.models import Fixture, MarketSnapshot, Signal
 from app.services.performance_intelligence import compute_performance_weights, PerformanceWeights
 from app.core.config import (
@@ -778,6 +779,13 @@ async def compute_signals_for_date(db: AsyncSession, run_date: date) -> int:
 
         if _hb_result.selected_market is None:
             # This fixture was rejected by Phase 2/3/6 filters — skip
+            continue
+
+        # ── Phase 6 Rule 3: team news alert ──────────────────────────────────
+        # Checked after market selection so rejected fixtures cost no API call.
+        # Queries API-Football /injuries; triggers when away team has ≥ 5
+        # injured/suspended players confirmed. Fail-open: errors → False.
+        if await lineup_service.get_team_news_alert(fixture.id, fixture.away_team):
             continue
 
         # ── Phase 6 Rule 5: weather override ─────────────────────────────────

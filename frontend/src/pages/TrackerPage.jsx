@@ -322,10 +322,10 @@ export default function TrackerPage({ user, settings, onUpgrade }) {
 
       {/* System performance card — visible when source=system or system bets exist */}
       {systemSummary && systemSummary.total_bets > 0 && (sourceFilter === 'system' || sourceFilter === '') && (
-        <div className="rounded-xl border border-violet-500/25 bg-violet-500/6 px-4 py-3 space-y-2">
+        <div className="rounded-xl border border-blue-500/25 bg-blue-500/6 px-4 py-3 space-y-2">
           <div className="flex items-center gap-2">
-            <Bot size={13} className="text-violet-400 shrink-0" />
-            <span className="text-xs font-semibold text-violet-300">System Performance</span>
+            <Bot size={13} className="text-blue-400 shrink-0" />
+            <span className="text-xs font-semibold text-blue-300">System Performance</span>
             <span className="text-[10px] font-medium text-[var(--text)] opacity-50 bg-[var(--code-bg)] px-1.5 py-0.5 rounded">All-time</span>
             <span className="ml-auto text-xs text-[var(--text)] opacity-60">{systemSummary.total_bets} total picks</span>
           </div>

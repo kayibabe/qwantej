@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Shared formatting helpers used across the app.
  * Currency: Malawian Kwacha — symbol "K" prefix, e.g. K1,250.00
  * Time:     Always rendered in the user's local timezone via the browser's Intl APIs.
@@ -139,7 +139,7 @@ export function marketColor(market) {
   if (/^Over \d/.test(market))           return 'text-rose-400'
   if (/^(Home|Away) Under/.test(market)) return 'text-teal-400'
   if (/^Under \d/.test(market))          return 'text-sky-400'
-  if (market.startsWith('BTTS'))         return 'text-violet-400'
+  if (market.startsWith('BTTS'))         return 'text-blue-400'
   if (/^(1X|X2|12)\b/.test(market))     return 'text-blue-400'
   if (/^(Home Win|Away Win|Draw)$/.test(market)) return 'text-emerald-400'
   return 'text-[var(--text-h)]'

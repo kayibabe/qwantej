@@ -388,7 +388,7 @@ function BetRow({ bet, onRefresh }) {
             </span>
           )}
           {bet.source_rule_key === 'system_auto' && (
-            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-violet-500/15 text-violet-400 border border-violet-500/25 text-[10px] font-semibold">
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-400 border border-blue-500/25 text-[10px] font-semibold">
               <Bot size={9} />
               System
             </span>

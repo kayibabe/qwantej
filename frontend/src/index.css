@@ -4,14 +4,14 @@
 :root {
   --text: #c9cdd6;
   --text-h: #f3f4f6;
-  --bg: #16171d;
-  --bg-page: #0e0f14;
-  --border: #2e303a;
-  --code-bg: #1f2028;
-  --accent: #c084fc;
-  --accent-bg: rgba(192, 132, 252, 0.15);
-  --accent-border: rgba(192, 132, 252, 0.5);
-  --social-bg: rgba(47, 48, 58, 0.5);
+  --bg: #131827;
+  --bg-page: #0c1020;
+  --border: #1e2a3a;
+  --code-bg: #1a2035;
+  --accent: #3b82f6;
+  --accent-bg: rgba(59, 130, 246, 0.15);
+  --accent-border: rgba(59, 130, 246, 0.5);
+  --social-bg: rgba(26, 32, 53, 0.5);
   --shadow:
     rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
   --shadow-card:
@@ -46,16 +46,16 @@
 /* Light mode — system preference or manual override */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --text: #3d3848;
-    --text-h: #08060d;
+    --text: #374151;
+    --text-h: #0f172a;
     --bg: #fff;
-    --bg-page: #f0eef8;
-    --border: #e5e4e7;
-    --code-bg: #f4f3ec;
-    --accent: #aa3bff;
-    --accent-bg: rgba(170, 59, 255, 0.1);
-    --accent-border: rgba(170, 59, 255, 0.5);
-    --social-bg: rgba(244, 243, 236, 0.5);
+    --bg-page: #f0f4ff;
+    --border: #e2e8f0;
+    --code-bg: #f0f5ff;
+    --accent: #1d4ed8;
+    --accent-bg: rgba(29, 78, 216, 0.1);
+    --accent-border: rgba(29, 78, 216, 0.5);
+    --social-bg: rgba(240, 244, 255, 0.5);
     --shadow:
       rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
     --shadow-card:
@@ -78,14 +78,14 @@
   color-scheme: dark;
   --text: #c9cdd6;
   --text-h: #f3f4f6;
-  --bg: #16171d;
-  --bg-page: #0e0f14;
-  --border: #2e303a;
-  --code-bg: #1f2028;
-  --accent: #c084fc;
-  --accent-bg: rgba(192, 132, 252, 0.15);
-  --accent-border: rgba(192, 132, 252, 0.5);
-  --social-bg: rgba(47, 48, 58, 0.5);
+  --bg: #131827;
+  --bg-page: #0c1020;
+  --border: #1e2a3a;
+  --code-bg: #1a2035;
+  --accent: #3b82f6;
+  --accent-bg: rgba(59, 130, 246, 0.15);
+  --accent-border: rgba(59, 130, 246, 0.5);
+  --social-bg: rgba(26, 32, 53, 0.5);
   --shadow:
     rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
   --shadow-card:
@@ -104,16 +104,16 @@
 /* Manual light override */
 :root[data-theme="light"] {
   color-scheme: light;
-  --text: #3d3848;
-  --text-h: #08060d;
+  --text: #374151;
+  --text-h: #0f172a;
   --bg: #fff;
-  --bg-page: #f0eef8;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
+  --bg-page: #f0f4ff;
+  --border: #e2e8f0;
+  --code-bg: #f0f5ff;
+  --accent: #1d4ed8;
+  --accent-bg: rgba(29, 78, 216, 0.1);
+  --accent-border: rgba(29, 78, 216, 0.5);
+  --social-bg: rgba(240, 244, 255, 0.5);
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
   --shadow-card:

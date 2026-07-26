@@ -19,7 +19,7 @@ const CHANGE_TYPE_COLOR = {
   market_odds_ceiling:   'text-blue-400 bg-blue-500/10 border-blue-500/20',
   market_suppression:    'text-red-400 bg-red-500/10 border-red-500/20',
   league_suppression:    'text-orange-400 bg-orange-500/10 border-orange-500/20',
-  kelly_fraction_adj:    'text-purple-400 bg-purple-500/10 border-purple-500/20',
+  kelly_fraction_adj:    'text-blue-400 bg-blue-500/10 border-blue-500/20',
   min_prob_by_agreement: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
 }
 
@@ -264,7 +264,7 @@ export default function LearningProposalsPanel() {
         runResult={runResultB}
         onRun={handleRunB}
         onDeactivate={handleDeactivated}
-        accentClass="text-violet-400 border-violet-500/20 bg-violet-500/5"
+        accentClass="text-blue-400 border-blue-500/20 bg-blue-500/5"
       />
 
       {/* ── Unknown / future types ─────────────────────────────────────────── */}

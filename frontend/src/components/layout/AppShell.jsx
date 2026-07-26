@@ -110,18 +110,18 @@ export default function AppShell({ activePage, onNavigate, children }) {
         </button>
 
         {/* Brand logo — always visible */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
           <div className="shrink-0 w-9 h-9">
             <img
-              src="/falcon.png"
+              src="/qwantej-logo.svg"
               alt="Qwantej"
               className="w-full h-full object-contain"
             />
           </div>
           <div className="leading-none">
             <span className="text-base font-bold text-[var(--text-h)] tracking-tight">Qwantej</span>
-            <span className="block text-[10px] text-[var(--accent)] font-semibold tracking-widest uppercase mt-0.5 opacity-80">
-              Intelligence Platform
+            <span className="block text-[10px] text-[var(--accent)] font-semibold tracking-wide mt-0.5 opacity-90">
+              Intelligence Beyond Numbers.
             </span>
           </div>
         </div>

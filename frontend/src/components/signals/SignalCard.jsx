@@ -116,7 +116,7 @@ function MarketIntentBadge({ market }) {
 
   if (market === 'Over 0.5 1H') {
     label = 'First Half'
-    style = 'bg-violet-500/10 text-violet-400 border-violet-500/30'
+    style = 'bg-blue-500/10 text-blue-400 border-blue-500/30'
   } else if (market === 'Over 1.5' || market === 'Over 2.5' || market === 'Home Over 0.5' || market === 'Away Over 0.5') {
     label = market === 'Away Over 0.5' ? 'Away Scores' : market === 'Home Over 0.5' ? 'Home Scores' : 'Goals Lean'
     style = 'bg-rose-500/10 text-rose-600 border-rose-500/30'
@@ -128,10 +128,10 @@ function MarketIntentBadge({ market }) {
     style = 'bg-emerald-500/12 text-emerald-600 border-emerald-500/35'
   } else if (market === '1X (Home or Draw)' || market === 'X2 (Draw or Away)') {
     label = 'Safer Cover'
-    style = 'bg-indigo-500/12 text-indigo-400 border-indigo-500/30'
+    style = 'bg-blue-500/12 text-blue-400 border-blue-500/30'
   } else if (market === '12 (Home or Away)') {
     label = 'No Draw'
-    style = 'bg-purple-500/12 text-purple-400 border-purple-500/30'
+    style = 'bg-blue-500/12 text-blue-400 border-blue-500/30'
   }
 
   if (!label) return null
@@ -456,7 +456,7 @@ function HybridBPrimaryBlock({ signal }) {
 
   const marketStyle =
     market === 'X2'
-      ? 'bg-indigo-500/12 text-indigo-300 border-indigo-500/30'
+      ? 'bg-blue-500/12 text-blue-300 border-blue-500/30'
       : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
 
   const epLabel = ep != null ? `+K${(ep / 1000).toFixed(0)}k EP` : null
@@ -730,7 +730,7 @@ export default function SignalCard({ signal, rank, isPro = true, isTracked = fal
           : isHybridBMedium
             ? 'border-amber-400/30 border-l-4 border-l-amber-400 hover:border-amber-400/50 hover:shadow-[var(--shadow-card)]'
             : isBayesianOnly
-              ? 'border-violet-400/35 border-l-4 border-l-violet-400 hover:border-violet-400/55'
+              ? 'border-blue-400/35 border-l-4 border-l-violet-400 hover:border-blue-400/55'
               : isUnderMarket
                 ? 'border-sky-400/40 border-l-4 border-l-sky-400 hover:border-sky-400/60'
                 : isHighProbabilityOutcome
@@ -965,7 +965,7 @@ export default function SignalCard({ signal, rank, isPro = true, isTracked = fal
         {isAutoTracked ? (
           <span
             title="This signal was automatically recorded as a system pick. View in Tracker to see results."
-            className="flex items-center gap-1 text-xs font-semibold text-violet-400 mr-1"
+            className="flex items-center gap-1 text-xs font-semibold text-blue-400 mr-1"
           >
             <Bot size={13} />
             System Pick

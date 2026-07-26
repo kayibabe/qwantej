@@ -1,4 +1,4 @@
-const STYLES = {
+﻿const STYLES = {
   Won: 'bg-green-500/15 text-green-400 border-green-500/30',
   won: 'bg-green-500/15 text-green-400 border-green-500/30',
   Lost: 'bg-red-500/15 text-red-400 border-red-500/30',
@@ -13,7 +13,7 @@ const STYLES = {
   None: 'bg-gray-500/10 text-gray-500 border-gray-500/20',
   Both: 'bg-green-500/15 text-green-400 border-green-500/30',
   'Bayesian Only': 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  'Poisson Only': 'bg-purple-500/15 text-purple-400 border-purple-500/30',
+  'Poisson Only': 'bg-blue-500/15 text-blue-400 border-blue-500/30',
   Contradiction: 'bg-red-500/15 text-red-400 border-red-500/30',
 }
 

@@ -218,7 +218,7 @@ export default function AccountPage({ onUpgrade }) {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-[var(--border)] text-sm font-medium text-[var(--text-h)] hover:bg-[var(--code-bg)] transition-colors w-fit"
               >
-                <Send size={14} className="text-violet-400" />
+                <Send size={14} className="text-blue-400" />
                 Pro channel — full digest + ACCA
               </a>
             )}

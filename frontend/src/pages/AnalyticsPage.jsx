@@ -488,7 +488,7 @@ function AgreementBreakdown({ rows, onApplySignalFilter }) {
   const COLORS = {
     'Both':          { bar: 'bg-emerald-500', text: 'text-emerald-400' },
     'Bayesian Only': { bar: 'bg-blue-500',    text: 'text-blue-400' },
-    'Poisson Only':  { bar: 'bg-violet-500',  text: 'text-violet-400' },
+    'Poisson Only':  { bar: 'bg-blue-500',  text: 'text-blue-400' },
     'Contradiction': { bar: 'bg-amber-500',   text: 'text-amber-400' },
     'Unknown':       { bar: 'bg-gray-500',    text: 'text-gray-400' },
   }
@@ -578,7 +578,7 @@ function TierBreakdown({ rows = [] }) {
   const TIER_META = {
     1: { label: 'Tier 1', sub: 'Top-flight / international',  ring: 'border-amber-500/30',  bg: 'bg-amber-500/5',  text: 'text-amber-400',  bar: 'bg-amber-400' },
     2: { label: 'Tier 2', sub: 'Second division / major cup', ring: 'border-blue-500/30',   bg: 'bg-blue-500/5',   text: 'text-blue-400',   bar: 'bg-blue-400'  },
-    3: { label: 'Tier 3', sub: 'Lower league / minor cup',    ring: 'border-violet-500/30', bg: 'bg-violet-500/5', text: 'text-violet-400', bar: 'bg-violet-400' },
+    3: { label: 'Tier 3', sub: 'Lower league / minor cup',    ring: 'border-blue-500/30', bg: 'bg-blue-500/5', text: 'text-blue-400', bar: 'bg-blue-400' },
   }
 
   const totalBets = rows.reduce((s, r) => s + (r.bets ?? 0), 0)
@@ -770,7 +770,7 @@ export default function AnalyticsPage({ onUpgrade, onApplySignalFilter, onNaviga
             <li>After the match, mark it Won or Lost in the Tracker</li>
             <li>Once you have 50+ settled bets, full analytics appear</li>
           </ol>
-          <button onClick={() => onNavigate?.('signals')} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm rounded-lg transition-colors">
+          <button onClick={() => onNavigate?.('signals')} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
             View Signals →
           </button>
         </div>
@@ -820,7 +820,7 @@ export default function AnalyticsPage({ onUpgrade, onApplySignalFilter, onNaviga
                   {/* System Auto-Tracked panel */}
                   <div className="space-y-3">
                     <div className="flex items-center gap-1.5">
-                      <Bot size={12} className="text-violet-400 shrink-0" />
+                      <Bot size={12} className="text-blue-400 shrink-0" />
                       <span className="text-xs font-semibold text-[var(--text-h)]">System Auto-Tracked</span>
                       <span className="ml-2 text-[10px] text-[var(--text)] opacity-50">picks auto-tracked by the model</span>
                     </div>
@@ -1175,7 +1175,7 @@ function AccaPerformanceCard() {
                   </div>
                 </div>
                 <div className="h-1.5 rounded-full bg-[var(--border)] overflow-hidden">
-                  <div className="h-full rounded-full bg-indigo-500 opacity-70" style={{ width: pct + '%' }} />
+                  <div className="h-full rounded-full bg-blue-500 opacity-70" style={{ width: pct + '%' }} />
                 </div>
               </div>
             )

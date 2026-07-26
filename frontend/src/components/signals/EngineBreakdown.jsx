@@ -1,4 +1,4 @@
-// Engine breakdown — side-by-side Bayesian vs Poisson detail panel shown when
+﻿// Engine breakdown — side-by-side Bayesian vs Poisson detail panel shown when
 // the user expands a SignalCard. Reads from the nested API shape produced by
 // backend/app/routers/signals.py::_to_signal_out (signal.bayesian / signal.poisson).
 //
@@ -110,8 +110,8 @@ export default function EngineBreakdown({ signal }) {
 
       {/* ── Poisson ── */}
       {p ? (
-        <div className="rounded-lg border border-[var(--border)] px-3 py-2 bg-purple-500/5">
-          <div className="text-xs font-semibold text-purple-400 mb-1">Poisson</div>
+        <div className="rounded-lg border border-[var(--border)] px-3 py-2 bg-blue-500/5">
+          <div className="text-xs font-semibold text-blue-400 mb-1">Poisson</div>
           <Row label="Prob"        value={poissonProb} />
           <Row label="Edge"        value={poissonEdge} highlight={p.rule_strong} />
           <Row label="λH / λA"     value={poissonLambda} />
@@ -124,7 +124,7 @@ export default function EngineBreakdown({ signal }) {
       ) : (
         <EmptyEngine
           name="Poisson"
-          accent={{ bg: 'bg-purple-500/5', text: 'text-purple-400' }}
+          accent={{ bg: 'bg-blue-500/5', text: 'text-blue-400' }}
           reason="No Poisson signal — market not covered by the Poisson rule set, or λ unavailable for these teams."
         />
       )}

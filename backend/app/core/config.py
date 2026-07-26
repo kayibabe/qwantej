@@ -661,6 +661,12 @@ HYBRID_B_WEATHER_RAIN_MM_PER_HR: float = 10.0
 HYBRID_B_WEATHER_WIND_KMH: float = 50.0
 HYBRID_B_WEATHER_CHECK_ENABLED: bool = True
 
+# Phase 6 Rule 3 — Team News Alert (lineup / injury check via API-Football /injuries).
+# Flag a fixture when the away team has >= threshold injured or suspended players.
+# Fail-open: any lookup failure means no alert (bet proceeds on model merit).
+HYBRID_B_LINEUP_CHECK_ENABLED: bool = True
+HYBRID_B_LINEUP_ABSENT_THRESHOLD: int = 5  # injured + suspended away players
+
 BOS_SI_THRESHOLD: float = 75.0   # SI ≥ 75 → fixture is stable
 BOS_O00_MAX: float = 7.0          # Hard reject if 0-0 CS odds > 7
 BOS_CMA_MAX: float = 4.0          # CMA ceiling for H-score normalisation
@@ -1002,7 +1008,7 @@ POISSON_RULES = {
     # Overround correction for CS markets (tier-averaged global default).
     "cs_overround_factor": 1.45,
     # Rolling form lambda settings
-    "rolling_form_games": 6,
+    "rolling_form_games": 5,
     # form_lambda_weight lowered 0.50->0.35: CS odds lead, form adjusts.
     "form_lambda_weight": 0.35,
     # form_min_games raised 3->5: prevents single-game blowout spikes.

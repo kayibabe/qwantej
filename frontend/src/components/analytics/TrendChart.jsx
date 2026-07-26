@@ -156,7 +156,7 @@ export default function TrendChart({ data = [] }) {
         </span>
         {hasClvData && (
           <span className="flex items-center gap-1.5">
-            <span className="inline-block h-0.5 w-5 border-t-2 border-dashed border-violet-400" />
+            <span className="inline-block h-0.5 w-5 border-t-2 border-dashed border-blue-400" />
             Avg CLV
           </span>
         )}

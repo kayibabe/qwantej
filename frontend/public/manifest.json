@@ -1,23 +1,29 @@
-﻿{
-  "name": "Qwantej — Value Betting Intelligence",
+{
+  "name": "Qwantej — Intelligence Beyond Numbers",
   "short_name": "Qwantej",
-  "description": "Value Betting Intelligence Platform — Signals, Tracker & Analytics",
+  "description": "Football betting signals platform — Signals, Tracker & Analytics",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#0f1117",
-  "theme_color": "#4f46e5",
+  "background_color": "#0c1020",
+  "theme_color": "#1d4ed8",
   "lang": "en",
   "scope": "/",
   "icons": [
     {
-      "src": "/falcon.png",
-      "sizes": "any",
+      "src": "/icon-192.png",
+      "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/favicon.svg",
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/qwantej-logo.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
@@ -31,14 +37,14 @@
       "short_name": "Signals",
       "description": "Today's value betting signals",
       "url": "/?page=signals",
-      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
+      "icons": [{ "src": "/qwantej-logo.svg", "sizes": "any" }]
     },
     {
       "name": "Bet Tracker",
       "short_name": "Tracker",
       "description": "Track your bets",
       "url": "/?page=tracker",
-      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
+      "icons": [{ "src": "/qwantej-logo.svg", "sizes": "any" }]
     }
   ]
 }

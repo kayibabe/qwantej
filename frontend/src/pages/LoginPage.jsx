@@ -34,11 +34,11 @@ export default function LoginPage({ onSwitch, onForgot, onBack }) {
         <div className="mb-8 text-center">
           <div className="flex flex-col items-center gap-1 mb-1">
             <div className="flex items-center justify-center gap-2">
-              <img src="/falcon.png" alt="Qwantej" style={{ width: '44px', height: '44px', objectFit: 'contain' }} />
+              <img src="/qwantej-logo.svg" alt="Qwantej" style={{ width: '44px', height: '44px', objectFit: 'contain' }} />
               <span className="text-2xl font-bold text-[var(--text-h)] tracking-tight">Qwantej</span>
             </div>
-            <span className="block text-[10px] text-[var(--accent)] font-semibold tracking-widest uppercase opacity-80">
-              Intelligence Platform
+            <span className="block text-[10px] text-[var(--accent)] font-semibold tracking-wide opacity-90">
+              Intelligence Beyond Numbers.
             </span>
           </div>
           <p className="text-sm text-[var(--text)] opacity-75 mt-2">Sign in to your account</p>

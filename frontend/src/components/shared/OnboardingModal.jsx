@@ -8,8 +8,8 @@ const BASE_STEPS = [
     icon: TrendingUp,
     title: 'Welcome to Qwantej',
     body: 'We analyse live odds using two AI models (Bayesian + Poisson) to surface the highest-value football bets.',
-    iconColor: 'text-indigo-400',
-    iconBg: 'bg-indigo-500/15 border-indigo-500/30',
+    iconColor: 'text-blue-400',
+    iconBg: 'bg-blue-500/15 border-blue-500/30',
   },
   {
     icon: BarChart2,
@@ -55,7 +55,7 @@ export default function OnboardingModal({ onComplete }) {
       <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[var(--bg)] shadow-2xl overflow-hidden">
 
         {/* Top accent bar */}
-        <div className="h-1 w-full bg-gradient-to-r from-indigo-500 via-blue-500 to-emerald-500" />
+        <div className="h-1 w-full bg-gradient-to-r from-blue-500 via-blue-500 to-emerald-500" />
 
         {/* Dismiss button */}
         <button
