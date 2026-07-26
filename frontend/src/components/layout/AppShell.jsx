@@ -112,8 +112,8 @@ export default function AppShell({ activePage, onNavigate, children }) {
         {/* Brand logo — always visible */}
         <div className="flex items-center gap-2">
           <div className="shrink-0 w-9 h-9">
-            <img src="/icon-light.png" alt="Qwantej" className="q-theme-light w-full h-full object-contain" />
-            <img src="/icon-dark.png"  alt="Qwantej" className="q-theme-dark  w-full h-full object-contain" />
+            <img src="/icon-light.png" alt="Qwantej" className="q-theme-light q-icon w-full h-full object-contain" />
+            <img src="/icon-dark.png"  alt="Qwantej" className="q-theme-dark  q-icon w-full h-full object-contain" />
           </div>
           <div className="leading-none">
             <span className="text-base font-bold text-[var(--text-h)] tracking-tight">Qwantej</span>

@@ -32,6 +32,9 @@
   --heading: system-ui, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
+  /* Auth page background — matches logo image backgrounds */
+  --bg-auth: #080c1e;
+
   /* Logo mark colour tokens — dark default */
   --qlogo-a: #071040;
   --qlogo-b: #0855cc;
@@ -78,6 +81,9 @@
     --color-warning: #d97706;
     --color-warning-bg: rgba(217, 119, 6, 0.08);
     --color-warning-border: rgba(217, 119, 6, 0.3);
+    /* Auth page background */
+    --bg-auth: #ffffff;
+
     /* Logo mark colour tokens — light (system preference) */
     --qlogo-a: #0c1a5c;
     --qlogo-b: #1748c8;
@@ -116,6 +122,9 @@
   --color-warning: #fbbf24;
   --color-warning-bg: rgba(251, 191, 36, 0.1);
   --color-warning-border: rgba(251, 191, 36, 0.3);
+  /* Auth page background */
+  --bg-auth: #080c1e;
+
   /* Logo mark colour tokens — dark manual override */
   --qlogo-a: #071040;
   --qlogo-b: #0855cc;
@@ -152,6 +161,9 @@
   --color-warning: #d97706;
   --color-warning-bg: rgba(217, 119, 6, 0.08);
   --color-warning-border: rgba(217, 119, 6, 0.3);
+  /* Auth page background */
+  --bg-auth: #ffffff;
+
   /* Logo mark colour tokens — light manual override */
   --qlogo-a: #0c1a5c;
   --qlogo-b: #1748c8;
@@ -185,6 +197,18 @@ body {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* ── Theme-aware logo / icon blending ────────────────────────────────
+   Light mode: multiply blend removes white/off-white image backgrounds
+   against the white page, making the rectangle invisible.
+   Dark mode icon: clip-path crops the outer white ring pixels.        */
+.q-theme-dark.q-icon { clip-path: inset(3px round 20%); }
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .q-theme-light { mix-blend-mode: multiply; }
+}
+:root[data-theme="light"] .q-theme-light { mix-blend-mode: multiply; }
+:root[data-theme="dark"]  .q-theme-light { mix-blend-mode: normal; }
 
 /* ── Theme-aware image switching ──────────────────────────────────────
    Wrap light + dark <img> siblings in a flex container; these classes
