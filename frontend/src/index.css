@@ -199,16 +199,27 @@ body {
 }
 
 /* ── Theme-aware logo / icon blending ────────────────────────────────
-   Light mode: multiply blend removes white/off-white image backgrounds
-   against the white page, making the rectangle invisible.
-   Dark mode icon: clip-path crops the outer white ring pixels.        */
-.q-theme-dark.q-icon { clip-path: inset(3px round 20%); }
+   Dark icon: clip-path with generous inset removes the white ring at
+   all four edges of icon-dark.png.
+   Light logos/icons: brightness(1.06) pushes any off-white pixel
+   (#f8f8f8 etc.) to pure white, then multiply makes it invisible
+   against the white page — eliminating the rectangular outline.       */
+.q-theme-dark.q-icon { clip-path: inset(6px round 24%); }
 
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) .q-theme-light { mix-blend-mode: multiply; }
+  :root:not([data-theme="dark"]) .q-theme-light {
+    mix-blend-mode: multiply;
+    filter: brightness(1.06);
+  }
 }
-:root[data-theme="light"] .q-theme-light { mix-blend-mode: multiply; }
-:root[data-theme="dark"]  .q-theme-light { mix-blend-mode: normal; }
+:root[data-theme="light"] .q-theme-light {
+  mix-blend-mode: multiply;
+  filter: brightness(1.06);
+}
+:root[data-theme="dark"] .q-theme-light {
+  mix-blend-mode: normal;
+  filter: none;
+}
 
 /* ── Theme-aware image switching ──────────────────────────────────────
    Wrap light + dark <img> siblings in a flex container; these classes

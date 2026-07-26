@@ -123,9 +123,9 @@ export default function AppShell({ activePage, onNavigate, children }) {
           </div>
         </div>
 
-        {/* Pillars — centred, desktop only */}
+        {/* Brand line — centred, desktop only */}
         <span className="hidden lg:flex flex-1 justify-center text-xs font-semibold text-[var(--accent)] tracking-widest uppercase select-none pointer-events-none">
-          Signals&nbsp;·&nbsp;Tracker&nbsp;·&nbsp;Analytics
+          Value&nbsp;·&nbsp;Precision&nbsp;·&nbsp;Intelligence
         </span>
 
         {/* Right side: user avatar (mobile) + clock (sm+) */}
