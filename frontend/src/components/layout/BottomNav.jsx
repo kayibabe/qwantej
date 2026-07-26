@@ -1,7 +1,6 @@
 ﻿import { useState, useEffect } from 'react'
 import {
   BarChart2,
-  Bot,
   ListChecks,
   TrendingUp,
   Wrench,
@@ -11,7 +10,6 @@ import { fetchBets } from '../../api/tracker'
 // Mirrors the desktop Sidebar exactly — same destinations on both devices.
 const NAV_ITEMS = [
   { id: 'signals',   label: 'Signals',    icon: TrendingUp },
-  { id: 'advisor',   label: 'AI',         icon: Bot        },
   { id: 'tracker',   label: 'Tracker',    icon: ListChecks },
   { id: 'analytics', label: 'Analytics',  icon: BarChart2  },
   { id: 'tools',     label: 'Tools',      icon: Wrench     },

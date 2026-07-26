@@ -581,11 +581,7 @@ async def compute_signals_for_date(db: AsyncSession, run_date: date) -> int:
         await db.execute(delete(Signal).where(Signal.fixture_id.in_(upcoming_ids)))
         await db.commit()
 
-        # Advisory cache only embeds upcoming picks — invalidate when those change.
-        from app.services.advisor_service import invalidate_advisory_cache
-        await invalidate_advisory_cache(db, run_date)
-
-    # Finished fixtures with existing signals are kept as-is; skip recomputing them.
+# Finished fixtures with existing signals are kept as-is; skip recomputing them.
     finished_with_signal: set[int] = set()
     if finished_fixtures:
         finished_ids = [f.id for f in finished_fixtures]

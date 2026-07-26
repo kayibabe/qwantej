@@ -83,7 +83,6 @@ const FREE_FEATURES = [
 const PRO_FEATURES = [
   'All signals, fully ranked',
   'AI Acca-of-the-Day picks',
-  'AI Advisory chat',
   'CLV tracking & closing line value',
   'Bet tracker with P&L analytics',
   'Kelly criterion stake sizing',

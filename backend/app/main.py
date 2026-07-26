@@ -20,7 +20,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.config import get_settings
 from app.core.database import init_db, engine, AsyncSessionLocal
 from app.core.migrations import run_migrations
-from app.routers import signals, tracker, analytics, backtest, advisor, arb as arb_router
+from app.routers import signals, tracker, analytics, backtest, arb as arb_router
 from app.routers import leaderboard as leaderboard_router
 from app.routers import loss_analysis as loss_analysis_router
 from app.routers import auth as auth_router
@@ -275,7 +275,6 @@ app.include_router(signals.router)
 app.include_router(tracker.router)
 app.include_router(analytics.router)
 app.include_router(backtest.router)
-app.include_router(advisor.router)
 app.include_router(loss_analysis_router.router)
 app.include_router(arb_router.router)
 app.include_router(leaderboard_router.router)

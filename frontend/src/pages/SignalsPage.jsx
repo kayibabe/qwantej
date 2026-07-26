@@ -1,9 +1,9 @@
 ﻿import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import { RefreshCw, Download, Calendar, TrendingUp, ArrowUpDown, SlidersHorizontal, AlertCircle, X, Filter, Target, Zap, HelpCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Radio, Search, Heart, Bot, Clock } from 'lucide-react'
+import { RefreshCw, Download, Calendar, TrendingUp, AlertCircle, X, Target, Zap, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Heart, Bot, Clock } from 'lucide-react'
 import { useSignals } from '../store/useSignals'
 import { computeSignals, fetchSignals } from '../api/signals'
 import { syncData, fetchBets } from '../api/tracker'
-import { fetchValueBandStreak } from '../api/analytics'
+
 import SignalCard from '../components/signals/SignalCard'
 import AccaCard from '../components/signals/AccaCard'
 import { marketColor } from '../utils/format'
@@ -16,49 +16,6 @@ import OnboardingModal from '../components/shared/OnboardingModal'
 
 const FREE_SIGNAL_LIMIT = 5
 
-const CONFIDENCE_OPTIONS = ['', 'High', 'Medium', 'Low']
-const AGREEMENT_OPTIONS  = ['', 'Both', 'Bayesian Only', 'Poisson Only', 'Contradiction']
-const MARKET_FAMILY_OPTIONS = [
-  '',
-  'Goals',
-  'First Half',
-  'Team Totals',
-  'Double Chance',
-  'Clean Sheet',
-]
-const MARKET_OPTIONS     = [
-  '',
-  // Full-game totals (active)
-  'Over 1.5', 'Over 2.5', 'Under 2.5',
-  // First half (active)
-  'Over 0.5 1H',
-  // Team totals (active)
-  'Home Over 0.5', 'Away Over 0.5',
-  // Double Chance (active)
-  '1X (Home or Draw)', 'X2 (Draw or Away)', '12 (Home or Away)',
-  // Win to nil (active)
-  'Home Win to Nil', 'Away Win to Nil',
-]
-
-const SORT_OPTIONS = [
-  { value: 'system',      label: 'System Rank' },
-  { value: 'quality',     label: 'Quality' },
-  { value: 'probability', label: 'Prob %' },
-  { value: 'kickoff',     label: 'Kickoff' },
-  { value: 'stake',       label: 'Stake %' },
-]
-
-const DC_MARKETS = new Set(['1X (Home or Draw)', 'X2 (Draw or Away)', '12 (Home or Away)'])
-
-function getMarketFamily(market) {
-  if (!market) return 'Other'
-  if (market === 'Over 1.5' || market === 'Over 2.5' || market === 'Under 2.5') return 'Goals'
-  if (market === 'Over 0.5 1H') return 'First Half'
-  if (market === 'Home Over 0.5' || market === 'Away Over 0.5') return 'Team Totals'
-  if (DC_MARKETS.has(market)) return 'Double Chance'
-  if (market === 'Home Win to Nil' || market === 'Away Win to Nil') return 'Clean Sheet'
-  return 'Other'
-}
 
 function fmtDate(iso) {
   const d = new Date(iso + 'T00:00:00')
@@ -71,43 +28,6 @@ function shiftDate(iso, days) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 }
 
-function FilterSelect({ label, value, onChange, options, tooltip }) {
-  return (
-    <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
-      <span className="font-medium opacity-85 flex items-center gap-1">
-        {label}
-        {tooltip && (
-          <span title={tooltip}>
-            <HelpCircle size={11} className="text-slate-500 cursor-help" />
-          </span>
-        )}
-      </span>
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        className="w-full px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--bg)] text-[var(--text-h)] text-sm focus:outline-none focus:border-[var(--accent)]"
-      >
-        {options.map(o => <option key={o} value={o}>{o || 'All'}</option>)}
-      </select>
-    </label>
-  )
-}
-
-// Sort pill button
-function SortPill({ label, active, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
-        active
-          ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
-          : 'border-[var(--border)] text-[var(--text)] hover:text-[var(--text-h)] hover:bg-[var(--code-bg)]'
-      }`}
-    >
-      {label}
-    </button>
-  )
-}
 
 // ── Fallback card for system bets whose signal isn't in the loaded list ────────
 // Mirrors SignalCard's visual structure using only TrackedBet fields.
@@ -246,16 +166,12 @@ export default function SignalsPage({ settings, onDeepDive, onUpgrade, onNavigat
   const [date, setDate]             = useState(today)
   const [confidence, setConfidence] = useState('')
   const [agreement, setAgreement]   = useState('')
-  const [marketFamily, setMarketFamily] = useState('')
+
   const [market, setMarket]         = useState('')
   const [sortBy, setSortBy]         = useState('system')
   const [bestPerFixture, setBestPerFixture] = useState(true)
-  const [minProb, setMinProb]       = useState('')
-  const [leagueSearch, setLeagueSearch] = useState('')
   const [showSavedOnly, setShowSavedOnly] = useState(false)
   const [showFinished, setShowFinished] = useState(false)
-  const [filtersOpen, setFiltersOpen]   = useState(false)
-  const [viewMode, setViewMode]         = useState('all') // 'all' | 'value_band'
 
   const getSavedIds = () => { try { return JSON.parse(localStorage.getItem('Qwantej_saved_signals_v1') || '[]') } catch { return [] } }
   const [syncing, setSyncing]       = useState(false)
@@ -296,40 +212,18 @@ export default function SignalsPage({ settings, onDeepDive, onUpgrade, onNavigat
     if (initialFilter.market)     setMarket(initialFilter.market)
     if (initialFilter.confidence) setConfidence(initialFilter.confidence)
     if (initialFilter.agreement)  setAgreement(initialFilter.agreement)
-    if (initialFilter.viewMode)   setViewMode(initialFilter.viewMode)
-    setAnalyticsFilter(initialFilter)
+setAnalyticsFilter(initialFilter)
     onFilterConsumed?.()
   }, [initialFilter]) // eslint-disable-line
 
-  const [vbStreak, setVbStreak] = useState(null) // { streak, total, won, wr_pct, last_loss }
-  useEffect(() => {
-    fetchValueBandStreak().then(setVbStreak).catch(() => {})
-  }, [])
-
-  function clearAnalyticsFilter() {
+function clearAnalyticsFilter() {
     setMarket('')
     setConfidence('')
     setAgreement('')
     setAnalyticsFilter(null)
   }
 
-  function clearAllFilters() {
-    setConfidence('')
-    setAgreement('')
-    setMarketFamily('')
-    setMarket('')
-    setMinProb('')
-    setLeagueSearch('')
-    setShowSavedOnly(false)
-    setAnalyticsFilter(null)
-  }
 
-  // Count how many filters are active (for badge)
-  const activeFilterCount = [
-    confidence, agreement, marketFamily, market,
-    minProb !== '' ? minProb : '',
-    leagueSearch,
-  ].filter(Boolean).length
 const dateInputRef = useRef(null)
   const { signals, hiddenHighConfidenceCount, loading, error, load, invalidate } = useSignals()
   // Map fixture_id:market → signal so we can render system-tracked bets as full cards
@@ -360,28 +254,6 @@ const reload = () => load(params)
   const displayedSignals = useMemo(() => {
     let list = [...signals]
 
-    if (marketFamily) {
-      list = list.filter(s => getMarketFamily(s.market) === marketFamily)
-    }
-
-    // League / country text search
-    if (leagueSearch.trim()) {
-      const q = leagueSearch.trim().toLowerCase()
-      list = list.filter(s =>
-        (s.league  || '').toLowerCase().includes(q) ||
-        (s.country || '').toLowerCase().includes(q)
-      )
-    }
-
-    // Min probability filter
-    const probThreshold = minProb !== '' ? parseFloat(minProb) / 100 : null
-    if (probThreshold !== null && !isNaN(probThreshold)) {
-      list = list.filter(s => {
-        const primary = Math.max(s.bayesian?.prob ?? 0, s.poisson?.prob ?? 0)
-        return primary >= probThreshold
-      })
-    }
-
     // Sort
     switch (sortBy) {
       case 'system':
@@ -410,16 +282,9 @@ const reload = () => load(params)
       list = list.filter(s => savedIds.includes(s.id))
     }
 
-    // Value Band view: Poisson Only signals at 1.65–2.09 odds
-    if (viewMode === 'value_band') {
-      list = list.filter(s => {
-        const odd = s.best_odd ?? s.bayesian?.best_odd ?? 0
-        return s.dual_agreement === 'Poisson Only' && odd >= 1.65 && odd < 2.10
-      })
-    }
 
     return list
-  }, [signals, marketFamily, sortBy, minProb, leagueSearch, showSavedOnly, viewMode]) // eslint-disable-line
+  }, [signals, sortBy, showSavedOnly]) // eslint-disable-line
 
   // Summary stats for the result bar
   const stats = useMemo(() => {
@@ -428,15 +293,7 @@ const reload = () => load(params)
     return { total: displayedSignals.length, highConf }
   }, [displayedSignals])
 
-  // Auto-expand the filter panel when active filters produce 0 results so the
-  // user can see what's blocking their view without having to discover the panel.
-  useEffect(() => {
-    if (!loading && !error && displayedSignals.length === 0 && activeFilterCount > 0) {
-      setFiltersOpen(true)
-    }
-  }, [loading, error, displayedSignals.length, activeFilterCount]) // eslint-disable-line
-
-  const _LIVE_SET = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT'])
+const _LIVE_SET = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT'])
   const hasLiveMatches = signals.some(s => _LIVE_SET.has((s.status || '').trim().toUpperCase()))
 
   async function handleSync() {
@@ -653,176 +510,10 @@ const reload = () => load(params)
           </div>
         )}
 
-        {/* ── View Mode tabs ────────────────────────────────────────────── */}
-        <div className="flex gap-1 rounded-lg border border-[var(--border)] bg-[var(--code-bg)] p-1">
-          {[
-            { key: 'all',        label: 'All Signals' },
-            { key: 'value_band', label: '◆ Value Band' },
-          ].map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setViewMode(key)}
-              className={`flex-1 rounded-md py-1.5 text-xs font-semibold transition-all ${
-                viewMode === key
-                  ? key === 'value_band'
-                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
-                    : 'bg-[var(--accent)]/15 text-[var(--accent)] border border-[var(--accent)]/30'
-                  : 'text-[var(--text)] opacity-60 hover:opacity-90'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {/* Value Band explanation banner */}
-        {viewMode === 'value_band' && (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/8 px-4 py-3 text-sm">
-            <div className="flex items-start gap-3">
-              <span className="text-amber-400 text-lg leading-none mt-0.5">◆</span>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-amber-400 text-xs mb-0.5">Value Band — Poisson Only @ 1.65–2.09</p>
-                <p className="text-[var(--text)] opacity-75 text-xs leading-relaxed">
-                  These signals are where Poisson finds the most edge: 91.9% WR across 99 bets.
-                  The model detects home-team scoring rate mispriced by lagging bookmaker lines.
-                </p>
-              </div>
-              {vbStreak && (
-                <div className="shrink-0 text-right">
-                  <div className="flex items-center gap-1 justify-end">
-                    <span className="text-base leading-none">{vbStreak.streak >= 10 ? '🔥' : '✅'}</span>
-                    <span className="text-xl font-bold text-amber-400 leading-none">{vbStreak.streak}</span>
-                  </div>
-                  <p className="text-[10px] text-[var(--text)] opacity-60 mt-0.5">
-                    consecutive win{vbStreak.streak !== 1 ? 's' : ''}
-                  </p>
-                  <p className="text-[10px] text-[var(--text)] opacity-50">
-                    {vbStreak.wr_pct}% · {vbStreak.total} bets
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* ── ACCA of the Day ───────────────────────────────────────────── */}
         <AccaCard />
 
-        {/* ── Filter + Sort bar ─────────────────────────────────────────── */}
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--code-bg)] overflow-hidden">
 
-          {/* Collapsible header */}
-          <button
-            onClick={() => setFiltersOpen(v => !v)}
-            className="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-[var(--bg)] transition-colors text-left"
-          >
-            <Filter size={12} className="text-[var(--accent)] shrink-0" />
-            <span className="text-xs font-semibold text-[var(--text-h)]">Filters & Sort</span>
-            {activeFilterCount > 0 && (
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[var(--accent)] text-white">
-                {activeFilterCount}
-              </span>
-            )}
-            <div className="ml-auto flex items-center gap-2">
-              {activeFilterCount > 0 && (
-                <button
-                  onClick={e => { e.stopPropagation(); clearAllFilters() }}
-                  className="text-[10px] text-[var(--text)] opacity-80 hover:opacity-100 hover:text-red-400 flex items-center gap-1 transition-colors"
-                >
-                  <X size={10} /> Reset all
-                </button>
-              )}
-              <span className="text-[var(--text)] opacity-50">
-                {filtersOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-              </span>
-            </div>
-          </button>
-
-          {filtersOpen && (
-            <div className="px-4 pb-3 pt-1 space-y-3 border-t border-[var(--border)]">
-
-              {/* Row 1: dropdowns */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <FilterSelect label="Confidence"    value={confidence}   onChange={setConfidence}   options={CONFIDENCE_OPTIONS} />
-                <FilterSelect label="Agreement"     value={agreement}    onChange={setAgreement}    options={AGREEMENT_OPTIONS} />
-                <FilterSelect label="Market Family" value={marketFamily} onChange={setMarketFamily} options={MARKET_FAMILY_OPTIONS} tooltip="Betting market category: Goals (Over/Under), BTTS, Safer Cover (double chance), Team Totals, Clean Sheet, or Exact Goals" />
-                <FilterSelect label="Market"        value={market}       onChange={setMarket}       options={MARKET_OPTIONS} />
-              </div>
-
-              {/* Row 2: numeric + text inputs */}
-              <div className="flex flex-wrap gap-3">
-                {/* League search */}
-                <label className="flex flex-col gap-1 text-sm text-[var(--text)] flex-1 min-w-[140px]">
-                  <span className="font-medium opacity-85 text-xs">League / Country</span>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="e.g. Premier League"
-                      value={leagueSearch}
-                      onChange={e => setLeagueSearch(e.target.value)}
-                      className="w-full pl-3 pr-6 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--bg)] text-[var(--text-h)] text-sm focus:outline-none focus:border-[var(--accent)]"
-                    />
-                    {leagueSearch && (
-                      <button onClick={() => setLeagueSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text)] opacity-65 hover:opacity-100 text-xs">✕</button>
-                    )}
-                  </div>
-                </label>
-
-                {/* Min Prob% */}
-                <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
-                  <span className="font-medium opacity-85 text-xs flex items-center gap-1">
-                    <SlidersHorizontal size={10} /> Min Prob %
-                  </span>
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {['70', '80', '90'].map(v => (
-                      <button
-                        key={v}
-                        onClick={() => setMinProb(minProb === v ? '' : v)}
-                        className={`px-2 py-1 rounded-md text-[10px] font-bold border transition-colors ${
-                          minProb === v
-                            ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
-                            : 'border-[var(--border)] text-[var(--text)] hover:text-[var(--text-h)] hover:bg-[var(--code-bg)]'
-                        }`}
-                      >
-                        {v}%+
-                      </button>
-                    ))}
-                    <div className="relative">
-                      <input
-                        type="number"
-                        placeholder="Custom"
-                        min="0"
-                        max="100"
-                        value={minProb}
-                        onChange={e => setMinProb(e.target.value)}
-                        className="w-20 pl-2 pr-6 py-1 rounded-lg border border-[var(--border)] bg-[var(--bg)] text-[var(--text-h)] text-xs focus:outline-none focus:border-[var(--accent)] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                      />
-                      {minProb && (
-                        <button onClick={() => setMinProb('')} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[var(--text)] opacity-65 hover:opacity-100 text-xs">✕</button>
-                      )}
-                    </div>
-                  </div>
-                </label>
-              </div>
-
-              {/* Row 3: Sort pills */}
-              <div className="flex items-center gap-2 flex-wrap pt-0.5">
-                <span className="text-xs font-medium text-[var(--text)] opacity-85 flex items-center gap-1">
-                  <ArrowUpDown size={11} /> Sort
-                </span>
-                {SORT_OPTIONS.map(opt => (
-                  <SortPill
-                    key={opt.value}
-                    label={opt.label}
-                    active={sortBy === opt.value}
-                    onClick={() => setSortBy(opt.value)}
-                  />
-                ))}
-              </div>
-
-            </div>
-          )}
-        </div>
 
         {/* ── Results-pending banner ───────────────────────────────────── */}
         {!loading && hasLiveMatches && (
@@ -956,15 +647,15 @@ const reload = () => load(params)
               </div>
               <p className="text-sm font-semibold text-[var(--text-h)]">No signals match these filters</p>
               <p className="text-xs text-[var(--text)] opacity-75 max-w-xs">
-                Try adjusting the <span className="font-semibold text-[var(--accent)]">Min Prob%</span> threshold, changing the confidence filter, or{' '}
-                <button onClick={clearAllFilters} className="font-semibold text-[var(--accent)] hover:underline">resetting all filters</button>.
+                Try changing the confidence or market filter, or{' '}
+                <button onClick={() => { setConfidence(''); setAgreement(''); setMarket(''); setShowSavedOnly(false) }} className="font-semibold text-[var(--accent)] hover:underline">reset all filters</button>.
               </p>
             </div>
           ) : (
             /* No signals at all for this date */
             <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--bg)] p-10 flex flex-col items-center gap-3 text-center">
               <div className="w-12 h-12 rounded-full bg-[var(--code-bg)] flex items-center justify-center">
-                <Radio size={22} className="text-[var(--text)] opacity-40" />
+                <Zap size={22} className="text-[var(--text)] opacity-40" />
               </div>
               <p className="text-sm font-semibold text-[var(--text-h)]">No qualifying signals for {fmtDate(date)}</p>
               <p className="text-xs text-[var(--text)] opacity-75 max-w-sm">

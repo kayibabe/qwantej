@@ -1,4 +1,10 @@
 @echo off
+:: Re-launch inside a persistent cmd /k window so errors are always visible.
+if not "%_QWANTEJ_RELAUNCHED%"=="1" (
+    set _QWANTEJ_RELAUNCHED=1
+    cmd /k call "%~f0"
+    exit /b
+)
 setlocal enabledelayedexpansion
 title Qwantej Launcher
 color 0A
@@ -85,19 +91,20 @@ if not exist "%~dp0frontend\node_modules" (
 echo [1/2] Starting backend...
 cd /d "%~dp0backend"
 netstat -aon 2>nul | findstr ":8010 " | findstr "LISTENING" >nul
-if errorlevel 1 (
-    start "Qwantej-Backend" cmd /k "%PYTHON% run.py"
-    :: Capture the new cmd window PID. Allow up to 2 s for the window to appear
-    :: (slow machines need more than 400 ms on first launch with no .pyc cache).
-    powershell -NoProfile -Command ^
-      "for ($i = 0; $i -lt 8; $i++) { " ^
-      "  Start-Sleep -Milliseconds 250; " ^
-      "  $p = Get-Process cmd -ErrorAction SilentlyContinue | Where-Object {$_.MainWindowTitle -eq 'Qwantej-Backend'} | Sort-Object StartTime -Descending | Select-Object -First 1; " ^
-      "  if ($p) { $p.Id | Out-File '%BPID%' -Encoding ascii -NoNewline; Write-Host '      Backend console PID' $p.Id 'saved.'; break } " ^
-      "}"
-) else (
-    echo       Reusing existing Qwantej backend on port 8010.
-)
+if not errorlevel 1 goto :backend_already_running
+start "Qwantej-Backend" cmd /k "%PYTHON% run.py"
+:: Capture the new cmd window PID. Allow up to 2 s for the window to appear
+:: (slow machines need more than 400 ms on first launch with no .pyc cache).
+powershell -NoProfile -Command ^
+  "for ($i = 0; $i -lt 8; $i++) { " ^
+  "  Start-Sleep -Milliseconds 250; " ^
+  "  $p = Get-Process cmd -ErrorAction SilentlyContinue | Where-Object {$_.MainWindowTitle -eq 'Qwantej-Backend'} | Sort-Object StartTime -Descending | Select-Object -First 1; " ^
+  "  if ($p) { $p.Id | Out-File '%BPID%' -Encoding ascii -NoNewline; Write-Host '      Backend console PID' $p.Id 'saved.'; break } " ^
+  "}"
+goto :backend_wait
+:backend_already_running
+echo       Reusing existing Qwantej backend on port 8010.
+:backend_wait
 
 :: Wait for Qwantej backend identity instead of any generic 200 /health response.
 echo       Waiting for Qwantej backend on http://localhost:8010/openapi.json ...
@@ -147,7 +154,7 @@ if errorlevel 1 (
     echo        Check the Qwantej-Frontend window for errors.
 )
 echo       [OK] Qwantej frontend is ready.
-start "" http://localhost:5173
+explorer "http://localhost:5173"
 
 echo.
 echo ============================================================

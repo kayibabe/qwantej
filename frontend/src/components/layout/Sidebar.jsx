@@ -1,6 +1,5 @@
 ﻿import {
   BarChart2,
-  Bot,
   ListChecks,
   LogOut,
   ShieldCheck,
@@ -14,7 +13,6 @@ import { useAuth } from '../../context/AuthContext'
 // Account and Plans live in the footer. Arbitrage, Backtest and Settings live inside Tools.
 const NAV_ITEMS = [
   { id: 'signals',  label: 'Signals',    icon: TrendingUp },
-  { id: 'advisor',  label: 'Ask the AI', icon: Bot        },
   { id: 'tracker',  label: 'Tracker',    icon: ListChecks },
   { id: 'analytics',label: 'Analytics',  icon: BarChart2  },
   { id: 'tools',    label: 'Tools',      icon: Wrench     },

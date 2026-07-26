@@ -681,7 +681,7 @@ function UnifiedGroupedBets({ bets, onRefresh }) {
                                 </div>
                                 <div className="rounded-xl border border-[var(--border)] overflow-hidden divide-y divide-[var(--border)]">
                                   {dateBets.map(bet =>
-                                    bet.source_rule_key === 'acca_advisory' || bet.source_rule_key === 'system_acca'
+                                    bet.source_rule_key === 'system_acca'
                                       ? <AccaRow key={bet.id} bet={bet} onRefresh={onRefresh} />
                                       : <BetRow  key={bet.id} bet={bet} onRefresh={onRefresh} />
                                   )}

@@ -727,66 +727,6 @@ async def trigger_strategy_pipeline(
     }
 
 
-@router.post("/advisory/retrack")
-async def retrack_advisory_acca(
-    target_date:        str  = Query(description="ISO date to retrack, e.g. 2026-07-03"),
-    replace_user_bets:  bool = Query(False, description="Also delete all users' acca_advisory rows for this date so they re-track against the new acca"),
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(_require_admin),
-):
-    """
-    Force-replace a date's system acca tracking rows and optionally user rows.
-
-    Always deletes acca_leg_system rows (user_id=NULL) for the date, then
-    re-runs auto_track_acca_legs() against the current advisory cache.
-
-    replace_user_bets=true additionally purges all users' acca_advisory rows
-    for the date so they see the new acca as un-tracked and can re-add it.
-    Use after a mid-day cache clear where the new acca is materially different.
-    """
-    from datetime import date as date_type
-    from app.services.advisor_service import get_advisor_insights, auto_track_acca_legs
-
-    try:
-        d = date_type.fromisoformat(target_date)
-    except ValueError:
-        raise HTTPException(400, f"Invalid date: {target_date!r} — use ISO format YYYY-MM-DD")
-
-    user_rows_deleted = 0
-    if replace_user_bets:
-        res = await db.execute(
-            text(
-                "DELETE FROM tracked_bets "
-                "WHERE event_date = :d AND source_rule_key = 'acca_advisory' "
-                "AND user_id IS NOT NULL"
-            ),
-            {"d": d.isoformat()},
-        )
-        user_rows_deleted = res.rowcount
-        await db.commit()
-
-    result = await get_advisor_insights(db, d, current_user=None)
-    tickets = result.get("accumulators") or []
-    if not tickets:
-        acca = result.get("accumulator", {})
-        if acca.get("legs") and not acca.get("error"):
-            tickets = [acca]
-    if not tickets:
-        return {
-            "replaced": 0,
-            "user_rows_deleted": user_rows_deleted,
-            "message": "No valid acca available for this date.",
-        }
-
-    n = await auto_track_acca_legs(db, tickets, d, replace=True)
-    return {
-        "replaced":          n,
-        "user_rows_deleted": user_rows_deleted,
-        "date":              d.isoformat(),
-        "tickets":           len(tickets),
-        "combined_odds":     [t.get("combined_odds") for t in tickets],
-    }
-
 
 @router.get("/watchguard")
 async def get_watchguard_status(
@@ -1421,7 +1361,7 @@ async def apply_daily_cap(
 
 @router.post("/resettle-all")
 async def resettle_all(
-    source: str = Query("system", description="'system' resets user_id=NULL bets; 'all' includes advisory"),
+    source: str = Query("system", description="'system' resets user_id=NULL bets; 'all' includes all bets"),
     dry_run: bool = Query(False, description="Preview counts — no DB writes"),
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(_require_admin),
@@ -1506,7 +1446,7 @@ async def resettle_all(
 @router.post("/sync/trigger")
 async def trigger_sync(
     run_date: Optional[str] = Query(None, description="ISO date to sync (default: today)"),
-    morning_extras: bool = Query(False, description="Run advisory cache + ACCA + morning digest"),
+    morning_extras: bool = Query(False, description="Run ACCA tracking + morning digest"),
     evening_extras: bool = Query(False, description="Run tomorrow pre-sync + digests"),
     _admin: User = Depends(_require_admin),
 ):
