@@ -2,8 +2,8 @@
 hybrid_b.py — Hybrid B Strategy Engine.
 
 Focuses exclusively on two markets:
-  1. X2 (Away Win or Draw)       — preferred when away xG > home xG
-  2. Away O0.5 (Away team scores) — preferred when home xG > away xG but away xG ≥ 1.5
+  1. X2 (Away Win or Draw)
+  2. Away O0.5 (Away team scores)
 
 Home O0.5 odds are pulled and logged only — NEVER selected for betting.
 BET_HOME_OVER_0_5 = False is a hard constant.
@@ -171,23 +171,24 @@ def evaluate(
     if ao05_tier != "SKIP" and away_o05_odds:
         ep_ao05 = round((ao05_base * away_o05_odds) - ao05_base, 2)
 
-    # Decision matrix:
-    #   away_xg > home_xg → X2 is the primary market
-    #   home_xg > away_xg → Away O0.5 is the primary market
-    #   Both or neither qualify by EP → pick higher EP
+    # Decision matrix (EP-first):
+    #   1. Pick the market with higher positive EP.
+    #   2. When EP is equal, xG direction breaks the tie (away_xg > home_xg → X2).
+    #   3. Only one market qualifies → pick it.
     x2_ep_pos = ep_x2 is not None and ep_x2 > 0
     ao05_ep_pos = ep_ao05 is not None and ep_ao05 > 0
 
     if not x2_ep_pos and not ao05_ep_pos:
         return _reject("P3:no_positive_EP")
 
-    if away_xg > home_xg and x2_ep_pos:
-        selected = "X2"
-    elif home_xg > away_xg and ao05_ep_pos:
-        selected = "Away O0.5"
-    elif x2_ep_pos and ao05_ep_pos:
-        # Both qualify — pick higher EP
-        selected = "X2" if (ep_x2 or 0) >= (ep_ao05 or 0) else "Away O0.5"
+    if x2_ep_pos and ao05_ep_pos:
+        if (ep_x2 or 0) > (ep_ao05 or 0):
+            selected = "X2"
+        elif (ep_ao05 or 0) > (ep_x2 or 0):
+            selected = "Away O0.5"
+        else:
+            # Equal EP — xG direction tiebreaker
+            selected = "X2" if away_xg >= home_xg else "Away O0.5"
     elif x2_ep_pos:
         selected = "X2"
     elif ao05_ep_pos:
