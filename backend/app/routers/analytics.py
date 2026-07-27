@@ -328,6 +328,8 @@ async def full(
         q = q.where(TrackedBet.market_type == "Accumulator")
     elif source == "advisory":
         q = q.where(TrackedBet.source_rule_key.in_(_ADVISORY_KEYS))
+    elif source == "system_acca":
+        q = q.where(TrackedBet.source_rule_key == "system_acca")
     if scope == "system":
         q = q.where(TrackedBet.user_id.is_(None))
     elif scope == "personal" and current_user:

@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect, useMemo } from 'react'
-import { RefreshCw, CheckCircle, TrendingUp, Lock, Upload, Settings2, Bot, User, Layers, ListChecks, ArrowRight, FileUp } from 'lucide-react'
+import { RefreshCw, CheckCircle, TrendingUp, Lock, Upload, Settings2, Bot, User, Layers, ListChecks, ArrowRight, FileUp, Link2 } from 'lucide-react'
 import { useTracker } from '../store/useTracker'
 import { syncData, computeCLV, deduplicateBets, normalizeStakes } from '../api/tracker'
 import { fetchAnalytics } from '../api/analytics'
@@ -17,9 +17,10 @@ const STATUS_OPTIONS = ['', 'Pending', 'Won', 'Lost', 'Void']
 
 
 const SOURCE_OPTIONS = [
-  { value: '',       label: 'All Picks',    icon: null },
-  { value: 'system', label: 'System Picks', icon: Bot  },
-  { value: 'manual', label: 'Manual Picks', icon: User },
+  { value: '',            label: 'All Picks',    icon: null   },
+  { value: 'system',      label: 'System Picks', icon: Bot    },
+  { value: 'system_acca', label: 'System ACCA',  icon: Link2  },
+  { value: 'manual',      label: 'Manual Picks', icon: User   },
 ]
 
 const DATE_PRESETS = [
@@ -74,6 +75,7 @@ export default function TrackerPage({ user, settings, onUpgrade }) {
   // Client-side source filter
   const filteredBets = useMemo(() => {
     if (sourceFilter === 'system') return bets.filter(isSystemPick)
+    if (sourceFilter === 'system_acca') return bets.filter(b => b.source_rule_key === 'system_acca')
     if (sourceFilter === 'manual') return bets.filter(b => !isSystemPick(b))
     return bets
   }, [bets, sourceFilter]) // eslint-disable-line
@@ -321,7 +323,7 @@ export default function TrackerPage({ user, settings, onUpgrade }) {
       })()}
 
       {/* System performance card — visible when source=system or system bets exist */}
-      {systemSummary && systemSummary.total_bets > 0 && (sourceFilter === 'system' || sourceFilter === '') && (
+      {systemSummary && systemSummary.total_bets > 0 && (sourceFilter === 'system' || sourceFilter === 'system_acca' || sourceFilter === '') && (
         <div className="rounded-xl border border-blue-500/25 bg-blue-500/6 px-4 py-3 space-y-2">
           <div className="flex items-center gap-2">
             <Bot size={13} className="text-blue-400 shrink-0" />
