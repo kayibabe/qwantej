@@ -24,6 +24,7 @@ from app.core.config import (
     GOALS_MARKET_NAMES, MATCH_WINNER_MARKET_NAMES,
     DOUBLE_CHANCE_MARKET_NAMES, POISSON_RULES, get_settings,
     UNDER_GOALS_SUPPRESSED_LEAGUES,
+    BOTH_MEDIUM_DISABLED_LEAGUES,
     HOME_GOALS_MARKET_NAMES, AWAY_GOALS_MARKET_NAMES,
     WIN_TO_NIL_HOME_MARKET_NAMES, WIN_TO_NIL_AWAY_MARKET_NAMES,
     WIN_TO_NIL_COMBINED_MARKET_NAMES,
@@ -809,6 +810,15 @@ async def compute_signals_for_date(db: AsyncSession, run_date: date) -> int:
             "MEDIUM": "Medium",
             "LOW":    "Low",
         }.get(_hb_result.stake_tier, "None")
+
+        # Suppress Hybrid B Medium picks in leagues with confirmed structural losses
+        # at Medium confidence (same leagues blocked for Both+Medium in non-Hybrid B path).
+        # Hybrid B is normally exempt from the B-5 gate in auto_tracker; this
+        # filter catches it at source so the signal is never written to the DB.
+        _hb_league_lower = (fixture.league or "").lower().strip()
+        if _hb_confidence == "Medium" and _hb_league_lower in BOTH_MEDIUM_DISABLED_LEAGUES:
+            continue
+
         _hb_ep = _hb_result.ep_x2 if _hb_result.selected_market == "X2" else _hb_result.ep_away_o05
 
         sig = Signal(

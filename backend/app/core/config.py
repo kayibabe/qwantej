@@ -642,6 +642,22 @@ HYBRID_B_MAX_HOME_AWAY_XG_RATIO: float = 2.0
 HYBRID_B_PERMANENT_BLACKLIST: frozenset[str] = frozenset({
     "australia npl", "tasmania npl", "finland kakkonen",
     "latvian cup", "brazilian carioca c",
+    # ── 2026-07-27 (Jul 26 postmortem) ───────────────────────────────────────
+    # MLS Next Pro: 3W/4L all-time = 43% WR, -37% ROI. Development league with
+    # extreme home bias — away teams (MLS reserve sides) lose to structured home
+    # academies 57% of the time. X2 model chronically fights the market here.
+    "mls next pro",
+    # Northern NSW NPL: 0W/2L = 0% WR, -100% ROI. Same structural pattern as
+    # Australia NPL (already blocked). Hard block matches the NPL franchise ban.
+    "northern nsw npl",
+    # Piala Presiden (Indonesia cup): Integrity risk country + cup rotation +
+    # 0W/1L. Indonesian competitions already Tier 3; cup context makes X2 picks
+    # unreliable (single-leg knockout incentivises parking-the-bus away).
+    "piala presiden",
+    # Major League Soccer: 0W/1L Jul 26 + structural pattern mirrors MLS Next Pro.
+    # MLS produces high home-team motivation and crowd advantage in summer.
+    # Already in UNDER_GOALS_SUPPRESSED_LEAGUES; extend hard block to Hybrid B.
+    "major league soccer",
 })
 
 HYBRID_B_CONDITIONAL_BLACKLIST: frozenset[str] = frozenset({
@@ -657,6 +673,12 @@ HYBRID_B_STAKE_LEVELS: dict[str, dict] = {
 }
 HYBRID_B_HOME_XGA_BONUS_THRESHOLD: float = 1.4
 HYBRID_B_MAX_SINGLE_STAKE_PCT: float = 0.05
+# X2 market stake cap: never apply the K100k bonus booster to X2 picks.
+# Historical data shows X2 High (≥1.40 odds) runs 55% WR / -11.4% ROI all-time
+# — negative expected value. The bonus was designed for clear defensive mismatches
+# but high X2 odds mean the bookmaker already prices the home team as favourite,
+# making the bonus doubly counter-productive. Cap X2 at the base K75k stake.
+HYBRID_B_X2_MAX_STAKE: float = 75_000.0
 
 # Phase 1 — Home O0.5 is pulled and logged only; never bet
 HYBRID_B_BET_HOME_OVER_0_5: bool = False

@@ -35,6 +35,7 @@ from app.core.config import (
     HYBRID_B_CONDITIONAL_BLACKLIST,
     HYBRID_B_STAKE_LEVELS,
     HYBRID_B_HOME_XGA_BONUS_THRESHOLD,
+    HYBRID_B_X2_MAX_STAKE,
 )
 
 BET_HOME_OVER_0_5: bool = False  # hard constant — never bet Home O0.5
@@ -239,6 +240,12 @@ def evaluate(
         and home_xga >= HYBRID_B_HOME_XGA_BONUS_THRESHOLD
     ):
         recommended_stake = tier_cfg["bonus_stake"]
+
+    # X2 stake cap: high X2 odds = market backs home team = low true X2 probability.
+    # Applying the K100k bonus to X2 stakes max against the market on negative-EV
+    # picks. Cap X2 at K75k regardless of bonus booster result.
+    if selected == "X2" and recommended_stake > HYBRID_B_X2_MAX_STAKE:
+        recommended_stake = HYBRID_B_X2_MAX_STAKE
 
     # ── Phase 5: Recency form advisory stake adjustment ───────────────────
     # Cold form (< 0.75× season): reduce stake one tier.
