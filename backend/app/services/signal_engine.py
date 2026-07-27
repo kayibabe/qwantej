@@ -797,6 +797,18 @@ async def compute_signals_for_date(db: AsyncSession, run_date: date) -> int:
         ):
             continue
 
+        # ── Glicko gate: reject X2 when home team has meaningful rating advantage ──
+        # Hybrid B is blind to Glicko ratings; this gate prevents backing draw/away
+        # on fixtures where the Glicko model says home is the stronger side.
+        # Threshold 40: covers ~6 losses/day from 26-Jul without over-suppressing wins.
+        # Positive glicko_r_diff = home team rated higher.
+        if (
+            _hb_result.selected_market == "X2"
+            and _glicko_rdiff is not None
+            and _glicko_rdiff > 40
+        ):
+            continue
+
         # Map Hybrid B market short-name to canonical Signal.market value
         _hb_market_full = (
             "X2 (Draw or Away)" if _hb_result.selected_market == "X2"

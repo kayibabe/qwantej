@@ -269,11 +269,16 @@ async def auto_track_date(db: AsyncSession, run_date: date) -> int:
         match_name = f"{fixture.home_team} vs {fixture.away_team}"
 
         if is_hybrid:
+            # SKIP tier means Phase 5 form-demotion (or any rejection path) produced
+            # a zero-stake result — never place a bet for these signals.
+            if signal.stake_tier == "SKIP":
+                continue
             source_rule_key   = "system_hybrid_b"
             source_rule_label = f"Hybrid B ({signal.stake_tier or 'LOW'})"
             # Hybrid B staking is deterministic (Phase 4/5 already applied
             # tier logic, bonus booster, and form adjustments) — use it as-is.
-            stake = float(signal.recommended_stake or FLAT_STAKE)
+            # Guard against 0.0 (falsy) falling back to FLAT_STAKE.
+            stake = float(signal.recommended_stake) if signal.recommended_stake else FLAT_STAKE
         else:
             if agreement == "Both" and confidence == "High":
                 source_rule_key   = "system_dual"

@@ -258,10 +258,13 @@ def evaluate(
         and away_season_xg > 0
     ):
         if recency_xg_away < away_season_xg * 0.75:
-            # Away team in poor recent form — reduce stake one tier
+            # Away team in poor recent form — reduce stake one tier.
+            # If already at LOW, demotion lands on SKIP → reject (no bet).
             idx = _tier_order.index(selected_tier)
             if idx < len(_tier_order) - 1:
                 reduced_tier = _tier_order[idx + 1]
+                if reduced_tier == "SKIP":
+                    return _reject("P5:cold_form_demotion_to_skip")
                 recommended_stake = HYBRID_B_STAKE_LEVELS[reduced_tier]["base_stake"]
                 selected_tier = reduced_tier
         elif recency_xg_away > away_season_xg * 1.25:
