@@ -36,6 +36,8 @@ from app.core.config import (
     HYBRID_B_STAKE_LEVELS,
     HYBRID_B_HOME_XGA_BONUS_THRESHOLD,
     HYBRID_B_X2_MAX_STAKE,
+    HYBRID_B_MIN_ODDS,
+    HYBRID_B_MAX_ODDS,
 )
 
 BET_HOME_OVER_0_5: bool = False  # hard constant — never bet Home O0.5
@@ -202,6 +204,16 @@ def evaluate(
 
     if not selected_odds or selected_tier == "SKIP":
         return _reject("P3:no_valid_odds_for_selected_market")
+
+    # ── Odds window filter ────────────────────────────────────────────────
+    # Only bet when odds are within the profitable band.
+    # Backtested on 525 settled bets (Jul 8–Jul 27 2026):
+    #   >=1.21 / <=1.50 → 78.0% WR vs 57.1% baseline; breaks even vs -8.3% ROI.
+    #   279 X2 bets above 1.50 at 47.3% WR account for -2.1M MWK system losses.
+    if selected_odds < HYBRID_B_MIN_ODDS:
+        return _reject(f"P3:odds_below_min:{selected_odds:.3f}<{HYBRID_B_MIN_ODDS}")
+    if selected_odds > HYBRID_B_MAX_ODDS:
+        return _reject(f"P3:odds_above_max:{selected_odds:.3f}>{HYBRID_B_MAX_ODDS}")
 
     # ── Phase 6 pre-check overrides (before staking) ─────────────────────
     # Override 1: X2 odds == Away O0.5 odds AND both < 1.20 (no edge)

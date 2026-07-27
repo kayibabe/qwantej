@@ -680,6 +680,14 @@ HYBRID_B_MAX_SINGLE_STAKE_PCT: float = 0.05
 # making the bonus doubly counter-productive. Cap X2 at the base K75k stake.
 HYBRID_B_X2_MAX_STAKE: float = 75_000.0
 
+# Odds window — only bet when selected odds are within this range.
+# Analysis across 525 settled bets (Jul 8–Jul 27 2026):
+#   >=1.21 / <=1.50 → 78.0% WR, break-even ROI  (182 picks)
+#   All bets         → 57.1% WR, -8.3% ROI       (525 picks)
+# 279 X2 bets above 1.50 at 47.3% WR account for -2.1M MWK of system losses.
+HYBRID_B_MIN_ODDS: float = 1.21
+HYBRID_B_MAX_ODDS: float = 1.50
+
 # Phase 1 — Home O0.5 is pulled and logged only; never bet
 HYBRID_B_BET_HOME_OVER_0_5: bool = False
 
