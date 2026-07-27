@@ -18,6 +18,7 @@ from app.models.learning_proposal import LearningProposal
 from app.services.analytics import build_analytics, compute_parameter_status
 from app.services.performance_intelligence import compute_performance_weights
 from app.services.settlement import SCORE_SETTLEABLE_MARKETS
+from app.core.config import HYBRID_B_ACTIVE_MARKETS
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
@@ -333,7 +334,9 @@ async def full(
         q = q.where(TrackedBet.user_id == current_user.id)
     rows = await db.execute(q)
     bets = list(rows.scalars().all())
-    return build_analytics(bets)
+    result = build_analytics(bets)
+    result["active_markets"] = sorted(HYBRID_B_ACTIVE_MARKETS)
+    return result
 
 
 @router.get("/staking-simulation")

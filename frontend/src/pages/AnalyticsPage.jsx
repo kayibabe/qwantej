@@ -678,15 +678,16 @@ export default function AnalyticsPage({ onUpgrade, onApplySignalFilter, onNaviga
     ])
       .then(([result, intelligence, systemResult, personalResult]) => {
         setData({
-          summary:      result,
-          byMarket:     result.by_market     ?? [],
-          byLeague:     result.by_league     ?? [],
-          byTier:       result.by_tier       ?? [],
-          byRule:       result.by_rule       ?? [],
-          byConfidence: result.by_confidence ?? [],
-          byAgreement:  result.by_agreement  ?? [],
-          bySource:     result.by_source     ?? [],
-          trend:        result.daily_trend   ?? [],
+          summary:       result,
+          byMarket:      result.by_market     ?? [],
+          byLeague:      result.by_league     ?? [],
+          byTier:        result.by_tier       ?? [],
+          byRule:        result.by_rule       ?? [],
+          byConfidence:  result.by_confidence ?? [],
+          byAgreement:   result.by_agreement  ?? [],
+          bySource:      result.by_source     ?? [],
+          trend:         result.daily_trend   ?? [],
+          activeMarkets: result.active_markets ?? null,
           streaks: {
             current_streak_type: result.current_streak_type,
             current_streak_len:  result.current_streak_len,

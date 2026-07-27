@@ -41,6 +41,7 @@ function computeInsights(data) {
   const s = data.summary
   if (!s || (s.settled_bets ?? 0) < 5) return insights
 
+  const activeMarketSet = data.activeMarkets ? new Set(data.activeMarkets) : null
   const byMarket     = (data.byMarket     ?? []).filter(m => (m.bets  ?? 0) >= 5)
   const byConfidence = (data.byConfidence ?? []).filter(c => (c.bets  ?? 0) >= 5)
   const byAgreement  = (data.byAgreement  ?? []).filter(a => (a.bets  ?? 0) >= 5)
@@ -60,16 +61,26 @@ function computeInsights(data) {
     })
   }
 
-  // 2 — Best market
+  // 2 — Best market (prefer currently active markets; flag deprecated ones)
   const qualified = byMarket.filter(m => (m.settled ?? m.bets) > 0)
   if (qualified.length > 0) {
-    const best = [...qualified].sort((a, b) => b.roi - a.roi)[0]
+    // Prefer an active market with positive ROI; fall back to overall best
+    const sorted = [...qualified].sort((a, b) => b.roi - a.roi)
+    const activeWithRoi = activeMarketSet
+      ? sorted.find(m => m.roi > 0 && activeMarketSet.has(m.market))
+      : null
+    const best = activeWithRoi ?? sorted[0]
+    const isDeprecated = activeMarketSet && !activeMarketSet.has(best.market)
     if (best.roi > 0) {
       insights.push({
-        type: 'success',
+        type: isDeprecated ? 'info' : 'success',
         Icon: Target,
-        text: `${best.market} is your strongest market`,
-        sub: `${best.win_rate}% win rate · ${best.roi > 0 ? '+' : ''}${best.roi}% ROI over ${best.bets} bet${best.bets !== 1 ? 's' : ''}. Prioritise this market when signals align.`,
+        text: isDeprecated
+          ? `${best.market} was your strongest market (historical)`
+          : `${best.market} is your strongest market`,
+        sub: isDeprecated
+          ? `${best.win_rate}% win rate · +${best.roi}% ROI over ${best.bets} bet${best.bets !== 1 ? 's' : ''} — from the previous engine. The current engine focuses on X2 and Away O0.5.`
+          : `${best.win_rate}% win rate · ${best.roi > 0 ? '+' : ''}${best.roi}% ROI over ${best.bets} bet${best.bets !== 1 ? 's' : ''}. Prioritise this market when signals align.`,
       })
     }
   }

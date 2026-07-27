@@ -402,6 +402,13 @@ DISABLED_MARKETS: frozenset = frozenset({
     "Away Win to Nil",
 })
 
+# Markets that the current engine (Hybrid B) actively produces.
+# Used by analytics to flag historical insights about deprecated markets.
+HYBRID_B_ACTIVE_MARKETS: frozenset[str] = frozenset({
+    "X2 (Draw or Away)",
+    "Away Over 0.5",
+})
+
 # Leagues permanently disabled from signal generation AND serving.
 # Use lowercase, stripped names — matched via lower(trim(league)).
 # Add a league here when dynamic ROI suppression hasn't kicked in yet (< 5 bets)

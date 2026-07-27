@@ -41,11 +41,52 @@ _ACCA_DUAL_HIGH_MIN_PROB = 0.76  # was 0.73
 # to below this value is not built — 30% ≈ a 3-leg ticket at 67% per leg.
 _ACCA_WIN_PROB_FLOOR = 0.30
 
+# Minimum win probability for Hybrid B legs in ACCA context.
+# Away O0.5 at away_xg=1.50 gives P≈0.78; X2 varies with xG balance.
+_HB_ACCA_MIN_PROB = 0.65
+
+
+def _hybrid_b_win_prob(selected_market: str | None, home_xg: float, away_xg: float) -> float:
+    """
+    Estimate win probability for a Hybrid B market from xG values.
+
+    Away O0.5: 1 - exp(-away_xg)  — Poisson CDF for ≥1 away goal.
+    X2:        P(home_goals ≤ away_goals) — summed over joint Poisson distribution.
+    """
+    home_xg = max(home_xg or 0.0, 0.0)
+    away_xg = max(away_xg or 0.0, 0.0)
+
+    if selected_market == "Away O0.5":
+        return 1.0 - math.exp(-away_xg)
+
+    # X2 (Draw or Away): P(home ≤ away) via joint Poisson
+    N = 15
+    prob = 0.0
+    for j in range(N + 1):          # away goals
+        p_away_j = math.exp(-away_xg) * (away_xg ** j) / math.factorial(j)
+        for k in range(j + 1):      # home goals (k ≤ j → draw or away win)
+            p_home_k = math.exp(-home_xg) * (home_xg ** k) / math.factorial(k)
+            prob += p_home_k * p_away_j
+    return min(prob, 1.0)
+
 
 def _primary_prob(sig: Signal) -> float:
+    # Hybrid B signals: derive win probability from xG stored on the signal row
+    if sig.selected_market is not None and sig.away_xg is not None:
+        return _hybrid_b_win_prob(sig.selected_market, sig.home_xg or 0.0, sig.away_xg)
     bayes   = sig.bayesian_prob  or 0.0
     poisson = sig.poisson_prob   or 0.0
     return max(bayes, poisson)
+
+
+def _both_high_prob(sig: Signal) -> float:
+    """
+    For the Both+High gate: return the minimum per-engine probability.
+    For Hybrid B signals there is only one engine, so use the xG-derived prob.
+    """
+    if sig.selected_market is not None:
+        return _primary_prob(sig)  # single-engine decision; xG-derived
+    return min(sig.bayesian_prob or 0.0, sig.poisson_prob or 0.0)
 
 
 def _is_correlated(leg_a: dict, leg_b: dict) -> bool:
@@ -225,23 +266,24 @@ async def build_acca_candidates(
         and (sig.bayesian_best_odd or 0.0) >= ACCA_OVER25_UNKNOWN_TIER_CEILING
     )]
 
-    # Quality floor — HO0.5 legs use a stricter floor than other markets.
+    # Quality floor — HO0.5 legs use a stricter floor; Hybrid B uses _HB_ACCA_MIN_PROB.
     rows = [
         (sig, fix) for sig, fix in rows
         if _primary_prob(sig) >= (
-            _HO05_ACCA_MIN_PROB if sig.market == "Home Over 0.5" else _MIN_PROB
+            _HB_ACCA_MIN_PROB     if sig.selected_market is not None
+            else _HO05_ACCA_MIN_PROB if sig.market == "Home Over 0.5"
+            else _MIN_PROB
         )
     ]
 
-    # Both+High ACCA gate: both engines must individually clear the same floor
-    # applied by auto_tracker for singles. A Both+High signal at 0.65 primary_prob
-    # (which singles rejects) must not sneak into an ACCA leg via the lower _MIN_PROB.
+    # Both+High ACCA gate: per-engine probability floor.
+    # For Hybrid B (single-engine), use the xG-derived probability via _both_high_prob.
     rows = [
         (sig, fix) for sig, fix in rows
         if not (
             sig.dual_confidence == "High"
             and sig.dual_agreement == "Both"
-            and min(sig.bayesian_prob or 0.0, sig.poisson_prob or 0.0) < _ACCA_DUAL_HIGH_MIN_PROB
+            and _both_high_prob(sig) < _ACCA_DUAL_HIGH_MIN_PROB
         )
     ]
 
