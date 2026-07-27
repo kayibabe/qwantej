@@ -730,7 +730,7 @@ export default function SignalCard({ signal, rank, isPro = true, isTracked = fal
           : isHybridBMedium
             ? 'border-amber-400/30 border-l-4 border-l-amber-400 hover:border-amber-400/50 hover:shadow-[var(--shadow-card)]'
             : isBayesianOnly
-              ? 'border-blue-400/35 border-l-4 border-l-violet-400 hover:border-blue-400/55'
+              ? 'border-blue-400/35 border-l-4 border-l-blue-400 hover:border-blue-400/55'
               : isUnderMarket
                 ? 'border-sky-400/40 border-l-4 border-l-sky-400 hover:border-sky-400/60'
                 : isHighProbabilityOutcome
