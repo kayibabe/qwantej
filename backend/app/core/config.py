@@ -638,6 +638,12 @@ MAX_DAILY_EXPOSURE: float = 0.15
 # Phase 2 — Qualifying filters
 HYBRID_B_MIN_AWAY_XG: float = 1.50
 HYBRID_B_MAX_HOME_AWAY_XG_RATIO: float = 2.0
+# Minimum absolute away xG advantage over home xG required to bet X2 or Away O0.5.
+# Jul 11/18 postmortem: Sejong SA (λH=2.28 vs λA=1.64) and EPS (λH=1.74 vs λA=1.60)
+# both had home_xg > away_xg yet still passed Filter 2 (ratio gate too loose at 2×).
+# Requiring away_xg - home_xg ≥ 0.30 eliminates picks where the model barely prefers
+# the away side and the home team is realistically capable of winning.
+HYBRID_B_MIN_XG_GAP: float = 0.30
 
 HYBRID_B_PERMANENT_BLACKLIST: frozenset[str] = frozenset({
     "australia npl", "tasmania npl", "finland kakkonen",
@@ -658,6 +664,20 @@ HYBRID_B_PERMANENT_BLACKLIST: frozenset[str] = frozenset({
     # MLS produces high home-team motivation and crowd advantage in summer.
     # Already in UNDER_GOALS_SUPPRESSED_LEAGUES; extend hard block to Hybrid B.
     "major league soccer",
+    # ── 2026-07-28 (Jul 11 + Jul 18 postmortem) ──────────────────────────────
+    # Women's leagues: xG model is calibrated on men's football and does not
+    # transfer to women's match dynamics. NWSL Women produced 2 losses across the
+    # two worst days (Orlando Pride W 3-0, Bay FC W 3-0) with 0 wins in the same
+    # sample. Suppress all competitions whose league name signals women's football
+    # in any major language.
+    " women",   # English: "NWSL Women", "Women's Super League", etc.
+    "nwsl",     # USA National Women's Soccer League
+    "femenin",  # Spanish: "Liga Femenina", "Primera Femenino", "Femenil"
+    "frauen",   # German: "Frauen-Bundesliga"
+    "dames",    # Dutch/French: "Eredivisie Dames", "Division 1 Dames"
+    "kvinn",    # Norwegian/Swedish: "Toppserien Kvinner", "Damallsvenskan" — partial
+    "nais",     # Finnish: "Naisten Liiga", "Naiset" (genitive + nominative)
+    "femmes",   # French: "Division 1 Femmes"
 })
 
 HYBRID_B_CONDITIONAL_BLACKLIST: frozenset[str] = frozenset({
