@@ -38,6 +38,7 @@ from app.core.config import (
     HYBRID_B_X2_MAX_STAKE,
     HYBRID_B_MIN_ODDS,
     HYBRID_B_MAX_ODDS,
+    HYBRID_B_AO05_SUPPRESSED_COUNTRIES,
 )
 
 BET_HOME_OVER_0_5: bool = False  # hard constant — never bet Home O0.5
@@ -214,6 +215,25 @@ def evaluate(
         return _reject(f"P3:odds_below_min:{selected_odds:.3f}<{HYBRID_B_MIN_ODDS}")
     if selected_odds > HYBRID_B_MAX_ODDS:
         return _reject(f"P3:odds_above_max:{selected_odds:.3f}>{HYBRID_B_MAX_ODDS}")
+
+    # ── Away O0.5 country suppression ────────────────────────────────────
+    # For countries where Away O0.5 systematically underperforms (e.g. "world"
+    # = UEFA qualifying, where away teams park the bus in single-leg knockouts),
+    # reject the Away O0.5 selection and try X2 as fallback.  If X2 is also
+    # out of window or has no positive EP, the whole pick is rejected.
+    if selected == "Away O0.5" and country_lower in HYBRID_B_AO05_SUPPRESSED_COUNTRIES:
+        # Try X2 fallback
+        odds_x2_fb = x2_odds
+        if (
+            odds_x2_fb is not None
+            and ep_x2 is not None and ep_x2 > 0
+            and HYBRID_B_MIN_ODDS <= odds_x2_fb <= HYBRID_B_MAX_ODDS
+        ):
+            selected = "X2"
+            selected_odds = odds_x2_fb
+            selected_tier = x2_tier
+        else:
+            return _reject(f"P3:ao05_suppressed_country:{country or 'world'}")
 
     # ── Phase 6 pre-check overrides (before staking) ─────────────────────
     # Override 1: X2 odds == Away O0.5 odds AND both < 1.20 (no edge)

@@ -702,6 +702,37 @@ HYBRID_B_PERMANENT_BLACKLIST: frozenset[str] = frozenset({
     "kvinn",    # Norwegian/Swedish: "Toppserien Kvinner", "Damallsvenskan" — partial
     "nais",     # Finnish: "Naisten Liiga", "Naiset" (genitive + nominative)
     "femmes",   # French: "Division 1 Femmes"
+    # ── 2026-07-28 (Jul 8–27 retrospective postmortem) ───────────────────
+    # New South Wales NPL / NPL 2: not caught by "australia npl" (which
+    # expects the country prefix). Jul 8–27 sample: 11W/4L on NSW NPL picks
+    # at 73.4% WR, below the 80%+ target. Same structural home bias as
+    # Northern NSW NPL (already blocked) and Victoria NPL (already blocked).
+    # API-Football spells the league out as "New South Wales NPL" (not abbreviated).
+    "new south wales npl",  # catches "New South Wales NPL" and "New South Wales NPL 2"
+    # Queensland Premier League: structurally similar to Queensland NPL
+    # (regional club football, high home bias). 3W/2L across the sample.
+    "queensland premier",   # catches "Queensland Premier League"
+    # Estonia Meistriliiga: 1W/3L = 25.0% WR, -64% ROI across Jul 8–27.
+    # Small Baltic league; xG model overestimates away scoring probability
+    # in a compact, high-home-advantage environment.
+    "meistriliiga",
+    # Georgia David Kipiani Cup: cup competition (single-leg knockout) where
+    # away teams systematically park the bus. 0W/1L. Cup format already
+    # unreliable; Georgian league Tier 3 amplifies uncertainty.
+    "david kipiani",
+    # Panama Liga Panameña: sub-liquidity market, very limited bookmaker
+    # coverage, xG inputs unreliable. 0W/1L in sample.
+    "liga panameña",
+    # Switzerland Challenge League: 2nd division, insufficient top-tier bookmaker
+    # coverage. Jul 8–27: 3W/2L = 60% WR, -25.64% ROI in simulation;
+    # 2W/3L = 40% WR in tracked_bets (both datasets agree on underperformance).
+    # xG model calibrated on top divisions — 2nd tier Swiss football is noisy.
+    "challenge league",
+    # South Korea K League 2: 2nd division shows 6W/3L = 66.7% WR vs
+    # K League 1 = 83.3% WR. Clear tier-split: top-flight Korean football
+    # has reliable xG; reserve/development league dynamics differ. Blocking
+    # only K League 2 to preserve the profitable K League 1 picks.
+    "k league 2",
 })
 
 HYBRID_B_CONDITIONAL_BLACKLIST: frozenset[str] = frozenset({
@@ -731,6 +762,16 @@ HYBRID_B_X2_MAX_STAKE: float = 75_000.0
 # 279 X2 bets above 1.50 at 47.3% WR account for -2.1M MWK of system losses.
 HYBRID_B_MIN_ODDS: float = 1.21
 HYBRID_B_MAX_ODDS: float = 1.50
+
+# Away O0.5 market suppression by fixture country.
+# API-Football sets country = "World" for all UEFA/FIFA competitions (CL, EL, UECL).
+# Jul 8–27 retrospective: World Away O0.5 = 17W/7L = 70.8% WR, -0.42% ROI (essentially
+# zero-sum). Away teams in UEFA qualifying single-leg ties systematically park the bus
+# to hold an away result — the Poisson xG model overstates away scoring probability for
+# knockout-round conservatism. World X2 = 22W/2L = 91.7% WR — untouched.
+# When Away O0.5 is suppressed for a country, the engine falls back to X2 if it
+# qualifies; otherwise the pick is rejected entirely.
+HYBRID_B_AO05_SUPPRESSED_COUNTRIES: frozenset[str] = frozenset({"world"})
 
 # Phase 1 — Home O0.5 is pulled and logged only; never bet
 HYBRID_B_BET_HOME_OVER_0_5: bool = False
