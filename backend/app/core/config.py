@@ -762,6 +762,9 @@ HYBRID_B_X2_MAX_STAKE: float = 75_000.0
 # 279 X2 bets above 1.50 at 47.3% WR account for -2.1M MWK of system losses.
 HYBRID_B_MIN_ODDS: float = 1.21
 HYBRID_B_MAX_ODDS: float = 1.50
+# AO05 needs higher odds to be profitable: 1.21-1.40 band = 50-67% WR / -10 to -38% ROI
+# (Jul 8-27 postmortem, 8 bets). 1.40-1.51 band = 89% WR / +28% ROI.
+HYBRID_B_MIN_ODDS_AO05: float = 1.40
 
 # Away O0.5 market suppression by fixture country.
 # API-Football sets country = "World" for all UEFA/FIFA competitions (CL, EL, UECL).

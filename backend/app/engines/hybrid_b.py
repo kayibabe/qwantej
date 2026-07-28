@@ -20,6 +20,9 @@ Phase 1 — xG sourcing:
 Phase 2 — Qualifying filters (all must pass; any failure = REJECTED)
   Filter 5 (applied post-selection): X2 rejected when home_xg < away_xg.
     lh/la < 1.0 → 50% WR; home advantage overrides model's away-fav prediction.
+  Filter 6 (applied post-selection): AO05 rejected when odds < 1.40; try X2 fallback.
+    Jul 8-27 postmortem: AO05 at 1.21-1.40 = 50-67% WR / -10 to -38% ROI (8 bets).
+    AO05 at 1.40-1.51 = 89% WR / +28% ROI (8 bets).
 Phase 3 — Market selection via Expected Profit (EP)
 Phase 4 — Dynamic staking (MWK amounts)
 Phase 5 — Recency xG form stake adjustment (advisory)
@@ -40,6 +43,7 @@ from app.core.config import (
     HYBRID_B_X2_MAX_STAKE,
     HYBRID_B_MIN_ODDS,
     HYBRID_B_MAX_ODDS,
+    HYBRID_B_MIN_ODDS_AO05,
     HYBRID_B_AO05_SUPPRESSED_COUNTRIES,
 )
 
@@ -217,6 +221,25 @@ def evaluate(
         return _reject(f"P3:odds_below_min:{selected_odds:.3f}<{HYBRID_B_MIN_ODDS}")
     if selected_odds > HYBRID_B_MAX_ODDS:
         return _reject(f"P3:odds_above_max:{selected_odds:.3f}>{HYBRID_B_MAX_ODDS}")
+
+    # ── AO05 minimum odds guard ───────────────────────────────────────────
+    # Jul 8-27 postmortem (17 AO05 bets):
+    #   1.21-1.30 → 50% WR / -38% ROI (1W 1L);  1.30-1.40 → 67% WR / -10% ROI (4W 2L).
+    #   1.40-1.51 → 89% WR / +28% ROI (8W 1L).
+    # Below 1.40 the bookmaker has already priced in near-certainty that the
+    # away team scores — but the WR doesn't meet break-even (~74%). Try X2
+    # fallback; if that's also out of window, reject the pick entirely.
+    if selected == "Away O0.5" and selected_odds < HYBRID_B_MIN_ODDS_AO05:
+        if (
+            x2_odds is not None
+            and ep_x2 is not None and ep_x2 > 0
+            and HYBRID_B_MIN_ODDS <= x2_odds <= HYBRID_B_MAX_ODDS
+        ):
+            selected = "X2"
+            selected_odds = x2_odds
+            selected_tier = x2_tier
+        else:
+            return _reject(f"F6:ao05_odds_below_min:{selected_odds:.3f}<{HYBRID_B_MIN_ODDS_AO05}")
 
     # ── Away O0.5 country suppression ────────────────────────────────────
     # For countries where Away O0.5 systematically underperforms (e.g. "world"
