@@ -656,9 +656,17 @@ HYBRID_B_PERMANENT_BLACKLIST: frozenset[str] = frozenset({
     # so each must be listed individually. Jul 28 postmortem confirmed 0W/2L
     # across Queensland NPL + Western Australia State League in the 0.30–0.60
     # xG gap band — same structural cause as Northern NSW NPL already blocked.
-    "australia npl", "tasmania npl",
+    "australia npl",
     "queensland npl",          # Queensland NPL — not caught by "australia npl"
     "western australia",       # Western Australia State League 1 (and variants)
+    "victoria npl",            # Victoria NPL — same state-prefix miss (0–0.30 band postmortem)
+    # Tasmania: the blacklist has "tasmania npl" for the NPL competition but
+    # API-Football also delivers "Tasmania Southern Championship", a lower amateur
+    # competition with no reliable xG signal. Block all Tasmania football.
+    "tasmania",                # replaces "tasmania npl" — catches NPL + Southern Championship
+    # South Korea K3 League: 3rd division, xG models have no reliable signal at
+    # this tier. One loss (Mokpo City 2-1 Gangneung City, Jul 11) in 0–0.30 band.
+    "k3 league",
     # Finnish Kakkonen: API-Football omits the country prefix — league comes
     # through as "Kakkonen - Lohko A", not "Finland Kakkonen". Jul 28: 1 loss
     # (PuiU Helsinki 4-1 Reipas, home xG 1.47 scored 4) confirmed blacklist miss.
