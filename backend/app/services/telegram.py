@@ -116,6 +116,28 @@ def _agreement_tag(agreement: str | None) -> str:
     }.get(agreement or "", "")
 
 
+def _pick_line(sig: Signal) -> str:
+    """
+    Format the '📌 …' pick line for a signal card.
+
+    Hybrid B signals carry odds + MWK stake (no model probability).
+    Legacy engine signals carry the model probability percentage.
+    """
+    is_hybrid = getattr(sig, "poisson_rule_key", None) == "hybrid_b"
+    market_label = _esc(_verbose_market(sig.market))
+    conf_tag = {"High": "🔥", "Medium": "📊", "Low": "📉"}.get(sig.dual_confidence or "", "•")
+
+    if is_hybrid:
+        odds_str  = _odds(sig.bayesian_best_odd)   # bayesian_best_odd = selected_odds for Hybrid B
+        raw_stake = int(sig.recommended_stake or 0)
+        stake_str = f"K{raw_stake // 1000}k" if raw_stake >= 1000 else ""
+        extra = f" · {stake_str}" if stake_str else ""
+        return f"📌 {market_label} @ {odds_str}{extra} {conf_tag}"
+
+    primary = max((v for v in [sig.bayesian_prob, sig.poisson_prob] if v), default=None)
+    return f"📌 {market_label} · {_pct(primary)} {conf_tag}"
+
+
 def _kickoff_str(kickoff_at: Any) -> str:
     if kickoff_at is None:
         return ""
@@ -286,13 +308,10 @@ def build_kickoff_alert(signals: list[tuple[Signal, Fixture]]) -> str:
     for sig, fix in signals:
         ko = _kickoff_str(fix.kickoff_at)
         league_line = f"{_esc(fix.country)} · {_esc(fix.league)}" if fix.country else _esc(fix.league or "")
-        b_prob   = sig.bayesian_prob
-        p_prob   = sig.poisson_prob
-        primary  = max((v for v in [b_prob, p_prob] if v is not None), default=None)
         parts.append(
             f"\n🔥 <b>{_esc(fix.home_team)} vs {_esc(fix.away_team)}</b> — {ko}\n"
             f"   🏆 {league_line}\n"
-            f"   📌 {_esc(_verbose_market(sig.market))} · {_pct(primary)}"
+            f"   {_pick_line(sig)}"
         )
     parts.append(f"\n<a href=\"{settings.app_url}\">{settings.app_url}</a>")
     return "\n".join(parts)
@@ -437,15 +456,15 @@ async def _query_tracked_singles(
 ) -> list[tuple[Signal, Fixture]]:
     """
     Return Signal+Fixture pairs for system-auto-tracked singles on run_date.
-    Reads from TrackedBet (source_rule_key in system_auto/system_dual) so the
-    Telegram digest shows exactly the same picks the Tracker page shows.
+    Reads from TrackedBet (source_rule_key in system_auto/system_dual/system_hybrid_b)
+    so the Telegram digest shows exactly the same picks the Tracker page shows.
     """
     tracked = list((await db.execute(
         select(TrackedBet.fixture_id, TrackedBet.market_type)
         .where(
             TrackedBet.event_date == run_date,
             TrackedBet.user_id.is_(None),
-            TrackedBet.source_rule_key.in_(["system_auto", "system_dual"]),
+            TrackedBet.source_rule_key.in_(["system_auto", "system_dual", "system_hybrid_b"]),
             TrackedBet.fixture_id.isnot(None),
         )
     )).all())
@@ -644,10 +663,8 @@ def build_signal_digest(
         f"<i>Tonight &amp; after-midnight kickoffs · {len(rows)} picks · times in CAT</i>",
     ]
     for i, (sig, fix) in enumerate(rows, 1):
-        primary = max((v for v in [sig.bayesian_prob, sig.poisson_prob] if v), default=None)
         ko = _kickoff_label_cat(fix.kickoff_at, now)
         league_line = f"{_esc(fix.country)} · {_esc(fix.league)}" if fix.country else _esc(fix.league or "")
-        conf_tag = {"High": "🔥", "Medium": "📊", "Low": "📉"}.get(sig.dual_confidence or "", "•")
         match_name = (
             _FREE_HIDDEN_MATCH
             if is_free and fix.id not in reveal_fixture_ids
@@ -656,7 +673,7 @@ def build_signal_digest(
         parts.append(
             f"\n<b>{i}. {match_name}</b>{(' · ' + ko) if ko else ''}\n"
             f"   🏆 {league_line}\n"
-            f"   📌 {_esc(_verbose_market(sig.market))} · {_pct(primary)} {conf_tag}"
+            f"   {_pick_line(sig)}"
         )
 
     legs = (acca or {}).get("legs") or []
@@ -819,10 +836,8 @@ def build_tomorrow_message(
         f"<i>{subtitle}</i>",
     ]
     for i, (sig, fix) in enumerate(rows, 1):
-        primary = max((v for v in [sig.bayesian_prob, sig.poisson_prob] if v), default=None)
         ko = _kickoff_str_cat(fix.kickoff_at)
         league_line = f"{_esc(fix.country)} · {_esc(fix.league)}" if fix.country else _esc(fix.league or "")
-        conf_tag = {"High": "🔥", "Medium": "📊", "Low": "📉"}.get(sig.dual_confidence or "", "•")
         match_name = (
             _FREE_HIDDEN_MATCH
             if is_free and fix.id not in reveal_fixture_ids
@@ -831,7 +846,7 @@ def build_tomorrow_message(
         parts.append(
             f"\n<b>{i}. {match_name}</b>{(' · ' + ko) if ko else ''}\n"
             f"   🏆 {league_line}\n"
-            f"   📌 {_esc(_verbose_market(sig.market))} · {_pct(primary)} {conf_tag}"
+            f"   {_pick_line(sig)}"
         )
 
     legs = (acca or {}).get("legs") or []
@@ -884,8 +899,8 @@ async def push_tomorrow_digest(db: AsyncSession, run_date: date | None = None) -
     acca = await _query_tracked_acca(db, run_date)
 
     if not tracked and acca is None:
-        logger.info("Tomorrow digest: no tracked picks or acca for %s — nothing to send", run_date)
-        return 0
+        logger.info("Tomorrow digest: no tracked picks or acca for %s — sending no-picks notification", run_date)
+        return await push_no_picks_notification(db, run_date, is_tomorrow=True)
 
     if not tracked:
         logger.info("Tomorrow digest: no system singles for %s — sending acca-only digest", run_date)
@@ -1174,7 +1189,6 @@ def build_results_message(
         parts.append(_conf_header(conf))
         for sig, fix, result in buckets[conf]:
             score    = _score_str(fix)
-            primary  = max((v for v in [sig.bayesian_prob, sig.poisson_prob] if v), default=None)
             r_emoji  = _result_emoji(result)
             ko       = _kickoff_str(fix.kickoff_at)
             league_line = (
@@ -1184,7 +1198,7 @@ def build_results_message(
                 f"\n{r_emoji} <b>{idx}. {_esc(fix.home_team)} vs {_esc(fix.away_team)}</b> ({score})"
                 f"{(' · ' + ko) if ko else ''}\n"
                 f"   🏆 {league_line}\n"
-                f"   📌 {_esc(_verbose_market(sig.market))} · {_pct(primary)}"
+                f"   {_pick_line(sig)}"
             )
             idx += 1
 
@@ -1289,6 +1303,64 @@ async def push_results_report(
     return any_sent
 
 
+async def push_no_picks_notification(
+    db: AsyncSession,
+    target_date: date,
+    *,
+    is_tomorrow: bool = False,
+) -> int:
+    """
+    Send a brief 'no qualifying picks' notice for target_date.
+
+    Called by push_morning_digest / push_tomorrow_digest when both the singles
+    list and the ACCA are empty, so subscribers know the silence is intentional
+    rather than a system fault. Idempotent via telegram_push_log (push_type=
+    'no_picks'). Returns the number of channels notified.
+    """
+    if not settings.telegram_bot_token:
+        return 0
+    targets = _configured_Qwantej_channels()
+    if not targets:
+        return 0
+
+    date_label = target_date.strftime("%a %d %b %Y")
+    if is_tomorrow:
+        title  = f"Tomorrow · {date_label}"
+        detail = (
+            "Light fixture calendar for tomorrow — no matches projected clear "
+            "away dominance (xG ≥ 1.50). The model only bets when the edge is clear."
+        )
+    else:
+        title  = f"Today · {date_label}"
+        detail = (
+            "No qualifying picks today — no matches projected clear away "
+            "dominance (xG ≥ 1.50). Skipping beats losing."
+        )
+
+    msg = (
+        f"📭 <b>Qwantej — No Picks: {title}</b>\n"
+        f"<i>{_esc(detail)}</i>"
+    )
+
+    push_type = "no_picks"
+    sent = 0
+    for chat_id, channel_type in targets:
+        if await _check_push_sent(db, target_date, channel_type, push_type):
+            logger.info("No-picks notice: already sent for %s/%s — skipping", target_date, channel_type)
+            continue
+        ok = await _send_to(chat_id, msg)
+        if ok:
+            await _log_push_sent(db, target_date, channel_type, push_type)
+            sent += 1
+
+    if sent:
+        logger.info(
+            "No-picks notification sent to %d channel(s) for %s (is_tomorrow=%s)",
+            sent, target_date, is_tomorrow,
+        )
+    return sent
+
+
 async def push_morning_digest(db: AsyncSession, free_reveal_count: int = FREE_REVEAL_COUNT) -> int:
     """
     Broadcast today's signal list at 06:00 CAT (04:00 UTC).
@@ -1320,8 +1392,8 @@ async def push_morning_digest(db: AsyncSession, free_reveal_count: int = FREE_RE
     acca = await _query_tracked_acca(db, today)
 
     if not tracked and acca is None:
-        logger.info("Morning digest: no tracked picks or acca for %s — skipping", today)
-        return 0
+        logger.info("Morning digest: no tracked picks or acca for %s — sending no-picks notification", today)
+        return await push_no_picks_notification(db, today, is_tomorrow=False)
 
     if not tracked:
         logger.info("Morning digest: no system singles for %s — sending acca-only digest", today)

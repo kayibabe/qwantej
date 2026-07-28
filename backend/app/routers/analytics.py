@@ -23,7 +23,7 @@ from app.core.config import HYBRID_B_ACTIVE_MARKETS
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
 
-_CORE_SYSTEM_KEYS = ["system_auto", "system_dual", "system_acca"]
+_CORE_SYSTEM_KEYS = ["system_auto", "system_dual", "system_acca", "system_hybrid_b"]
 _ADVISORY_KEYS = ["scout_pick", "strategist_pick", "skeptic_pick"]
 _SYSTEM_PICK_KEYS = _CORE_SYSTEM_KEYS + _ADVISORY_KEYS  # kept for CLV/revoke compat
 
