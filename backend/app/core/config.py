@@ -651,7 +651,18 @@ HYBRID_B_MAX_HOME_AWAY_XG_RATIO: float = 2.0
 HYBRID_B_MIN_XG_GAP: float = 0.30  # retired — not enforced in engine
 
 HYBRID_B_PERMANENT_BLACKLIST: frozenset[str] = frozenset({
-    "australia npl", "tasmania npl", "finland kakkonen",
+    # Australian state/regional NPLs: API-Football uses state-prefixed names
+    # ("Queensland NPL", "Western Australia State League") not "Australia NPL",
+    # so each must be listed individually. Jul 28 postmortem confirmed 0W/2L
+    # across Queensland NPL + Western Australia State League in the 0.30–0.60
+    # xG gap band — same structural cause as Northern NSW NPL already blocked.
+    "australia npl", "tasmania npl",
+    "queensland npl",          # Queensland NPL — not caught by "australia npl"
+    "western australia",       # Western Australia State League 1 (and variants)
+    # Finnish Kakkonen: API-Football omits the country prefix — league comes
+    # through as "Kakkonen - Lohko A", not "Finland Kakkonen". Jul 28: 1 loss
+    # (PuiU Helsinki 4-1 Reipas, home xG 1.47 scored 4) confirmed blacklist miss.
+    "kakkonen",                # replaces "finland kakkonen" — matches all groups
     "latvian cup", "brazilian carioca c",
     # ── 2026-07-27 (Jul 26 postmortem) ───────────────────────────────────────
     # MLS Next Pro: 3W/4L all-time = 43% WR, -37% ROI. Development league with
