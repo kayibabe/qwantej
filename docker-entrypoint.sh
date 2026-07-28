@@ -1,4 +1,4 @@
-﻿#!/bin/sh
+#!/bin/sh
 set -e
 
 # If a gzipped staged upload exists, decompress it first. The slim base image has
