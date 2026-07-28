@@ -18,6 +18,8 @@ Phase 1 — xG sourcing:
   data source while preserving the correct economic interpretation.
 
 Phase 2 — Qualifying filters (all must pass; any failure = REJECTED)
+  Filter 5 (applied post-selection): X2 rejected when home_xg < away_xg.
+    lh/la < 1.0 → 50% WR; home advantage overrides model's away-fav prediction.
 Phase 3 — Market selection via Expected Profit (EP)
 Phase 4 — Dynamic staking (MWK amounts)
 Phase 5 — Recency xG form stake adjustment (advisory)
@@ -235,6 +237,15 @@ def evaluate(
         else:
             return _reject(f"P3:ao05_suppressed_country:{country or 'world'}")
 
+    # ── Filter 5: X2 home-direction guard ────────────────────────────────
+    # Postmortem Jul 8-27 (480 X2 bets):
+    #   lh/la < 1.0 → 50% WR (187 bets); 1.0-1.2 → 57% WR (58 bets).
+    # On every bad day (Jul 10 / 14 / 24) all 39 losses were home wins in
+    # fixtures where home_xg < away_xg — home advantage overrides the
+    # model's away-favoured prediction. Reject X2 in this direction.
+    if selected == "X2" and home_xg < away_xg:
+        return _reject(f"F5:x2_home_xg<away_xg:{home_xg:.2f}<{away_xg:.2f}")
+
     # ── Phase 6 pre-check overrides (before staking) ─────────────────────
     # Override 1: X2 odds == Away O0.5 odds AND both < 1.20 (no edge)
     if (
@@ -315,6 +326,19 @@ def evaluate(
     if home_xg < 0.30 and selected == "X2":
         recommended_stake = HYBRID_B_STAKE_LEVELS["LOW"]["base_stake"]
         selected_tier = "LOW"
+
+    # Override 6: X2 confidence cap — only lh/la 1.2–1.3 (74% WR) earns HIGH.
+    # Post-Fix-A sub-band breakdown (lh >= la kept pool):
+    #   1.0-1.2 → 42% WR  (43 bets)   ← blocked by Fix B lower bound
+    #   1.2-1.3 → 74% WR  (23 bets)   ← only viable HIGH band
+    #   1.3-1.5 → 50% WR  (16 bets)   ← blocked by Fix B upper bound
+    #   1.5-2.0 → 44% WR  (18 bets)   ← blocked by Fix B upper bound
+    # Cap to MEDIUM outside the 1.2–1.3 sweet spot.
+    # Applied last so it overrides any form-driven tier promotion.
+    if selected == "X2" and selected_tier == "HIGH":
+        if not (away_xg * 1.2 <= home_xg < away_xg * 1.3):
+            selected_tier = "MEDIUM"
+            recommended_stake = HYBRID_B_STAKE_LEVELS["MEDIUM"]["base_stake"]
 
     return HybridBResult(
         selected_market=selected,
