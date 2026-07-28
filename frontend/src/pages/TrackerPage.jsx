@@ -322,52 +322,25 @@ export default function TrackerPage({ user, settings, onUpgrade }) {
         return null
       })()}
 
-      {/* System performance card — visible when source=system or system bets exist */}
-      {systemSummary && systemSummary.total_bets > 0 && (sourceFilter === 'system' || sourceFilter === 'system_acca' || sourceFilter === '') && (
-        <div className="rounded-xl border border-blue-500/25 bg-blue-500/6 px-4 py-3 space-y-2">
-          <div className="flex items-center gap-2">
-            <Bot size={13} className="text-blue-400 shrink-0" />
-            <span className="text-xs font-semibold text-blue-300">System Performance</span>
-            <span className="text-[10px] font-medium text-[var(--text)] opacity-50 bg-[var(--code-bg)] px-1.5 py-0.5 rounded">All-time</span>
-            <span className="ml-auto text-xs text-[var(--text)] opacity-60">{systemSummary.total_bets} total picks</span>
+      {/* System performance strip — compact all-time headline above the filter bar */}
+      {systemSummary && systemSummary.settled_bets > 0 && (sourceFilter === 'system' || sourceFilter === 'system_acca' || sourceFilter === '') && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--code-bg)] flex-wrap text-xs">
+          <div className="flex items-center gap-1.5">
+            <Bot size={12} className="text-blue-400 shrink-0" />
+            <span className="font-semibold text-[var(--text-h)]">All-time</span>
           </div>
-          <div className="flex items-center gap-5 flex-wrap text-xs">
-            <div className="flex flex-col items-center">
-              <span className="text-lg font-bold text-[var(--text-h)] tabular-nums">
-                {systemSummary.settled_bets > 0 ? `${Math.round(systemSummary.win_rate)}%` : '—'}
-              </span>
-              <span className="text-[var(--text)] opacity-60">Hit Rate</span>
-            </div>
-            <div className="flex flex-col items-center">
-              <span className={`text-lg font-bold tabular-nums ${systemSummary.settled_bets === 0 ? 'text-[var(--text-h)]' : systemSummary.roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {systemSummary.settled_bets > 0 ? `${systemSummary.roi >= 0 ? '+' : ''}${systemSummary.roi}%` : '—'}
-              </span>
-              <span className="text-[var(--text)] opacity-60">ROI</span>
-            </div>
-            <div className="flex flex-col items-center">
-              <span className="text-lg font-bold text-green-400 tabular-nums">{systemSummary.wins}</span>
-              <span className="text-[var(--text)] opacity-60">Won</span>
-            </div>
-            <div className="flex flex-col items-center">
-              <span className="text-lg font-bold text-red-400 tabular-nums">{systemSummary.losses}</span>
-              <span className="text-[var(--text)] opacity-60">Lost</span>
-            </div>
-            {systemSummary.pending_bets > 0 && (
-              <div className="flex flex-col items-center">
-                <span className="text-lg font-bold text-amber-400 tabular-nums">{systemSummary.pending_bets}</span>
-                <span className="text-[var(--text)] opacity-60">Pending</span>
-              </div>
-            )}
-            {(() => {
-              const voidCount = systemSummary.total_bets - systemSummary.wins - systemSummary.losses - (systemSummary.pending_bets || 0)
-              return voidCount > 0 ? (
-                <div className="flex flex-col items-center">
-                  <span className="text-lg font-bold text-slate-400 tabular-nums">{voidCount}</span>
-                  <span className="text-[var(--text)] opacity-60">Void</span>
-                </div>
-              ) : null
-            })()}
-          </div>
+          <span className="text-[var(--border)]">|</span>
+          <span className={`font-bold tabular-nums ${systemSummary.win_rate >= 60 ? 'text-green-400' : 'text-[var(--text-h)]'}`}>
+            {Math.round(systemSummary.win_rate)}% hit
+          </span>
+          <span className={`font-bold tabular-nums ${systemSummary.roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {systemSummary.roi >= 0 ? '+' : ''}{systemSummary.roi}% ROI
+          </span>
+          <span className="text-[var(--text)] opacity-60 tabular-nums">
+            {systemSummary.wins}W · {systemSummary.losses}L
+            {systemSummary.pending_bets > 0 && ` · ${systemSummary.pending_bets} pending`}
+          </span>
+          <span className="ml-auto text-[var(--text)] opacity-40 tabular-nums">{systemSummary.total_bets} picks</span>
         </div>
       )}
 

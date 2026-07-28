@@ -811,10 +811,6 @@ export default function AnalyticsPage({ onUpgrade, onApplySignalFilter, onNaviga
           ══════════════════════════════════════════════════════════════════ */}
           {analyticsTab === 'overview' && (
             <div className="space-y-5">
-              <Section icon={Target} title="Model Accuracy" subtitle="how often each signal prediction was correct across all settled fixtures">
-                <AccuracyDashboard />
-              </Section>
-
               <Section icon={Activity} title="Performance Breakdown" subtitle={activePreset === 'All' ? 'All-time' : activePreset ? `Last ${activePreset}` : dateFrom && dateTo ? formatPeriodLabel(dateFrom, dateTo) : 'period summary'}>
                 <div className="space-y-5">
 
@@ -890,7 +886,7 @@ export default function AnalyticsPage({ onUpgrade, onApplySignalFilter, onNaviga
           {analyticsTab === 'markets' && (
             <div className="space-y-5">
               {data.byTier.length > 0 && (
-                <Section icon={Layers} title="League Tier Breakdown" subtitle="Home Over 0.5 performance by league tier">
+                <Section icon={Layers} title="League Tier Breakdown" subtitle="performance by league tier">
                   <TierBreakdown rows={data.byTier} />
                 </Section>
               )}
@@ -937,6 +933,10 @@ export default function AnalyticsPage({ onUpgrade, onApplySignalFilter, onNaviga
 
               <Section icon={Layers} title="ACCA Performance" subtitle="leg hit rate and ticket hit rate by market and leg count">
                 <AccaPerformanceCard />
+              </Section>
+
+              <Section icon={Target} title="Model Accuracy" subtitle="how often each signal prediction was correct across all settled fixtures">
+                <AccuracyDashboard />
               </Section>
 
             </div>
@@ -1045,12 +1045,12 @@ function OddsBandBreakdown() {
         </table>
       </div>
 
-      {/* Value Band Poisson Only spotlight */}
+      {/* Value Band spotlight — highest-edge odds range */}
       {vb && vb.n > 0 && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/8 p-3 space-y-1.5">
           <div className="flex items-center gap-2">
             <span className="text-amber-400 font-bold text-sm">◆</span>
-            <span className="text-xs font-bold text-amber-400">Poisson Only subset · 1.65–2.09</span>
+            <span className="text-xs font-bold text-amber-400">Value band · 1.65–2.09</span>
             <span className="ml-auto text-[10px] text-[var(--text)] opacity-60">{vb.n} bets</span>
           </div>
           <div className="grid grid-cols-3 gap-3 pt-1">
@@ -1070,8 +1070,8 @@ function OddsBandBreakdown() {
             </div>
           </div>
           <p className="text-[10px] text-[var(--text)] opacity-65 pt-1 leading-relaxed">
-            When Poisson Only signals fall in the 1.65–2.09 range the model is finding home-team
-            scoring rates mispriced by bookmaker lines. This is the system's highest-edge segment.
+            Picks in the 1.65–2.09 odds range show the system's highest edge historically.
+            Bookmaker lines in this band tend to underestimate the modelled away probability.
           </p>
         </div>
       )}

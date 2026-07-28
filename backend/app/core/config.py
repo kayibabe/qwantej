@@ -641,9 +641,14 @@ HYBRID_B_MAX_HOME_AWAY_XG_RATIO: float = 2.0
 # Minimum absolute away xG advantage over home xG required to bet X2 or Away O0.5.
 # Jul 11/18 postmortem: Sejong SA (λH=2.28 vs λA=1.64) and EPS (λH=1.74 vs λA=1.60)
 # both had home_xg > away_xg yet still passed Filter 2 (ratio gate too loose at 2×).
-# Requiring away_xg - home_xg ≥ 0.30 eliminates picks where the model barely prefers
-# the away side and the home team is realistically capable of winning.
-HYBRID_B_MIN_XG_GAP: float = 0.30
+# Filter 2b (min xG gap) was trialled at 0.30 then retired 2026-07-28:
+# Retrospective simulation showed that within the 1.21–1.50 odds window the odds cap
+# already handles those cases (if home_xg >> away_xg the X2 price is naturally >1.50
+# because the home side is the bookmaker favourite). Adding the gap check removed
+# profitable bets without improving ROI — no-filter baseline: 156 picks, 77.6% WR,
+# +6.13% ROI vs gap≥0.30: 107 picks, 75.7% WR, +3.36% ROI.
+# Constant kept for reference; the check in hybrid_b.py is disabled.
+HYBRID_B_MIN_XG_GAP: float = 0.30  # retired — not enforced in engine
 
 HYBRID_B_PERMANENT_BLACKLIST: frozenset[str] = frozenset({
     "australia npl", "tasmania npl", "finland kakkonen",

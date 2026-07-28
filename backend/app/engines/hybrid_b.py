@@ -31,7 +31,6 @@ from typing import Optional
 from app.core.config import (
     HYBRID_B_MIN_AWAY_XG,
     HYBRID_B_MAX_HOME_AWAY_XG_RATIO,
-    HYBRID_B_MIN_XG_GAP,
     HYBRID_B_PERMANENT_BLACKLIST,
     HYBRID_B_CONDITIONAL_BLACKLIST,
     HYBRID_B_STAKE_LEVELS,
@@ -137,14 +136,6 @@ def evaluate(
     # Filter 2 — Home xG < Away xG × 2.0
     if home_xg >= away_xg * HYBRID_B_MAX_HOME_AWAY_XG_RATIO:
         return _reject(f"F2:home_xg={home_xg:.2f}≥away_xg*{HYBRID_B_MAX_HOME_AWAY_XG_RATIO}")
-
-    # Filter 2b — Away xG must exceed Home xG by at least HYBRID_B_MIN_XG_GAP.
-    # Jul 11/18 postmortem: picks where home_xg ≥ away_xg (e.g. Sejong SA 2.28 vs 1.64,
-    # EPS 1.74 vs 1.60) still passed Filter 2 because the 2× ratio gate is too loose.
-    # A minimum absolute gap of 0.30 ensures the away side has a meaningful xG advantage
-    # before we back them not to lose (X2) or to score (Away O0.5).
-    if (away_xg - home_xg) < HYBRID_B_MIN_XG_GAP:
-        return _reject(f"F2b:xg_gap={away_xg - home_xg:.2f}<{HYBRID_B_MIN_XG_GAP}")
 
     # Filter 3 — Permanent blacklist leagues (exact substring match, lower)
     if any(bl in league_lower for bl in HYBRID_B_PERMANENT_BLACKLIST):
