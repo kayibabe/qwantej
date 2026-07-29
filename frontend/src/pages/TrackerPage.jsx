@@ -1,13 +1,12 @@
 ﻿import React, { useState, useEffect, useMemo } from 'react'
-import { RefreshCw, CheckCircle, TrendingUp, Lock, Upload, Settings2, Bot, User, Layers, ListChecks, ArrowRight, FileUp, Link2 } from 'lucide-react'
+import { RefreshCw, CheckCircle, TrendingUp, Lock, Settings2, Bot, User, Layers, ListChecks, ArrowRight, Link2 } from 'lucide-react'
 import { useTracker } from '../store/useTracker'
-import { syncData, computeCLV, deduplicateBets, normalizeStakes } from '../api/tracker'
+import { syncData, computeCLV, deduplicateBets } from '../api/tracker'
 import { fetchAnalytics } from '../api/analytics'
 import { triggerAdminSettle } from '../api/admin'
 import BetTable from '../components/tracker/BetTable'
 import PLChart from '../components/tracker/PLChart'
 import BetStatsBar from '../components/tracker/BetStatsBar'
-import ImportCSVModal from '../components/tracker/ImportCSVModal'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import DatePicker from '../components/shared/DatePicker'
 import { fmtK } from '../utils/format'
@@ -47,13 +46,10 @@ export default function TrackerPage({ user, settings, onUpgrade }) {
   const [settling, setSettling]         = useState(false)
   const [settleResult, setSettleResult] = useState(null)
   const [computingCLV, setComputingCLV] = useState(false)
-  const [showImport, setShowImport]     = useState(false)
   const [moreOpen, setMoreOpen]         = useState(false)
   const [clvResult, setClvResult]       = useState(null)
   const [deduping, setDeduping]           = useState(false)
   const [dedupResult, setDedupResult]     = useState(null)
-  const [normalizing, setNormalizing]     = useState(false)
-  const [normalizeResult, setNormalizeResult] = useState(null)
   const [actionError, setActionError]     = useState(null)
   const { bets, loading, error, loadBets, invalidate } = useTracker()
   const [slowLoad, setSlowLoad] = useState(false)
@@ -170,21 +166,6 @@ export default function TrackerPage({ user, settings, onUpgrade }) {
     await loadBets(betFilters)
   }
 
-  async function handleNormalizeStakes() {
-    setNormalizing(true)
-    setNormalizeResult(null)
-    try {
-      const res = await normalizeStakes(50_000)
-      setNormalizeResult(res)
-      setTimeout(() => setNormalizeResult(null), 6000)
-      invalidate()
-      await loadBets(betFilters)
-    } catch (e) {
-      setActionError(e.message || 'Failed — are you logged in?')
-      setTimeout(() => setActionError(null), 7000)
-    } finally { setNormalizing(false) }
-  }
-
   async function handleDedup() {
     setDeduping(true)
     setDedupResult(null)
@@ -264,15 +245,6 @@ export default function TrackerPage({ user, settings, onUpgrade }) {
                 <div className="fixed inset-0 z-10" onClick={() => setMoreOpen(false)} />
                 <div className="absolute right-0 mt-1 z-20 w-52 rounded-lg border border-[var(--border)] bg-[var(--bg)] shadow-xl p-1">
                   <button
-                    onClick={() => { setMoreOpen(false); handleNormalizeStakes() }}
-                    disabled={normalizing}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-[var(--text-h)] hover:bg-[var(--code-bg)] disabled:opacity-50 transition-colors text-left"
-                    title="Set all bets to K50,000 flat stake and recompute P/L"
-                  >
-                    <Layers size={14} className={`text-emerald-400 ${normalizing ? 'animate-pulse' : ''}`} />
-                    {normalizing ? 'Updating stakes…' : 'Set All Stakes → K50k'}
-                  </button>
-                  <button
                     onClick={() => { setMoreOpen(false); handleDedup() }}
                     disabled={deduping}
                     className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-[var(--text-h)] hover:bg-[var(--code-bg)] disabled:opacity-50 transition-colors text-left"
@@ -280,13 +252,6 @@ export default function TrackerPage({ user, settings, onUpgrade }) {
                   >
                     <Layers size={14} className={`text-amber-400 ${deduping ? 'animate-pulse' : ''}`} />
                     {deduping ? 'Removing duplicates…' : 'Remove Duplicates'}
-                  </button>
-                  <button
-                    onClick={() => { setMoreOpen(false); setShowImport(true) }}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-[var(--text-h)] hover:bg-[var(--code-bg)] transition-colors text-left"
-                    title="Bulk-import historical bets from CSV"
-                  >
-                    <Upload size={14} /> Import CSV
                   </button>
                 </div>
               </>
@@ -296,7 +261,7 @@ export default function TrackerPage({ user, settings, onUpgrade }) {
       </div>
 
       {/* Action result status line — sits below the toolbar, never reflows buttons */}
-      {(settleResult != null || normalizeResult != null || dedupResult != null || actionError || clvResult) && (() => {
+      {(settleResult != null || dedupResult != null || actionError || clvResult) && (() => {
         if (actionError) return (
           <p className="text-xs font-medium text-red-400 px-1">✗ {actionError}</p>
         )
@@ -310,9 +275,6 @@ export default function TrackerPage({ user, settings, onUpgrade }) {
             </p>
           )
         }
-        if (normalizeResult != null) return (
-          <p className="text-xs font-medium text-emerald-400 px-1">✓ {normalizeResult.updated} bet{normalizeResult.updated !== 1 ? 's' : ''} updated to K50,000</p>
-        )
         if (dedupResult != null) return (
           <p className="text-xs font-medium text-emerald-400 px-1">✓ {dedupResult.removed} duplicate{dedupResult.removed !== 1 ? 's' : ''} removed</p>
         )
@@ -454,32 +416,12 @@ export default function TrackerPage({ user, settings, onUpgrade }) {
               Go to Signals
               <ArrowRight size={14} />
             </button>
-            <button
-              onClick={() => setShowImport(true)}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-[var(--border)] hover:bg-[var(--code-bg)] text-[var(--text)] text-sm font-medium transition-colors"
-            >
-              <FileUp size={14} />
-              Import CSV
-            </button>
           </div>
-          <p className="text-xs text-[var(--text)] opacity-35">
-            Already have picks? Import a CSV from any spreadsheet.
-          </p>
         </div>
       ) : (
         !loading && <BetTable bets={filteredBets} summary={analyticsSummary} isPro={isPro} onUpgrade={onUpgrade} onRefresh={() => { invalidate(); loadBets(betFilters) }} />
       )}
 
-      {/* Import CSV modal */}
-      {showImport && (
-        <ImportCSVModal
-          onClose={() => setShowImport(false)}
-          onImported={() => {
-            loadBets(betFilters)
-            setShowImport(false)
-          }}
-        />
-      )}
     </div>
   )
 }

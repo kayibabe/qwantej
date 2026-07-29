@@ -498,82 +498,6 @@ async def update_bet(
     return bet
 
 
-@router.post("/bets/import")
-async def bulk_import_bets(
-    rows: list[dict],
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Bulk-import historical bets from a CSV paste.
-
-    Each row must have: date, match, market, odds, stake
-    Optional fields: bookmaker, result (Won/Lost/Void/Pending), notes
-
-    Returns: { imported, skipped, errors }
-    """
-    imported = 0
-    skipped  = 0
-    errors: list[str] = []
-
-    VALID_RESULTS = {"Won", "Lost", "Void", "Pending"}
-
-    for i, row in enumerate(rows):
-        try:
-            raw_date = str(row.get("date", "") or "").strip()
-            match    = str(row.get("match", "") or "").strip()
-            market   = str(row.get("market", "") or "").strip()
-            bookmaker = str(row.get("bookmaker", "") or "Betway").strip() or "Betway"
-            notes    = str(row.get("notes", "") or "").strip() or None
-
-            odds  = float(row.get("odds", 0) or 0)
-            stake = float(row.get("stake", 0) or 0)
-
-            result_raw = str(row.get("result", "") or "Pending").strip()
-            result     = result_raw if result_raw in VALID_RESULTS else "Pending"
-
-            if not match or not market or odds <= 1.0 or stake <= 0:
-                skipped += 1
-                continue
-
-            event_date = None
-            if raw_date:
-                try:
-                    event_date = date.fromisoformat(raw_date)
-                except ValueError:
-                    pass
-
-            bet = TrackedBet(
-                user_id=current_user.id,
-                match_name=match,
-                market_type=market,
-                selection_name=market,   # no separate selection for manual rows
-                bookmaker=bookmaker,
-                odds=round(odds, 4),
-                stake=round(stake, 2),
-                event_date=event_date,
-                notes=notes,
-                result_status=result,
-            )
-
-            # Compute P&L for settled rows
-            if result == "Won":
-                bet.profit_loss = round(stake * (odds - 1.0), 2)
-                bet.settled_at  = datetime.utcnow()
-            elif result in ("Lost", "Void"):
-                bet.profit_loss = round(-stake, 2) if result == "Lost" else 0.0
-                bet.settled_at  = datetime.utcnow()
-
-            db.add(bet)
-            imported += 1
-
-        except Exception as exc:
-            errors.append(f"Row {i + 1}: {exc}")
-
-    await db.commit()
-    return {"imported": imported, "skipped": skipped, "errors": errors}
-
-
 @router.delete("/bets/{bet_id}")
 async def delete_bet(
     bet_id: int,
@@ -619,37 +543,6 @@ async def revoke_system_bet(
     await db.delete(bet)
     await db.commit()
     return {"revoked": True}
-
-
-@router.post("/bets/normalize-stakes")
-async def normalize_stakes(
-    stake: float = Query(50_000.0, description="Target flat stake to apply to all bets"),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Set every tracked bet for this user to the given flat stake and recompute P/L."""
-    result = await db.execute(
-        select(TrackedBet).where(
-            or_(
-                TrackedBet.user_id == current_user.id,
-                and_(
-                    TrackedBet.user_id.is_(None),
-                    TrackedBet.source_rule_key.in_(_SYSTEM_PICK_KEYS),
-                ),
-            )
-        )
-    )
-    bets = list(result.scalars().all())
-    updated = 0
-    for bet in bets:
-        if bet.stake == stake:
-            continue
-        bet.stake = round(stake, 2)
-        if bet.result_status in {"Won", "Lost", "Void"}:
-            _apply_settlement(bet, bet.result_status)
-        updated += 1
-    await db.commit()
-    return {"updated": updated, "stake": stake}
 
 
 @router.post("/bets/deduplicate")

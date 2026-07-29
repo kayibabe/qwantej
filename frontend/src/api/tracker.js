@@ -67,12 +67,6 @@ export async function deduplicateBets() {
   return res.json()
 }
 
-export async function normalizeStakes(stake = 50_000) {
-  const res = await apiFetch(`${BASE}/bets/normalize-stakes?stake=${stake}`, { method: 'POST' })
-  if (!res.ok) throw new Error(`Normalize stakes failed: ${res.status}`)
-  return res.json()
-}
-
 export async function settleResults(run_date) {
   const params = run_date ? `?run_date=${run_date}` : ''
   const res = await apiFetch(`${BASE}/settle-results${params}`, { method: 'POST' })
@@ -169,16 +163,3 @@ export async function trackAcca(acca, date) {
   })
 }
 
-/** Bulk-import historical bets from parsed CSV rows. */
-export async function bulkImportBets(rows) {
-  const res = await apiFetch(`${BASE}/bets/import`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(rows),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.detail || `Import failed: ${res.status}`)
-  }
-  return res.json()   // { imported, skipped, errors }
-}
