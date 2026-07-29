@@ -741,19 +741,18 @@ HYBRID_B_CONDITIONAL_BLACKLIST: frozenset[str] = frozenset({
 
 # Phase 4 — Dynamic staking (all amounts in MWK)
 HYBRID_B_STAKE_LEVELS: dict[str, dict] = {
-    "HIGH":   {"min_odds": 1.40, "base_stake": 75_000.0, "bonus_stake": 100_000.0},
-    "MEDIUM": {"min_odds": 1.25, "base_stake": 75_000.0, "bonus_stake":  75_000.0},
-    "LOW":    {"min_odds": 1.10, "base_stake": 50_000.0, "bonus_stake":  50_000.0},
-    "SKIP":   {"min_odds": 0.00, "base_stake":      0.0, "bonus_stake":      0.0},
+    "HIGH":   {"min_odds": 1.40, "base_stake": 100_000.0, "bonus_stake": 100_000.0},
+    "MEDIUM": {"min_odds": 1.25, "base_stake":  75_000.0, "bonus_stake":  75_000.0},
+    "LOW":    {"min_odds": 1.10, "base_stake":  40_000.0, "bonus_stake":  40_000.0},
+    "SKIP":   {"min_odds": 0.00, "base_stake":       0.0, "bonus_stake":      0.0},
 }
 HYBRID_B_HOME_XGA_BONUS_THRESHOLD: float = 1.4
 HYBRID_B_MAX_SINGLE_STAKE_PCT: float = 0.05
-# X2 market stake cap: never apply the K100k bonus booster to X2 picks.
-# Historical data shows X2 High (≥1.40 odds) runs 55% WR / -11.4% ROI all-time
-# — negative expected value. The bonus was designed for clear defensive mismatches
-# but high X2 odds mean the bookmaker already prices the home team as favourite,
-# making the bonus doubly counter-productive. Cap X2 at the base K75k stake.
-HYBRID_B_X2_MAX_STAKE: float = 75_000.0
+# X2 stake cap raised to K100k (was K75k). Original cap was based on X2 HIGH
+# running -11.4% ROI all-time, but that dataset included odds >1.50 which the
+# odds window now rejects. Within 1.40–1.50, X2 is part of the 82.7% WR /
+# +13% ROI cohort and deserves the full HIGH-tier stake.
+HYBRID_B_X2_MAX_STAKE: float = 100_000.0
 
 # Odds window — only bet when selected odds are within this range.
 # Analysis across 525 settled bets (Jul 8–Jul 27 2026):
