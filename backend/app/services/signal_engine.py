@@ -712,6 +712,7 @@ async def compute_signals_for_date(db: AsyncSession, run_date: date) -> int:
             away_team=fixture.away_team,
             fallback_lh=_fl_h,
             fallback_la=_fl_a,
+            country=fixture.country or "",
         )
 
         # BOS 2.0: Match Stability Index.
@@ -762,7 +763,7 @@ async def compute_signals_for_date(db: AsyncSession, run_date: date) -> int:
         # comparison a tautology that never fires. zinb_predict returns the
         # form-lambda fallback when unfitted (indistinguishable by value), so we
         # gate on zinb_is_fitted; unfitted → None → engine skips the recency check.
-        _hb_away_season_xg = _zinb_la if adv.zinb_is_fitted(fixture.league or "") else None
+        _hb_away_season_xg = _zinb_la if adv.zinb_is_fitted(fixture.league or "", country=fixture.country or "") else None
         _hb_recency_xg_away = (form_lambdas or {}).get("lambda_a") if form_lambdas else None
 
         # BOS stability mapping

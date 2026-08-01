@@ -182,7 +182,7 @@ class AdvancedModelsService:
 
         try:
             rows = await self._db.execute(text("""
-                SELECT id, home_team, away_team, league,
+                SELECT id, home_team, away_team, league, country,
                        home_score, away_score, event_date
                 FROM fixtures
                 WHERE home_score IS NOT NULL
@@ -265,8 +265,8 @@ class AdvancedModelsService:
         from collections import defaultdict
         by_league: dict[str, list[dict]] = defaultdict(list)
         for r in records:
-            league = (r.get("league") or "unknown").lower().strip()
-            by_league[league].append({
+            league_key = _league_country_key(r.get("league"), r.get("country"))
+            by_league[league_key].append({
                 "home_team_id": _team_hash(r["home_team"]),
                 "away_team_id": _team_hash(r["away_team"]),
                 "home_goals": int(r["home_score"]),
@@ -346,12 +346,13 @@ class AdvancedModelsService:
         away_team: str,
         fallback_lh: float = 1.35,
         fallback_la: float = 1.10,
+        country: str = "",
     ) -> tuple[float, float]:
         """
         Return ZINB (mu_home, mu_away). Falls back to supplied Poisson lambdas
         when ZINB is unavailable for this league.
         """
-        league_key = league.lower().strip()
+        league_key = _league_country_key(league, country)
         model = self._zinb_models.get(league_key)
         if model is None or not model.fitted:
             return fallback_lh, fallback_la
@@ -364,12 +365,12 @@ class AdvancedModelsService:
         except Exception:
             return fallback_lh, fallback_la
 
-    def zinb_is_fitted(self, league: str) -> bool:
+    def zinb_is_fitted(self, league: str, country: str = "") -> bool:
         """True when a genuine ZINB fit exists for this league (not a fallback).
         Callers that must distinguish model output from the Poisson/form fallback
         (e.g. Hybrid B's season-xG baseline) should check this before trusting
         zinb_predict's return values."""
-        model = self._zinb_models.get(league.lower().strip())
+        model = self._zinb_models.get(_league_country_key(league, country))
         return model is not None and model.fitted
 
     def glicko_r_diff(self, home_team: str, away_team: str) -> Optional[float]:
@@ -411,6 +412,16 @@ class AdvancedModelsService:
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _league_country_key(league: str | None, country: str | None) -> str:
+    """Compound key so 'Premier League / Wales' and 'Premier League / England'
+    are fitted as separate ZINB models.  Without country, generic league names
+    like 'Premier League' would pool teams from dozens of different competitions
+    with wildly different scoring rates, producing absurd mu predictions."""
+    lg = (league or "unknown").lower().strip()
+    ct = (country or "").lower().strip()
+    return f"{lg}|{ct}" if ct else lg
+
 
 def _team_hash(name: str) -> int:
     """Stable integer ID from team name (used as ZINB team key).
