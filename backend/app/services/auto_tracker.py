@@ -146,6 +146,9 @@ async def auto_track_date(db: AsyncSession, run_date: date) -> int:
         # odds tiers, and MWK staking — legacy market/odds gates below are bypassed
         # for them (guarded with `not is_hybrid`).
         is_hybrid = signal.poisson_rule_key == "hybrid_b"
+        # ZINB goals signals (zinb_o15, zinb_o25, zinb_u25, zinb_u35) share Hybrid B
+        # stake sizing and bypass the old dual-engine odds/confidence gates.
+        is_zinb_goals = (signal.poisson_rule_key or "").startswith("zinb_")
 
         # Defense-in-depth: skip disabled markets and leagues.
         # signal_engine and router already filter these, but old signals in the
@@ -172,9 +175,9 @@ async def auto_track_date(db: AsyncSession, run_date: date) -> int:
                 continue
 
         # Skip signals below the minimum odds floor — parity with router serving gate.
-        # Hybrid B exempt: its own stake tiers enforce a 1.10 floor.
+        # Hybrid B and ZINB goals exempt: they use their own stake/odds tier logic.
         min_odds_floor = MARKET_MIN_ODDS.get(signal.market)
-        if not is_hybrid and min_odds_floor is not None and odds < min_odds_floor:
+        if not is_hybrid and not is_zinb_goals and min_odds_floor is not None and odds < min_odds_floor:
             continue
 
         # Skip Both+High picks whose odds exceed the serving-time ceiling —
@@ -258,9 +261,12 @@ async def auto_track_date(db: AsyncSession, run_date: date) -> int:
         # (55-70%). High confidence (≥0.70) gives the model a realistic chance of
         # beating the market. Medium Bayesian-Only Over 1.5 is not suppressed from
         # signal generation (it informs pattern detection), only from auto-tracking.
+        # ZINB goals signals are exempt: their confidence tiers reflect lambda
+        # thresholds, not the Bayesian/Poisson dual-engine confidence scale.
         if (
             signal.market == "Over 1.5"
             and signal.dual_confidence != "High"
+            and not is_zinb_goals
         ):
             continue
 
@@ -279,6 +285,14 @@ async def auto_track_date(db: AsyncSession, run_date: date) -> int:
             # tier logic, bonus booster, and form adjustments) — use it as-is.
             # Guard against 0.0 (falsy) falling back to FLAT_STAKE.
             stake = float(signal.recommended_stake) if signal.recommended_stake else FLAT_STAKE
+        elif is_zinb_goals:
+            # ZINB goals signals carry deterministic Kelly-tier staking computed
+            # in signal_engine.py — use recommended_stake directly.
+            if signal.stake_tier == "SKIP" or not signal.recommended_stake:
+                continue
+            source_rule_key   = "system_zinb_goals"
+            source_rule_label = f"ZINB Goals ({signal.stake_tier or 'MEDIUM'})"
+            stake = float(signal.recommended_stake)
         else:
             if agreement == "Both" and confidence == "High":
                 source_rule_key   = "system_dual"

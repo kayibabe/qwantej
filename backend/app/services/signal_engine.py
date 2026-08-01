@@ -47,12 +47,14 @@ from app.engines import poisson as poi_engine
 from app.engines import dual_engine
 from app.engines import bos as bos_engine
 from app.engines import hybrid_b as hybrid_b_engine
+from app.engines import zinb_goals as zinb_goals_engine
 from app.services import weather_service
 from app.services import lineup_service
 from app.models import Fixture, MarketSnapshot, Signal
 from app.services.performance_intelligence import compute_performance_weights, PerformanceWeights
 from app.core.config import (
     BOS_SI_THRESHOLD, BOS_O00_MAX, BOS_CMA_MAX,
+    HYBRID_B_STAKE_LEVELS,
 )
 
 settings = get_settings()
@@ -189,6 +191,21 @@ def _build_away_totals(snapshots: list[MarketSnapshot]) -> dict[str, dict[str, f
         if s.market_type in AWAY_GOALS_MARKET_NAMES:
             result.setdefault(s.bookmaker, {})[s.selection_name] = s.odds
     return result
+
+
+def _best_goals_ou_odds(
+    goals_ou: dict[str, dict[str, float]],
+    selection: str,
+) -> tuple[float | None, str | None]:
+    """Return (best_odds, bookmaker) for a Goals O/U selection (e.g. 'Over 1.5')."""
+    best_odds: float | None = None
+    best_bk: str | None = None
+    for bk, markets in goals_ou.items():
+        o = markets.get(selection)
+        if o and o > (best_odds or 0):
+            best_odds = o
+            best_bk = bk
+    return best_odds, best_bk
 
 
 def _build_win_to_nil_home(snapshots: list[MarketSnapshot]) -> dict[str, dict[str, float]]:
@@ -778,103 +795,149 @@ async def compute_signals_for_date(db: AsyncSession, run_date: date) -> int:
             away_season_xg=_hb_away_season_xg,
         )
 
-        if _hb_result.selected_market is None:
-            # This fixture was rejected by Phase 2/3/6 filters — skip
+        # ── ZINB Goals Market engine (independent of Hybrid B) ───────────────
+        # Evaluates Over 1.5 / Over 2.5 / Under 2.5 / Under 3.5 using the same
+        # home_xg / away_xg that Hybrid B uses (ZINB-fitted or form-lambda).
+        _zinb_goals_result = zinb_goals_engine.evaluate(_hb_home_xg, _hb_away_xg)
+
+        # Apply league suppression to ZINB goals at generation time.
+        if _zinb_goals_result is not None:
+            _zg_league_lower = (fixture.league or "").lower().strip()
+            _zg_is_over = _zinb_goals_result.market in {"Over 1.5", "Over 2.5"}
+            if _zg_is_over and _league_matches_suppression(_zg_league_lower, OVER_GOALS_SUPPRESSED_LEAGUES):
+                _zinb_goals_result = None
+            elif not _zg_is_over and _league_matches_suppression(_zg_league_lower, UNDER_GOALS_SUPPRESSED_LEAGUES):
+                _zinb_goals_result = None
+
+        # Glicko gate for Hybrid B X2 (does not apply to ZINB goals).
+        _hb_qualified = _hb_result.selected_market is not None
+        if (
+            _hb_qualified
+            and _hb_result.selected_market == "X2"
+            and _glicko_rdiff is not None
+            and _glicko_rdiff > 40
+        ):
+            _hb_qualified = False
+
+        # Skip expensive API calls if neither engine produced a candidate.
+        if not _hb_qualified and _zinb_goals_result is None:
             continue
 
-        # ── Phase 6 Rule 3: team news alert ──────────────────────────────────
-        # Checked after market selection so rejected fixtures cost no API call.
+        # ── Phase 6 Rule 3: team news alert (shared gate) ────────────────────
         # Queries API-Football /injuries; triggers when away team has ≥ 5
         # injured/suspended players confirmed. Fail-open: errors → False.
         if await lineup_service.get_team_news_alert(fixture.id, fixture.away_team):
             continue
 
-        # ── Phase 6 Rule 5: weather override ─────────────────────────────────
-        # Checked only after a market is selected so rejected fixtures never
-        # cost an HTTP lookup. Fail-open: lookup errors never block a signal.
+        # ── Phase 6 Rule 5: weather override (shared gate) ───────────────────
+        # Fail-open: lookup errors never block a signal.
         if await weather_service.get_weather_alert(
             getattr(fixture, "venue_city", None), fixture.country, fixture.kickoff_at
         ):
             continue
 
-        # ── Glicko gate: reject X2 when home team has meaningful rating advantage ──
-        # Hybrid B is blind to Glicko ratings; this gate prevents backing draw/away
-        # on fixtures where the Glicko model says home is the stronger side.
-        # Threshold 40: covers ~6 losses/day from 26-Jul without over-suppressing wins.
-        # Positive glicko_r_diff = home team rated higher.
-        if (
-            _hb_result.selected_market == "X2"
-            and _glicko_rdiff is not None
-            and _glicko_rdiff > 40
-        ):
-            continue
+        # ── Write Hybrid B signal ─────────────────────────────────────────────
+        if _hb_qualified:
+            # Map Hybrid B market short-name to canonical Signal.market value
+            _hb_market_full = (
+                "X2 (Draw or Away)" if _hb_result.selected_market == "X2"
+                else "Away Over 0.5"
+            )
 
-        # Map Hybrid B market short-name to canonical Signal.market value
-        _hb_market_full = (
-            "X2 (Draw or Away)" if _hb_result.selected_market == "X2"
-            else "Away Over 0.5"
-        )
+            # dual_confidence / agreement kept for backward-compat with analytics/tracker
+            _hb_confidence = {
+                "HIGH":   "High",
+                "MEDIUM": "Medium",
+                "LOW":    "Low",
+            }.get(_hb_result.stake_tier, "None")
 
-        # dual_confidence / agreement kept for backward-compat with analytics/tracker
-        # Use stake_tier as the confidence proxy for the new system
-        _hb_confidence = {
-            "HIGH":   "High",
-            "MEDIUM": "Medium",
-            "LOW":    "Low",
-        }.get(_hb_result.stake_tier, "None")
+            # Suppress Hybrid B Medium picks in leagues with confirmed structural losses.
+            _hb_league_lower = (fixture.league or "").lower().strip()
+            if _hb_confidence != "Medium" or _hb_league_lower not in BOTH_MEDIUM_DISABLED_LEAGUES:
+                _hb_ep = _hb_result.ep_x2 if _hb_result.selected_market == "X2" else _hb_result.ep_away_o05
 
-        # Suppress Hybrid B Medium picks in leagues with confirmed structural losses
-        # at Medium confidence (same leagues blocked for Both+Medium in non-Hybrid B path).
-        # Hybrid B is normally exempt from the B-5 gate in auto_tracker; this
-        # filter catches it at source so the signal is never written to the DB.
-        _hb_league_lower = (fixture.league or "").lower().strip()
-        if _hb_confidence == "Medium" and _hb_league_lower in BOTH_MEDIUM_DISABLED_LEAGUES:
-            continue
+                sig = Signal(
+                    fixture_id=fixture.id,
+                    market=_hb_market_full,
+                    # Poisson lambda values (xG proxies) preserved for analytics/tracker
+                    poisson_lambda_h=_fl_h,
+                    poisson_lambda_a=_fl_a,
+                    poisson_lambda_total=_fl_h + _fl_a,
+                    poisson_prob=None,
+                    poisson_rule_key="hybrid_b",
+                    poisson_rule_pass=True,
+                    poisson_rule_strong=_hb_result.stake_tier == "HIGH",
+                    poisson_grade="A" if _hb_result.stake_tier == "HIGH" else "B" if _hb_result.stake_tier == "MEDIUM" else "C",
+                    bayesian_best_odd=_hb_result.selected_odds,
+                    dual_confidence=_hb_confidence,
+                    dual_agreement="Both",
+                    dual_quality_score=round((_hb_ep or 0) / 100_000.0, 6),
+                    dual_recommended_stake_pct=round(_hb_result.recommended_stake / 1_000_000.0, 6),
+                    contradiction=False,
+                    bos_si=_bos_result.si if _bos_result else None,
+                    bos_passed=_bos_result.passed if _bos_result else None,
+                    zinb_lambda_h=round(_zinb_lh, 4) if _zinb_lh else None,
+                    zinb_lambda_a=round(_zinb_la, 4) if _zinb_la else None,
+                    glicko_r_diff=_glicko_rdiff,
+                    glicko_rating_age_days=_glicko_age,
+                    home_xg=round(_hb_home_xg, 4),
+                    away_xg=round(_hb_away_xg, 4),
+                    home_xga=round(_hb_result.home_xga, 4),
+                    recency_xg_away=round(_hb_recency_xg_away, 4) if _hb_recency_xg_away else None,
+                    bos_stability=_hb_bos,
+                    selected_market=_hb_result.selected_market,
+                    ep_x2=_hb_result.ep_x2,
+                    ep_away_o05=_hb_result.ep_away_o05,
+                    recommended_stake=_hb_result.recommended_stake,
+                    stake_tier=_hb_result.stake_tier,
+                    home_o05_odds_logged=_hb_ho05_odds,
+                )
+                pending_signals.append(sig)
+                count += 1
 
-        _hb_ep = _hb_result.ep_x2 if _hb_result.selected_market == "X2" else _hb_result.ep_away_o05
+        # ── Write ZINB Goals Market signal ────────────────────────────────────
+        if _zinb_goals_result is not None:
+            # Look up best bookmaker odds for the selected goals line.
+            _zg_odds, _zg_bk = _best_goals_ou_odds(goals_ou, _zinb_goals_result.market)
+            _zg_stake = (
+                HYBRID_B_STAKE_LEVELS["HIGH"]["base_stake"]
+                if _zinb_goals_result.confidence == "EXCELLENT"
+                else HYBRID_B_STAKE_LEVELS["MEDIUM"]["base_stake"]
+            )
+            _zg_confidence = "High" if _zinb_goals_result.confidence == "EXCELLENT" else "Medium"
 
-        sig = Signal(
-            fixture_id=fixture.id,
-            market=_hb_market_full,
-            # Poisson lambda values (xG proxies) preserved for analytics/tracker
-            poisson_lambda_h=_fl_h,
-            poisson_lambda_a=_fl_a,
-            poisson_lambda_total=_fl_h + _fl_a,
-            poisson_prob=None,
-            poisson_rule_key="hybrid_b",
-            poisson_rule_pass=True,
-            poisson_rule_strong=_hb_result.stake_tier == "HIGH",
-            poisson_grade="A" if _hb_result.stake_tier == "HIGH" else "B" if _hb_result.stake_tier == "MEDIUM" else "C",
-            # Bayesian fields — populated if Bayesian engine ran for this market
-            bayesian_best_odd=_hb_result.selected_odds,
-            # dual engine fields reused for ranking/analytics compat
-            dual_confidence=_hb_confidence,
-            dual_agreement="Both",  # Hybrid B is a single-engine decision; "Both" signals production-grade
-            dual_quality_score=round((_hb_ep or 0) / 100_000.0, 6),  # normalise EP to [0,1] range
-            dual_recommended_stake_pct=round(_hb_result.recommended_stake / 1_000_000.0, 6),
-            contradiction=False,
-            # Advanced model fields
-            bos_si=_bos_result.si if _bos_result else None,
-            bos_passed=_bos_result.passed if _bos_result else None,
-            zinb_lambda_h=round(_zinb_lh, 4) if _zinb_lh else None,
-            zinb_lambda_a=round(_zinb_la, 4) if _zinb_la else None,
-            glicko_r_diff=_glicko_rdiff,
-            glicko_rating_age_days=_glicko_age,
-            # ── Hybrid B specific fields ─────────────────────────────────────
-            home_xg=round(_hb_home_xg, 4),
-            away_xg=round(_hb_away_xg, 4),
-            home_xga=round(_hb_result.home_xga, 4),
-            recency_xg_away=round(_hb_recency_xg_away, 4) if _hb_recency_xg_away else None,
-            bos_stability=_hb_bos,
-            selected_market=_hb_result.selected_market,
-            ep_x2=_hb_result.ep_x2,
-            ep_away_o05=_hb_result.ep_away_o05,
-            recommended_stake=_hb_result.recommended_stake,
-            stake_tier=_hb_result.stake_tier,
-            home_o05_odds_logged=_hb_ho05_odds,
-        )
-        pending_signals.append(sig)
-        count += 1
+            zinb_sig = Signal(
+                fixture_id=fixture.id,
+                market=_zinb_goals_result.market,
+                poisson_lambda_h=round(_hb_home_xg, 4),
+                poisson_lambda_a=round(_hb_away_xg, 4),
+                poisson_lambda_total=round(_zinb_goals_result.total_lambda, 4),
+                poisson_prob=None,
+                poisson_rule_key=_zinb_goals_result.rule_key,
+                poisson_rule_pass=True,
+                poisson_rule_strong=_zinb_goals_result.confidence == "EXCELLENT",
+                poisson_grade="A" if _zinb_goals_result.confidence == "EXCELLENT" else "B",
+                bayesian_best_odd=_zg_odds,
+                bayesian_bookmaker=_zg_bk,
+                dual_confidence=_zg_confidence,
+                dual_agreement="Poisson Only",
+                dual_quality_score=round(_zg_stake / 1_000_000.0, 6),
+                dual_recommended_stake_pct=round(_zg_stake / 1_000_000.0, 6),
+                contradiction=False,
+                bos_si=_bos_result.si if _bos_result else None,
+                bos_passed=_bos_result.passed if _bos_result else None,
+                zinb_lambda_h=round(_zinb_lh, 4) if _zinb_lh else None,
+                zinb_lambda_a=round(_zinb_la, 4) if _zinb_la else None,
+                glicko_r_diff=_glicko_rdiff,
+                glicko_rating_age_days=_glicko_age,
+                home_xg=round(_hb_home_xg, 4),
+                away_xg=round(_hb_away_xg, 4),
+                bos_stability=_hb_bos,
+                recommended_stake=_zg_stake,
+                stake_tier="HIGH" if _zinb_goals_result.confidence == "EXCELLENT" else "MEDIUM",
+            )
+            pending_signals.append(zinb_sig)
+            count += 1
 
     # ── Portfolio stake normalization ─────────────────────────────────────────
     # Cap total daily recommended exposure at MAX_DAILY_EXPOSURE (15 % of bankroll).

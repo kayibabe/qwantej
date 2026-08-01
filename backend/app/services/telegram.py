@@ -464,7 +464,7 @@ async def _query_tracked_singles(
         .where(
             TrackedBet.event_date == run_date,
             TrackedBet.user_id.is_(None),
-            TrackedBet.source_rule_key.in_(["system_auto", "system_dual", "system_hybrid_b"]),
+            TrackedBet.source_rule_key.in_(["system_auto", "system_dual", "system_hybrid_b", "system_zinb_goals"]),
             TrackedBet.fixture_id.isnot(None),
         )
     )).all())
