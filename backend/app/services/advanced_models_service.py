@@ -413,5 +413,14 @@ class AdvancedModelsService:
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _team_hash(name: str) -> int:
-    """Stable integer ID from team name (used as ZINB team key)."""
-    return hash(name.lower().strip()) & 0x7FFFFFFF
+    """Stable integer ID from team name (used as ZINB team key).
+
+    Must be deterministic across all Python processes (main + worker).
+    Python's built-in hash() is randomized per-process (PYTHONHASHSEED), so
+    ZINB models fitted in ProcessPoolExecutor workers would use different IDs
+    from the main process, causing random team-ID collisions and garbage
+    mu predictions (observed: Cardiff MET returned mu_h=18.52 instead of ~1.35).
+    zlib.crc32 is stable across processes and fast enough for this use.
+    """
+    import zlib
+    return zlib.crc32(name.lower().strip().encode()) & 0x7FFFFFFF
