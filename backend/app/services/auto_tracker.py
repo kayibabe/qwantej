@@ -37,7 +37,7 @@ from app.core.config import (
     DISABLED_LEAGUES, DISABLED_MARKETS, OVER_GOALS_SUPPRESSED_LEAGUES,
     OVER25_SUPPRESSED_TIERS, MARKET_MIN_ODDS, HALVED_STAKE_LEAGUES,
     COPA_HO05_SUPPRESSED_LEAGUES, AWAY_GOALS_SUPPRESSED_LEAGUES,
-    is_womens_fixture,
+    is_womens_fixture, ZINB_GOALS_MIN_ODDS,
 )
 from app.services.acca_builder import (
     build_acca_candidates, build_accumulator, _ACCA_WIN_PROB_FLOOR,
@@ -155,7 +155,7 @@ async def auto_track_date(db: AsyncSession, run_date: date) -> int:
         # DB (generated before a market/league was retired) can still reach this loop.
         # Hybrid B signals bypass this gate — the engine owns its own market list
         # (X2 + Away O0.5) and should never be blocked by the legacy disabled set.
-        if not is_hybrid and signal.market in DISABLED_MARKETS:
+        if not is_hybrid and not is_zinb_goals and signal.market in DISABLED_MARKETS:
             continue
         league_lower = (fixture.league or "").lower().strip()
         if league_lower in DISABLED_LEAGUES or "friendlies" in league_lower:
@@ -179,6 +179,13 @@ async def auto_track_date(db: AsyncSession, run_date: date) -> int:
         min_odds_floor = MARKET_MIN_ODDS.get(signal.market)
         if not is_hybrid and not is_zinb_goals and min_odds_floor is not None and odds < min_odds_floor:
             continue
+
+        # ZINB goals: apply per-market minimum odds gates (calibrated floors).
+        # Parity with the serving-time filter in routers/signals.py.
+        if is_zinb_goals:
+            zinb_floor = ZINB_GOALS_MIN_ODDS.get(signal.poisson_rule_key or "")
+            if zinb_floor is not None and odds < zinb_floor:
+                continue
 
         # Skip Both+High picks whose odds exceed the serving-time ceiling —
         # consistent with what the router shows subscribers. Hybrid B exempt.

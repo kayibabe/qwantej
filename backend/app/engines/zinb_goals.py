@@ -10,7 +10,7 @@ Thresholds (team-level conditions from ZINB calibration research):
 
   Market    | EXCELLENT                                | GOOD
   ──────────|──────────────────────────────────────────|──────────────────────────
-  Over 1.5  | total≥3.0, H≥1.0, A≥1.0,               | total≥2.7, max≥1.2, min≥0.6
+  Over 1.5  | total≥4.5, H≥1.0, A≥1.0,               | total≥2.7, max≥1.2, min≥0.6
             | max≥1.5, min≥0.6                         |
   Over 2.5  | total≥3.8, H≥1.3, A≥1.3,               | total≥3.3, max≥1.5, min≥0.6,
             | max≥1.7, |diff|≤1.8                      | |diff|≤1.8
@@ -39,7 +39,7 @@ class ZinbGoalsResult:
 def _classify_over15(lh: float, la: float) -> Optional[str]:
     total = lh + la
     mx, mn = max(lh, la), min(lh, la)
-    if total >= 3.0 and lh >= 1.0 and la >= 1.0 and mx >= 1.5 and mn >= 0.6:
+    if total >= 4.5 and lh >= 1.0 and la >= 1.0 and mx >= 1.5 and mn >= 0.6:
         return "EXCELLENT"
     if total >= 2.7 and mx >= 1.2 and mn >= 0.6:
         return "GOOD"

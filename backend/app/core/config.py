@@ -192,6 +192,15 @@ CS_KELLY_CAP: float = 0.005              # hard stake cap — CS variance is bru
 CS_AUTO_TRACK_STAKE: float = 10_000.0    # flat auto-track stake (vs 50k for normal system picks)
 CS_ZINB_VETO_DIVERGENCE: float = 1.0     # skip fixture if |zinb_total − blend_total| exceeds this
 
+# Serving-time minimum odds gates for ZINB goals markets (router + auto_tracker).
+# Calibration: O1.5 @ λ≥4.5 → 93.8% WR / 17% edge at 1.25 floor.
+ZINB_GOALS_MIN_ODDS: dict[str, float] = {
+    "zinb_o15": 1.25,
+    "zinb_o25": 1.55,
+    "zinb_u25": 1.45,
+    "zinb_u35": 1.30,
+}
+
 
 # =============================================================================
 # API-Football market type name sets

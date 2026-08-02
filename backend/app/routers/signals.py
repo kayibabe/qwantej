@@ -16,7 +16,7 @@ from app.core.config import (
     MAX_SIGNALS_PER_TIER3_LEAGUE, MAX_SIGNALS_PER_MARKET, DUAL_HIGH_ODDS_CEILING,
     WOMEN_LEAGUE_KEYWORDS, WOMEN_OVER_SUPPRESSED_MARKETS, HO05_DATA_POOR_COUNTRIES,
     COPA_HO05_SUPPRESSED_LEAGUES, PROVISIONAL_LEAGUE_MIN_BETS,
-    is_womens_fixture, OVER25_SUPPRESSED_TIERS,
+    is_womens_fixture, OVER25_SUPPRESSED_TIERS, ZINB_GOALS_MIN_ODDS,
 )
 from app.models import Signal, Fixture, TrackedBet
 from app.models.odds import MarketSnapshot
@@ -314,7 +314,23 @@ async def list_signals(
         # and "Friendlies International" which are not exact-matched by the notin_ above.
         query = query.where(~func.lower(func.trim(Fixture.league)).contains("friendlies"))
     if DISABLED_MARKETS:
-        query = query.where(Signal.market.notin_(list(DISABLED_MARKETS)))
+        # Option B: ZINB goals signals (identified by poisson_rule_key starting with "zinb_")
+        # are served even when their market name appears in DISABLED_MARKETS.
+        # This allows ZINB-specific Over 1.5/2.5 and Under 2.5/3.5 signals to surface
+        # without re-enabling the retired Bayesian/Poisson signals for those markets.
+        _zinb_goal_markets = {"Over 1.5", "Over 2.5", "Under 2.5", "Under 3.5"}
+        _zinb_disabled = DISABLED_MARKETS & _zinb_goal_markets
+        _non_zinb_disabled = DISABLED_MARKETS - _zinb_goal_markets
+        from sqlalchemy import or_ as _or
+        if _non_zinb_disabled:
+            query = query.where(Signal.market.notin_(list(_non_zinb_disabled)))
+        if _zinb_disabled:
+            query = query.where(
+                _or(
+                    Signal.market.notin_(list(_zinb_disabled)),
+                    Signal.poisson_rule_key.like("zinb_%"),
+                )
+            )
 
     # Over-goals suppression for structurally low-scoring leagues.
     # Hybrid B manages its own league blacklist in the engine; "Away Over 0.5"
@@ -382,6 +398,18 @@ async def list_signals(
                 sig.poisson_rule_key != "hybrid_b"
                 and sig.market in learned_ceilings
                 and (sig.bayesian_best_odd or 0.0) >= learned_ceilings[sig.market]
+            )
+        ]
+
+    # ZINB goals minimum odds gates — calibrated floors per market.
+    # Signals below these odds are structurally poor value for the ZINB engine.
+    if ZINB_GOALS_MIN_ODDS:
+        rows = [
+            (sig, fix) for sig, fix in rows
+            if not (
+                (sig.poisson_rule_key or "").startswith("zinb_")
+                and sig.poisson_rule_key in ZINB_GOALS_MIN_ODDS
+                and (sig.bayesian_best_odd or 0.0) < ZINB_GOALS_MIN_ODDS[sig.poisson_rule_key]
             )
         ]
 
@@ -1178,7 +1206,19 @@ async def fixture_signals(fixture_id: int, db: AsyncSession = Depends(get_db)):
         .order_by(Signal.dual_quality_score.desc().nullslast())
     )
     if DISABLED_MARKETS:
-        sig_query = sig_query.where(Signal.market.notin_(list(DISABLED_MARKETS)))
+        _zinb_goal_markets_dd = {"Over 1.5", "Over 2.5", "Under 2.5", "Under 3.5"}
+        _zinb_disabled_dd = DISABLED_MARKETS & _zinb_goal_markets_dd
+        _non_zinb_disabled_dd = DISABLED_MARKETS - _zinb_goal_markets_dd
+        from sqlalchemy import or_ as _or_dd
+        if _non_zinb_disabled_dd:
+            sig_query = sig_query.where(Signal.market.notin_(list(_non_zinb_disabled_dd)))
+        if _zinb_disabled_dd:
+            sig_query = sig_query.where(
+                _or_dd(
+                    Signal.market.notin_(list(_zinb_disabled_dd)),
+                    Signal.poisson_rule_key.like("zinb_%"),
+                )
+            )
     rows = await db.execute(sig_query)
     signal_rows = rows.all()
 
