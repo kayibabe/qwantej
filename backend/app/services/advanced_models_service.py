@@ -29,10 +29,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 # Minimum completed fixtures with scores per league to justify fitting ZINB.
-# Raised 20→40 after D1 backfill tripled the number of qualifying leagues and
-# pushed morning ZINB fitting from ~1h to 3h+. 40 fixtures still gives ZINB
-# enough data to converge while cutting the league count by roughly half.
-_MIN_FIXTURES_FOR_ZINB: int = 40
+# Raised 20→40 after D1 backfill tripled qualifying leagues; raised again 40→80
+# to cut fitting time from ~80 min to ~40 min on the 2 GB Fly machine. 80 still
+# gives ZINB enough data for stable dispersion estimates; smaller leagues fall
+# back to the Poisson-lambda estimate from the Bayesian engine.
+_MIN_FIXTURES_FOR_ZINB: int = 80
+# Skip aggregated "World" or cross-league keys that have thousands of fixtures
+# and thousands of teams — heterogeneous data produces meaningless ZINB fits
+# and a single such key can take 6+ minutes to fit.
+_MAX_FIXTURES_FOR_ZINB: int = 600
 # How far back (days) to pull historical fixtures for model fitting.
 # 180 days (6 months) covers a full league season for most competitions while
 # roughly halving the fixture count vs 365 days — keeping RSS under 400 MB on
@@ -287,7 +292,7 @@ class AdvancedModelsService:
         eligible = [
             (league, matches)
             for league, matches in by_league.items()
-            if len(matches) >= _MIN_FIXTURES_FOR_ZINB
+            if _MIN_FIXTURES_FOR_ZINB <= len(matches) <= _MAX_FIXTURES_FOR_ZINB
         ]
         if not eligible:
             return

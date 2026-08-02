@@ -13,6 +13,7 @@ primary_region = 'jnb'   # Johannesburg — closest region to Malawi
   SKIP_STARTUP_SYNC  = 'false'
   APP_URL            = 'https://qwantej.fly.dev'
   CORS_ORIGINS       = 'https://qwantej.fly.dev'
+  MODEL_CACHE_DIR    = '/data/.cache/advanced_models'
 
 # All sensitive values (JWT_SECRET, DB_URL, API keys) are set via:
 #   fly secrets set KEY=value ...
