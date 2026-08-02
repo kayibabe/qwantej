@@ -1111,6 +1111,7 @@ async def backfill_dates(
     date_from: str = Query(description="Start date inclusive, YYYY-MM-DD"),
     date_to: Optional[str] = Query(None, description="End date inclusive (default: today)"),
     dry_run: bool = Query(False, description="Preview only — no DB writes, no API calls"),
+    skip_tracking: bool = Query(False, description="Skip auto_track_date — signals only, no TrackedBet rows created"),
     _admin: User = Depends(_require_admin),
 ):
     """
@@ -1122,6 +1123,9 @@ async def backfill_dates(
     be skipped (returned in 'no_snapshots' list).
 
     Use dry_run=true to preview which dates would be processed without making API calls.
+    Use skip_tracking=true to recompute signals only without creating TrackedBet rows —
+    safe for historical backfills where you want ZINB signals without polluting
+    the analytics baseline with retroactive system picks.
     """
     import asyncio
     from datetime import date, timedelta
@@ -1171,9 +1175,13 @@ async def backfill_dates(
                     "market_snapshots": snap_count,
                     "signals": sig_count,
                     "system_bets": bet_count,
-                    "action": "sync+compute+track" if snap_count == 0 else (
-                        "compute+track" if sig_count == 0 else (
-                            "track" if bet_count == 0 else "skip (already tracked)"
+                    "action": (
+                        ("sync+compute" if snap_count == 0 else "compute") if skip_tracking else (
+                            "sync+compute+track" if snap_count == 0 else (
+                                "compute+track" if sig_count == 0 else (
+                                    "track" if bet_count == 0 else "skip (already tracked)"
+                                )
+                            )
                         )
                     ),
                 })
@@ -1228,8 +1236,9 @@ async def backfill_dates(
                 )
                 entry["signals_computed"] = n_sig
                 await db.commit()
-                n_track = await auto_track_date(db, current)
-                entry["bets_tracked"] = n_track
+                if not skip_tracking:
+                    n_track = await auto_track_date(db, current)
+                    entry["bets_tracked"] = n_track
             except asyncio.TimeoutError:
                 entry["error"] = "timed out (>120s)"
             except Exception as exc:
@@ -1237,17 +1246,20 @@ async def backfill_dates(
         results.append(entry)
         current += timedelta(days=1)
 
-    # Settle all pending bets (all dates) after back-filling
+    # Settle all pending bets (all dates) after back-filling.
+    # Skipped when skip_tracking=True — no new bets were created so settlement is a no-op.
     settled_count = 0
-    async with AsyncSessionLocal() as db:
-        try:
-            info = await settle_bets_for_date(db, None)
-            settled_count = info.get("settled", 0)
-        except Exception as exc:
-            settled_count = -1
+    if not skip_tracking:
+        async with AsyncSessionLocal() as db:
+            try:
+                info = await settle_bets_for_date(db, None)
+                settled_count = info.get("settled", 0)
+            except Exception as exc:
+                settled_count = -1
 
     return {
         "dry_run": False,
+        "skip_tracking": skip_tracking,
         "date_from": date_from,
         "date_to": end.isoformat(),
         "days_processed": len(results),
