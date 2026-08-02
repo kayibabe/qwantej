@@ -580,8 +580,9 @@ async def compute_signals_for_date(db: AsyncSession, run_date: date) -> int:
     # Fitted lazily from historical fixture data; gracefully no-ops if data
     # or scipy are unavailable.
     from app.services.advanced_models_service import get_or_load as _adv_get
+    from datetime import date as _date
     try:
-        adv = await _adv_get(db, run_date)
+        adv = await _adv_get(db, _date.today())
     except Exception as _adv_err:
         import logging as _l
         _l.getLogger(__name__).warning("AdvancedModelsService.load() failed: %s", _adv_err)
