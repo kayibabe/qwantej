@@ -202,7 +202,9 @@ def _to_signal_out(
     # Construct PoissonOut whenever ANY Poisson-side info exists — a market
     # may have no per-market poisson_prob but still carry fixture-level
     # mixed_signals worth surfacing for the contradiction alert.
-    if sig.poisson_prob is not None or sig.poisson_mixed_signals:
+    # Also include ZINB goals signals which have a rule_key but no prob.
+    _is_zinb = (sig.poisson_rule_key or "").startswith("zinb_")
+    if sig.poisson_prob is not None or sig.poisson_mixed_signals or _is_zinb:
         poisson = PoissonOut(
             lambda_h=sig.poisson_lambda_h, lambda_a=sig.poisson_lambda_a,
             lambda_total=sig.poisson_lambda_total, prob=sig.poisson_prob,
