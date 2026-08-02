@@ -34,7 +34,17 @@ logger = logging.getLogger(__name__)
 # enough data to converge while cutting the league count by roughly half.
 _MIN_FIXTURES_FOR_ZINB: int = 40
 # How far back (days) to pull historical fixtures for model fitting.
-_LOOKBACK_DAYS: int = 365
+# 180 days (6 months) covers a full league season for most competitions while
+# roughly halving the fixture count vs 365 days — keeping RSS under 400 MB on
+# the 1 GB Fly machine. Most leagues play 40+ home games in 6 months so ZINB
+# still converges; the Poisson-lambda fallback handles the rest.
+_LOOKBACK_DAYS: int = 180
+
+# Max number of ZINB league fits submitted to the process pool at once.
+# Submitting all eligible leagues simultaneously pickles every dataset in the
+# main process before any worker starts, spiking RSS. Batching to _ZINB_BATCH
+# caps the in-flight serialised data and keeps peak memory bounded.
+_ZINB_BATCH: int = 8
 
 # Process-level cache — ZINB + Glicko-2 fitting takes 5+ min; reuse across
 # all Recompute calls within the same day. Keyed by reference_date.
@@ -285,16 +295,20 @@ class AdvancedModelsService:
         loop = asyncio.get_running_loop()
         pool = _get_process_pool()
 
-        futures = [
-            loop.run_in_executor(pool, _fit_zinb_worker, matches)
-            for _, matches in eligible
-        ]
-        results = await asyncio.gather(*futures, return_exceptions=True)
-        for (league, _), result in zip(eligible, results):
-            if isinstance(result, Exception):
-                logger.debug("ZINB fit failed for %r: %s", league, result)
-            elif getattr(result, "fitted", False):
-                self._zinb_models[league] = result
+        # Submit in batches of _ZINB_BATCH so the main process never holds more
+        # than _ZINB_BATCH serialised league datasets in memory at once.
+        for batch_start in range(0, len(eligible), _ZINB_BATCH):
+            batch = eligible[batch_start : batch_start + _ZINB_BATCH]
+            futures = [
+                loop.run_in_executor(pool, _fit_zinb_worker, matches)
+                for _, matches in batch
+            ]
+            results = await asyncio.gather(*futures, return_exceptions=True)
+            for (league, _), result in zip(batch, results):
+                if isinstance(result, Exception):
+                    logger.debug("ZINB fit failed for %r: %s", league, result)
+                elif getattr(result, "fitted", False):
+                    self._zinb_models[league] = result
 
     def _compute_ht_proxies(self, records: list[dict]) -> None:
         """

@@ -33,7 +33,7 @@ primary_region = 'jnb'   # Johannesburg — closest region to Malawi
     timeout      = '10s'
 
 [[vm]]
-  memory   = '1gb'    # scipy + numpy + pandas need headroom
+  memory   = '2gb'    # ZINB model fitting (scipy + numpy, 211 leagues) needs headroom
   cpu_kind = 'shared'
   cpus     = 1
 
