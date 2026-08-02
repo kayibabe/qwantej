@@ -333,6 +333,27 @@ function EditBetModal({ bet, onClose, onSaved }) {
 }
 
 // ── Shared bet row renderer (used inside every source section) ────────────────
+const SOURCE_BADGE = {
+  system_dual:      { label: 'Dual',     cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25' },
+  system_hybrid_b:  { label: 'Hybrid B', cls: 'bg-violet-500/15  text-violet-400  border-violet-500/25'  },
+  system_zinb_goals:{ label: 'ZINB',     cls: 'bg-sky-500/15     text-sky-400     border-sky-500/25'     },
+  system_auto:      { label: 'System',   cls: 'bg-blue-500/15    text-blue-400    border-blue-500/25'    },
+}
+
+function SourceBadge({ sourceRuleKey }) {
+  const cfg = SOURCE_BADGE[sourceRuleKey]
+  if (cfg) return (
+    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md border text-[10px] font-semibold ${cfg.cls}`}>
+      <Bot size={9} />{cfg.label}
+    </span>
+  )
+  return (
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-amber-500/12 text-amber-400 border border-amber-500/25 text-[10px] font-semibold">
+      <User size={9} />Manual
+    </span>
+  )
+}
+
 function BetRow({ bet, onRefresh }) {
   const [editing, setEditing]   = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -342,6 +363,9 @@ function BetRow({ bet, onRefresh }) {
   const isPending = status === 'Pending'
   const isWon     = status === 'Won'
   const isVoid    = status === 'Void'
+
+  const isSystem = (bet.source_rule_key || '').startsWith('system_')
+  const leftBorder = isSystem ? 'border-l-2 border-l-blue-500/50' : 'border-l-2 border-l-amber-500/50'
 
   const badgeBg = isWon
     ? 'bg-green-600'
@@ -374,25 +398,14 @@ function BetRow({ bet, onRefresh }) {
     {editing && (
       <EditBetModal bet={bet} onClose={() => setEditing(false)} onSaved={() => onRefresh?.()} />
     )}
-    <div className="flex items-center justify-between px-4 py-3 bg-[var(--bg)] hover:bg-[var(--code-bg)] transition-colors gap-3">
+    <div className={`flex items-center justify-between px-4 py-3 bg-[var(--bg)] hover:bg-[var(--code-bg)] transition-colors gap-3 ${leftBorder}`}>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-semibold text-[var(--text-h)]">{matchName}</span>
           <span className="text-sm font-bold text-[var(--accent)]">({bet.odds?.toFixed(2)})</span>
         </div>
         <div className="flex items-center gap-2 mt-0.5 text-xs text-[var(--text)] opacity-80 flex-wrap">
-          {bet.source_rule_key === 'system_dual' && (
-            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 text-[10px] font-semibold">
-              <Bot size={9} />
-              Dual
-            </span>
-          )}
-          {bet.source_rule_key === 'system_auto' && (
-            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-400 border border-blue-500/25 text-[10px] font-semibold">
-              <Bot size={9} />
-              System
-            </span>
-          )}
+          <SourceBadge sourceRuleKey={bet.source_rule_key} />
           <span className={`font-medium ${marketColor(bet.market_type)}`}>{bet.market_type}</span>
           <span>·</span>
           <span>{bet.league}</span>
