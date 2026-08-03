@@ -1,5 +1,5 @@
 ﻿import { useState, useMemo } from 'react'
-import { Download, Lock, Ticket, Bot, Pencil, Trash2, X, Clock, CheckCircle, AlertTriangle, MinusCircle, ClipboardList, ChevronDown } from 'lucide-react'
+import { Download, Lock, Ticket, Bot, User, Pencil, Trash2, X, Clock, CheckCircle, AlertTriangle, MinusCircle, ClipboardList, ChevronDown } from 'lucide-react'
 import { fmtK, fmtPL, fmtPLCompact, marketColor } from '../../utils/format'
 import { updateBet, deleteBet } from '../../api/tracker'
 
