@@ -906,7 +906,7 @@ async def compute_signals_for_date(db: AsyncSession, run_date: date) -> int:
                 if _zinb_goals_result.confidence == "EXCELLENT"
                 else HYBRID_B_STAKE_LEVELS["MEDIUM"]["base_stake"]
             )
-            _zg_confidence = "High" if _zinb_goals_result.confidence == "EXCELLENT" else "Medium"
+            _zg_confidence = "Medium"  # ZINB goals capped at Medium — single engine, no Bayesian confirmation
 
             zinb_sig = Signal(
                 fixture_id=fixture.id,

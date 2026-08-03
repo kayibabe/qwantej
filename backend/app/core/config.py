@@ -195,10 +195,10 @@ CS_ZINB_VETO_DIVERGENCE: float = 1.0     # skip fixture if |zinb_total − blend
 # Serving-time minimum odds gates for ZINB goals markets (router + auto_tracker).
 # Calibration: O1.5 @ λ≥4.5 → 93.8% WR / 17% edge at 1.25 floor.
 ZINB_GOALS_MIN_ODDS: dict[str, float] = {
-    "zinb_o15": 1.25,
-    "zinb_o25": 1.55,
-    "zinb_u25": 1.45,
-    "zinb_u35": 1.30,
+    "zinb_o15": 1.65,   # raised from 1.25 — 2026-08-03 audit: short-price ZINB goals poorly calibrated
+    "zinb_o25": 1.65,   # raised from 1.55
+    "zinb_u25": 1.65,   # raised from 1.45
+    "zinb_u35": 1.65,   # raised from 1.30
 }
 
 
@@ -464,6 +464,9 @@ DISABLED_LEAGUES: frozenset = frozenset({
     # Same -47,500 P&L evidence flagged for HALVED_STAKE. Tactically defensive
     # style; home scoring rates lower than lambda estimates. Re-audit at ≥20 bets.
     "serie b",
+    # ── Disabled 2026-08-03 (loss analysis audit) ─────────────────────────────
+    "liga mx femenil",           # Women's competition — models calibrated on men's football (also caught by femenin blacklist)
+    "canadian premier league",   # No settled-bet track record; block until ≥20 bets establish a baseline
 })
 
 # Leagues suppressed only for Both+Medium signals (dual_agreement="Both", dual_confidence="Medium").

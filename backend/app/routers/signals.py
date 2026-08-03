@@ -268,6 +268,38 @@ def _to_signal_out(
     )
 
 
+async def _get_away_scored_recently(db: AsyncSession, away_teams: set[str]) -> set[str]:
+    """
+    Returns the subset of away_teams that either:
+      (a) have ≥1 goal in their last 3 completed away fixtures, OR
+      (b) have no completed away fixture data (insufficient history → don't suppress).
+    Teams with completed away data but 0 goals in all 3 matches are excluded.
+    """
+    if not away_teams:
+        return set()
+    from sqlalchemy import text as _t
+    passed: set[str] = set()
+    for team in away_teams:
+        row = (await db.execute(_t("""
+            SELECT
+                SUM(CASE WHEN away_score > 0 THEN 1 ELSE 0 END),
+                COUNT(*)
+            FROM (
+                SELECT away_score FROM fixtures
+                WHERE away_team = :team
+                  AND upper(trim(status)) IN ('FT', 'AET', 'PEN')
+                  AND away_score IS NOT NULL
+                ORDER BY kickoff_at DESC
+                LIMIT 3
+            )
+        """), {"team": team})).first()
+        goals_count = (row[0] or 0) if row else 0
+        total_count = (row[1] or 0) if row else 0
+        if total_count == 0 or goals_count > 0:
+            passed.add(team)
+    return passed
+
+
 @router.get("", response_model=SignalsResponse)
 async def list_signals(
     date_str: Optional[str] = Query(None, alias="date"),
@@ -415,6 +447,17 @@ async def list_signals(
             )
         ]
 
+    # End-of-season gate: during the Northern Hemisphere wind-down (May 10 – June 30)
+    # Tier 3 league signals are suppressed. Dead rubber matches with teams already
+    # promoted/relegated produce defensive, low-scoring results the Poisson model
+    # doesn't anticipate. Tier 1/2 leagues and Hybrid B picks are exempt.
+    if (target_date.month == 5 and target_date.day >= 10) or target_date.month == 6:
+        rows = [
+            (sig, fix) for sig, fix in rows
+            if sig.poisson_rule_key == "hybrid_b"
+            or (fix.league_tier or 3) < 3
+        ]
+
     # ── Universal signal quality baseline (B-1 … B-5) ───────────────────────
     # Every signal clears these five gates regardless of market.
     # Per-market overrides (DUAL_HIGH_ODDS_CEILING, COPA_HO05_SUPPRESSED_LEAGUES,
@@ -506,6 +549,32 @@ async def list_signals(
             )
         ]
 
+    # D-grade suppression: signals with quality_score < 0.035 are below the minimum
+    # actionable threshold. Hybrid B uses EP/100k for its quality score (a different
+    # scale) and has its own tier gates — exempt it here.
+    rows = [
+        (sig, fix) for sig, fix in rows
+        if sig.poisson_rule_key == "hybrid_b"
+        or (sig.dual_quality_score or 0.0) >= 0.035
+    ]
+
+    # Away Over 0.5 form gate: require away team to have scored in ≥1 of their
+    # last 3 completed away matches. Goal-drought away teams have a poor hit rate
+    # even when xG looks decent — the model's scoring lambda hasn't caught up to
+    # the current form trough.
+    _ao05_away_teams = {
+        fix.away_team
+        for sig, fix in rows
+        if sig.market == "Away Over 0.5" and fix.away_team
+    }
+    if _ao05_away_teams:
+        _scored_recently = await _get_away_scored_recently(db, _ao05_away_teams)
+        rows = [
+            (sig, fix) for sig, fix in rows
+            if sig.market != "Away Over 0.5"
+            or (fix.away_team or "") in _scored_recently
+        ]
+
     # CLV market ranks: one DB query, used for all signals in this response.
     # Only computed for the default "system" sort where the ranking matters most.
     clv_ranks: dict[str, int] = {}
@@ -577,6 +646,18 @@ async def list_signals(
                 mkt_counts[r.market or ""] = n + 1
             mkt_capped.append(r)
         results = mkt_capped
+
+    # Poisson Only stake cap: halve recommended_stake for signals backed by one engine only.
+    # Without Bayesian confirmation the edge estimate is less reliable; conservative
+    # staking prevents over-exposure on single-model picks. Hybrid B is exempt —
+    # it uses EP-based staking from its own engine.
+    for r in results:
+        if (
+            r.dual_agreement == "Poisson Only"
+            and r.selected_market is None  # Hybrid B always has selected_market set
+            and r.recommended_stake is not None
+        ):
+            r.recommended_stake = round(r.recommended_stake * 0.5, 2)
 
     # ── Banker annotation ─────────────────────────────────────────────────────
     # Top 3 High-confidence Both-engines signals with prob ≥ 0.70 are flagged as
