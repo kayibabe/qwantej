@@ -33,6 +33,8 @@ from app.core.config import (
     DISABLED_MARKETS,
     DISABLED_LEAGUES,
     OVER_GOALS_SUPPRESSED_LEAGUES,
+    ZINB_DISABLED_MARKETS,
+    ZINB_U35_SUPPRESSED_TIERS,
     MARKET_MAX_ODDS,
     MARKET_MIN_ODDS,
     POISSON_ONLY_MAX_ODDS,
@@ -802,7 +804,7 @@ async def compute_signals_for_date(db: AsyncSession, run_date: date) -> int:
         # home_xg / away_xg that Hybrid B uses (ZINB-fitted or form-lambda).
         _zinb_goals_result = zinb_goals_engine.evaluate(_hb_home_xg, _hb_away_xg)
 
-        # Apply league suppression to ZINB goals at generation time.
+        # Apply generation-time gates to ZINB goals result.
         if _zinb_goals_result is not None:
             _zg_league_lower = (fixture.league or "").lower().strip()
             _zg_is_over = _zinb_goals_result.market in {"Over 1.5", "Over 2.5"}
@@ -810,6 +812,18 @@ async def compute_signals_for_date(db: AsyncSession, run_date: date) -> int:
                 _zinb_goals_result = None
             elif not _zg_is_over and _league_matches_suppression(_zg_league_lower, UNDER_GOALS_SUPPRESSED_LEAGUES):
                 _zinb_goals_result = None
+
+        # Disabled-market gate: suspend specific ZINB markets globally.
+        if _zinb_goals_result is not None and _zinb_goals_result.market in ZINB_DISABLED_MARKETS:
+            _zinb_goals_result = None
+
+        # Under 3.5 tier gate: only allow at Tier 3 (T1/T2 show negative ROI).
+        if (
+            _zinb_goals_result is not None
+            and _zinb_goals_result.market == "Under 3.5"
+            and (fixture.league_tier or 1) in ZINB_U35_SUPPRESSED_TIERS
+        ):
+            _zinb_goals_result = None
 
         # Glicko gate for Hybrid B X2 (does not apply to ZINB goals).
         _hb_qualified = _hb_result.selected_market is not None

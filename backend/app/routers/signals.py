@@ -447,11 +447,11 @@ async def list_signals(
             )
         ]
 
-    # End-of-season gate: during the Northern Hemisphere wind-down (May 10 – June 30)
-    # Tier 3 league signals are suppressed. Dead rubber matches with teams already
-    # promoted/relegated produce defensive, low-scoring results the Poisson model
-    # doesn't anticipate. Tier 1/2 leagues and Hybrid B picks are exempt.
-    if (target_date.month == 5 and target_date.day >= 10) or target_date.month == 6:
+    # End-of-season gate: Northern Hemisphere wind-down (May 10 – July 31).
+    # Dead rubber / cup-filler matches produce results the Poisson model doesn't
+    # anticipate. Extended to July after Aug 2026 audit confirmed continued Tier 3
+    # exposure losses through July. Tier 1/2 and Hybrid B picks are exempt.
+    if (target_date.month == 5 and target_date.day >= 10) or target_date.month in {6, 7}:
         rows = [
             (sig, fix) for sig, fix in rows
             if sig.poisson_rule_key == "hybrid_b"

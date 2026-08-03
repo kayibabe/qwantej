@@ -45,6 +45,7 @@ from app.core.config import (
     HYBRID_B_MAX_ODDS,
     HYBRID_B_MIN_ODDS_AO05,
     HYBRID_B_AO05_SUPPRESSED_COUNTRIES,
+    HYBRID_B_AO05_SUPPRESSED_LEAGUES,
 )
 
 BET_HOME_OVER_0_5: bool = False  # hard constant — never bet Home O0.5
@@ -259,6 +260,24 @@ def evaluate(
             selected_tier = x2_tier
         else:
             return _reject(f"P3:ao05_suppressed_country:{country or 'world'}")
+
+    # League-level Away O0.5 suppression (partial-match, lower-cased).
+    # Away teams in Argentine/Brazilian lower divisions systematically blank.
+    if selected == "Away O0.5":
+        league_lower = (league or "").lower().strip()
+        suppressed_by_league = any(s in league_lower for s in HYBRID_B_AO05_SUPPRESSED_LEAGUES)
+        if suppressed_by_league:
+            odds_x2_fb = x2_odds
+            if (
+                odds_x2_fb is not None
+                and ep_x2 is not None and ep_x2 > 0
+                and HYBRID_B_MIN_ODDS <= odds_x2_fb <= HYBRID_B_MAX_ODDS
+            ):
+                selected = "X2"
+                selected_odds = odds_x2_fb
+                selected_tier = x2_tier
+            else:
+                return _reject(f"P3:ao05_suppressed_league:{league_lower}")
 
     # ── Filter 5: X2 home-direction guard ────────────────────────────────
     # Postmortem Jul 8-27 (480 X2 bets):

@@ -201,6 +201,15 @@ ZINB_GOALS_MIN_ODDS: dict[str, float] = {
     "zinb_u35": 1.65,   # raised from 1.30
 }
 
+# ZINB markets permanently disabled at generation time (Aug 2026 postmortem).
+# Over 1.5 suspended: all Aug 2–3 losses were in this market at sub-1.65 odds;
+# even after raising the odds floor the market showed near-zero positive CLV.
+ZINB_DISABLED_MARKETS: frozenset[str] = frozenset({"Over 1.5"})
+
+# Under 3.5 tier gate: T1/T2 = negative ROI; T3 = +16.5% ROI.
+# Only allow Under 3.5 ZINB signals for Tier 3 leagues.
+ZINB_U35_SUPPRESSED_TIERS: frozenset[int] = frozenset({1, 2})
+
 
 # =============================================================================
 # API-Football market type name sets
@@ -745,6 +754,13 @@ HYBRID_B_PERMANENT_BLACKLIST: frozenset[str] = frozenset({
     # has reliable xG; reserve/development league dynamics differ. Blocking
     # only K League 2 to preserve the profitable K League 1 picks.
     "k league 2",
+    # ── 2026-08-03 (Aug 2–3 postmortem) ──────────────────────────────────────
+    # Copa Gaúcha: Brazilian state cup, away teams park the bus in single-leg
+    # ties. 0W/1L Away O0.5 loss confirmed.
+    "copa gaucha",
+    # Liga MX: Mexican top-flight. Structural home bias ~55%+ home win rate.
+    # Away model routinely overestimates away scoring probability.
+    "liga mx",
 })
 
 HYBRID_B_CONDITIONAL_BLACKLIST: frozenset[str] = frozenset({
@@ -786,6 +802,16 @@ HYBRID_B_MIN_ODDS_AO05: float = 1.40
 # When Away O0.5 is suppressed for a country, the engine falls back to X2 if it
 # qualifies; otherwise the pick is rejected entirely.
 HYBRID_B_AO05_SUPPRESSED_COUNTRIES: frozenset[str] = frozenset({"world"})
+
+# Away O0.5 suppression by league name (partial-match, lower-cased).
+# Aug 2–3 postmortem: Argentine lower-division and Brazilian cup competition
+# away teams systematically score 0 goals — these markets are profitable only
+# as X2. Engine falls back to X2 if it qualifies; else rejects the pick.
+HYBRID_B_AO05_SUPPRESSED_LEAGUES: frozenset[str] = frozenset({
+    "torneo federal a",         # Argentine 3rd tier — 3 Away O0.5 losses
+    "liga profesional argentina",  # Argentine top flight — away blanks observed
+    "primera c",                # Argentine 5th tier — very low away scoring
+})
 
 # Phase 1 — Home O0.5 is pulled and logged only; never bet
 HYBRID_B_BET_HOME_OVER_0_5: bool = False
