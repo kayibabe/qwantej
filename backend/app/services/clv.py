@@ -43,10 +43,11 @@ _BET_TO_SELECTION: dict[str, str] = {
     "Exactly 1 Goal":  "1",
     "Exactly 2 Goals": "2",
     "Exactly 3 Goals": "3",
-    # Double Chance — API-Football delivers selection as "1X", "X2", or "12"
-    "1X (Home or Draw)": "1X",
-    "X2 (Draw or Away)": "X2",
-    "12 (Home or Away)": "12",
+    # Double Chance — API-Football delivers selections as "Home/Draw", "Draw/Away", "Home/Away"
+    # (verified against signal_engine._best_dc_x2_odds which uses "Draw/Away")
+    "1X (Home or Draw)": "Home/Draw",
+    "X2 (Draw or Away)": "Draw/Away",
+    "12 (Home or Away)": "Home/Away",
     # Match Winner — API selection names
     "Home Win": "Home",
     "Away Win": "Away",
