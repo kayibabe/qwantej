@@ -17,8 +17,15 @@ import PaymentCallbackPage from './pages/PaymentCallbackPage'
 import { useSettings } from './store/useSettings'
 import { useAuth } from './context/AuthContext'
 
+const PAGES = new Set(['signals', 'tracker', 'analytics', 'tools', 'account', 'pricing', 'admin'])
+
+function pageFromPath() {
+  const slug = window.location.pathname.replace(/^\//, '')
+  return slug && PAGES.has(slug) ? slug : 'signals'
+}
+
 export default function App() {
-  const [activePage, setActivePage] = useState('signals')
+  const [activePage, setActivePage] = useState(pageFromPath)
   const [deepDiveFixtureId, setDeepDiveFixtureId] = useState(null)
   const [authMode, setAuthMode] = useState('login')
   const [pendingSignalFilter, setPendingSignalFilter] = useState(null)
@@ -39,6 +46,22 @@ export default function App() {
     function handler(e) { setActivePage(e.detail) }
     window.addEventListener('Qwantej:navigate', handler)
     return () => window.removeEventListener('Qwantej:navigate', handler)
+  }, [])
+
+  // Keep URL in sync with activePage so /tracker, /analytics etc. are bookmarkable
+  useEffect(() => {
+    if (!PAGES.has(activePage)) return
+    const target = activePage === 'signals' ? '/' : `/${activePage}`
+    if (window.location.pathname !== target) {
+      window.history.pushState({}, '', target)
+    }
+  }, [activePage])
+
+  // Handle browser back/forward
+  useEffect(() => {
+    function handlePopState() { setActivePage(pageFromPath()) }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
   }, [])
 
   if (loading) {
