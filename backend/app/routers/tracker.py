@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_current_user, get_current_user_optional
+from app.core.config import DISABLED_MARKETS, DISABLED_LEAGUES, HYBRID_B_PERMANENT_BLACKLIST
 from app.core.database import get_db
 from app.models import Fixture, MarketSnapshot, TrackedBet, IngestionRun
 from app.models.user import User
@@ -265,6 +266,42 @@ async def track_pick(
                 await db.commit()
                 await db.refresh(existing)
             return _bet_out_from_models(existing)
+
+        # Block manual bets in markets/leagues the system has suppressed.
+        # System picks (source_rule_key set to a system key) bypass this —
+        # they're auto-generated and should never hit a disabled market anyway.
+        _is_manual = payload.source_rule_key not in (
+            "system_auto", "system_dual", "system_acca", "system_hybrid_b",
+            "system_zinb_goals", "acca_advisory",
+            "scout_pick", "strategist_pick", "skeptic_pick",
+        )
+        if _is_manual:
+            if payload.market_type in DISABLED_MARKETS:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"'{payload.market_type}' is a suppressed market with confirmed negative edge. "
+                        "The system does not bet this market. Tracking it manually will drag your ROI. "
+                        "Stick to X2 (Draw or Away) — the system's proven market."
+                    ),
+                )
+            _league_lower = (payload.league or "").lower().strip()
+            if _league_lower in {lg.lower().strip() for lg in DISABLED_LEAGUES}:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"'{payload.league}' is a suppressed league with confirmed losses. "
+                        "The system does not bet this league."
+                    ),
+                )
+            if any(kw in _league_lower for kw in HYBRID_B_PERMANENT_BLACKLIST):
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"'{payload.league}' is on the permanent blacklist. "
+                        "The system does not bet this league."
+                    ),
+                )
 
         bet = TrackedBet(
             user_id=uid,

@@ -383,7 +383,7 @@ DISABLED_MARKETS: frozenset = frozenset({
     "BTTS No",        # poor historical strike rate
     "BTTS Yes",       # retired 2026-06-15: btts rule removed
     "Away Over 1.5",  # retired 2026-06-02: 41.1% hit (-15.5% ROI) across 73 bets
-    # "Away Over 0.5" — re-enabled: away_o05 Poisson rule restored (mirrors home_o05, side="a")
+    "Away Over 0.5",  # retired 2026-08-03: 73.3% WR / +3.6% ROI over 16 bets — too weak vs X2 (92.6%/+25.7%)
     "Home Over 1.5",  # retired 2026-06-15: home_o15 rule removed
     "Under 3.5",      # retired 2026-06-15: under35 + u35_flip rules removed
     "Home Under 1.5", # retired 2026-06-15: hu15_flip rule removed
@@ -411,7 +411,7 @@ DISABLED_MARKETS: frozenset = frozenset({
     "Over 1.5",
     "Over 2.5",
     "Under 2.5",
-    # "Away Over 0.5" — Hybrid B primary market; removed from disabled set 2026-07-25
+    # "Away Over 0.5" — re-enabled 2026-07-25, retired again 2026-08-03 (see above)
     "Over 0.5 1H",
     "1X (Home or Draw)",
     # "X2 (Draw or Away)" — Hybrid B primary market; removed from disabled set 2026-07-25
@@ -424,7 +424,7 @@ DISABLED_MARKETS: frozenset = frozenset({
 # Used by analytics to flag historical insights about deprecated markets.
 HYBRID_B_ACTIVE_MARKETS: frozenset[str] = frozenset({
     "X2 (Draw or Away)",
-    "Away Over 0.5",
+    # "Away Over 0.5" — retired 2026-08-03: 73.3% WR / +3.6% ROI, too weak vs X2
 })
 
 # Leagues permanently disabled from signal generation AND serving.
@@ -476,6 +476,11 @@ DISABLED_LEAGUES: frozenset = frozenset({
     # ── Disabled 2026-08-03 (loss analysis audit) ─────────────────────────────
     "liga mx femenil",           # Women's competition — models calibrated on men's football (also caught by femenin blacklist)
     "canadian premier league",   # No settled-bet track record; block until ≥20 bets establish a baseline
+    # Loss-clustering leagues: 5 leagues account for all system losses (Aug 2026 audit)
+    "copa gaúcha",               # Brazilian state cup — away teams park the bus; 0W/1L (also in HYBRID_B_PERMANENT_BLACKLIST)
+    "liga mx",                   # Mexican top-flight — structural home bias; away model overestimates (also in HYBRID_B_PERMANENT_BLACKLIST)
+    "torneo federal a",          # Argentine 3rd tier — 1W/1L; consistent away-scoring failure (also in HYBRID_B_PERMANENT_BLACKLIST)
+    "liga profesional argentina", # Argentine top-flight — 1W/1L; X2 losses after AO05 already suppressed (also in HYBRID_B_PERMANENT_BLACKLIST)
 })
 
 # Leagues suppressed only for Both+Medium signals (dual_agreement="Both", dual_confidence="Medium").
@@ -754,13 +759,21 @@ HYBRID_B_PERMANENT_BLACKLIST: frozenset[str] = frozenset({
     # has reliable xG; reserve/development league dynamics differ. Blocking
     # only K League 2 to preserve the profitable K League 1 picks.
     "k league 2",
-    # ── 2026-08-03 (Aug 2–3 postmortem) ──────────────────────────────────────
+    # ── 2026-08-03 (Aug 2–3 postmortem + Aug 3 loss clustering audit) ────────
     # Copa Gaúcha: Brazilian state cup, away teams park the bus in single-leg
-    # ties. 0W/1L Away O0.5 loss confirmed.
-    "copa gaucha",
+    # ties. 0W/1L Away O0.5 loss confirmed. Also in DISABLED_LEAGUES.
+    "copa gaucha",   # without accent (API variant)
+    "copa gaúcha",   # with accent (DB stored form)
     # Liga MX: Mexican top-flight. Structural home bias ~55%+ home win rate.
-    # Away model routinely overestimates away scoring probability.
+    # Away model routinely overestimates away scoring probability. Also in DISABLED_LEAGUES.
     "liga mx",
+    # Torneo Federal A: Argentine 3rd tier. 1W/1L system bets, X2 loss after
+    # AO05 already suppressed. Upgraded from AO05-only suppression to full block.
+    # Also in DISABLED_LEAGUES.
+    "torneo federal a",
+    # Liga Profesional Argentina: Argentine top-flight. 1W/1L. X2 loss persists
+    # even with AO05 suppressed. Also in DISABLED_LEAGUES.
+    "liga profesional argentina",
 })
 
 HYBRID_B_CONDITIONAL_BLACKLIST: frozenset[str] = frozenset({

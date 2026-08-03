@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import (
     BTTS_MARKET_NAMES, GOALS_MARKET_NAMES,
     HOME_GOALS_MARKET_NAMES, AWAY_GOALS_MARKET_NAMES,
+    DOUBLE_CHANCE_MARKET_NAMES, MATCH_WINNER_MARKET_NAMES,
     WIN_TO_NIL_COMBINED_MARKET_NAMES,
     EXACT_GOALS_MARKET_NAMES,
 )
@@ -42,7 +43,24 @@ _BET_TO_SELECTION: dict[str, str] = {
     "Exactly 1 Goal":  "1",
     "Exactly 2 Goals": "2",
     "Exactly 3 Goals": "3",
-    # Team totals — selection_name matches the Over/Under label directly
+    # Double Chance — API-Football delivers selection as "1X", "X2", or "12"
+    "1X (Home or Draw)": "1X",
+    "X2 (Draw or Away)": "X2",
+    "12 (Home or Away)": "12",
+    # Match Winner — API selection names
+    "Home Win": "Home",
+    "Away Win": "Away",
+    "Draw":     "Draw",
+    # Team over/under — API delivers the bar only (e.g. "Over 0.5") inside
+    # "Away Team Total Goals" / "Total - Away", not the full "Away Over 0.5" label.
+    "Away Over 0.5":  "Over 0.5",
+    "Away Over 1.5":  "Over 1.5",
+    "Away Under 0.5": "Under 0.5",
+    "Away Under 1.5": "Under 1.5",
+    "Home Over 0.5":  "Over 0.5",
+    "Home Over 1.5":  "Over 1.5",
+    "Home Under 0.5": "Under 0.5",
+    "Home Under 1.5": "Under 1.5",
 }
 
 # Maps standardized market_type → the set of raw market_type names in MarketSnapshot.
@@ -60,11 +78,23 @@ _MARKET_TYPE_SCOPE: dict[str, frozenset] = {
     # BTTS
     "BTTS Yes":  BTTS_MARKET_NAMES,
     "BTTS No":   BTTS_MARKET_NAMES,
-    # Team totals
-    "Home Over 0.5": HOME_GOALS_MARKET_NAMES,
-    "Home Over 1.5": HOME_GOALS_MARKET_NAMES,
-    "Away Over 0.5": AWAY_GOALS_MARKET_NAMES,
-    "Away Over 1.5": AWAY_GOALS_MARKET_NAMES,
+    # Double Chance — primary Hybrid B markets
+    "1X (Home or Draw)": DOUBLE_CHANCE_MARKET_NAMES,
+    "X2 (Draw or Away)": DOUBLE_CHANCE_MARKET_NAMES,
+    "12 (Home or Away)": DOUBLE_CHANCE_MARKET_NAMES,
+    # Match Winner
+    "Home Win": MATCH_WINNER_MARKET_NAMES,
+    "Away Win": MATCH_WINNER_MARKET_NAMES,
+    "Draw":     MATCH_WINNER_MARKET_NAMES,
+    # Team totals — scoped to the correct side's market type
+    "Home Over 0.5":  HOME_GOALS_MARKET_NAMES,
+    "Home Over 1.5":  HOME_GOALS_MARKET_NAMES,
+    "Home Under 0.5": HOME_GOALS_MARKET_NAMES,
+    "Home Under 1.5": HOME_GOALS_MARKET_NAMES,
+    "Away Over 0.5":  AWAY_GOALS_MARKET_NAMES,
+    "Away Over 1.5":  AWAY_GOALS_MARKET_NAMES,
+    "Away Under 0.5": AWAY_GOALS_MARKET_NAMES,
+    "Away Under 1.5": AWAY_GOALS_MARKET_NAMES,
     # Win to nil — combined market, disambiguated by selection ("Home"/"Away")
     "Home Win to Nil": WIN_TO_NIL_COMBINED_MARKET_NAMES,
     "Away Win to Nil": WIN_TO_NIL_COMBINED_MARKET_NAMES,

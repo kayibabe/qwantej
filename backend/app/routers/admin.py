@@ -1526,3 +1526,26 @@ async def purge_pre_jul2(
         "tracked_bets_remaining":  n_remaining,
         "cutoff":                  CUTOFF,
     }
+
+
+@router.post("/clv/backfill")
+async def clv_backfill(
+    force: bool = Query(False, description="Recompute CLV even for bets that already have closing_odds"),
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(_require_admin),
+):
+    """
+    Backfill CLV (Closing Line Value) for all tracked bets that have a fixture_id.
+    Reads closing odds from market_snapshots (best odds in 4h pre-kickoff window).
+    Bets without snapshot data are skipped (no quota used — reads local DB only).
+
+    CLV formula: (closing_odds / bet_odds - 1) × 100.
+    Positive CLV = you beat the closing market = genuine model edge, independent of outcome variance.
+    """
+    from app.services.clv import compute_clv_all
+    result = await compute_clv_all(db, force=force)
+    return {
+        "updated": result["updated"],
+        "skipped_no_snapshot_data": result["skipped_no_data"],
+        "note": "CLV computed from local market_snapshots — no API calls made.",
+    }
