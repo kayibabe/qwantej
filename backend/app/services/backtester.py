@@ -58,6 +58,20 @@ from app.services.form_service import (
 settings = get_settings()
 
 
+class _Snap:
+    """Lightweight snapshot placeholder — same attribute API as MarketSnapshot ORM but
+    uses __slots__ so each instance costs ~200 bytes instead of ~2 KB (ORM overhead)."""
+    __slots__ = ("fixture_id", "bookmaker", "market_type", "selection_name", "odds", "pulled_at")
+
+    def __init__(self, fixture_id, bookmaker, market_type, selection_name, odds, pulled_at):
+        self.fixture_id = fixture_id
+        self.bookmaker = bookmaker
+        self.market_type = market_type
+        self.selection_name = selection_name
+        self.odds = odds
+        self.pulled_at = pulled_at
+
+
 async def run_backtest(
     db: AsyncSession,
     market: Optional[str] = None,
@@ -93,15 +107,12 @@ async def run_backtest(
     if league_name:
         query = query.where(Fixture.league.ilike(f"%{league_name}%"))
 
-    # Only include finished fixtures that have at least one market snapshot.
-    # Fixtures backfilled without odds (no market_snapshots rows) are useless
-    # for signal replay and were causing O(N) empty snapshot queries that pushed
-    # 6-month backtests past the 60-second Fly.io proxy timeout.
+    # Finished fixtures with scores. The DISTINCT subquery was dropped — it caused
+    # a full table scan on market_snapshots (20+ seconds on production).  Fixtures
+    # without snapshot data are filtered cheaply inside the loop via the pre-built
+    # _snapshots_by_fixture dict (get → None → continue).
     query = query.where(Fixture.status.in_(["FT", "AET", "PEN"]))
     query = query.where(Fixture.home_score.isnot(None))
-    query = query.where(
-        Fixture.id.in_(select(MarketSnapshot.fixture_id).distinct())
-    )
 
     _t0 = time.time()
     fixture_result = await db.execute(query)
@@ -152,21 +163,29 @@ async def run_backtest(
     _form_cache = await build_team_form_cache(db, date_from=_cache_from, date_to=date_to)
     log.info("BT timing: form_cache %.2fs → %d teams", time.time() - _t4, len(_form_cache))
 
-    # Batch-load all market snapshots — eliminates 1×N per-fixture snapshot queries.
+    # Batch-load all market snapshots as lightweight _Snap structs (not full ORM
+    # objects — each ORM object costs ~2 KB vs ~200 bytes for __slots__ class).
     # SQLite IN clause limit is ~999; chunk to be safe.
     _t5 = time.time()
     _fixture_ids = [f.id for f in fixtures]
-    _snapshots_by_fixture: dict[int, list[MarketSnapshot]] = defaultdict(list)
+    _snapshots_by_fixture: dict[int, list[_Snap]] = defaultdict(list)
     _CHUNK = 900
     _total_snaps = 0
+    _snap_cols = (
+        MarketSnapshot.fixture_id, MarketSnapshot.bookmaker,
+        MarketSnapshot.market_type, MarketSnapshot.selection_name,
+        MarketSnapshot.odds, MarketSnapshot.pulled_at,
+    )
     for _i in range(0, len(_fixture_ids), _CHUNK):
         _chunk_ids = _fixture_ids[_i: _i + _CHUNK]
-        _snap_rows = list((await db.execute(
-            select(MarketSnapshot).where(MarketSnapshot.fixture_id.in_(_chunk_ids))
-        )).scalars().all())
-        for _sn in _snap_rows:
+        _rows = (await db.execute(
+            select(*_snap_cols).where(MarketSnapshot.fixture_id.in_(_chunk_ids))
+        )).all()
+        for _row in _rows:
+            _sn = _Snap(*_row)
             _snapshots_by_fixture[_sn.fixture_id].append(_sn)
-        _total_snaps += len(_snap_rows)
+        _total_snaps += len(_rows)
+        await asyncio.sleep(0)  # yield between chunks so health checks can pass
     log.info("BT timing: snapshot batch %.2fs → %d rows across %d fixtures",
              time.time() - _t5, _total_snaps, len(_snapshots_by_fixture))
 

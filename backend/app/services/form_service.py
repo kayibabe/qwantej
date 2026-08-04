@@ -196,8 +196,12 @@ async def build_team_form_cache(
     max_days = int(R.get("form_max_lookback_days", 90))
     cache_start = (date_from - timedelta(days=max_days)) if date_from else None
 
+    # Select only the 5 columns needed — avoids full ORM object instantiation
     stmt = (
-        select(Fixture)
+        select(
+            Fixture.event_date, Fixture.home_team, Fixture.away_team,
+            Fixture.home_score, Fixture.away_score,
+        )
         .where(
             Fixture.home_score.is_not(None),
             Fixture.away_score.is_not(None),
@@ -209,13 +213,13 @@ async def build_team_form_cache(
     if date_to:
         stmt = stmt.where(Fixture.event_date < date_to)
 
-    rows: list[Fixture] = list((await db.execute(stmt)).scalars().all())
+    raw_rows = (await db.execute(stmt)).all()
     cache: dict[str, list[_FormEntry]] = defaultdict(list)
-    for fx in rows:
-        if fx.event_date is None:
+    for event_date, home_team, away_team, home_score, away_score in raw_rows:
+        if event_date is None:
             continue
-        cache[fx.home_team].append((fx.event_date, float(fx.home_score), float(fx.away_score)))
-        cache[fx.away_team].append((fx.event_date, float(fx.away_score), float(fx.home_score)))
+        cache[home_team].append((event_date, float(home_score), float(away_score)))
+        cache[away_team].append((event_date, float(away_score), float(home_score)))
     return dict(cache)
 
 
