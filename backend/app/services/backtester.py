@@ -14,6 +14,7 @@ from datetime import date
 from typing import Optional
 
 from sqlalchemy import select, delete
+from sqlalchemy.orm import noload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 log = logging.getLogger(__name__)
@@ -107,12 +108,16 @@ async def run_backtest(
     if league_name:
         query = query.where(Fixture.league.ilike(f"%{league_name}%"))
 
-    # Finished fixtures with scores. The DISTINCT subquery was dropped — it caused
-    # a full table scan on market_snapshots (20+ seconds on production).  Fixtures
-    # without snapshot data are filtered cheaply inside the loop via the pre-built
-    # _snapshots_by_fixture dict (get → None → continue).
-    query = query.where(Fixture.status.in_(["FT", "AET", "PEN"]))
-    query = query.where(Fixture.home_score.isnot(None))
+    # Finished fixtures with scores.
+    # noload() suppresses the lazy="selectin" eager-load of market_snapshots and
+    # signals that SQLAlchemy would otherwise fire automatically — those loads were
+    # the 20s query + OOM (snapshots for 2000+ fixtures loaded twice).
+    query = (
+        query
+        .where(Fixture.status.in_(["FT", "AET", "PEN"]))
+        .where(Fixture.home_score.isnot(None))
+        .options(noload(Fixture.market_snapshots), noload(Fixture.signals))
+    )
 
     _t0 = time.time()
     fixture_result = await db.execute(query)
