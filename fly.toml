@@ -25,6 +25,7 @@ primary_region = 'jnb'   # Johannesburg — closest region to Malawi
   auto_stop_machines   = 'off'   # scheduler jobs must keep running 24/7
   auto_start_machines  = true
   min_machines_running = 1       # always one machine up for the cron jobs
+  idle_timeout         = 300     # 5 min — backtest endpoint needs > 60s default
 
   [[http_service.checks]]
     grace_period = '30s'
