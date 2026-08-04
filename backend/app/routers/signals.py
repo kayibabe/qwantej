@@ -17,6 +17,8 @@ from app.core.config import (
     WOMEN_LEAGUE_KEYWORDS, WOMEN_OVER_SUPPRESSED_MARKETS, HO05_DATA_POOR_COUNTRIES,
     COPA_HO05_SUPPRESSED_LEAGUES, PROVISIONAL_LEAGUE_MIN_BETS,
     is_womens_fixture, OVER25_SUPPRESSED_TIERS, ZINB_GOALS_MIN_ODDS,
+    is_grade_c_ceiling_exception, HO05_ALL_TIERS_SUPPRESSED_COUNTRIES,
+    U35_DATA_POOR_COUNTRIES,
 )
 from app.models import Signal, Fixture, TrackedBet
 from app.models.odds import MarketSnapshot
@@ -409,6 +411,8 @@ async def list_signals(
     # Serving-time odds ceiling for Both+High signals — suppresses picks where
     # the market is most sceptical and our models fight hardest but hit least.
     # DUAL_HIGH_ODDS_CEILING is keyed by market; signals not in the dict are unaffected.
+    # Grade C exception: Both+High at odds >= 2.50 with quality >= 0.30 passes through
+    # (5W/0L backfill at Tier 1/2). 2.20-2.49 sub-band confirmed bad (33.3% WR).
     if DUAL_HIGH_ODDS_CEILING:
         rows = [
             (sig, fix) for sig, fix in rows
@@ -418,6 +422,9 @@ async def list_signals(
                 and sig.dual_agreement == "Both"
                 and sig.market in DUAL_HIGH_ODDS_CEILING
                 and (sig.bayesian_best_odd or 0.0) >= DUAL_HIGH_ODDS_CEILING[sig.market]
+                and not is_grade_c_ceiling_exception(
+                    sig.bayesian_best_odd or 0.0, sig.dual_quality_score
+                )
             )
         ]
 
@@ -537,8 +544,8 @@ async def list_signals(
         )
     ]
 
-    # Copa/cup gate: suppress Home Over 0.5 in South American cup competitions.
-    # Rotation/reserve line-ups + knockout incentives depress home-scoring rates.
+    # Copa/cup gate: suppress Home Over 0.5 in South American cup competitions
+    # and international tournaments (neutral-venue fixtures; no genuine home advantage).
     if COPA_HO05_SUPPRESSED_LEAGUES:
         _league_lower = lambda fix: (fix.league or "").lower()
         rows = [
@@ -546,6 +553,29 @@ async def list_signals(
             if not (
                 sig.market == "Home Over 0.5"
                 and any(kw in _league_lower(fix) for kw in COPA_HO05_SUPPRESSED_LEAGUES)
+            )
+        ]
+
+    # Australia HO0.5 gate: suppress Home Over 0.5 at ALL tiers for Australia.
+    # State leagues are mis-classified as Tier 1 by the API; data is thin.
+    # Aug-2026: St George Willawong 0-1 @ 1.51 (T1).
+    if HO05_ALL_TIERS_SUPPRESSED_COUNTRIES:
+        rows = [
+            (sig, fix) for sig, fix in rows
+            if not (
+                sig.market == "Home Over 0.5"
+                and (fix.country or "").lower() in HO05_ALL_TIERS_SUPPRESSED_COUNTRIES
+            )
+        ]
+
+    # Under 3.5 data-poor country gate: suppress at any tier where ZINB λ calibration
+    # is unreliable. Aug-2026: 3 Grade A failures across Armenia/Nicaragua/Faroe Islands.
+    if U35_DATA_POOR_COUNTRIES:
+        rows = [
+            (sig, fix) for sig, fix in rows
+            if not (
+                sig.market == "Under 3.5"
+                and (fix.country or "").lower() in U35_DATA_POOR_COUNTRIES
             )
         ]
 
@@ -797,12 +827,18 @@ async def stat_driven_picks(
     rows = (await db.execute(query)).all()
 
     # Apply the same Both+High odds ceiling as the main list endpoint.
+    # Grade C exception: odds >= 2.50 + quality >= 0.30 bypasses the ceiling.
     if DUAL_HIGH_ODDS_CEILING:
         rows = [
             (sig, fix) for sig, fix in rows
             if not (
-                sig.market in DUAL_HIGH_ODDS_CEILING
+                sig.dual_confidence == "High"
+                and sig.dual_agreement == "Both"
+                and sig.market in DUAL_HIGH_ODDS_CEILING
                 and (sig.bayesian_best_odd or 0.0) >= DUAL_HIGH_ODDS_CEILING[sig.market]
+                and not is_grade_c_ceiling_exception(
+                    sig.bayesian_best_odd or 0.0, sig.dual_quality_score
+                )
             )
         ]
 
@@ -848,6 +884,24 @@ async def stat_driven_picks(
             if not (
                 sig.market == "Home Over 0.5"
                 and any(kw in _league_lower(fix) for kw in COPA_HO05_SUPPRESSED_LEAGUES)
+            )
+        ]
+
+    # Australia HO0.5 + U35 data-poor gates — mirror main endpoint.
+    if HO05_ALL_TIERS_SUPPRESSED_COUNTRIES:
+        rows = [
+            (sig, fix) for sig, fix in rows
+            if not (
+                sig.market == "Home Over 0.5"
+                and (fix.country or "").lower() in HO05_ALL_TIERS_SUPPRESSED_COUNTRIES
+            )
+        ]
+    if U35_DATA_POOR_COUNTRIES:
+        rows = [
+            (sig, fix) for sig, fix in rows
+            if not (
+                sig.market == "Under 3.5"
+                and (fix.country or "").lower() in U35_DATA_POOR_COUNTRIES
             )
         ]
 

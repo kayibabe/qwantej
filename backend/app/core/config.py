@@ -195,20 +195,21 @@ CS_ZINB_VETO_DIVERGENCE: float = 1.0     # skip fixture if |zinb_total − blend
 # Serving-time minimum odds gates for ZINB goals markets (router + auto_tracker).
 # Calibration: O1.5 @ λ≥4.5 → 93.8% WR / 17% edge at 1.25 floor.
 ZINB_GOALS_MIN_ODDS: dict[str, float] = {
-    "zinb_o15": 1.65,   # raised from 1.25 — 2026-08-03 audit: short-price ZINB goals poorly calibrated
-    "zinb_o25": 1.65,   # raised from 1.55
-    "zinb_u25": 1.65,   # raised from 1.45
-    "zinb_u35": 1.65,   # raised from 1.30
+    "zinb_o15": 1.25,   # titibet calibrated floor: 93.8% WR @ λ≥4.5 (ZINB_OVER15_MIN_ODDS)
+    "zinb_o25": 1.55,   # aligns with MARKET_MIN_ODDS["Over 2.5"]
+    "zinb_u25": 1.45,   # titibet ZINB_UNDER25_MIN_ODDS: 82.4% WR n=102 (break-even 1.214, floor 1.45)
+    "zinb_u35": 1.35,   # titibet ZINB_UNDER35_MIN_ODDS: 87.4% WR n=174 (raised 1.30→1.35 Aug-2026)
 }
 
-# ZINB markets permanently disabled at generation time (Aug 2026 postmortem).
-# Over 1.5 suspended: all Aug 2–3 losses were in this market at sub-1.65 odds;
-# even after raising the odds floor the market showed near-zero positive CLV.
-ZINB_DISABLED_MARKETS: frozenset[str] = frozenset({"Over 1.5"})
+# ZINB markets permanently disabled at generation time.
+# Over 1.5 re-enabled 2026-08-04: titibet Aug 1 data shows ZINB O1.5 active at Tier 1/2.
+# Kept under stricter 1.65 floor (vs titibet's 1.25) per qwantej Aug 3 calibration.
+# Monitor CLV on settled bets — if near-zero CLV persists at 1.65+, re-disable.
+ZINB_DISABLED_MARKETS: frozenset[str] = frozenset()
 
-# Under 3.5 tier gate: T1/T2 = negative ROI; T3 = +16.5% ROI.
-# Only allow Under 3.5 ZINB signals for Tier 3 leagues.
-ZINB_U35_SUPPRESSED_TIERS: frozenset[int] = frozenset({1, 2})
+# Under 3.5 tier gate: cleared 2026-08-04 — titibet has zinb_under35 at T1 (UEFA CL 1.45)
+# and T2 with no tier suppression. The 1.35 odds floor is the primary quality gate.
+ZINB_U35_SUPPRESSED_TIERS: frozenset[int] = frozenset()
 
 
 # =============================================================================
@@ -385,7 +386,8 @@ DISABLED_MARKETS: frozenset = frozenset({
     "Away Over 1.5",  # retired 2026-06-02: 41.1% hit (-15.5% ROI) across 73 bets
     "Away Over 0.5",  # retired 2026-08-03: 73.3% WR / +3.6% ROI over 16 bets — too weak vs X2 (92.6%/+25.7%)
     "Home Over 1.5",  # retired 2026-06-15: home_o15 rule removed
-    "Under 3.5",      # retired 2026-06-15: under35 + u35_flip rules removed
+    # "Under 3.5" — re-enabled 2026-08-04: cs00mid Poisson rule active in titibet (7 signals);
+    # ZINB via zinb_u35; gated by ZINB_U35_SUPPRESSED_TIERS={1,2} + U35_DATA_POOR_COUNTRIES
     "Home Under 1.5", # retired 2026-06-15: hu15_flip rule removed
     "Away Under 1.5", # retired 2026-06-15: au15_flip rule removed
     "Over 0.5",       # retired 2026-06-15: over05ft rule removed
@@ -406,11 +408,10 @@ DISABLED_MARKETS: frozenset = frozenset({
     # System narrowed to Home Over 0.5 only.
     # B-4 gate relaxed 2026-07-21: Both+Medium allowed at odds < 1.65 (implied ≥61%).
     # Validated: 86.8% WR / +10.8% ROI across 76 tracked bets at avg 1.258 odds.
-    # All other markets suppressed at serving time and compute time until
-    # a broader re-audit establishes independent edge for each.
-    "Over 1.5",
-    "Over 2.5",
-    "Under 2.5",
+    # Re-enabled 2026-08-04 via ZINB team-level λ gates (matching titibet Aug 1 state):
+    #   "Over 1.5"  — ZINB total λ ≥ 2.7; floor 1.65 (qwantej Aug 3 calibration)
+    #   "Over 2.5"  — ZINB total λ ≥ 3.3; titibet 4/4 winners on Aug 1 (T1/T2)
+    #   "Under 2.5" — ZINB total λ ≤ 2.2; MARKET_MIN_ODDS["Under 2.5"]=2.10 floor
     # "Away Over 0.5" — re-enabled 2026-07-25, retired again 2026-08-03 (see above)
     "Over 0.5 1H",
     "1X (Home or Draw)",
@@ -475,12 +476,11 @@ DISABLED_LEAGUES: frozenset = frozenset({
     "serie b",
     # ── Disabled 2026-08-03 (loss analysis audit) ─────────────────────────────
     "liga mx femenil",           # Women's competition — models calibrated on men's football (also caught by femenin blacklist)
-    "canadian premier league",   # No settled-bet track record; block until ≥20 bets establish a baseline
-    # Loss-clustering leagues: 5 leagues account for all system losses (Aug 2026 audit)
-    "copa gaúcha",               # Brazilian state cup — away teams park the bus; 0W/1L (also in HYBRID_B_PERMANENT_BLACKLIST)
-    "liga mx",                   # Mexican top-flight — structural home bias; away model overestimates (also in HYBRID_B_PERMANENT_BLACKLIST)
-    "torneo federal a",          # Argentine 3rd tier — 1W/1L; consistent away-scoring failure (also in HYBRID_B_PERMANENT_BLACKLIST)
-    "liga profesional argentina", # Argentine top-flight — 1W/1L; X2 losses after AO05 already suppressed (also in HYBRID_B_PERMANENT_BLACKLIST)
+    # "canadian premier league" — re-enabled 2026-08-04: titibet 2/2 Over 2.5 winners on Aug 1
+    # "copa gaúcha" — re-enabled 2026-08-04: failure was Away O0.5/X2 only; stays in HYBRID_B_PERMANENT_BLACKLIST
+    # "liga mx" — re-enabled 2026-08-04: failure was structural home bias for X2/AO0.5; stays in HYBRID_B_PERMANENT_BLACKLIST
+    # "torneo federal a" — re-enabled 2026-08-04: away-scoring failure only; stays in HYBRID_B_PERMANENT_BLACKLIST
+    # "liga profesional argentina" — re-enabled 2026-08-04: X2 failure only; stays in HYBRID_B_PERMANENT_BLACKLIST
 })
 
 # Leagues suppressed only for Both+Medium signals (dual_agreement="Both", dual_confidence="Medium").
@@ -638,6 +638,25 @@ DUAL_HIGH_ODDS_CEILING: dict[str, float] = {
     "Away Over 0.5": 2.10,
 }
 
+# Grade C exception to DUAL_HIGH_ODDS_CEILING for Both+High signals.
+# At odds >= 2.50 with quality >= 0.30 the model has meaningful confidence
+# despite a long price. Backfill: 5W/0L at Tier 1/2 (Bournemouth/City,
+# Wolves/Fulham, Getafe/Osasuna, Genoa/Milan, Cremonese/Como).
+# 2.20-2.49 sub-band confirmed bad (33.3% WR) — floor stays at 2.50, not 2.20.
+# Grade D (quality < 0.30) stays behind the 1.95 ceiling.
+DUAL_HIGH_CEILING_EXCEPTION_MIN_ODDS: float = 2.50
+DUAL_HIGH_CEILING_EXCEPTION_MIN_QUALITY: float = 0.30
+
+
+def is_grade_c_ceiling_exception(odds: float, quality: float | None) -> bool:
+    """True when a Both+High signal qualifies for the Grade C ceiling exception.
+    Call AFTER confirming the signal already exceeds DUAL_HIGH_ODDS_CEILING."""
+    return (
+        odds >= DUAL_HIGH_CEILING_EXCEPTION_MIN_ODDS
+        and (quality or 0.0) >= DUAL_HIGH_CEILING_EXCEPTION_MIN_QUALITY
+    )
+
+
 # Acca candidate gate: exclude Over 2.5 legs where confidence is High,
 # league tier is unknown (None), and bookmaker odds exceed this ceiling.
 # 2026-07-05: initial value 3.46 (from card 1); lowered to 3.10 after full
@@ -761,18 +780,19 @@ HYBRID_B_PERMANENT_BLACKLIST: frozenset[str] = frozenset({
     "k league 2",
     # ── 2026-08-03 (Aug 2–3 postmortem + Aug 3 loss clustering audit) ────────
     # Copa Gaúcha: Brazilian state cup, away teams park the bus in single-leg
-    # ties. 0W/1L Away O0.5 loss confirmed. Also in DISABLED_LEAGUES.
+    # ties. 0W/1L Away O0.5 loss confirmed. Removed from DISABLED_LEAGUES 2026-08-04
+    # (Over 2.5 edge confirmed by titibet); X2 still blocked here.
     "copa gaucha",   # without accent (API variant)
     "copa gaúcha",   # with accent (DB stored form)
     # Liga MX: Mexican top-flight. Structural home bias ~55%+ home win rate.
-    # Away model routinely overestimates away scoring probability. Also in DISABLED_LEAGUES.
+    # Away model routinely overestimates away scoring probability.
+    # Removed from DISABLED_LEAGUES 2026-08-04; X2/AO0.5 still blocked here.
     "liga mx",
-    # Torneo Federal A: Argentine 3rd tier. 1W/1L system bets, X2 loss after
-    # AO05 already suppressed. Upgraded from AO05-only suppression to full block.
-    # Also in DISABLED_LEAGUES.
+    # Torneo Federal A: Argentine 3rd tier. X2 and Away O0.5 failures only.
+    # Removed from DISABLED_LEAGUES 2026-08-04; X2 still blocked here.
     "torneo federal a",
-    # Liga Profesional Argentina: Argentine top-flight. 1W/1L. X2 loss persists
-    # even with AO05 suppressed. Also in DISABLED_LEAGUES.
+    # Liga Profesional Argentina: Argentine top-flight. X2 failures only.
+    # Removed from DISABLED_LEAGUES 2026-08-04; X2 still blocked here.
     "liga profesional argentina",
 })
 
@@ -861,6 +881,7 @@ MARKET_MIN_ODDS: dict = {
     "Over 1.5":        1.50,
     "Over 2.5":        1.55,
     "Under 2.5":       2.10,  # < 2.10 implies < 48% probability — no value at short Under 2.5
+    "Under 3.5":       1.30,  # titibet floor: break-even at 76.9%, 1.30 gives ~4% edge minimum
     # 2026-07-22: raised 1.30 → 1.50 after clean post-Jul-2 audit showed
     # 33 bets at 1.35-1.49 running 57.6% WR / -18.2% ROI (break-even needs 70%).
     # At odds < 1.50 bookmakers have priced these with sharp-money precision;
@@ -1042,6 +1063,40 @@ HO05_DATA_POOR_COUNTRIES: frozenset[str] = frozenset({
     "lebanon",
 })
 
+# Countries where Under 3.5 is suppressed at ANY tier.
+# ZINB lambda calibration is unreliable in data-sparse nations — thin historical
+# records cause the model to underestimate goal frequencies even in Tier 1/2 leagues.
+# Aug-2026 losses: Armenia 2-2 @ 1.19 (T1), Nicaragua 4-1 @ 1.36 (T3),
+# Faroe Islands 3-2 @ 1.30 (T2). All Grade A signals, all wrong.
+U35_DATA_POOR_COUNTRIES: frozenset[str] = frozenset({
+    "armenia",
+    "nicaragua",
+    "faroe-islands",
+    "andorra",
+    "san marino",
+    "liechtenstein",
+    "mongolia",
+    "guam",
+})
+
+# Countries where Home Over 0.5 is suppressed at ALL tiers (not just Tier 3).
+# Distinct from HO05_DATA_POOR_COUNTRIES which only fires at Tier 3.
+# Aug-2026: St George Willawong vs Brisbane Strikers 0-1 @ 1.51 (T1).
+# Australian state leagues are mis-classified as Tier 1 by the API — data is thin.
+HO05_ALL_TIERS_SUPPRESSED_COUNTRIES: frozenset[str] = frozenset({
+    "australia",
+})
+
+# UEFA club competition keywords — tighter Glicko ceiling (-100 vs the general -150).
+# Small-nation clubs in CL/EL/UECL qualifiers are structurally outclassed in the
+# -100 to -149 Glicko band the general gate misses.
+# Aug-2026: HB Torshavn (Faroe Islands) 0-3 vs Motherwell (UECL).
+UEFA_CLUB_COMP_KEYWORDS: frozenset[str] = frozenset({
+    "champions league",
+    "europa league",
+    "conference league",
+})
+
 # South American cup competition name substrings where Home Over 0.5 signals are suppressed.
 # Cup fixtures use rotation/reserve line-ups and single-leg knockout format
 # incentivises parking the bus — home-team scoring rates drop sharply vs. league games.
@@ -1060,6 +1115,16 @@ COPA_HO05_SUPPRESSED_LEAGUES: frozenset[str] = frozenset({
     # Peruvian Copa de la Liga uses rotation/reserve squads — same structural pattern
     # as other LatAm cups where home scoring drops sharply vs. league games.
     "copa de la liga",
+    # International tournaments: neutral-venue fixtures — "home" is just API ordering,
+    # not a genuine home ground. Jul-2026: Paraguay 0-0, Haiti 0-1 in World Cup.
+    "world cup",
+    "copa america",
+    "nations league",
+    "gold cup",
+    "africa cup",
+    "asian cup",
+    "concacaf",
+    "olympic",
 })
 
 # League tiers where Over 2.5 signals are suppressed system-wide.

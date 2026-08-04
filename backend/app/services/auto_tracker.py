@@ -38,6 +38,8 @@ from app.core.config import (
     OVER25_SUPPRESSED_TIERS, MARKET_MIN_ODDS, HALVED_STAKE_LEAGUES,
     COPA_HO05_SUPPRESSED_LEAGUES, AWAY_GOALS_SUPPRESSED_LEAGUES,
     is_womens_fixture, ZINB_GOALS_MIN_ODDS,
+    HO05_ALL_TIERS_SUPPRESSED_COUNTRIES, U35_DATA_POOR_COUNTRIES,
+    UEFA_CLUB_COMP_KEYWORDS, is_grade_c_ceiling_exception,
 )
 from app.services.acca_builder import (
     build_acca_candidates, build_accumulator, _ACCA_WIN_PROB_FLOOR,
@@ -189,6 +191,8 @@ async def auto_track_date(db: AsyncSession, run_date: date) -> int:
 
         # Skip Both+High picks whose odds exceed the serving-time ceiling —
         # consistent with what the router shows subscribers. Hybrid B exempt.
+        # Grade C exception: odds >= 2.50 + quality >= 0.30 bypasses the ceiling
+        # (5W/0L backfill at Tier 1/2).
         ceiling = DUAL_HIGH_ODDS_CEILING.get(signal.market)
         if (
             not is_hybrid
@@ -196,6 +200,7 @@ async def auto_track_date(db: AsyncSession, run_date: date) -> int:
             and signal.dual_confidence == "High"
             and signal.dual_agreement == "Both"
             and odds >= ceiling
+            and not is_grade_c_ceiling_exception(odds, signal.dual_quality_score)
         ):
             continue
 
@@ -237,6 +242,45 @@ async def auto_track_date(db: AsyncSession, run_date: date) -> int:
             and signal.dual_agreement == "Both"
             and (fixture.league_tier or 3) >= 3
             and (fixture.country or "").lower() in HO05_DATA_POOR_COUNTRIES
+        ):
+            continue
+
+        # Home Over 0.5 suppressed for these countries at ALL tiers.
+        # Australian state leagues are mis-classified as T1 by the API.
+        # Aug-2026: St George Willawong 0-1 @ 1.51 (T1).
+        if (
+            signal.market == "Home Over 0.5"
+            and (fixture.country or "").lower() in HO05_ALL_TIERS_SUPPRESSED_COUNTRIES
+        ):
+            continue
+
+        # Under 3.5 suppressed for data-poor countries at any tier.
+        # ZINB λ calibration is unreliable where historical match data is thin.
+        # Aug-2026: Armenia 2-2 @ 1.19 (T1), Nicaragua 4-1 @ 1.36 (T3),
+        # Faroe Islands 3-2 @ 1.30 (T2).
+        if (
+            signal.market == "Under 3.5"
+            and (fixture.country or "").lower() in U35_DATA_POOR_COUNTRIES
+        ):
+            continue
+
+        # Glicko gate: skip HO0.5 where the home team is a heavy underdog.
+        # glicko_r_diff < -150 means the home side is outrated by >150 Glicko points —
+        # home goals are structurally improbable regardless of lambda.
+        # Aug-2026: Banik Ostrava vs Slavia Praha (diff=-180) 0-4.
+        _glicko = signal.glicko_r_diff
+        if signal.market == "Home Over 0.5" and _glicko is not None and _glicko < -150:
+            continue
+
+        # Tighter Glicko gate for UEFA club competitions: -100 vs the general -150.
+        # Small-nation clubs in CL/EL/UECL qualifiers are structurally outclassed
+        # in the -100 to -149 band the general gate misses.
+        # Aug-2026: HB Torshavn (Faroe Islands) 0-3 vs Motherwell (UECL).
+        if (
+            signal.market == "Home Over 0.5"
+            and _glicko is not None
+            and _glicko < -100
+            and any(kw in league_lower for kw in UEFA_CLUB_COMP_KEYWORDS)
         ):
             continue
 

@@ -42,6 +42,7 @@ from app.core.config import (
     MAX_DAILY_EXPOSURE,
     YOUTH_LEAGUE_KEYWORDS,
     get_league_tier,
+    U35_DATA_POOR_COUNTRIES,
 )
 from app.engines import bayesian as bay_engine
 from app.services.form_service import get_team_form_lambdas
@@ -305,7 +306,7 @@ def _build_poisson_odds(snapshots: list[MarketSnapshot]) -> tuple[dict, dict]:
         if mt in GOALS_MARKET_NAMES:
             key_map = {
                 "Over 1.5": "over1_5", "Over 2.5": "over2_5",
-                "Under 2.5": "under2_5",
+                "Under 2.5": "under2_5", "Under 3.5": "under3_5",
             }
             k = key_map.get(sel)
             if k and (k not in signal_odds or s.odds > signal_odds[k]):
@@ -817,7 +818,8 @@ async def compute_signals_for_date(db: AsyncSession, run_date: date) -> int:
         if _zinb_goals_result is not None and _zinb_goals_result.market in ZINB_DISABLED_MARKETS:
             _zinb_goals_result = None
 
-        # Under 3.5 tier gate: only allow at Tier 3 (T1/T2 show negative ROI).
+        # Under 3.5 tier gate: ZINB_U35_SUPPRESSED_TIERS cleared 2026-08-04 (titibet has
+        # zinb_under35 at T1/T2; odds floor 1.35 is the primary quality gate).
         if (
             _zinb_goals_result is not None
             and _zinb_goals_result.market == "Under 3.5"
@@ -835,8 +837,12 @@ async def compute_signals_for_date(db: AsyncSession, run_date: date) -> int:
         ):
             _hb_qualified = False
 
-        # Skip expensive API calls if neither engine produced a candidate.
-        if not _hb_qualified and _zinb_goals_result is None:
+        # Skip expensive API calls if no engine produced a candidate.
+        _has_cs_u35 = poi_result is not None and any(
+            r.rule_key in {"cs00mid", "cs00u35"} and r.market == "Under 3.5" and r.rule_pass
+            for r in poi_result.results
+        )
+        if not _hb_qualified and _zinb_goals_result is None and not _has_cs_u35:
             continue
 
         # ── Phase 6 Rule 3: team news alert (shared gate) ────────────────────
@@ -954,6 +960,77 @@ async def compute_signals_for_date(db: AsyncSession, run_date: date) -> int:
             )
             pending_signals.append(zinb_sig)
             count += 1
+
+        # ── Write Poisson cs00mid / cs00u35 Under 3.5 signal ─────────────────
+        # Only emit when ZINB did not already generate an Under 3.5 signal for
+        # this fixture — the unique constraint on (fixture_id, market) would
+        # otherwise reject the second insert.
+        _zinb_u35_emitted = (
+            _zinb_goals_result is not None
+            and _zinb_goals_result.market == "Under 3.5"
+        )
+        if not _zinb_u35_emitted and poi_result is not None:
+            _cs_u35_result = next(
+                (
+                    r for r in poi_result.results
+                    if r.rule_key in {"cs00mid", "cs00u35"}
+                    and r.market == "Under 3.5"
+                    and r.rule_pass
+                ),
+                None,
+            )
+            if _cs_u35_result is not None:
+                _cs_u35_odds, _cs_u35_bk = _best_goals_ou_odds(goals_ou, "Under 3.5")
+                _cs_u35_min = MARKET_MIN_ODDS.get("Under 3.5", 1.30)
+                _cs_country_lower = (fixture.country or "").lower()
+                _cs_league_lower = (fixture.league or "").lower().strip()
+                _cs_u35_tier = fixture.league_tier or 1
+                _cs_u35_ok = (
+                    _cs_u35_odds is not None
+                    and _cs_u35_odds >= _cs_u35_min
+                    and _cs_country_lower not in U35_DATA_POOR_COUNTRIES
+                    and _cs_u35_tier not in ZINB_U35_SUPPRESSED_TIERS
+                    and not _league_matches_suppression(_cs_league_lower, UNDER_GOALS_SUPPRESSED_LEAGUES)
+                )
+                if _cs_u35_ok:
+                    _cs_u35_confidence = "High" if _cs_u35_result.rule_strong else "Medium"
+                    _cs_u35_stake = (
+                        HYBRID_B_STAKE_LEVELS["HIGH"]["base_stake"]
+                        if _cs_u35_result.rule_strong
+                        else HYBRID_B_STAKE_LEVELS["MEDIUM"]["base_stake"]
+                    )
+                    cs_u35_sig = Signal(
+                        fixture_id=fixture.id,
+                        market="Under 3.5",
+                        poisson_lambda_h=_cs_u35_result.lambda_h,
+                        poisson_lambda_a=_cs_u35_result.lambda_a,
+                        poisson_lambda_total=_cs_u35_result.lambda_total,
+                        poisson_prob=_cs_u35_result.poisson_prob,
+                        poisson_rule_key=_cs_u35_result.rule_key,
+                        poisson_rule_pass=True,
+                        poisson_rule_strong=_cs_u35_result.rule_strong,
+                        poisson_grade=_cs_u35_result.grade,
+                        bayesian_best_odd=_cs_u35_odds,
+                        bayesian_bookmaker=_cs_u35_bk,
+                        dual_confidence=_cs_u35_confidence,
+                        dual_agreement="Poisson Only",
+                        dual_quality_score=round(_cs_u35_stake / 1_000_000.0, 6),
+                        dual_recommended_stake_pct=round(_cs_u35_stake / 1_000_000.0, 6),
+                        contradiction=False,
+                        bos_si=_bos_result.si if _bos_result else None,
+                        bos_passed=_bos_result.passed if _bos_result else None,
+                        zinb_lambda_h=round(_zinb_lh, 4) if _zinb_lh else None,
+                        zinb_lambda_a=round(_zinb_la, 4) if _zinb_la else None,
+                        glicko_r_diff=_glicko_rdiff,
+                        glicko_rating_age_days=_glicko_age,
+                        home_xg=round(_hb_home_xg, 4),
+                        away_xg=round(_hb_away_xg, 4),
+                        bos_stability=_hb_bos,
+                        recommended_stake=_cs_u35_stake,
+                        stake_tier="HIGH" if _cs_u35_result.rule_strong else "MEDIUM",
+                    )
+                    pending_signals.append(cs_u35_sig)
+                    count += 1
 
     # ── Portfolio stake normalization ─────────────────────────────────────────
     # Cap total daily recommended exposure at MAX_DAILY_EXPOSURE (15 % of bankroll).
