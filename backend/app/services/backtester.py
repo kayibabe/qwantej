@@ -6,6 +6,7 @@ Produces BacktestResult rows with per-market win/loss outcomes.
 """
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import date
 from typing import Optional
 
@@ -127,11 +128,24 @@ async def run_backtest(
     await db.execute(del_q)
     await db.commit()
 
-    # Build form cache once — eliminates 2×N per-fixture DB queries.
+    # Build form cache once — eliminates 2×N per-fixture form DB queries.
     _cache_from = date_from
     if not _cache_from and fixtures:
         _cache_from = min((f.event_date for f in fixtures if f.event_date), default=None)
     _form_cache = await build_team_form_cache(db, date_from=_cache_from, date_to=date_to)
+
+    # Batch-load all market snapshots — eliminates 1×N per-fixture snapshot queries.
+    # SQLite IN clause limit is ~999; chunk to be safe.
+    _fixture_ids = [f.id for f in fixtures]
+    _snapshots_by_fixture: dict[int, list[MarketSnapshot]] = defaultdict(list)
+    _CHUNK = 900
+    for _i in range(0, len(_fixture_ids), _CHUNK):
+        _chunk_ids = _fixture_ids[_i: _i + _CHUNK]
+        _snap_rows = list((await db.execute(
+            select(MarketSnapshot).where(MarketSnapshot.fixture_id.in_(_chunk_ids))
+        )).scalars().all())
+        for _sn in _snap_rows:
+            _snapshots_by_fixture[_sn.fixture_id].append(_sn)
 
     results: list[BacktestResult] = []
 
@@ -149,10 +163,7 @@ async def run_backtest(
         if any(kw in _league_lower_bt for kw in YOUTH_LEAGUE_KEYWORDS):
             continue
 
-        snap_result = await db.execute(
-            select(MarketSnapshot).where(MarketSnapshot.fixture_id == fixture.id)
-        )
-        snapshots_raw: list[MarketSnapshot] = list(snap_result.scalars().all())
+        snapshots_raw = _snapshots_by_fixture.get(fixture.id)
         if not snapshots_raw:
             continue
         snapshots = _latest_snapshots(snapshots_raw)
