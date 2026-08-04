@@ -170,303 +170,307 @@ async def run_backtest(
     _form_cache = await build_team_form_cache(db, date_from=_cache_from, date_to=date_to)
     log.info("BT timing: form_cache %.2fs → %d teams", time.time() - _t4, len(_form_cache))
 
-    # Batch-load all market snapshots as lightweight _Snap structs (not full ORM
-    # objects — each ORM object costs ~2 KB vs ~200 bytes for __slots__ class).
-    # SQLite IN clause limit is ~999; chunk to be safe.
-    _t5 = time.time()
-    _fixture_ids = [f.id for f in fixtures]
-    _snapshots_by_fixture: dict[int, list[_Snap]] = defaultdict(list)
-    _CHUNK = 900
-    _total_snaps = 0
+    # Process fixtures in batches — load snapshots only for the current batch so
+    # peak memory stays bounded at ~200 fixtures × ~1200 rows × 200 bytes ≈ 48 MB
+    # per batch, instead of loading all snapshots for thousands of fixtures at once.
+    _BATCH = 200
     _snap_cols = (
         MarketSnapshot.fixture_id, MarketSnapshot.bookmaker,
         MarketSnapshot.market_type, MarketSnapshot.selection_name,
         MarketSnapshot.odds, MarketSnapshot.pulled_at,
     )
-    for _i in range(0, len(_fixture_ids), _CHUNK):
-        _chunk_ids = _fixture_ids[_i: _i + _CHUNK]
-        _rows = (await db.execute(
-            select(*_snap_cols).where(MarketSnapshot.fixture_id.in_(_chunk_ids))
-        )).all()
-        for _row in _rows:
-            _sn = _Snap(*_row)
-            _snapshots_by_fixture[_sn.fixture_id].append(_sn)
-        _total_snaps += len(_rows)
-        await asyncio.sleep(0)  # yield between chunks so health checks can pass
-    log.info("BT timing: snapshot batch %.2fs → %d rows across %d fixtures",
-             time.time() - _t5, _total_snaps, len(_snapshots_by_fixture))
-
     results: list[BacktestResult] = []
+    _total_processed = 0
+    _n_batches = (len(fixtures) + _BATCH - 1) // _BATCH
 
-    for _idx, fixture in enumerate(fixtures):
-        # Yield to the event loop every 20 fixtures so health checks and other
-        # requests are not starved during a long-running backtest.
-        if _idx % 20 == 0:
-            await asyncio.sleep(0)
-        if fixture.home_score is None or fixture.away_score is None:
-            continue
-        _bt_league_lower = (fixture.league or "").lower().strip()
-        if all_suppressed_leagues and (
-            _bt_league_lower in all_suppressed_leagues
-            or "friendlies" in _bt_league_lower
-        ):
-            continue
+    for _batch_idx in range(_n_batches):
+        _batch = fixtures[_batch_idx * _BATCH: (_batch_idx + 1) * _BATCH]
+        _batch_ids = [f.id for f in _batch]
 
-        _league_lower_bt = (fixture.league or "").lower()
-        if any(kw in _league_lower_bt for kw in YOUTH_LEAGUE_KEYWORDS):
-            continue
+        # Load snapshots for this batch only (chunk at 900 for SQLite IN limit)
+        _snapshots_by_fixture: dict[int, list[_Snap]] = defaultdict(list)
+        for _ci in range(0, len(_batch_ids), 900):
+            _chunk_ids = _batch_ids[_ci: _ci + 900]
+            _rows = (await db.execute(
+                select(*_snap_cols).where(MarketSnapshot.fixture_id.in_(_chunk_ids))
+            )).all()
+            for _row in _rows:
+                _sn = _Snap(*_row)
+                _snapshots_by_fixture[_sn.fixture_id].append(_sn)
+        await asyncio.sleep(0)  # yield after each batch's snapshot load
 
-        snapshots_raw = _snapshots_by_fixture.get(fixture.id)
-        if not snapshots_raw:
-            continue
-        snapshots = _latest_snapshots(snapshots_raw)
-
-        cs_by_bookie = _build_cs_by_bookie(snapshots)
-        goals_ou = _build_goals_ou(snapshots)
-        btts_dict = {}
-        match_winner = _build_match_winner(snapshots)
-        double_chance = _build_double_chance(snapshots)
-        home_totals = _build_home_totals(snapshots)
-        away_totals = _build_away_totals(snapshots)
-        wtn_home = _build_win_to_nil_home(snapshots)
-        wtn_away = _build_win_to_nil_away(snapshots)
-        exact_goals = _build_exact_goals(snapshots)
-        poi_odds, poi_signal_odds = _build_poisson_odds(snapshots)
-
-        bay_result = bay_engine.analyse_fixture(
-            fixture_id=fixture.id,
-            home_team=fixture.home_team, away_team=fixture.away_team,
-            league=fixture.league or "", country=fixture.country or "",
-            cs_by_bookie=cs_by_bookie, goals_ou=goals_ou,
-            btts=btts_dict, match_winner=match_winner,
-            double_chance=double_chance,
-            home_totals=home_totals,
-            away_totals=away_totals,
-            win_to_nil_home=wtn_home,
-            win_to_nil_away=wtn_away,
-            exact_goals=exact_goals,
-            all_markets=True,
-        ) if engine in ("bayesian", "dual") else None
-
-        form_lambdas = None
-        if engine in ("poisson", "dual"):
-            form_lambdas = get_form_lambdas_from_cache(
-                _form_cache,
-                home_team=fixture.home_team,
-                away_team=fixture.away_team,
-                before_date=fixture.event_date or date_from or date.today(),
-            ) or None
-
-        poi_result = poi_engine.analyse_fixture(
-            fixture_id=fixture.id, odds=poi_odds, signal_odds=poi_signal_odds,
-            form_lambdas=form_lambdas or None,
-        ) if engine in ("poisson", "dual") else None
-
-        bay_by_market: dict[str, bay_engine.BayesianResult] = {}
-        if bay_result:
-            for mr in bay_result.market_results:
-                bay_by_market[mr.market] = mr
-
-        poi_by_key = {}
-        if poi_result:
-            poi_by_key = {r.rule_key: r for r in poi_result.results}
-        poi_by_market = {}
-        if poi_result:
-            poi_by_market = {r.market: r for r in poi_result.results if r.rule_pass}
-
-        all_markets = set(bay_by_market.keys()) | set(poi_by_market.keys())
-        fixture_league = (fixture.league or "").strip()
-
-        fixture_date = fixture.event_date or date_from or date.today()
-
-        for mkt in all_markets:
-            if mkt not in MARKETS:
+        for fixture in _batch:
+            if fixture.home_score is None or fixture.away_score is None:
                 continue
-            if market and mkt != market:
-                continue
-            if mkt in DISABLED_MARKETS:
-                continue
-
-            # Mirror new signal_engine gates so backtest ROI is representative
-            if mkt in {"Home Over 1.5", "Away Over 1.5"} and (fixture.league_tier or 3) >= 3:
-                continue
-
-            if perf_weights is not None and perf_weights.should_suppress_league_market(fixture_league, mkt):
-                continue
-
-            condition = MARKETS[mkt]
-
-            b = bay_by_market.get(mkt)
-            # is_value is now the probability floor only; the min_edge parameter
-            # is retained for API compatibility but no longer filters (EV gating
-            # retired 2026-07-02).
-            if b and not b.is_value:
-                b = None
-            p_key = MARKET_TO_POISSON_KEY.get(mkt)
-            p = poi_by_market.get(mkt)
-            if p_key and p_key in poi_by_key:
-                p = poi_by_key.get(p_key)
-
-            if engine == "bayesian" and not b:
-                continue
-            if engine == "poisson" and (not p or not p.rule_pass):
-                continue
-            if engine == "dual" and not b and (not p or not p.rule_pass):
-                continue
-
-            ds = dual_engine.fuse(
-                fixture_id=fixture.id, market=mkt,
-                bayesian=b, poisson=p,
-                mixed_signals=poi_result.mixed_signals if poi_result else [],
-            )
-
-            if mkt == "Under 2.5":
-                under25_cap = float(POISSON_RULES.get("under25_max_odds", 2.20))
-                best_u25_odd = b.best_actual_odd if b else None
-                if best_u25_odd is not None and best_u25_odd > under25_cap:
-                    continue
-
-            if mkt == "Under 2.5":
-                league_lower = (fixture.league or "").lower()
-                if any(k in league_lower for k in UNDER_GOALS_SUPPRESSED_LEAGUES):
-                    continue
-
-            over_markets = {"Over 1.5", "Over 2.5", "Home Over 0.5"}
-            if mkt in over_markets:
-                league_lower = (fixture.league or "").lower()
-                if any(k in league_lower for k in OVER_GOALS_SUPPRESSED_LEAGUES):
-                    continue
-
-            # Women's league over-goals odds ceiling (mirror of signal_engine gate)
-            if mkt == "Home Over 0.5":
-                league_lower = (fixture.league or "").lower()
-                if any(kw in league_lower for kw in WOMEN_LEAGUE_KEYWORDS):
-                    _wo = b.best_actual_odd if b else None
-                    if _wo is not None and _wo > 2.50:
-                        continue
-
-            # Market maximum odds cap (mirror of signal_engine gate)
-            _max_odd = MARKET_MAX_ODDS.get(mkt)
-            if _max_odd:
-                _best_for_cap = b.best_actual_odd if b else None
-                if _best_for_cap is not None and _best_for_cap > _max_odd:
-                    continue
-
-            final_confidence = ds.confidence
-            if (
-                perf_weights is not None
-                and ds.confidence not in ("None", "Low")
-                and perf_weights.confidence_needs_downgrade(mkt, fixture.league_tier)
+            _bt_league_lower = (fixture.league or "").lower().strip()
+            if all_suppressed_leagues and (
+                _bt_league_lower in all_suppressed_leagues
+                or "friendlies" in _bt_league_lower
             ):
-                final_confidence = _CONFIDENCE_DOWNGRADE.get(ds.confidence, ds.confidence)
+                continue
 
-            _team_penalty, severe_team_total_flag = _team_total_context_penalty(
-                market=mkt,
-                league_tier=fixture.league_tier,
+            _league_lower_bt = (fixture.league or "").lower()
+            if any(kw in _league_lower_bt for kw in YOUTH_LEAGUE_KEYWORDS):
+                continue
+
+            snapshots_raw = _snapshots_by_fixture.get(fixture.id)
+            if not snapshots_raw:
+                continue
+            snapshots = _latest_snapshots(snapshots_raw)
+
+            cs_by_bookie = _build_cs_by_bookie(snapshots)
+            goals_ou = _build_goals_ou(snapshots)
+            btts_dict = {}
+            match_winner = _build_match_winner(snapshots)
+            double_chance = _build_double_chance(snapshots)
+            home_totals = _build_home_totals(snapshots)
+            away_totals = _build_away_totals(snapshots)
+            wtn_home = _build_win_to_nil_home(snapshots)
+            wtn_away = _build_win_to_nil_away(snapshots)
+            exact_goals = _build_exact_goals(snapshots)
+            poi_odds, poi_signal_odds = _build_poisson_odds(snapshots)
+
+            bay_result = bay_engine.analyse_fixture(
+                fixture_id=fixture.id,
+                home_team=fixture.home_team, away_team=fixture.away_team,
+                league=fixture.league or "", country=fixture.country or "",
+                cs_by_bookie=cs_by_bookie, goals_ou=goals_ou,
+                btts=btts_dict, match_winner=match_winner,
+                double_chance=double_chance,
+                home_totals=home_totals,
+                away_totals=away_totals,
+                win_to_nil_home=wtn_home,
+                win_to_nil_away=wtn_away,
+                exact_goals=exact_goals,
+                all_markets=True,
+            ) if engine in ("bayesian", "dual") else None
+
+            form_lambdas = None
+            if engine in ("poisson", "dual"):
+                form_lambdas = get_form_lambdas_from_cache(
+                    _form_cache,
+                    home_team=fixture.home_team,
+                    away_team=fixture.away_team,
+                    before_date=fixture.event_date or date_from or date.today(),
+                ) or None
+
+            poi_result = poi_engine.analyse_fixture(
+                fixture_id=fixture.id, odds=poi_odds, signal_odds=poi_signal_odds,
                 form_lambdas=form_lambdas or None,
-                best_odd=b.best_actual_odd if b else None,
-                bookmaker_count=b.bookmaker_count if b else None,
-            )
-            if severe_team_total_flag and final_confidence in ("High", "Medium"):
-                final_confidence = _CONFIDENCE_DOWNGRADE.get(final_confidence, final_confidence)
+            ) if engine in ("poisson", "dual") else None
 
-            if final_confidence == "Low" and perf_weights is not None:
-                lm_factor = perf_weights.factor_for_league_market(fixture_league, mkt)
-                if lm_factor < 0.85:
+            bay_by_market: dict[str, bay_engine.BayesianResult] = {}
+            if bay_result:
+                for mr in bay_result.market_results:
+                    bay_by_market[mr.market] = mr
+
+            poi_by_key = {}
+            if poi_result:
+                poi_by_key = {r.rule_key: r for r in poi_result.results}
+            poi_by_market = {}
+            if poi_result:
+                poi_by_market = {r.market: r for r in poi_result.results if r.rule_pass}
+
+            all_markets = set(bay_by_market.keys()) | set(poi_by_market.keys())
+            fixture_league = (fixture.league or "").strip()
+
+            fixture_date = fixture.event_date or date_from or date.today()
+
+            for mkt in all_markets:
+                if mkt not in MARKETS:
+                    continue
+                if market and mkt != market:
+                    continue
+                if mkt in DISABLED_MARKETS:
                     continue
 
-            # Low confidence in Tier 3 = near-zero edge in highest-variance context
-            if final_confidence == "Low" and (fixture.league_tier or 3) >= 3:
-                continue
+                # Mirror new signal_engine gates so backtest ROI is representative
+                if mkt in {"Home Over 1.5", "Away Over 1.5"} and (fixture.league_tier or 3) >= 3:
+                    continue
 
-            if allowed_confidence and final_confidence not in allowed_confidence:
-                continue
-            if final_confidence == "None":
-                continue
+                if perf_weights is not None and perf_weights.should_suppress_league_market(fixture_league, mkt):
+                    continue
 
-            # Mirror live signal_engine tier gates.
-            # Tier 1: Dual Signal — Both agreement + High confidence.
-            # Tier 2: Poisson Signal — Poisson-only + rule_strong + odds < POISSON_ONLY_MAX_ODDS.
-            _poi_bt_odd = float(poi_signal_odds.get(p_key or "") or 0.0)
-            _poi_bt_max = POISSON_ONLY_MAX_ODDS.get(mkt)
-            is_dual_bt   = final_confidence == "High" and ds.agreement == "Both"
-            is_poisson_bt = (
-                mkt == "Home Over 0.5"
-                and ds.agreement == "Poisson Only"
-                and p is not None and getattr(p, "rule_strong", False)
-                and _poi_bt_odd > 1.0
-                and (_poi_bt_max is None or _poi_bt_odd < _poi_bt_max)
-            )
-            if not is_dual_bt and not is_poisson_bt:
-                continue
+                condition = MARKETS[mkt]
 
-            # ── New gates (mirroring signal_engine) ──────────────────────────
-            # (The negative-EV hard gate was removed 2026-07-02, mirroring the
-            # live signal engine — EV never rejects a bet.)
-            if apply_new_gates:
-                # Gate 2: end-of-northern-season suppression.
-                # Tier 2+ Over-goals signals dropped May 10 – June 30.
-                # Tier 3 remaining signals confidence-downgraded.
-                if _is_end_of_northern_season(fixture_date):
-                    _bt_tier = fixture.league_tier or 3
-                    if _bt_tier >= 2 and mkt in _OVER_GOALS_MARKETS:
+                b = bay_by_market.get(mkt)
+                # is_value is now the probability floor only; the min_edge parameter
+                # is retained for API compatibility but no longer filters (EV gating
+                # retired 2026-07-02).
+                if b and not b.is_value:
+                    b = None
+                p_key = MARKET_TO_POISSON_KEY.get(mkt)
+                p = poi_by_market.get(mkt)
+                if p_key and p_key in poi_by_key:
+                    p = poi_by_key.get(p_key)
+
+                if engine == "bayesian" and not b:
+                    continue
+                if engine == "poisson" and (not p or not p.rule_pass):
+                    continue
+                if engine == "dual" and not b and (not p or not p.rule_pass):
+                    continue
+
+                ds = dual_engine.fuse(
+                    fixture_id=fixture.id, market=mkt,
+                    bayesian=b, poisson=p,
+                    mixed_signals=poi_result.mixed_signals if poi_result else [],
+                )
+
+                if mkt == "Under 2.5":
+                    under25_cap = float(POISSON_RULES.get("under25_max_odds", 2.20))
+                    best_u25_odd = b.best_actual_odd if b else None
+                    if best_u25_odd is not None and best_u25_odd > under25_cap:
                         continue
-                    if _bt_tier >= 3 and final_confidence in ("High", "Medium"):
-                        final_confidence = _CONFIDENCE_DOWNGRADE.get(final_confidence, final_confidence)
-                        is_dual_bt = final_confidence == "High" and ds.agreement == "Both"
-                        if not is_dual_bt and not is_poisson_bt:
+
+                if mkt == "Under 2.5":
+                    league_lower = (fixture.league or "").lower()
+                    if any(k in league_lower for k in UNDER_GOALS_SUPPRESSED_LEAGUES):
+                        continue
+
+                over_markets = {"Over 1.5", "Over 2.5", "Home Over 0.5"}
+                if mkt in over_markets:
+                    league_lower = (fixture.league or "").lower()
+                    if any(k in league_lower for k in OVER_GOALS_SUPPRESSED_LEAGUES):
+                        continue
+
+                # Women's league over-goals odds ceiling (mirror of signal_engine gate)
+                if mkt == "Home Over 0.5":
+                    league_lower = (fixture.league or "").lower()
+                    if any(kw in league_lower for kw in WOMEN_LEAGUE_KEYWORDS):
+                        _wo = b.best_actual_odd if b else None
+                        if _wo is not None and _wo > 2.50:
                             continue
 
-            # Determine bet outcome
-            won = condition(fixture.home_score, fixture.away_score)
-            best_odd = b.best_actual_odd if b else 0.0
-            # For Poisson-only signals (b is None or b has no Bayesian odds),
-            # fall back to the actual bookmaker odds captured in poi_signal_odds.
-            # Without this, every Poisson-only win still books as a loss because
-            # profit = stake * (0 - 1) = -stake.
-            if best_odd <= 1 and p_key:
-                best_odd = float(poi_signal_odds.get(p_key) or 0.0)
-            if best_odd <= 1:
-                # No valid bookmaker odds available — skip this signal from P&L
-                continue
-            # best_odd is the displayed PROXY price. Settle at the EXECUTION price
-            # (proxy haircut to the user's real book) so ROI is honest. The
-            # odds-cap gates above deliberately still use the observed proxy price.
-            settle_odd = exec_odd_from(best_odd, mkt) if settle_at_exec else best_odd
-            if settle_odd <= 1:
-                continue
-            flat_stake = BACKTEST_FLAT_STAKE
-            # Probability-scaled flat stake (Kelly retired with EV gating).
-            ks = settings.max_kelly_pct * b.derived_prob * 100 if b and b.derived_prob else 0.0
+                # Market maximum odds cap (mirror of signal_engine gate)
+                _max_odd = MARKET_MAX_ODDS.get(mkt)
+                if _max_odd:
+                    _best_for_cap = b.best_actual_odd if b else None
+                    if _best_for_cap is not None and _best_for_cap > _max_odd:
+                        continue
 
-            profit = flat_stake * (settle_odd - 1.0) if won else -flat_stake
+                final_confidence = ds.confidence
+                if (
+                    perf_weights is not None
+                    and ds.confidence not in ("None", "Low")
+                    and perf_weights.confidence_needs_downgrade(mkt, fixture.league_tier)
+                ):
+                    final_confidence = _CONFIDENCE_DOWNGRADE.get(ds.confidence, ds.confidence)
 
-            result = BacktestResult(
-                fixture_id=fixture.id,
-                fixture_date=fixture.event_date,
-                league_id=fixture.league_id,
-                league_name=fixture.league,
-                league_tier=fixture.league_tier,
-                home_team=fixture.home_team,
-                away_team=fixture.away_team,
-                home_score=fixture.home_score,
-                away_score=fixture.away_score,
-                market=mkt,
-                source_engine=engine,
-                derived_prob=b.derived_prob if b else None,
-                # Record the settlement odd actually used for P&L (exec price when
-                # settle_at_exec) so summary ROI / avg_odds reflect real returns.
-                actual_odd=round(settle_odd, 3) if settle_odd > 1 else None,
-                edge=b.edge if b else None,
-                dual_confidence=final_confidence,
-                dual_agreement=ds.agreement,
-                bet_result=1 if won else 0,
-                profit_loss=round(profit, 2),
-                flat_stake=flat_stake,
-                kelly_stake=round(ks, 2) if ks else None,
-            )
-            results.append(result)
-            db.add(result)
+                _team_penalty, severe_team_total_flag = _team_total_context_penalty(
+                    market=mkt,
+                    league_tier=fixture.league_tier,
+                    form_lambdas=form_lambdas or None,
+                    best_odd=b.best_actual_odd if b else None,
+                    bookmaker_count=b.bookmaker_count if b else None,
+                )
+                if severe_team_total_flag and final_confidence in ("High", "Medium"):
+                    final_confidence = _CONFIDENCE_DOWNGRADE.get(final_confidence, final_confidence)
+
+                if final_confidence == "Low" and perf_weights is not None:
+                    lm_factor = perf_weights.factor_for_league_market(fixture_league, mkt)
+                    if lm_factor < 0.85:
+                        continue
+
+                # Low confidence in Tier 3 = near-zero edge in highest-variance context
+                if final_confidence == "Low" and (fixture.league_tier or 3) >= 3:
+                    continue
+
+                if allowed_confidence and final_confidence not in allowed_confidence:
+                    continue
+                if final_confidence == "None":
+                    continue
+
+                # Mirror live signal_engine tier gates.
+                # Tier 1: Dual Signal — Both agreement + High confidence.
+                # Tier 2: Poisson Signal — Poisson-only + rule_strong + odds < POISSON_ONLY_MAX_ODDS.
+                _poi_bt_odd = float(poi_signal_odds.get(p_key or "") or 0.0)
+                _poi_bt_max = POISSON_ONLY_MAX_ODDS.get(mkt)
+                is_dual_bt   = final_confidence == "High" and ds.agreement == "Both"
+                is_poisson_bt = (
+                    mkt == "Home Over 0.5"
+                    and ds.agreement == "Poisson Only"
+                    and p is not None and getattr(p, "rule_strong", False)
+                    and _poi_bt_odd > 1.0
+                    and (_poi_bt_max is None or _poi_bt_odd < _poi_bt_max)
+                )
+                if not is_dual_bt and not is_poisson_bt:
+                    continue
+
+                # ── New gates (mirroring signal_engine) ──────────────────────────
+                # (The negative-EV hard gate was removed 2026-07-02, mirroring the
+                # live signal engine — EV never rejects a bet.)
+                if apply_new_gates:
+                    # Gate 2: end-of-northern-season suppression.
+                    # Tier 2+ Over-goals signals dropped May 10 – June 30.
+                    # Tier 3 remaining signals confidence-downgraded.
+                    if _is_end_of_northern_season(fixture_date):
+                        _bt_tier = fixture.league_tier or 3
+                        if _bt_tier >= 2 and mkt in _OVER_GOALS_MARKETS:
+                            continue
+                        if _bt_tier >= 3 and final_confidence in ("High", "Medium"):
+                            final_confidence = _CONFIDENCE_DOWNGRADE.get(final_confidence, final_confidence)
+                            is_dual_bt = final_confidence == "High" and ds.agreement == "Both"
+                            if not is_dual_bt and not is_poisson_bt:
+                                continue
+
+                # Determine bet outcome
+                won = condition(fixture.home_score, fixture.away_score)
+                best_odd = b.best_actual_odd if b else 0.0
+                # For Poisson-only signals (b is None or b has no Bayesian odds),
+                # fall back to the actual bookmaker odds captured in poi_signal_odds.
+                # Without this, every Poisson-only win still books as a loss because
+                # profit = stake * (0 - 1) = -stake.
+                if best_odd <= 1 and p_key:
+                    best_odd = float(poi_signal_odds.get(p_key) or 0.0)
+                if best_odd <= 1:
+                    # No valid bookmaker odds available — skip this signal from P&L
+                    continue
+                # best_odd is the displayed PROXY price. Settle at the EXECUTION price
+                # (proxy haircut to the user's real book) so ROI is honest. The
+                # odds-cap gates above deliberately still use the observed proxy price.
+                settle_odd = exec_odd_from(best_odd, mkt) if settle_at_exec else best_odd
+                if settle_odd <= 1:
+                    continue
+                flat_stake = BACKTEST_FLAT_STAKE
+                # Probability-scaled flat stake (Kelly retired with EV gating).
+                ks = settings.max_kelly_pct * b.derived_prob * 100 if b and b.derived_prob else 0.0
+
+                profit = flat_stake * (settle_odd - 1.0) if won else -flat_stake
+
+                result = BacktestResult(
+                    fixture_id=fixture.id,
+                    fixture_date=fixture.event_date,
+                    league_id=fixture.league_id,
+                    league_name=fixture.league,
+                    league_tier=fixture.league_tier,
+                    home_team=fixture.home_team,
+                    away_team=fixture.away_team,
+                    home_score=fixture.home_score,
+                    away_score=fixture.away_score,
+                    market=mkt,
+                    source_engine=engine,
+                    derived_prob=b.derived_prob if b else None,
+                    # Record the settlement odd actually used for P&L (exec price when
+                    # settle_at_exec) so summary ROI / avg_odds reflect real returns.
+                    actual_odd=round(settle_odd, 3) if settle_odd > 1 else None,
+                    edge=b.edge if b else None,
+                    dual_confidence=final_confidence,
+                    dual_agreement=ds.agreement,
+                    bet_result=1 if won else 0,
+                    profit_loss=round(profit, 2),
+                    flat_stake=flat_stake,
+                    kelly_stake=round(ks, 2) if ks else None,
+                )
+                results.append(result)
+                db.add(result)
+
+        # Release this batch's snapshots before loading the next batch
+        del _snapshots_by_fixture
+        _total_processed += len(_batch)
+        log.info("BT batch %d/%d done — %d/%d fixtures processed",
+                 _batch_idx + 1, _n_batches, _total_processed, len(fixtures))
+        await asyncio.sleep(0)
 
     await db.commit()
 
