@@ -32,6 +32,7 @@ Design decisions
 from __future__ import annotations
 
 import math
+from collections import defaultdict
 from datetime import date, timedelta
 from typing import Optional
 
@@ -168,3 +169,98 @@ async def _fetch_team_goals(
             conceded.append(float(fx.home_score))   # type: ignore[arg-type]
 
     return goals, conceded  # already ordered most-recent first by the query
+
+
+# ---------------------------------------------------------------------------
+# Batch-load cache — eliminates N+1 queries in the backtest loop
+# ---------------------------------------------------------------------------
+
+# (event_date, goals_scored, goals_conceded), most-recent first
+_FormEntry = tuple[date, float, float]
+TeamFormCache = dict[str, list[_FormEntry]]
+
+
+async def build_team_form_cache(
+    db: AsyncSession,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+) -> TeamFormCache:
+    """
+    One-shot bulk load of all finished fixtures needed for form lookups.
+
+    Returns {team_name: [(event_date, goals_scored, goals_conceded), ...]},
+    most-recent first.  Pass the same date_from/date_to as the backtest —
+    the 90-day lookback window is extended automatically so fixtures before
+    the backtest start that are needed for early-fixture form still appear.
+    """
+    max_days = int(R.get("form_max_lookback_days", 90))
+    cache_start = (date_from - timedelta(days=max_days)) if date_from else None
+
+    stmt = (
+        select(Fixture)
+        .where(
+            Fixture.home_score.is_not(None),
+            Fixture.away_score.is_not(None),
+        )
+        .order_by(Fixture.event_date.desc())
+    )
+    if cache_start:
+        stmt = stmt.where(Fixture.event_date >= cache_start)
+    if date_to:
+        stmt = stmt.where(Fixture.event_date < date_to)
+
+    rows: list[Fixture] = list((await db.execute(stmt)).scalars().all())
+    cache: dict[str, list[_FormEntry]] = defaultdict(list)
+    for fx in rows:
+        if fx.event_date is None:
+            continue
+        cache[fx.home_team].append((fx.event_date, float(fx.home_score), float(fx.away_score)))
+        cache[fx.away_team].append((fx.event_date, float(fx.away_score), float(fx.home_score)))
+    return dict(cache)
+
+
+def get_form_lambdas_from_cache(
+    cache: TeamFormCache,
+    home_team: str,
+    away_team: str,
+    before_date: date,
+    n: Optional[int] = None,
+) -> dict:
+    """
+    Sync drop-in for get_team_form_lambdas — no DB access, O(n) in-memory scan.
+    Use inside loops that already called build_team_form_cache once.
+    """
+    n = n or int(R["rolling_form_games"])
+    min_games = int(R["form_min_games"])
+    max_days = int(R.get("form_max_lookback_days", 90))
+    cutoff = before_date - timedelta(days=max_days)
+
+    def _extract(team: str) -> tuple[list[float], list[float]]:
+        goals: list[float] = []
+        conceded: list[float] = []
+        for entry_date, g, c in cache.get(team, []):
+            if cutoff <= entry_date < before_date:
+                goals.append(g)
+                conceded.append(c)
+                if len(goals) >= n:
+                    break
+        return goals, conceded
+
+    home_goals, home_conceded = _extract(home_team)
+    away_goals, away_conceded = _extract(away_team)
+
+    if len(home_goals) < min_games or len(away_goals) < min_games:
+        return {}
+
+    lam_h = max(_exp_weighted_avg(home_goals), 0.10)
+    lam_a = max(_exp_weighted_avg(away_goals), 0.10)
+
+    return {
+        "lambda_h": lam_h,
+        "lambda_a": lam_a,
+        "lambda_total": lam_h + lam_a,
+        "games_h": len(home_goals),
+        "games_a": len(away_goals),
+        "conceded_h": _exp_weighted_avg(home_conceded),
+        "conceded_a": _exp_weighted_avg(away_conceded),
+    }

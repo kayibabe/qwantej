@@ -43,7 +43,11 @@ from app.services.signal_engine import (
     _team_total_context_penalty,
     _is_end_of_northern_season, _OVER_GOALS_MARKETS,
 )
-from app.services.form_service import get_team_form_lambdas
+from app.services.form_service import (
+    get_team_form_lambdas,
+    build_team_form_cache,
+    get_form_lambdas_from_cache,
+)
 
 settings = get_settings()
 
@@ -123,6 +127,12 @@ async def run_backtest(
     await db.execute(del_q)
     await db.commit()
 
+    # Build form cache once — eliminates 2×N per-fixture DB queries.
+    _cache_from = date_from
+    if not _cache_from and fixtures:
+        _cache_from = min((f.event_date for f in fixtures if f.event_date), default=None)
+    _form_cache = await build_team_form_cache(db, date_from=_cache_from, date_to=date_to)
+
     results: list[BacktestResult] = []
 
     for fixture in fixtures:
@@ -174,16 +184,14 @@ async def run_backtest(
             all_markets=True,
         ) if engine in ("bayesian", "dual") else None
 
-        # Use the same form-lambda blending as the live signal engine so that
-        # backtest ROI figures are representative of what the system actually bets.
         form_lambdas = None
         if engine in ("poisson", "dual"):
-            form_lambdas = await get_team_form_lambdas(
-                db=db,
+            form_lambdas = get_form_lambdas_from_cache(
+                _form_cache,
                 home_team=fixture.home_team,
                 away_team=fixture.away_team,
                 before_date=fixture.event_date or date_from or date.today(),
-            )
+            ) or None
 
         poi_result = poi_engine.analyse_fixture(
             fixture_id=fixture.id, odds=poi_odds, signal_odds=poi_signal_odds,
