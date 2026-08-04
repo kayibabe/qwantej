@@ -7,6 +7,7 @@ Produces BacktestResult rows with per-market win/loss outcomes.
 from __future__ import annotations
 
 from collections import defaultdict
+import asyncio
 from datetime import date
 from typing import Optional
 
@@ -149,7 +150,11 @@ async def run_backtest(
 
     results: list[BacktestResult] = []
 
-    for fixture in fixtures:
+    for _idx, fixture in enumerate(fixtures):
+        # Yield to the event loop every 20 fixtures so health checks and other
+        # requests are not starved during a long-running backtest.
+        if _idx % 20 == 0:
+            await asyncio.sleep(0)
         if fixture.home_score is None or fixture.away_score is None:
             continue
         _bt_league_lower = (fixture.league or "").lower().strip()
