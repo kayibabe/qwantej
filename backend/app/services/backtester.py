@@ -9,7 +9,6 @@ from __future__ import annotations
 from collections import defaultdict
 import asyncio
 import logging
-import time
 from datetime import date
 from typing import Optional
 
@@ -121,10 +120,9 @@ async def run_backtest(
         .options(noload(Fixture.market_snapshots), noload(Fixture.signals))
     )
 
-    _t0 = time.time()
     fixture_result = await db.execute(query)
     fixtures: list[Fixture] = list(fixture_result.scalars().all())
-    log.info("BT timing: fixture query %.2fs → %d fixtures", time.time() - _t0, len(fixtures))
+    log.info("Backtest: %d fixtures with snapshots in scope", len(fixtures))
 
     allowed_confidence = None
     if confidence_filter:
@@ -133,19 +131,15 @@ async def run_backtest(
             for item in str(confidence_filter).split(",")
             if item.strip()
         }
-    _t1 = time.time()
     try:
         perf_weights: Optional[PerformanceWeights] = await compute_performance_weights(db)
     except Exception:
         perf_weights = None
-    log.info("BT timing: perf_weights %.2fs", time.time() - _t1)
 
-    _t2 = time.time()
     try:
         underperforming_leagues: frozenset[str] = await _get_underperforming_leagues(db, min_roi_pct=-20.0)
     except Exception:
         underperforming_leagues = frozenset()
-    log.info("BT timing: underperforming_leagues %.2fs", time.time() - _t2)
 
     all_suppressed_leagues = underperforming_leagues | DISABLED_LEAGUES
 
@@ -157,18 +151,13 @@ async def run_backtest(
         del_q = del_q.where(BacktestResult.fixture_date <= date_to)
     if market:
         del_q = del_q.where(BacktestResult.market == market)
-    _t3 = time.time()
     await db.execute(del_q)
     await db.commit()
-    log.info("BT timing: delete+commit %.2fs", time.time() - _t3)
 
-    # Build form cache once — eliminates 2×N per-fixture form DB queries.
-    _t4 = time.time()
     _cache_from = date_from
     if not _cache_from and fixtures:
         _cache_from = min((f.event_date for f in fixtures if f.event_date), default=None)
     _form_cache = await build_team_form_cache(db, date_from=_cache_from, date_to=date_to)
-    log.info("BT timing: form_cache %.2fs → %d teams", time.time() - _t4, len(_form_cache))
 
     # Process fixtures in batches — load snapshots only for the current batch so
     # peak memory stays bounded at ~200 fixtures × ~1200 rows × 200 bytes ≈ 48 MB
@@ -180,7 +169,6 @@ async def run_backtest(
         MarketSnapshot.odds, MarketSnapshot.pulled_at,
     )
     results: list[BacktestResult] = []
-    _total_processed = 0
     _n_batches = (len(fixtures) + _BATCH - 1) // _BATCH
 
     for _batch_idx in range(_n_batches):
@@ -199,7 +187,11 @@ async def run_backtest(
                 _snapshots_by_fixture[_sn.fixture_id].append(_sn)
         await asyncio.sleep(0)  # yield after each batch's snapshot load
 
-        for fixture in _batch:
+        for _fix_idx, fixture in enumerate(_batch):
+            # Yield every 10 fixtures so the health-check endpoint stays responsive
+            # even when the dual-engine analysis is blocking CPU for several seconds.
+            if _fix_idx % 10 == 0:
+                await asyncio.sleep(0)
             if fixture.home_score is None or fixture.away_score is None:
                 continue
             _bt_league_lower = (fixture.league or "").lower().strip()
@@ -467,9 +459,6 @@ async def run_backtest(
 
         # Release this batch's snapshots before loading the next batch
         del _snapshots_by_fixture
-        _total_processed += len(_batch)
-        log.info("BT batch %d/%d done — %d/%d fixtures processed",
-                 _batch_idx + 1, _n_batches, _total_processed, len(fixtures))
         await asyncio.sleep(0)
 
     await db.commit()
