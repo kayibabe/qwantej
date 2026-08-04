@@ -108,14 +108,16 @@ async def run_backtest(
     if league_name:
         query = query.where(Fixture.league.ilike(f"%{league_name}%"))
 
-    # Finished fixtures with scores.
-    # noload() suppresses the lazy="selectin" eager-load of market_snapshots and
-    # signals that SQLAlchemy would otherwise fire automatically — those loads were
-    # the 20s query + OOM (snapshots for 2000+ fixtures loaded twice).
+    # Finished fixtures with scores, joined to market_snapshots so we only load
+    # fixtures that have odds data (JOIN is fast — uses ix on market_snapshots.fixture_id).
+    # noload() prevents SQLAlchemy selectin auto-loads from fetching all snapshots/
+    # signals again as relationships (which was the original 22s / OOM bug).
     query = (
         query
+        .join(MarketSnapshot, Fixture.id == MarketSnapshot.fixture_id)
         .where(Fixture.status.in_(["FT", "AET", "PEN"]))
         .where(Fixture.home_score.isnot(None))
+        .distinct()
         .options(noload(Fixture.market_snapshots), noload(Fixture.signals))
     )
 
