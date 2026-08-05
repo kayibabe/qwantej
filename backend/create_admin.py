@@ -1,6 +1,7 @@
 """
-One-shot script: create or reset the admin user on the live DB.
-Run via: fly ssh console -a qwantej -C "cd /app && python create_admin.py"
+Create or reset an admin user on the database.
+Usage: python create_admin.py <email> <password>
+Run on Fly.io: fly ssh console -a qwantej -C "cd /app && python create_admin.py <email> <password>"
 """
 import asyncio
 import sys
@@ -9,30 +10,24 @@ from app.core.database import AsyncSessionLocal, init_db
 from app.core.auth import hash_password
 from app.models.user import User
 
-EMAIL = "cmhango@gmail.com"
-PASSWORD = sys.argv[1] if len(sys.argv) > 1 else None
 
-
-async def main():
-    if not PASSWORD:
-        print("Usage: python create_admin.py <password>")
-        sys.exit(1)
-
+async def main(email: str, password: str):
     await init_db()
     async with AsyncSessionLocal() as db:
-        result = await db.execute(select(User).where(User.email == EMAIL))
+        result = await db.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
 
         if user:
-            user.hashed_password = hash_password(PASSWORD)
+            user.hashed_password = hash_password(password)
             user.is_active = True
             user.is_admin = True
             action = "updated"
         else:
+            name = email.split("@")[0]
             user = User(
-                email=EMAIL,
-                hashed_password=hash_password(PASSWORD),
-                name="Cromwell",
+                email=email,
+                hashed_password=hash_password(password),
+                name=name,
                 tier="pro",
                 subscription_status="active",
                 is_admin=True,
@@ -45,4 +40,8 @@ async def main():
         print(f"User {action}: id={user.id} email={user.email} admin={user.is_admin} tier={user.tier}")
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    if len(sys.argv) < 3:
+        print("Usage: python create_admin.py <email> <password>")
+        sys.exit(1)
+    asyncio.run(main(sys.argv[1], sys.argv[2]))
