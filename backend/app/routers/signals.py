@@ -19,6 +19,7 @@ from app.core.config import (
     is_womens_fixture, OVER25_SUPPRESSED_TIERS, ZINB_GOALS_MIN_ODDS,
     is_grade_c_ceiling_exception, HO05_ALL_TIERS_SUPPRESSED_COUNTRIES,
     U35_DATA_POOR_COUNTRIES, CUP_U35_SUPPRESSED_LEAGUES, UEFA_QUAL_U35_SUPPRESSED_LEAGUES,
+    U35_MIN_PROBABILITY,
 )
 from app.models import Signal, Fixture, TrackedBet
 from app.models.odds import MarketSnapshot
@@ -598,17 +599,31 @@ async def list_signals(
             )
         ]
 
-    # Under 3.5 UEFA club competition suppression — August/September qualifying rounds
-    # produce volatile scorelines (aggregate pressure, all-or-nothing mentality) that
-    # xG cannot model. 2026-08-04: Union St. Gilloise 3-3 (UCL Q), Shamrock Rovers
-    # 3-1 (UEL Q). Matches substring against lower(trim(league)).
+    # UEFA club competition suppression — qualifying window (Jul–Sep): ALL markets.
+    # Group/knockout stage (Oct+): Under 3.5 only (aggregate dynamics gone, normal play).
+    # Aug-2026: UCL -27.4% ROI / -K150,500 (11 bets), UECL -12.2% ROI / -K140,000
+    # (23 bets), UEL -4% ROI / -K14,000 (7 bets). Combined: -K304,500.
     if UEFA_QUAL_U35_SUPPRESSED_LEAGUES:
-        _league_lc_uefa = lambda fix: (fix.league or "").lower()
+        def _is_uefa_suppressed(sig: Signal, fix: Fixture) -> bool:
+            league_lc = (fix.league or "").lower()
+            if not any(kw in league_lc for kw in UEFA_QUAL_U35_SUPPRESSED_LEAGUES):
+                return False
+            # Qualifying months: suppress everything
+            if fix.kickoff_at and fix.kickoff_at.month in {7, 8, 9}:
+                return True
+            # Rest of season: Under 3.5 only (volatile aggregates gone)
+            return sig.market == "Under 3.5"
+        rows = [(sig, fix) for sig, fix in rows if not _is_uefa_suppressed(sig, fix)]
+
+    # Under 3.5 minimum probability floor — at avg odds 1.37 breakeven is 73% WR;
+    # system was at 65.1% WR (-11.5% ROI) across 111 bets (Aug-2026 audit).
+    # Rejects low-conviction signals at the bottom of the probability distribution.
+    if U35_MIN_PROBABILITY:
         rows = [
             (sig, fix) for sig, fix in rows
             if not (
                 sig.market == "Under 3.5"
-                and any(kw in _league_lc_uefa(fix) for kw in UEFA_QUAL_U35_SUPPRESSED_LEAGUES)
+                and max(filter(None, [sig.bayesian_prob, sig.poisson_prob]), default=1.0) < U35_MIN_PROBABILITY
             )
         ]
 
@@ -952,12 +967,22 @@ async def stat_driven_picks(
             )
         ]
     if UEFA_QUAL_U35_SUPPRESSED_LEAGUES:
-        _sp_uefa_lc = lambda fix: (fix.league or "").lower()
+        def _is_uefa_suppressed_sp(sig: Signal, fix: Fixture) -> bool:
+            league_lc = (fix.league or "").lower()
+            if not any(kw in league_lc for kw in UEFA_QUAL_U35_SUPPRESSED_LEAGUES):
+                return False
+            if fix.kickoff_at and fix.kickoff_at.month in {7, 8, 9}:
+                return True
+            return sig.market == "Under 3.5"
+        rows = [(sig, fix) for sig, fix in rows if not _is_uefa_suppressed_sp(sig, fix)]
+
+    # Under 3.5 minimum probability floor — mirror main endpoint.
+    if U35_MIN_PROBABILITY:
         rows = [
             (sig, fix) for sig, fix in rows
             if not (
                 sig.market == "Under 3.5"
-                and any(kw in _sp_uefa_lc(fix) for kw in UEFA_QUAL_U35_SUPPRESSED_LEAGUES)
+                and max(filter(None, [sig.bayesian_prob, sig.poisson_prob]), default=1.0) < U35_MIN_PROBABILITY
             )
         ]
 

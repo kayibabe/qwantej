@@ -481,6 +481,15 @@ DISABLED_LEAGUES: frozenset = frozenset({
     # "liga mx" — re-enabled 2026-08-04: failure was structural home bias for X2/AO0.5; stays in HYBRID_B_PERMANENT_BLACKLIST
     # "torneo federal a" — re-enabled 2026-08-04: away-scoring failure only; stays in HYBRID_B_PERMANENT_BLACKLIST
     # "liga profesional argentina" — re-enabled 2026-08-04: X2 failure only; stays in HYBRID_B_PERMANENT_BLACKLIST
+    # ── MONITORING (not disabled — too small a sample) ───────────────────────
+    # EFL League One (England Tier 3): 3 bets, 33.3% WR, -54.3% ROI.
+    # Under 3.5 losses. Will self-correct with U35_MIN_PROBABILITY=0.70 floor.
+    # Re-audit when ≥10 settled bets.
+    #   "league one"
+    # Liga I (Romania Tier 1): 3 bets, 33.3% WR, -55% ROI.
+    # Same pattern — low-probability Under 3.5 picks passing the old gate.
+    # Re-audit when ≥10 settled bets.
+    #   "liga i"
     # ── Disabled 2026-08-05 (Aug 4 loss analysis — competition-type audit) ─────
     # ASEAN Championship: total data desert for xG calibration. Myanmar vs Laos
     # ended 7-2 (9 goals) on an Under 3.5 pick. Both countries are already in
@@ -530,6 +539,13 @@ MARKET_PROB_BOUNDS: dict = {
     "Home Win to Nil": (0.03, 0.52),
     "Away Win to Nil": (0.02, 0.42),
 }
+
+# Minimum primary_prob required to serve an Under 3.5 signal.
+# At avg odds 1.37 the breakeven is 73% WR; the market was running at 65.1% WR
+# (-11.5% ROI, -K612,000) across 111 bets (Aug-2026 audit).
+# A 70% floor rejects the low-conviction end of the distribution and lifts expected
+# WR above the breakeven threshold. Applies at serving time — no recomputation needed.
+U35_MIN_PROBABILITY: float = 0.70
 
 # MARKET_MIN_EDGE removed 2026-07-02: EV/edge gating retired from the signal
 # pipeline. Signals are accepted on probability, confidence, and agreement only.
@@ -1056,6 +1072,10 @@ OVER_GOALS_SUPPRESSED_LEAGUES: frozenset = frozenset({
 # Matched by checking fixture.league against WOMEN_LEAGUE_KEYWORDS at serving time.
 WOMEN_OVER_SUPPRESSED_MARKETS: frozenset[str] = frozenset({
     "Home Over 0.5", "Away Over 0.5", "Over 1.5", "Over 2.5",
+    # Under 3.5 added 2026-08-05: NWSL Women 4 bets, 50% WR, -28.2% ROI.
+    # xG calibrated on men's football underestimates goals in women's fixtures in both
+    # directions — high-scoring women's games blow Under markets just as they blow Over.
+    "Under 3.5",
 })
 
 # Countries where Both+High Home Over 0.5 signals are blocked at Tier 3.
