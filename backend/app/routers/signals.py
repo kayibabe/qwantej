@@ -18,7 +18,7 @@ from app.core.config import (
     COPA_HO05_SUPPRESSED_LEAGUES, PROVISIONAL_LEAGUE_MIN_BETS,
     is_womens_fixture, OVER25_SUPPRESSED_TIERS, ZINB_GOALS_MIN_ODDS,
     is_grade_c_ceiling_exception, HO05_ALL_TIERS_SUPPRESSED_COUNTRIES,
-    U35_DATA_POOR_COUNTRIES,
+    U35_DATA_POOR_COUNTRIES, CUP_U35_SUPPRESSED_LEAGUES, UEFA_QUAL_U35_SUPPRESSED_LEAGUES,
 )
 from app.models import Signal, Fixture, TrackedBet
 from app.models.odds import MarketSnapshot
@@ -579,6 +579,39 @@ async def list_signals(
             )
         ]
 
+    # Under 3.5 domestic cup suppression — cup fixtures use rotation squads and
+    # produce blowout scorelines detached from league-calibrated xG.
+    # Also catches league name == "cup" (exact) which is API-Football's name for
+    # Russia Cup, Czech Cup, and other generic domestic knock-out competitions.
+    # 2026-08-04: Russia Cup ×2 (5-0, 0-4), DBU Pokalen (3-1), Copa Chile (1-3),
+    # Toto Cup (4-2) — avg 4.6 actual goals on Under 3.5 picks.
+    if CUP_U35_SUPPRESSED_LEAGUES:
+        _league_lc = lambda fix: (fix.league or "").lower()
+        rows = [
+            (sig, fix) for sig, fix in rows
+            if not (
+                sig.market == "Under 3.5"
+                and (
+                    any(kw in _league_lc(fix) for kw in CUP_U35_SUPPRESSED_LEAGUES)
+                    or _league_lc(fix).strip() == "cup"
+                )
+            )
+        ]
+
+    # Under 3.5 UEFA club competition suppression — August/September qualifying rounds
+    # produce volatile scorelines (aggregate pressure, all-or-nothing mentality) that
+    # xG cannot model. 2026-08-04: Union St. Gilloise 3-3 (UCL Q), Shamrock Rovers
+    # 3-1 (UEL Q). Matches substring against lower(trim(league)).
+    if UEFA_QUAL_U35_SUPPRESSED_LEAGUES:
+        _league_lc_uefa = lambda fix: (fix.league or "").lower()
+        rows = [
+            (sig, fix) for sig, fix in rows
+            if not (
+                sig.market == "Under 3.5"
+                and any(kw in _league_lc_uefa(fix) for kw in UEFA_QUAL_U35_SUPPRESSED_LEAGUES)
+            )
+        ]
+
     # D-grade suppression: signals with quality_score < 0.035 are below the minimum
     # actionable threshold. Hybrid B uses EP/100k for its quality score (a different
     # scale) and has its own tier gates — exempt it here.
@@ -902,6 +935,29 @@ async def stat_driven_picks(
             if not (
                 sig.market == "Under 3.5"
                 and (fix.country or "").lower() in U35_DATA_POOR_COUNTRIES
+            )
+        ]
+
+    # Cup + UEFA qualifying Under 3.5 gates — mirror main endpoint.
+    if CUP_U35_SUPPRESSED_LEAGUES:
+        _sp_lc = lambda fix: (fix.league or "").lower()
+        rows = [
+            (sig, fix) for sig, fix in rows
+            if not (
+                sig.market == "Under 3.5"
+                and (
+                    any(kw in _sp_lc(fix) for kw in CUP_U35_SUPPRESSED_LEAGUES)
+                    or _sp_lc(fix).strip() == "cup"
+                )
+            )
+        ]
+    if UEFA_QUAL_U35_SUPPRESSED_LEAGUES:
+        _sp_uefa_lc = lambda fix: (fix.league or "").lower()
+        rows = [
+            (sig, fix) for sig, fix in rows
+            if not (
+                sig.market == "Under 3.5"
+                and any(kw in _sp_uefa_lc(fix) for kw in UEFA_QUAL_U35_SUPPRESSED_LEAGUES)
             )
         ]
 

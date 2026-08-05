@@ -481,6 +481,16 @@ DISABLED_LEAGUES: frozenset = frozenset({
     # "liga mx" — re-enabled 2026-08-04: failure was structural home bias for X2/AO0.5; stays in HYBRID_B_PERMANENT_BLACKLIST
     # "torneo federal a" — re-enabled 2026-08-04: away-scoring failure only; stays in HYBRID_B_PERMANENT_BLACKLIST
     # "liga profesional argentina" — re-enabled 2026-08-04: X2 failure only; stays in HYBRID_B_PERMANENT_BLACKLIST
+    # ── Disabled 2026-08-05 (Aug 4 loss analysis — competition-type audit) ─────
+    # ASEAN Championship: total data desert for xG calibration. Myanmar vs Laos
+    # ended 7-2 (9 goals) on an Under 3.5 pick. Both countries are already in
+    # INTEGRITY_RISK_COUNTRIES but API-Football sets country="World" for international
+    # tournaments, bypassing the country check. Hard block here catches it.
+    "asean championship",
+    # Toto Cup Ligat Al (Israel): Israeli cup, rotation squads + knockout format.
+    # Maccabi Haifa vs Ironi Tiberias ended 4-2 on an Under 3.5 pick (2026-08-04).
+    # Belt-and-suspenders with CUP_U35_SUPPRESSED_LEAGUES "toto cup" substring.
+    "toto cup ligat al",
 })
 
 # Leagues suppressed only for Both+Medium signals (dual_agreement="Both", dual_confidence="Medium").
@@ -1085,6 +1095,41 @@ U35_DATA_POOR_COUNTRIES: frozenset[str] = frozenset({
 # Australian state leagues are mis-classified as Tier 1 by the API — data is thin.
 HO05_ALL_TIERS_SUPPRESSED_COUNTRIES: frozenset[str] = frozenset({
     "australia",
+})
+
+# Domestic cup competitions where Under 3.5 signals are suppressed at serving time.
+# Cup fixtures use rotation/reserve squads; single-leg knockout format incentivises
+# one-sided blowouts or open attacking play — both detach from league-calibrated xG.
+# Matched by substring against lower(trim(league)).
+# API-Football names generic domestic cups as "Cup" (exact) with the country field
+# set to e.g. "Russia" — that exact-match case is handled separately in the router.
+# Aug-2026 losses: Russia Cup ×2 (5-0, 0-4), DBU Pokalen (3-1), Copa Chile (1-3),
+# Toto Cup (4-2) — all Under 3.5 picks with avg 4.6 actual goals.
+CUP_U35_SUPPRESSED_LEAGUES: frozenset[str] = frozenset({
+    "dbu pokalen",      # Denmark Cup — Sydkysten vs Ishøj 3-1 (2026-08-04)
+    "copa chile",       # Chile Cup — Univ. de Concepcion 1-3 (2026-08-04)
+    "toto cup",         # Israel Cup — Maccabi Haifa 4-2 (2026-08-04)
+    "copa do brasil",   # Brazil Cup — rotation-heavy, knockout format
+    "copa argentina",
+    "fa cup",           # England — heavy rotation, unpredictable scorelines
+    "coupe de france",
+    "coppa italia",
+    "dfb-pokal",
+    "copa del rey",
+    "pokalen",          # Nordic cups: DBU Pokalen, NM-cupen etc.
+    "cupen",            # Swedish/Norwegian cup variants
+})
+
+# UEFA club competitions where Under 3.5 is suppressed system-wide.
+# August/September are qualifying rounds — aggregate pressure and all-or-nothing
+# mentality make scorelines volatile in both directions. The xG model has no
+# awareness of qualifying-round dynamics vs. group-stage football.
+# Aug-2026 losses: Union St. Gilloise 3-3 (UCL Q), Shamrock Rovers 3-1 (UEL Q).
+# Matched by substring against lower(trim(league)).
+UEFA_QUAL_U35_SUPPRESSED_LEAGUES: frozenset[str] = frozenset({
+    "champions league",
+    "europa league",
+    "conference league",
 })
 
 # UEFA club competition keywords — tighter Glicko ceiling (-100 vs the general -150).
