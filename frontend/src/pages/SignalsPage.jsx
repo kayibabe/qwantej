@@ -511,7 +511,7 @@ const _LIVE_SET = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT'])
         )}
 
         {/* ── ACCA of the Day ───────────────────────────────────────────── */}
-        <AccaCard />
+        <AccaCard date={date} />
 
 
 

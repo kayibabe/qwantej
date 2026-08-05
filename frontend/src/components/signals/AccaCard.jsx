@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Lock, ChevronDown, ChevronUp, Ticket } from 'lucide-react'
+import { Lock, ChevronDown, ChevronUp, Ticket, CheckCircle2, XCircle, Clock } from 'lucide-react'
 import { fetchAccumulators } from '../../api/accumulators'
 
 function pickBestTicket(tiers) {
@@ -13,26 +13,65 @@ function pickBestTicket(tiers) {
   return partial.sort((a, b) => b.leg_count - a.leg_count)[0] || null
 }
 
+const RESULT_STYLE = {
+  Won:     { icon: CheckCircle2, cls: 'text-emerald-400 border-emerald-400/40 bg-emerald-400/8' },
+  Lost:    { icon: XCircle,      cls: 'text-red-400    border-red-400/40    bg-red-400/8'    },
+  Pending: { icon: Clock,        cls: 'text-amber-400  border-amber-400/40  bg-amber-400/8'  },
+}
+
 export default function AccaCard({ date }) {
-  const [ticket, setTicket] = useState(null)
+  const [ticket, setTicket]   = useState(null)
   const [loading, setLoading] = useState(true)
-  const [open, setOpen] = useState(true)
+  const [open, setOpen]       = useState(true)
 
   useEffect(() => {
     setLoading(true)
     fetchAccumulators(date)
-      .then(data => setTicket(pickBestTicket(data.tiers)))
+      .then(data => {
+        if (data.is_tracked) {
+          setTicket({
+            legs:                     data.legs ?? [],
+            combined_odds:            data.combined_odds,
+            leg_count:                data.leg_count ?? 0,
+            expected_win_probability: data.expected_win_probability,
+            insufficient_picks:       false,
+            result_status:            data.result_status ?? 'Pending',
+            is_tracked:               true,
+          })
+        } else {
+          const best = pickBestTicket(data.tiers)
+          setTicket(best ? { ...best, is_tracked: false } : null)
+        }
+      })
       .catch(() => setTicket(null))
       .finally(() => setLoading(false))
   }, [date])
 
-  if (loading || !ticket || ticket.leg_count === 0) return null
-
-  const legs = ticket.legs || []
-  const winPct = ticket.expected_win_probability
+  const legs     = ticket?.legs ?? []
+  const winPct   = ticket?.expected_win_probability != null
     ? Math.round(ticket.expected_win_probability * 100)
     : null
-  const isPartial = ticket.insufficient_picks
+  const isPartial = ticket?.insufficient_picks
+
+  const resultKey = ticket?.result_status && RESULT_STYLE[ticket.result_status]
+    ? ticket.result_status
+    : null
+  const ResultIcon = resultKey ? RESULT_STYLE[resultKey].icon : null
+
+  // ── Empty / loading state ─────────────────────────────────────────────────
+  if (loading || !ticket || ticket.leg_count === 0) {
+    return (
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--code-bg)] overflow-hidden opacity-60">
+        <div className="flex items-center gap-2.5 px-4 py-3">
+          <Ticket size={16} className="text-[var(--accent)] shrink-0" />
+          <span className="text-sm font-bold text-[var(--text-h)]">AI Acca of the Day</span>
+          <span className="text-xs text-[var(--text)] opacity-50 ml-auto">
+            {loading ? 'Loading…' : 'No qualifying picks for this date'}
+          </span>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="rounded-xl border border-[var(--accent)]/25 bg-[var(--code-bg)] overflow-hidden">
@@ -48,6 +87,12 @@ export default function AccaCard({ date }) {
           {isPartial && (
             <span className="text-[10px] font-semibold text-amber-400 border border-amber-400/40 rounded-full px-2 py-0.5">
               PARTIAL
+            </span>
+          )}
+          {resultKey && (
+            <span className={`flex items-center gap-1 text-[10px] font-semibold border rounded-full px-2 py-0.5 ${RESULT_STYLE[resultKey].cls}`}>
+              <ResultIcon size={10} />
+              {resultKey}
             </span>
           )}
         </div>
