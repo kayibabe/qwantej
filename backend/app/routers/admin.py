@@ -1528,6 +1528,37 @@ async def purge_pre_jul2(
     }
 
 
+@router.post("/db/purge-system-auto")
+async def purge_system_auto_bets(
+    dry_run: bool = Query(False, description="Preview counts — no deletes"),
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(_require_admin),
+):
+    """
+    Delete all system_auto tracked_bets (user_id IS NULL, source_rule_key = 'system_auto').
+    These are Poisson-Only and Bayesian-Only picks that bypass the Both-agreement quality
+    gate. Only Both-agreement (system_dual), Hybrid B, ZINB, and ACCA picks are retained.
+    """
+    count_r = await db.execute(
+        text("SELECT COUNT(*) FROM tracked_bets WHERE user_id IS NULL AND source_rule_key = 'system_auto'")
+    )
+    n = count_r.scalar() or 0
+    if not dry_run and n > 0:
+        await db.execute(
+            text("DELETE FROM tracked_bets WHERE user_id IS NULL AND source_rule_key = 'system_auto'")
+        )
+        await db.commit()
+    remaining_r = await db.execute(
+        text("SELECT COUNT(*) FROM tracked_bets WHERE user_id IS NULL")
+    )
+    return {
+        "deleted": n if not dry_run else 0,
+        "would_delete": n,
+        "dry_run": dry_run,
+        "system_bets_remaining": remaining_r.scalar(),
+    }
+
+
 @router.post("/clv/backfill")
 async def clv_backfill(
     force: bool = Query(False, description="Recompute CLV even for bets that already have closing_odds"),

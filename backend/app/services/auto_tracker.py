@@ -325,6 +325,12 @@ async def auto_track_date(db: AsyncSession, run_date: date) -> int:
         confidence = signal.dual_confidence or ""
         match_name = f"{fixture.home_team} vs {fixture.away_team}"
 
+        # Only track signals where both engines agree (or Hybrid B / ZINB which have
+        # their own quality gates). Poisson-Only and Bayesian-Only signals are never
+        # tracked — they bypass the Both-agreement quality gate and inflate pick volume.
+        if not is_hybrid and not is_zinb_goals and agreement != "Both":
+            continue
+
         if is_hybrid:
             # SKIP tier means Phase 5 form-demotion (or any rejection path) produced
             # a zero-stake result — never place a bet for these signals.
