@@ -211,6 +211,84 @@ ZINB_DISABLED_MARKETS: frozenset[str] = frozenset()
 # and T2 with no tier suppression. The 1.35 odds floor is the primary quality gate.
 ZINB_U35_SUPPRESSED_TIERS: frozenset[int] = frozenset()
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Context-aware serving-time odds ceilings (Aug 2026 loss analysis)
+#
+# These caps were proposed after backtesting across tier/context combinations.
+# Only conditions evaluable from Signal/Fixture schema columns are enforced;
+# conditions requiring table position (top-half/bottom-half), tactical tags
+# ('defensive_game', 'zero_zero'), or last-N-match records are documented in
+# comments below but NOT enforced — those fields don't exist in the DB.
+#
+# Caps for disabled markets (Away Over 0.5, Away Over 1.5, Home Over 1.5) are
+# also omitted — they would be dead code until those markets are re-enabled.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Under 3.5 — team-specific odds ceiling in Tier 3.
+# Key = case-insensitive substring matched against home_team OR away_team.
+U35_TEAM_CEILINGS_TIER3: dict[str, float] = {
+    "palmeiras": 1.31,   # Palmeiras Tier 3 U35: backtested ceiling
+}
+
+# Under 3.5 — team-specific ceiling when league name contains "cup" (Tier 3).
+# Softer than CUP_U35_SUPPRESSED_LEAGUES (full block) — tightens ceiling only.
+# Both conditions must match: team substring AND "cup" in league name.
+U35_CUP_TEAM_CEILINGS_TIER3: dict[str, float] = {
+    "rubin": 1.40,   # Rubin in cup — rotation squad xG unreliable
+}
+
+# Over 1.5 — odds ceiling when total expected goals (λ_total) is below threshold.
+# Proxy for 'defensive_game' + 'zero_zero' tactical tags (not stored in DB).
+# Signal is suppressed when: market == "Over 1.5" AND tier matches AND
+# λ_total < lambda_bound AND odds > ceiling.
+# dict: tier → (lambda_total_upper_bound, odds_ceiling)
+OVER15_DEFENSIVE_LAMBDA_CEILINGS: dict[int, tuple[float, float]] = {
+    1: (2.0, 1.33),   # Tier 1 very low-λ match → don't take Over 1.5 > 1.33
+    # Caps not enforced — require table position not in DB:
+    #   Tier 1 (home top-half): 1.27
+    #   Tier 1 (home bottom-half + away strong defence): 1.44
+    #   Tier 2 (away top-half): 1.36
+    #   Tier 3 (home bottom-half + away top-half): 1.26
+    #   Tier 3 (both bottom-half): 1.30
+    #   Tier 3 (both bottom-half + defensive): 1.31
+    #   Tier 3 (away top-half): 1.31 / 1.33
+}
+
+# Over 2.5 — odds ceiling for defensive fixtures (low λ_total proxy).
+# dict: tier → (lambda_total_upper_bound, odds_ceiling)
+OVER25_DEFENSIVE_LAMBDA_CEILINGS: dict[int, tuple[float, float]] = {
+    2: (2.2, 2.16),   # Tier 2 defensive match → don't take Over 2.5 > 2.16
+    # Caps not enforced — require table position or last-5 form not in DB:
+    #   Tier 1 (home top-half + strong defence last 5): 1.63
+    #   Tier 1 (home bottom-half, low historical goals): 2.10
+    #   Tier 1 (home bottom-half): 2.11
+}
+
+# Under 3.5 tier-conditional caps not enforced (table position not in DB):
+#   Tier 1 (both defensive_game + zero_zero): 1.33
+#   Tier 1 (home bottom-half + away strong defence): 1.44
+#   Tier 1 (home top-half): 1.73
+#   Tier 2 (home top-half): 1.30 / 1.35 / 2.0
+#   Tier 2 (home not top-half): 1.37
+#   Tier 2 (away top-half): 1.55
+#   Tier 2 (home top-half + strong attack last 5): 1.68
+#   Tier 3 (both bottom-half + defensive): 1.31
+#   Tier 3 (both bottom-half): 1.36 / 1.49
+#   Tier 3 (away top-half): 1.36 / 1.53 / 1.62
+#   Tier 3 (home bottom-half): 1.36 / 1.40
+#   Tier 3 (home top-half): 1.53
+#   Tier 3 (both top-half): 1.69
+# Away Over 0.5 caps not enforced — market currently disabled:
+#   Tier 3 (away team from higher league tier): 1.40
+#   Tier 3 (away team not top-half): 1.44
+#   Tier 2 (away xG < 0.5 + defensive_game): 1.50
+# Away Over 1.5 cap not enforced — market currently disabled:
+#   Tier 2 (away top-half): 1.95
+# Home Over 1.5 cap not enforced — market currently disabled:
+#   Tier 1 (home bottom-half): 1.41
+# High-confidence zero_zero-tagged Tier 1 minimum 1.40: 'zero_zero' category
+#   not stored as a signal field — requires schema addition to enforce.
+
 
 # =============================================================================
 # API-Football market type name sets

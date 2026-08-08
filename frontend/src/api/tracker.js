@@ -67,6 +67,22 @@ export async function deduplicateBets() {
   return res.json()
 }
 
+export async function normalizeStakes(stake) {
+  const res = await apiFetch(`${BASE}/bets/normalize-stakes?stake=${stake}`, { method: 'POST' })
+  if (!res.ok) throw new Error(`Normalize stakes failed: ${res.status}`)
+  return res.json()
+}
+
+export async function bulkImportBets(rows) {
+  const res = await apiFetch(`${BASE}/bets/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(rows),
+  })
+  if (!res.ok) throw new Error(`Import failed: ${res.status}`)
+  return res.json()
+}
+
 export async function settleResults(run_date) {
   const params = run_date ? `?run_date=${run_date}` : ''
   const res = await apiFetch(`${BASE}/settle-results${params}`, { method: 'POST' })
@@ -99,22 +115,42 @@ export async function fetchModelInsights() {
 }
 
 /**
- * Auto-track a signal as a system pick.  Called fire-and-forget from SignalsPage
- * whenever today's signals are loaded.  source_rule_key='system_auto' lets the
- * TrackerPage distinguish system picks from manual ones.
+ * Auto-track a signal as a system pick. Called fire-and-forget from SignalsPage
+ * when today's signals load.
+ *
+ * Gate (mirrors TiTiBet auto_tracker.py):
+ *   - Hybrid B picks (selected_market !== null) are always eligible — the engine
+ *     has its own quality gates (xG thresholds, EP, odds window).
+ *   - All other signals require dual_agreement === 'Both'. Poisson Only, Bayesian
+ *     Only, and Contradiction signals are never auto-tracked.
  */
 const DEFAULT_FLAT_STAKE = 50_000
 
 export async function autoTrackSignal(signal, { bankroll = DEFAULT_FLAT_STAKE } = {}) {
+  const isHybridB = signal.selected_market != null
+
+  // Non-Hybrid-B signals must have both engines in agreement.
+  if (!isHybridB && signal.dual_agreement !== 'Both') return null
+
   const odds =
     signal.bayesian?.best_odd ||
     (signal.poisson?.prob > 0 ? parseFloat((1 / signal.poisson.prob).toFixed(2)) : null)
-  if (!odds || odds <= 1.01) return null   // nothing valid to track
-
-  const stakeAmt = DEFAULT_FLAT_STAKE
+  if (!odds || odds <= 1.01) return null
 
   const q = signal.dual_quality_score
   const grade = q == null ? null : q >= 0.08 ? 'A' : q >= 0.055 ? 'B' : q >= 0.035 ? 'C' : 'D'
+
+  let sourceRuleKey, sourceRuleLabel
+  if (isHybridB) {
+    sourceRuleKey   = 'system_hybrid_b'
+    sourceRuleLabel = `Hybrid B · ${signal.selected_market}`
+  } else if (signal.dual_confidence === 'High') {
+    sourceRuleKey   = 'system_dual'
+    sourceRuleLabel = 'Dual Signal (High+Both)'
+  } else {
+    sourceRuleKey   = 'system_auto'
+    sourceRuleLabel = 'System Auto-Pick'
+  }
 
   return trackPick({
     fixture_id:            signal.fixture_id,
@@ -122,13 +158,13 @@ export async function autoTrackSignal(signal, { bankroll = DEFAULT_FLAT_STAKE } 
     event_date:            signal.event_date,
     match_name:            `${signal.home_team} vs ${signal.away_team}`,
     league:                signal.league,
-    market_type:           signal.market,
-    selection_name:        signal.market,
+    market_type:           isHybridB ? signal.selected_market : signal.market,
+    selection_name:        isHybridB ? signal.selected_market : signal.market,
     odds,
-    stake:                 stakeAmt,
+    stake:                 DEFAULT_FLAT_STAKE,
     recommended_stake_pct: signal.dual_recommended_stake_pct,
-    source_rule_key:       (signal.dual_confidence === 'High' && signal.dual_agreement === 'Both') ? 'system_dual' : 'system_auto',
-    source_rule_label:     (signal.dual_confidence === 'High' && signal.dual_agreement === 'Both') ? 'Dual Signal (High+Both)' : 'System Auto-Pick',
+    source_rule_key:       sourceRuleKey,
+    source_rule_label:     sourceRuleLabel,
     signal_grade:          grade,
     dual_confidence:       signal.dual_confidence,
     dual_agreement:        signal.dual_agreement,

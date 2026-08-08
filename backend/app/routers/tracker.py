@@ -457,7 +457,10 @@ async def list_bets(
         ))
     else:
         sub_queries.append(_apply_filters(
-            base.where(TrackedBet.user_id.is_(None))
+            base.where(
+                TrackedBet.user_id.is_(None),
+                TrackedBet.source_rule_key.in_(_SYSTEM_PICK_KEYS),
+            )
         ))
 
     all_rows = []
@@ -639,6 +642,110 @@ async def deduplicate_bets(
     return {"removed": removed}
 
 
+@router.post("/bets/normalize-stakes")
+async def normalize_stakes(
+    stake: float = Query(..., gt=0, description="New stake amount to apply to all bets"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Set every tracked bet's stake to the given amount and recompute P/L for settled bets."""
+    result = await db.execute(
+        select(TrackedBet).where(
+            or_(
+                TrackedBet.user_id == current_user.id,
+                and_(
+                    TrackedBet.user_id.is_(None),
+                    TrackedBet.source_rule_key.in_(_SYSTEM_PICK_KEYS),
+                ),
+            )
+        )
+    )
+    bets = list(result.scalars().all())
+    for bet in bets:
+        bet.stake = round(stake, 2)
+        if bet.result_status in ("Won", "Lost", "Void"):
+            _apply_settlement(bet, bet.result_status)
+    if bets:
+        await db.commit()
+    return {"updated": len(bets), "stake": round(stake, 2)}
+
+
+@router.post("/bets/import")
+async def import_bets(
+    rows: list[dict],
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Bulk-import bets from parsed CSV rows."""
+    imported = 0
+    skipped = 0
+    errors: list[str] = []
+
+    for i, row in enumerate(rows):
+        match = (row.get("match") or "").strip()
+        market = (row.get("market") or "").strip()
+        try:
+            odds = float(row.get("odds", 0))
+            stake = float(row.get("stake", 0))
+        except (TypeError, ValueError):
+            skipped += 1
+            errors.append(f"Row {i + 1}: invalid odds or stake")
+            continue
+
+        if not match or not market or odds <= 1.0 or stake <= 0:
+            skipped += 1
+            continue
+
+        raw_date = (row.get("date") or "").strip()
+        event_date_val: date | None = None
+        if raw_date:
+            try:
+                event_date_val = date.fromisoformat(raw_date)
+            except ValueError:
+                pass
+
+        result_status = (row.get("result") or "Pending").strip()
+        if result_status not in ("Won", "Lost", "Void", "Pending"):
+            result_status = "Pending"
+
+        profit_loss = 0.0
+        settled_at_val: datetime | None = None
+        if result_status == "Won":
+            profit_loss = round(stake * (odds - 1.0), 2)
+            settled_at_val = datetime.utcnow()
+        elif result_status == "Lost":
+            profit_loss = round(-stake, 2)
+            settled_at_val = datetime.utcnow()
+        elif result_status == "Void":
+            profit_loss = 0.0
+            settled_at_val = datetime.utcnow()
+
+        bet = TrackedBet(
+            user_id=current_user.id,
+            fixture_id=None,
+            match_name=match,
+            league=None,
+            event_date=event_date_val,
+            bookmaker=(row.get("bookmaker") or "Betway").strip() or "Betway",
+            market_type=market,
+            selection_name=market,
+            odds=round(odds, 4),
+            stake=round(stake, 2),
+            result_status=result_status,
+            profit_loss=profit_loss,
+            settled_at=settled_at_val,
+            notes=(row.get("notes") or "").strip() or None,
+            source_rule_key="manual_import",
+            source_rule_label="CSV Import",
+        )
+        db.add(bet)
+        imported += 1
+
+    if imported:
+        await db.commit()
+    return {"imported": imported, "skipped": skipped, "errors": errors}
+
+
 @router.delete("/bets/pending")
 async def delete_pending(
     date_from: Optional[str] = Query(None),
@@ -733,7 +840,10 @@ async def analytics(
             )
         )
     else:
-        q = q.where(TrackedBet.user_id.is_(None))
+        q = q.where(
+            TrackedBet.user_id.is_(None),
+            TrackedBet.source_rule_key.in_(_SYSTEM_PICK_KEYS),
+        )
     if date_from:
         q = q.where(TrackedBet.event_date >= date.fromisoformat(date_from))
     if date_to:

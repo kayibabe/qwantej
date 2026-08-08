@@ -20,6 +20,8 @@ from app.core.config import (
     is_grade_c_ceiling_exception, HO05_ALL_TIERS_SUPPRESSED_COUNTRIES,
     U35_DATA_POOR_COUNTRIES, CUP_U35_SUPPRESSED_LEAGUES, UEFA_QUAL_U35_SUPPRESSED_LEAGUES,
     U35_MIN_PROBABILITY,
+    U35_TEAM_CEILINGS_TIER3, U35_CUP_TEAM_CEILINGS_TIER3,
+    OVER15_DEFENSIVE_LAMBDA_CEILINGS, OVER25_DEFENSIVE_LAMBDA_CEILINGS,
 )
 from app.models import Signal, Fixture, TrackedBet
 from app.models.odds import MarketSnapshot
@@ -624,6 +626,81 @@ async def list_signals(
             if not (
                 sig.market == "Under 3.5"
                 and max(filter(None, [sig.bayesian_prob, sig.poisson_prob]), default=1.0) < U35_MIN_PROBABILITY
+            )
+        ]
+
+    # ── Context-aware odds ceilings ──────────────────────────────────────────
+    # Applied after the probability floor to catch market-disagreement scenarios
+    # where our lambda/rule-key data IS available. Conditions requiring table
+    # position or tactical tags (not in DB) are documented in config.py but not
+    # enforced here — see OVER15_DEFENSIVE_LAMBDA_CEILINGS docstring for details.
+
+    def _team_in_fixture(fix: Fixture, substring: str) -> bool:
+        sub = substring.lower()
+        return sub in (fix.home_team or "").lower() or sub in (fix.away_team or "").lower()
+
+    def _lambda_total_for(sig: Signal) -> float | None:
+        """Best available λ_total: standard Poisson first, ZINB blend as fallback."""
+        if sig.poisson_lambda_total is not None:
+            return sig.poisson_lambda_total
+        if sig.zinb_lambda_h is not None and sig.zinb_lambda_a is not None:
+            return sig.zinb_lambda_h + sig.zinb_lambda_a
+        return None
+
+    # Under 3.5 — team-specific ceiling (Tier 3 only).
+    if U35_TEAM_CEILINGS_TIER3:
+        rows = [
+            (sig, fix) for sig, fix in rows
+            if not (
+                sig.market == "Under 3.5"
+                and (fix.league_tier or 3) >= 3
+                and any(
+                    _team_in_fixture(fix, team)
+                    and (sig.bayesian_best_odd or 0.0) > ceiling
+                    for team, ceiling in U35_TEAM_CEILINGS_TIER3.items()
+                )
+            )
+        ]
+
+    # Under 3.5 — team + cup-league ceiling (Tier 3 only).
+    if U35_CUP_TEAM_CEILINGS_TIER3:
+        rows = [
+            (sig, fix) for sig, fix in rows
+            if not (
+                sig.market == "Under 3.5"
+                and (fix.league_tier or 3) >= 3
+                and "cup" in (fix.league or "").lower()
+                and any(
+                    _team_in_fixture(fix, team)
+                    and (sig.bayesian_best_odd or 0.0) > ceiling
+                    for team, ceiling in U35_CUP_TEAM_CEILINGS_TIER3.items()
+                )
+            )
+        ]
+
+    # Over 1.5 — odds ceiling for defensive matches (low λ_total proxy for 'defensive_game').
+    if OVER15_DEFENSIVE_LAMBDA_CEILINGS:
+        rows = [
+            (sig, fix) for sig, fix in rows
+            if not (
+                sig.market == "Over 1.5"
+                and (fix.league_tier or 3) in OVER15_DEFENSIVE_LAMBDA_CEILINGS
+                and (lam := _lambda_total_for(sig)) is not None
+                and lam < OVER15_DEFENSIVE_LAMBDA_CEILINGS[(fix.league_tier or 3)][0]
+                and (sig.bayesian_best_odd or 0.0) > OVER15_DEFENSIVE_LAMBDA_CEILINGS[(fix.league_tier or 3)][1]
+            )
+        ]
+
+    # Over 2.5 — odds ceiling for defensive matches (low λ_total proxy).
+    if OVER25_DEFENSIVE_LAMBDA_CEILINGS:
+        rows = [
+            (sig, fix) for sig, fix in rows
+            if not (
+                sig.market == "Over 2.5"
+                and (fix.league_tier or 3) in OVER25_DEFENSIVE_LAMBDA_CEILINGS
+                and (lam := _lambda_total_for(sig)) is not None
+                and lam < OVER25_DEFENSIVE_LAMBDA_CEILINGS[(fix.league_tier or 3)][0]
+                and (sig.bayesian_best_odd or 0.0) > OVER25_DEFENSIVE_LAMBDA_CEILINGS[(fix.league_tier or 3)][1]
             )
         ]
 

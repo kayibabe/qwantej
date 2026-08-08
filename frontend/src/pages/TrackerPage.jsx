@@ -1,7 +1,8 @@
 ﻿import React, { useState, useEffect, useMemo } from 'react'
-import { RefreshCw, CheckCircle, TrendingUp, Lock, Settings2, Bot, User, Layers, ListChecks, ArrowRight, Link2 } from 'lucide-react'
+import { RefreshCw, CheckCircle, TrendingUp, Lock, Settings2, Bot, User, Layers, ListChecks, ArrowRight, Link2, SlidersHorizontal, Upload } from 'lucide-react'
 import { useTracker } from '../store/useTracker'
-import { syncData, computeCLV, deduplicateBets } from '../api/tracker'
+import { syncData, computeCLV, deduplicateBets, normalizeStakes, bulkImportBets } from '../api/tracker'
+import ImportCSVModal from '../components/tracker/ImportCSVModal'
 import { fetchAnalytics } from '../api/analytics'
 import { triggerAdminSettle } from '../api/admin'
 import BetTable from '../components/tracker/BetTable'
@@ -41,16 +42,20 @@ export default function TrackerPage({ user, settings, onUpgrade }) {
   const [dateTo, setDateTo]     = useState('')
   const [activePreset, setActivePreset] = useState('All')
   const [statusFilter, setStatusFilter] = useState('')
-  const [sourceFilter, setSourceFilter] = useState('')
+  const [sourceFilter, setSourceFilter] = useState('system')
   const [syncing, setSyncing]           = useState(false)
   const [settling, setSettling]         = useState(false)
   const [settleResult, setSettleResult] = useState(null)
   const [computingCLV, setComputingCLV] = useState(false)
-  const [moreOpen, setMoreOpen]         = useState(false)
-  const [clvResult, setClvResult]       = useState(null)
+  const [moreOpen, setMoreOpen]           = useState(false)
+  const [clvResult, setClvResult]         = useState(null)
   const [deduping, setDeduping]           = useState(false)
   const [dedupResult, setDedupResult]     = useState(null)
   const [actionError, setActionError]     = useState(null)
+  const [stakeDialogOpen, setStakeDialogOpen] = useState(false)
+  const [stakeInput, setStakeInput]       = useState('')
+  const [normalizeResult, setNormalizeResult] = useState(null)
+  const [showImport, setShowImport]       = useState(false)
   const { bets, loading, error, loadBets, invalidate } = useTracker()
   const [slowLoad, setSlowLoad] = useState(false)
 
@@ -66,13 +71,15 @@ export default function TrackerPage({ user, settings, onUpgrade }) {
 
   const betFilters = { date_from: dateFrom || undefined, date_to: dateTo || undefined, result_status: statusFilter || undefined }
 
-  const isSystemPick = b => b.market_type !== 'Accumulator'
+  const _SYSTEM_KEYS = ['system_auto', 'system_dual', 'system_hybrid_b', 'system_zinb_goals',
+                        'scout_pick', 'strategist_pick', 'skeptic_pick']
+  const isSystemPick = b => _SYSTEM_KEYS.includes(b.source_rule_key)
 
   // Client-side source filter
   const filteredBets = useMemo(() => {
     if (sourceFilter === 'system') return bets.filter(isSystemPick)
     if (sourceFilter === 'system_acca') return bets.filter(b => b.source_rule_key === 'system_acca')
-    if (sourceFilter === 'manual') return bets.filter(b => !isSystemPick(b))
+    if (sourceFilter === 'manual') return bets.filter(b => !isSystemPick(b) && b.source_rule_key !== 'system_acca')
     return bets
   }, [bets, sourceFilter]) // eslint-disable-line
 
@@ -166,6 +173,19 @@ export default function TrackerPage({ user, settings, onUpgrade }) {
     await loadBets(betFilters)
   }
 
+  async function handleNormalizeStakes(amount) {
+    try {
+      const res = await normalizeStakes(amount)
+      setNormalizeResult(res)
+      setTimeout(() => setNormalizeResult(null), 5000)
+      invalidate()
+      await loadBets(betFilters)
+    } catch (e) {
+      setActionError(e.message || 'Failed to set stakes')
+      setTimeout(() => setActionError(null), 7000)
+    }
+  }
+
   async function handleDedup() {
     setDeduping(true)
     setDedupResult(null)
@@ -245,6 +265,13 @@ export default function TrackerPage({ user, settings, onUpgrade }) {
                 <div className="fixed inset-0 z-10" onClick={() => setMoreOpen(false)} />
                 <div className="absolute right-0 mt-1 z-20 w-52 rounded-lg border border-[var(--border)] bg-[var(--bg)] shadow-xl p-1">
                   <button
+                    onClick={() => { setMoreOpen(false); setStakeInput(''); setStakeDialogOpen(true) }}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-[var(--text-h)] hover:bg-[var(--code-bg)] transition-colors text-left"
+                  >
+                    <SlidersHorizontal size={14} className="text-emerald-400" />
+                    Set All Stakes to…
+                  </button>
+                  <button
                     onClick={() => { setMoreOpen(false); handleDedup() }}
                     disabled={deduping}
                     className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-[var(--text-h)] hover:bg-[var(--code-bg)] disabled:opacity-50 transition-colors text-left"
@@ -252,6 +279,13 @@ export default function TrackerPage({ user, settings, onUpgrade }) {
                   >
                     <Layers size={14} className={`text-amber-400 ${deduping ? 'animate-pulse' : ''}`} />
                     {deduping ? 'Removing duplicates…' : 'Remove Duplicates'}
+                  </button>
+                  <button
+                    onClick={() => { setMoreOpen(false); setShowImport(true) }}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-[var(--text-h)] hover:bg-[var(--code-bg)] transition-colors text-left"
+                  >
+                    <Upload size={14} className="text-blue-400" />
+                    Import CSV
                   </button>
                 </div>
               </>
@@ -261,7 +295,7 @@ export default function TrackerPage({ user, settings, onUpgrade }) {
       </div>
 
       {/* Action result status line — sits below the toolbar, never reflows buttons */}
-      {(settleResult != null || dedupResult != null || actionError || clvResult) && (() => {
+      {(settleResult != null || dedupResult != null || normalizeResult != null || actionError || clvResult) && (() => {
         if (actionError) return (
           <p className="text-xs font-medium text-red-400 px-1">✗ {actionError}</p>
         )
@@ -277,6 +311,9 @@ export default function TrackerPage({ user, settings, onUpgrade }) {
         }
         if (dedupResult != null) return (
           <p className="text-xs font-medium text-emerald-400 px-1">✓ {dedupResult.removed} duplicate{dedupResult.removed !== 1 ? 's' : ''} removed</p>
+        )
+        if (normalizeResult != null) return (
+          <p className="text-xs font-medium text-emerald-400 px-1">✓ {normalizeResult.updated} bet{normalizeResult.updated !== 1 ? 's' : ''} updated to {normalizeResult.stake.toLocaleString()} stake</p>
         )
         if (clvResult) return (
           <p className="text-xs font-medium text-green-400 px-1">✓ {clvResult.updated} CLV updated{clvResult.skipped_no_data > 0 ? ` · ${clvResult.skipped_no_data} no closing data` : ''}</p>
@@ -387,19 +424,20 @@ export default function TrackerPage({ user, settings, onUpgrade }) {
       {!loading && bets.length === 0 && !error ? (
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] p-10 flex flex-col items-center text-center gap-6">
           <div className="w-14 h-14 rounded-2xl bg-[var(--accent-bg)] border border-[var(--accent-border)] flex items-center justify-center">
-            <ListChecks size={26} className="text-[var(--accent)]" />
+            <Bot size={26} className="text-[var(--accent)]" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-[var(--text-h)] mb-2">No picks tracked yet</h2>
+            <h2 className="text-lg font-bold text-[var(--text-h)] mb-2">No system picks yet</h2>
             <p className="text-sm text-[var(--text)] opacity-65 max-w-sm leading-relaxed">
-              Track a signal and Qwantej records the odds, monitors the result, and builds your P&amp;L history automatically.
+              The system automatically tracks qualifying picks — Both-engine agreement signals and Hybrid B selections.
+              Picks are recorded at each sync and settled when results come in.
             </p>
           </div>
           <ol className="flex flex-col sm:flex-row items-stretch gap-3 w-full max-w-sm">
             {[
-              { step: '1', label: 'Open Signals', desc: 'Find today\'s ranked picks' },
-              { step: '2', label: 'Click Track', desc: 'On any signal card' },
-              { step: '3', label: 'Come back here', desc: 'Results update automatically' },
+              { step: '1', label: 'Signals computed', desc: 'Every sync cycle at 04:00, 19:00, 23:00 UTC' },
+              { step: '2', label: 'Picks auto-tracked', desc: 'Both-agreement + Hybrid B only' },
+              { step: '3', label: 'Results settled', desc: 'P&L updates automatically after FT' },
             ].map(({ step, label, desc }) => (
               <li key={step} className="flex-1 rounded-xl border border-[var(--border)] bg-[var(--code-bg)] px-4 py-3 text-left list-none">
                 <span className="text-[10px] font-bold text-[var(--accent)] opacity-70 uppercase tracking-widest">Step {step}</span>
@@ -413,7 +451,7 @@ export default function TrackerPage({ user, settings, onUpgrade }) {
               onClick={() => window.dispatchEvent(new CustomEvent('Qwantej:navigate', { detail: 'signals' }))}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[var(--accent)] hover:opacity-90 text-white text-sm font-semibold transition-opacity"
             >
-              Go to Signals
+              View Today's Signals
               <ArrowRight size={14} />
             </button>
           </div>
@@ -422,6 +460,57 @@ export default function TrackerPage({ user, settings, onUpgrade }) {
         !loading && <BetTable bets={filteredBets} summary={analyticsSummary} isPro={isPro} onUpgrade={onUpgrade} onRefresh={() => { invalidate(); loadBets(betFilters) }} />
       )}
 
+      {/* Set All Stakes dialog */}
+      {stakeDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-xs bg-[var(--bg)] border border-[var(--border)] rounded-2xl shadow-2xl p-5 space-y-4">
+            <h2 className="text-base font-bold text-[var(--text-h)]">Set All Stakes</h2>
+            <p className="text-xs text-[var(--text)] opacity-80">Enter a stake amount to apply to every tracked bet. Settled bets will have P&amp;L recalculated.</p>
+            <input
+              type="number"
+              min="1"
+              value={stakeInput}
+              onChange={e => setStakeInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && stakeInput && Number(stakeInput) > 0) {
+                  setStakeDialogOpen(false)
+                  handleNormalizeStakes(Number(stakeInput))
+                }
+              }}
+              placeholder="e.g. 50000"
+              autoFocus
+              className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--code-bg)] text-[var(--text-h)] text-sm focus:outline-none focus:border-[var(--accent)]"
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setStakeDialogOpen(false)}
+                className="px-4 py-1.5 rounded-lg border border-[var(--border)] text-sm text-[var(--text)] hover:bg-[var(--code-bg)] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (!stakeInput || Number(stakeInput) <= 0) return
+                  setStakeDialogOpen(false)
+                  handleNormalizeStakes(Number(stakeInput))
+                }}
+                disabled={!stakeInput || Number(stakeInput) <= 0}
+                className="px-4 py-1.5 rounded-lg bg-[var(--accent)] text-white text-sm font-semibold hover:opacity-90 disabled:opacity-40 transition-opacity"
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import CSV modal */}
+      {showImport && (
+        <ImportCSVModal
+          onClose={() => setShowImport(false)}
+          onImported={() => { invalidate(); loadBets(betFilters) }}
+        />
+      )}
     </div>
   )
 }
