@@ -84,8 +84,11 @@ export default function App() {
     // Unauthenticated users can view the tracker (system picks only — enforced by the API)
     if (activePage === 'tracker') {
       return (
-        <AppShell activePage={activePage} onNavigate={(p) => { if (p !== 'tracker') setAuthMode('login'); else setActivePage(p) }}>
-          <TrackerPage user={null} settings={settings} onUpgrade={() => setAuthMode('login')} />
+        <AppShell activePage={activePage} onNavigate={(p) => {
+          setActivePage(p)
+          if (p !== 'tracker') setAuthMode('login')
+        }}>
+          <TrackerPage user={null} settings={settings} onUpgrade={() => { setActivePage('signals'); setAuthMode('login') }} />
         </AppShell>
       )
     }

@@ -83,7 +83,7 @@ export default function Sidebar({ activePage, onNavigate }) {
       </nav>
 
       {/* User footer — name → Account, tier → Plans, sign out */}
-      <div className="px-3 py-3 border-t border-[var(--border)] space-y-1.5">
+      {user && <div className="px-3 py-3 border-t border-[var(--border)] space-y-1.5">
         <button
           onClick={() => onNavigate('account')}
           className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors text-left hover:bg-[var(--code-bg)] ${
@@ -118,7 +118,7 @@ export default function Sidebar({ activePage, onNavigate }) {
           <LogOut size={12} />
           Sign out
         </button>
-      </div>
+      </div>}
     </aside>
   )
 }
