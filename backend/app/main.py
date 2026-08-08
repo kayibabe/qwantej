@@ -104,6 +104,21 @@ async def lifespan(app: FastAPI):
     if stale:
         logger.info("Startup cleanup: marked %d stale ingestion run(s) as error", stale)
 
+    # One-shot: purge system_auto bets (Poisson-Only / Bayesian-Only picks that bypass
+    # the Both-agreement quality gate). These are no longer tracked going forward.
+    from sqlalchemy import text as _text
+    async with AsyncSessionLocal() as _db:
+        _r = await _db.execute(_text(
+            "SELECT COUNT(*) FROM tracked_bets WHERE user_id IS NULL AND source_rule_key = 'system_auto'"
+        ))
+        _n = _r.scalar() or 0
+        if _n > 0:
+            await _db.execute(_text(
+                "DELETE FROM tracked_bets WHERE user_id IS NULL AND source_rule_key = 'system_auto'"
+            ))
+            await _db.commit()
+            logger.info("Startup cleanup: purged %d system_auto bets (Poisson/Bayesian-Only picks)", _n)
+
     scheduler = get_scheduler()
     scheduler.start()
     logger.info("Qwantej starting up — scheduler running %d jobs", len(scheduler.get_jobs()))
