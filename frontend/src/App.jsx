@@ -81,6 +81,14 @@ export default function App() {
     if (resetToken) return <ResetPasswordPage token={resetToken} onDone={() => { window.history.replaceState({}, '', '/'); setAuthMode('landing') }} />
     if (authMode === 'forgot') return <ForgotPasswordPage onBack={() => setAuthMode('login')} />
     if (authMode === 'register') return <RegisterPage onSwitch={() => setAuthMode('login')} onBack={() => setAuthMode('login')} />
+    // Unauthenticated users can view the tracker (system picks only — enforced by the API)
+    if (activePage === 'tracker') {
+      return (
+        <AppShell activePage={activePage} onNavigate={(p) => { if (p !== 'tracker') setAuthMode('login'); else setActivePage(p) }}>
+          <TrackerPage user={null} settings={settings} onUpgrade={() => setAuthMode('login')} />
+        </AppShell>
+      )
+    }
     if (authMode === 'login') return <LoginPage onSwitch={() => setAuthMode('register')} onForgot={() => setAuthMode('forgot')} onBack={null} />
     return <LandingPage onSignIn={() => setAuthMode('login')} onSignUp={() => setAuthMode('register')} />
   }

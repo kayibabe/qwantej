@@ -83,6 +83,21 @@ function UserMenu({ onNavigate }) {
   )
 }
 
+function UserMenuOrSignIn({ onNavigate }) {
+  const { user } = useAuth()
+  if (!user) {
+    return (
+      <button
+        onClick={() => onNavigate('login')}
+        className="lg:hidden px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white text-xs font-semibold"
+      >
+        Sign In
+      </button>
+    )
+  }
+  return <UserMenu onNavigate={onNavigate} />
+}
+
 export default function AppShell({ activePage, onNavigate, children }) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const pageTitle = PAGE_TITLES[activePage] ?? ''
@@ -130,7 +145,7 @@ export default function AppShell({ activePage, onNavigate, children }) {
 
         {/* Right side: user avatar (mobile) + clock (sm+) */}
         <div className="ml-auto flex items-center gap-2">
-          <UserMenu onNavigate={navigate} />
+          <UserMenuOrSignIn onNavigate={navigate} />
           <LiveClock />
         </div>
       </header>
