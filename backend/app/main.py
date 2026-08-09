@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 import jwt
 from jwt import PyJWTError as JWTError
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -33,6 +33,99 @@ import app.models.user  # noqa: F401 — ensures users table is created by init_
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger("Qwantej")
 settings = get_settings()
+
+
+_MAINTENANCE_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Qwantej — Maintenance</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+  }
+  .card {
+    max-width: 480px;
+    width: 100%;
+    text-align: center;
+  }
+  .logo {
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    color: #10b981;
+    margin-bottom: 2rem;
+  }
+  .icon {
+    font-size: 3.5rem;
+    margin-bottom: 1.25rem;
+  }
+  h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    margin-bottom: 0.75rem;
+  }
+  p {
+    font-size: 1rem;
+    color: #94a3b8;
+    line-height: 1.6;
+    margin-bottom: 0.5rem;
+  }
+  .badge {
+    display: inline-block;
+    margin-top: 1.75rem;
+    padding: 0.4rem 1rem;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 9999px;
+    font-size: 0.8rem;
+    color: #64748b;
+    letter-spacing: 0.02em;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">Qwantej</div>
+    <div class="icon">🔧</div>
+    <h1>We'll be back shortly</h1>
+    <p>Qwantej is currently undergoing scheduled maintenance.</p>
+    <p>We're working to improve your experience and will be live again soon.</p>
+    <div class="badge">Scheduled Maintenance</div>
+  </div>
+</body>
+</html>"""
+
+
+class MaintenanceModeMiddleware(BaseHTTPMiddleware):
+    """Returns 503 for all requests when MAINTENANCE_MODE env var is truthy.
+    /health is always exempt so Fly.io health checks keep the machine alive."""
+    async def dispatch(self, request: Request, call_next):
+        if os.getenv("MAINTENANCE_MODE", "").lower() in ("1", "true", "yes"):
+            if request.url.path == "/health":
+                return await call_next(request)
+            if request.url.path.startswith("/api/"):
+                return JSONResponse(
+                    status_code=503,
+                    content={"detail": "Qwantej is temporarily down for maintenance. Please check back soon."},
+                    headers={"Retry-After": "3600"},
+                )
+            return HTMLResponse(
+                content=_MAINTENANCE_HTML,
+                status_code=503,
+                headers={"Retry-After": "3600"},
+            )
+        return await call_next(request)
 
 
 class APIKeyMiddleware(BaseHTTPMiddleware):
@@ -177,6 +270,7 @@ app.add_middleware(
     allow_headers=["*", "X-API-Key"],
 )
 app.add_middleware(APIKeyMiddleware)
+app.add_middleware(MaintenanceModeMiddleware)
 
 app.include_router(auth_router.router)
 app.include_router(admin_router.router)
