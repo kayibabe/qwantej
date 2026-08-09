@@ -187,9 +187,11 @@ async def _backfill_league(
     engine = EnsembleEngine()
     written = skipped = 0
     snapshot_at = datetime.now(tz=timezone.utc)
-    # Commit every N fixtures to keep INSERT batches small and the asyncpg
-    # connection alive across large leagues (13k+ rows per league otherwise).
-    _BATCH_SIZE = 100
+    # Commit every N fixtures to keep INSERT batches small.
+    # 100 fixtures × 9 markets = 900 rows = 441KB SQL — too large for the
+    # Fly.io Postgres proxy which drops connections on oversized packets.
+    # 5 fixtures × 9 markets = 45 rows ≈ 22KB — safely within limits.
+    _BATCH_SIZE = 5
     batch_count = 0
 
     for hf in holdout:
