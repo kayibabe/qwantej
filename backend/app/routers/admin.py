@@ -690,6 +690,46 @@ async def get_calibration_history(
     return {"snapshots": await load_recent_snapshots(db, n=n)}
 
 
+# ── Phase 1C calibration trigger ─────────────────────────────────────────────
+
+@router.post("/calibration/phase1c")
+async def trigger_phase1c_calibration(
+    cutoff: str = "2022-07-01",
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(_require_admin),
+):
+    """
+    Fire-and-forget: backfill ForecastSnapshots from historical warehouse data
+    then fit per-market isotonic calibrators. Runs as a background task;
+    returns immediately. Monitor progress via `flyctl logs`.
+    """
+    import asyncio
+    from datetime import date as _date
+    from app.services.calibration_service import backfill_and_settle, run_calibration
+    from app.core.database import AsyncSessionLocal
+    import logging as _logging
+
+    _log = _logging.getLogger("calibration_trigger")
+    cutoff_date = _date.fromisoformat(cutoff)
+
+    async def _run():
+        async with AsyncSessionLocal() as session:
+            _log.info("phase1c: starting backfill (cutoff=%s)", cutoff_date)
+            counts = await backfill_and_settle(session, cutoff=cutoff_date)
+            _log.info("phase1c: backfill done — %s", counts)
+            records = await run_calibration(session)
+            _log.info("phase1c: calibration done — %d markets calibrated", len(records))
+            for rec in records:
+                _log.info(
+                    "phase1c:   %-30s n=%-6d Brier %.4f → %.4f  Δ%+.4f",
+                    rec.market, rec.n_samples,
+                    rec.raw_brier, rec.calibrated_brier, rec.brier_improvement,
+                )
+
+    asyncio.create_task(_run())
+    return {"status": "started", "cutoff": cutoff}
+
+
 # ── Pipeline triggers ─────────────────────────────────────────────────────────
 
 @router.post("/pipelines/loss-analysis")
