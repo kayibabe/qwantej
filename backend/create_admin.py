@@ -24,7 +24,7 @@ async def main():
             if not rows:
                 print("NO USERS - creating admin")
                 hashed = get_password_hash(PASSWORD)
-                await db.execute(text("INSERT INTO users (email,hashed_password,name,tier,is_admin,is_active,subscription_status,created_at) VALUES (:e,:h,'Cromwell','elite',true,true,'active',now())"), {"e": EMAIL, "h": hashed})
+                await db.execute(text("INSERT INTO users (email,hashed_password,name,tier,is_admin,is_active,subscription_status,timezone,created_at) VALUES (:e,:h,'Cromwell','elite',true,true,'active','Africa/Blantyre',now())"), {"e": EMAIL, "h": hashed})
                 await db.commit()
                 print("Admin user created")
             else:
