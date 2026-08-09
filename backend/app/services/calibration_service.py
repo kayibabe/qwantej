@@ -158,20 +158,23 @@ async def _backfill_league(
     if len(train) < _MIN_TRAIN or not holdout:
         return {"fixtures": 0, "written": 0, "skipped": 0}
 
-    # Close the implicit transaction before fitting so the connection is NOT
-    # "idle in transaction" during CPU-bound scipy/numpy work.  Fly.io Postgres
-    # enforces idle_in_transaction_session_timeout and will drop connections
-    # that sit in an open transaction without issuing queries.
+    # Commit before fitting so the connection is NOT "idle in transaction"
+    # during CPU-bound scipy work.
     await db.commit()
 
-    # Fit ZINB on training set
+    # Run synchronous scipy/numpy fitting in a thread-pool executor so the
+    # asyncio event loop is NOT blocked during model fitting.  A blocked event
+    # loop prevents asyncpg's keepalive tasks from running, causing the Fly.io
+    # Postgres proxy to RST the TCP connection after a few seconds of silence.
+    import asyncio as _asyncio
+    loop = _asyncio.get_event_loop()
+
     zinb = ZINBMarketsModel()
     train_dicts = _to_dicts(train)
-    zinb.fit(train_dicts)
+    await loop.run_in_executor(None, zinb.fit, train_dicts)
 
-    # Fit Elo on training set
     elo = EloSystem()
-    elo.fit(train_dicts)
+    await loop.run_in_executor(None, elo.fit, train_dicts)
 
     # Fetch already-backfilled historical_fixture_ids to skip
     existing_ids_result = await db.execute(
