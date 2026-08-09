@@ -4,6 +4,7 @@ backend/.env
 
 # Dev artefacts
 backend/.cache
+.cache/
 backend/*.db
 backend/*.db.live
 backend/*.db.live-shm
