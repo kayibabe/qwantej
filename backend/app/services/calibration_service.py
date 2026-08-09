@@ -158,6 +158,12 @@ async def _backfill_league(
     if len(train) < _MIN_TRAIN or not holdout:
         return {"fixtures": 0, "written": 0, "skipped": 0}
 
+    # Close the implicit transaction before fitting so the connection is NOT
+    # "idle in transaction" during CPU-bound scipy/numpy work.  Fly.io Postgres
+    # enforces idle_in_transaction_session_timeout and will drop connections
+    # that sit in an open transaction without issuing queries.
+    await db.commit()
+
     # Fit ZINB on training set
     zinb = ZINBMarketsModel()
     train_dicts = _to_dicts(train)
