@@ -16,15 +16,19 @@ if config.config_file_name is not None:
 
 # Import all models so Base.metadata is populated for autogenerate.
 from app.core.database import Base  # noqa: E402
-import app.models.fixture           # noqa: F401
-import app.models.signal            # noqa: F401
-import app.models.odds              # noqa: F401
-import app.models.bet               # noqa: F401
-import app.models.backtest          # noqa: F401
-import app.models.ingestion         # noqa: F401
-import app.models.loss_analysis     # noqa: F401
-import app.models.learning_proposal # noqa: F401
-import app.models.user              # noqa: F401
+import app.models.fixture                  # noqa: F401
+import app.models.signal                   # noqa: F401
+import app.models.odds                     # noqa: F401
+import app.models.bet                      # noqa: F401
+import app.models.backtest                 # noqa: F401
+import app.models.ingestion                # noqa: F401
+import app.models.loss_analysis            # noqa: F401
+import app.models.learning_proposal        # noqa: F401
+import app.models.user                     # noqa: F401
+# Phase 1A — historical warehouse
+import app.models.historical_fixture       # noqa: F401
+import app.models.forecast_snapshot        # noqa: F401
+import app.models.data_source_experiment   # noqa: F401
 
 target_metadata = Base.metadata
 

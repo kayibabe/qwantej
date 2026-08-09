@@ -21,3 +21,5 @@ anthropic>=0.40.0
 numpy>=1.26.0
 scipy>=1.13.0
 pandas>=2.2.0
+# Phase 1A ETL loaders — async HTTP for downloading historical data CSVs/JSON
+aiohttp>=3.9.0
