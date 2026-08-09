@@ -26,6 +26,9 @@ from app.routers import auth as auth_router
 from app.routers import admin as admin_router
 from app.routers import payments as payments_router
 from app.routers import accumulators as accumulators_router
+from app.routers import forecasts as forecasts_router
+from app.routers import model_performance as model_performance_router
+from app.routers import data_sources as data_sources_router
 from app.scheduler import get_scheduler
 import app.models.user  # noqa: F401 — ensures users table is created by init_db
 
@@ -108,12 +111,16 @@ _MAINTENANCE_HTML = """<!DOCTYPE html>
 
 class MaintenanceModeMiddleware(BaseHTTPMiddleware):
     """Returns 503 for all requests when MAINTENANCE_MODE env var is truthy.
-    /health is always exempt so Fly.io health checks keep the machine alive."""
+    /health and /api/auth/* are always exempt — health keeps Fly.io alive,
+    auth lets admins log in during maintenance."""
+    _ALWAYS_PASS = ("/health", "/api/auth/")
+
     async def dispatch(self, request: Request, call_next):
         if os.getenv("MAINTENANCE_MODE", "").lower() in ("1", "true", "yes"):
-            if request.url.path == "/health":
+            path = request.url.path
+            if path == "/health" or path.startswith("/api/auth/"):
                 return await call_next(request)
-            if request.url.path.startswith("/api/"):
+            if path.startswith("/api/"):
                 return JSONResponse(
                     status_code=503,
                     content={"detail": "Qwantej is temporarily down for maintenance. Please check back soon."},
@@ -284,6 +291,9 @@ app.include_router(loss_analysis_router.router)
 app.include_router(arb_router.router)
 app.include_router(leaderboard_router.router)
 app.include_router(accumulators_router.router)
+app.include_router(forecasts_router.router)
+app.include_router(model_performance_router.router)
+app.include_router(data_sources_router.router)
 
 
 @app.get("/health")

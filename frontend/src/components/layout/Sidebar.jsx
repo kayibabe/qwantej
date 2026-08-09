@@ -1,26 +1,27 @@
 ﻿import {
   BarChart2,
+  Database,
+  Layers,
   ListChecks,
   LogOut,
   ShieldCheck,
   TrendingUp,
   User,
-  Wrench,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 
-// Primary nav — daily-driver pages only, identical on desktop and mobile.
-// Account and Plans live in the footer. Arbitrage, Backtest and Settings live inside Tools.
 const NAV_ITEMS = [
-  { id: 'signals',  label: 'Signals',    icon: TrendingUp },
-  { id: 'tracker',  label: 'Tracker',    icon: ListChecks },
-  { id: 'analytics',label: 'Analytics',  icon: BarChart2  },
-  { id: 'tools',    label: 'Tools',      icon: Wrench     },
+  { id: 'signals',     label: 'Signals',          icon: TrendingUp },
+  { id: 'tracker',     label: 'Tracker',           icon: ListChecks },
+  { id: 'archive',     label: 'Forecast Archive',  icon: Database   },
+  { id: 'performance', label: 'Model Performance', icon: BarChart2  },
+  { id: 'sources',     label: 'Data Sources',      icon: Layers     },
 ]
 
 const TIER_BADGE = {
-  free:  { label: 'Free',  color: 'text-slate-400',  upgradeable: true  },
-  pro:   { label: 'Pro',   color: 'text-blue-400',   upgradeable: false },
+  free:   { label: 'Free',   color: 'text-slate-400',   upgradeable: true  },
+  pro:    { label: 'Pro',    color: 'text-blue-400',    upgradeable: false },
+  elite:  { label: 'Elite',  color: 'text-emerald-400', upgradeable: false },
 }
 
 export default function Sidebar({ activePage, onNavigate }) {

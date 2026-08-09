@@ -1,9 +1,11 @@
 ﻿import { useState, useEffect } from 'react'
 import AppShell from './components/layout/AppShell'
 import SignalsPage from './pages/SignalsPage'
-import DeepDivePage from './pages/DeepDivePage'
+import MatchIntelligencePage from './pages/MatchIntelligencePage'
 import TrackerPage from './pages/TrackerPage'
-import AnalyticsPage from './pages/AnalyticsPage'
+import ForecastArchivePage from './pages/ForecastArchivePage'
+import ModelPerformancePage from './pages/ModelPerformancePage'
+import DataSourcePage from './pages/DataSourcePage'
 import ToolsPage from './pages/ToolsPage'
 import PricingPage from './pages/PricingPage'
 import AdminPage from './pages/AdminPage'
@@ -17,7 +19,7 @@ import PaymentCallbackPage from './pages/PaymentCallbackPage'
 import { useSettings } from './store/useSettings'
 import { useAuth } from './context/AuthContext'
 
-const PAGES = new Set(['signals', 'tracker', 'analytics', 'tools', 'account', 'pricing', 'admin'])
+const PAGES = new Set(['signals', 'tracker', 'archive', 'performance', 'sources', 'tools', 'account', 'pricing', 'admin'])
 
 function pageFromPath() {
   const slug = window.location.pathname.replace(/^\//, '')
@@ -26,7 +28,7 @@ function pageFromPath() {
 
 export default function App() {
   const [activePage, setActivePage] = useState(pageFromPath)
-  const [deepDiveFixtureId, setDeepDiveFixtureId] = useState(null)
+  const [matchFixtureId, setMatchFixtureId] = useState(null)
   const [authMode, setAuthMode] = useState('login')
   const [pendingSignalFilter, setPendingSignalFilter] = useState(null)
   const { settings, update } = useSettings()
@@ -107,14 +109,14 @@ export default function App() {
     )
   }
 
-  function handleDeepDive(fixtureId) {
-    setDeepDiveFixtureId(fixtureId)
-    setActivePage('deepdive')
+  function handleMatchIntelligence(fixtureId) {
+    setMatchFixtureId(fixtureId)
+    setActivePage('match')
   }
 
-  function handleBackFromDeepDive() {
+  function handleBackFromMatch() {
     setActivePage('signals')
-    setDeepDiveFixtureId(null)
+    setMatchFixtureId(null)
   }
 
   const goToPricing = () => setActivePage('pricing')
@@ -129,18 +131,22 @@ export default function App() {
       case 'signals':
         return <SignalsPage
           settings={settings}
-          onDeepDive={handleDeepDive}
+          onMatchIntelligence={handleMatchIntelligence}
           onUpgrade={goToPricing}
           onNavigateToTracker={() => setActivePage('tracker')}
           initialFilter={pendingSignalFilter}
           onFilterConsumed={() => setPendingSignalFilter(null)}
         />
-      case 'deepdive':
-        return <DeepDivePage fixtureId={deepDiveFixtureId} settings={settings} onBack={handleBackFromDeepDive} />
+      case 'match':
+        return <MatchIntelligencePage fixtureId={matchFixtureId} settings={settings} onBack={handleBackFromMatch} />
       case 'tracker':
         return <TrackerPage user={user} settings={settings} onUpgrade={goToPricing} />
-      case 'analytics':
-        return <AnalyticsPage onUpgrade={goToPricing} onApplySignalFilter={handleApplySignalFilter} onNavigate={setActivePage} settings={settings} />
+      case 'archive':
+        return <ForecastArchivePage onMatchIntelligence={handleMatchIntelligence} />
+      case 'performance':
+        return <ModelPerformancePage />
+      case 'sources':
+        return <DataSourcePage />
       case 'tools':
         return <ToolsPage settings={settings} onUpgrade={goToPricing} onUpdate={update} />
       case 'account':

@@ -1,18 +1,17 @@
 ﻿import { useState, useEffect } from 'react'
 import {
   BarChart2,
+  Database,
   ListChecks,
   TrendingUp,
-  Wrench,
 } from 'lucide-react'
 import { fetchBets } from '../../api/tracker'
 
-// Mirrors the desktop Sidebar exactly — same destinations on both devices.
 const NAV_ITEMS = [
-  { id: 'signals',   label: 'Signals',    icon: TrendingUp },
-  { id: 'tracker',   label: 'Tracker',    icon: ListChecks },
-  { id: 'analytics', label: 'Analytics',  icon: BarChart2  },
-  { id: 'tools',     label: 'Tools',      icon: Wrench     },
+  { id: 'signals',     label: 'Signals',     icon: TrendingUp },
+  { id: 'tracker',     label: 'Tracker',     icon: ListChecks },
+  { id: 'archive',     label: 'Archive',     icon: Database   },
+  { id: 'performance', label: 'Performance', icon: BarChart2  },
 ]
 
 export default function BottomNav({ activePage, onNavigate }) {

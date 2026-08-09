@@ -24,14 +24,16 @@ function LiveClock() {
 }
 
 const PAGE_TITLES = {
-  signals:   'Signals',
-  deepdive:  'Deep Dive',
-  tracker:   'Bet Tracker',
-  analytics: 'Analytics',
-  tools:     'Tools',
-  admin:     'User Panel',
-  account:   'My Account',
-  pricing:   'Plans & Pricing',
+  signals:     "Today's Signals",
+  match:       'Match Intelligence',
+  tracker:     'Tracker',
+  archive:     'Forecast Archive',
+  performance: 'Model Performance',
+  sources:     'Data Sources',
+  tools:       'Tools',
+  admin:       'Admin Panel',
+  account:     'My Account',
+  pricing:     'Plans & Pricing',
 }
 
 function UserMenu({ onNavigate }) {
