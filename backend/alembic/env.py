@@ -29,6 +29,8 @@ import app.models.user                     # noqa: F401
 import app.models.historical_fixture       # noqa: F401
 import app.models.forecast_snapshot        # noqa: F401
 import app.models.data_source_experiment   # noqa: F401
+# Phase 1B — ensemble engine
+import app.models.elo_rating               # noqa: F401
 
 target_metadata = Base.metadata
 
