@@ -28,14 +28,16 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.engines.ensemble import EnsembleEngine
+from app.engines.ensemble import EnsembleEngine, MODEL_VERSION
 from app.engines.zinb_markets import ZINBMarketsModel
 from app.engines.elo import EloSystem
+from app.models.calibration_record import CalibrationRecord
 from app.models.elo_rating import EloRating
 from app.models.forecast_snapshot import ForecastSnapshot
 from app.models.historical_fixture import HistoricalFixture
 from app.models.fixture import Fixture
 from app.models.signal import Signal
+from app.services.calibration_service import apply_calibration_knots
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +58,17 @@ async def compute_snapshots_for_date(
     snapshot_at = datetime.now(tz=timezone.utc)
     summary = {"total": 0, "signals": 0, "no_signals": 0, "fixtures_processed": 0}
 
+    # --- Load active calibration knots (one per market, cache for this run) ---
+    cal_result = await db.execute(
+        select(CalibrationRecord.market, CalibrationRecord.calibration_knots_json).where(
+            CalibrationRecord.is_active.is_(True),
+            CalibrationRecord.model_version == MODEL_VERSION,
+        )
+    )
+    calibrators: dict[str, str] = {market: knots for market, knots in cal_result.all()}
+    if calibrators:
+        logger.info("ensemble_service: loaded calibrators for %d markets", len(calibrators))
+
     # --- Load live fixtures for the target date ---
     result = await db.execute(
         select(Fixture).where(Fixture.event_date == fixture_date)
@@ -69,7 +82,7 @@ async def compute_snapshots_for_date(
                 len(fixtures), fixture_date, horizon)
 
     for fixture in fixtures:
-        n = await _process_fixture(db, fixture, snapshot_at, horizon)
+        n = await _process_fixture(db, fixture, snapshot_at, horizon, calibrators)
         summary["total"] += n["total"]
         summary["signals"] += n["signals"]
         summary["no_signals"] += n["no_signals"]
@@ -84,6 +97,7 @@ async def _process_fixture(
     fixture: Fixture,
     snapshot_at: datetime,
     horizon: str,
+    calibrators: dict[str, str] | None = None,
 ) -> dict[str, int]:
     home = fixture.home_team
     away = fixture.away_team
@@ -130,6 +144,9 @@ async def _process_fixture(
     # 7. Archive ForecastSnapshot rows
     counts = {"total": 0, "signals": 0, "no_signals": 0}
     for r in results:
+        knots = (calibrators or {}).get(r.market)
+        cal_prob = apply_calibration_knots(knots, r.ensemble_prob) if knots else None
+
         snap = ForecastSnapshot(
             fixture_id=fixture.id,
             historical_fixture_id=None,
@@ -140,7 +157,7 @@ async def _process_fixture(
             bayesian_prob=r.bayesian_prob,
             elo_prob=r.elo_prob,
             ensemble_prob=r.ensemble_prob,
-            calibrated_prob=None,
+            calibrated_prob=cal_prob,
             signal_type=r.signal_type,
             confidence=r.confidence,
             data_quality_score=r.data_quality_score,
