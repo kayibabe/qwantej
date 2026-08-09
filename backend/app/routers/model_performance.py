@@ -47,6 +47,13 @@ class ByEngineRow(BaseModel):
     n_available: int
     avg_brier: Optional[float]
 
+class ByConfidenceRow(BaseModel):
+    confidence: str
+    n: int
+    win_count: int
+    win_rate: Optional[float]
+    avg_brier: Optional[float]
+
 class BrierTrendRow(BaseModel):
     date: str
     n: int
@@ -66,6 +73,7 @@ class ModelPerformanceOut(BaseModel):
     by_market: list[ByMarketRow]
     by_horizon: list[ByHorizonRow]
     by_engine: list[ByEngineRow]
+    by_confidence: list[ByConfidenceRow]
     brier_trend: list[BrierTrendRow]
     calibration_records: list[CalibrationRow]
 
@@ -201,17 +209,52 @@ async def model_performance(
         ByEngineRow(engine="Ensemble", n_available=er.ens_n or 0,  avg_brier=avg_brier_ens),
     ]
 
-    # ── Brier trend (daily) ───────────────────────────────────────────────────
+    # ── By confidence ─────────────────────────────────────────────────────────
+    conf_q = await db.execute(
+        select(
+            ForecastSnapshot.confidence,
+            func.count().label("n"),
+            func.sum(case((ForecastSnapshot.outcome == "WIN", 1), else_=0)).label("wins"),
+            func.sum(case((ForecastSnapshot.brier_score.isnot(None), 1), else_=0)).label("settled"),
+            func.avg(ForecastSnapshot.brier_score).label("avg_brier"),
+        )
+        .select_from(ForecastSnapshot)
+        .where(
+            and_(*conditions, ForecastSnapshot.confidence.isnot(None))
+            if conditions else ForecastSnapshot.confidence.isnot(None)
+        )
+        .group_by(ForecastSnapshot.confidence)
+        .order_by(func.avg(ForecastSnapshot.brier_score))
+    )
+    by_confidence = []
+    for r in conf_q.all():
+        wr = round(r.wins / r.settled * 100, 1) if r.settled else None
+        by_confidence.append(ByConfidenceRow(
+            confidence=r.confidence or "Unknown",
+            n=r.n,
+            win_count=r.wins or 0,
+            win_rate=wr,
+            avg_brier=round(r.avg_brier, 4) if r.avg_brier is not None else None,
+        ))
+
+    # ── Brier trend (daily by match date, not snapshot date) ─────────────────
+    # Use settled_at (set to match date midnight for backfill and settlement) so
+    # the trend shows performance over time, not the date we ran the backfill.
+    match_date_col = func.coalesce(
+        cast(ForecastSnapshot.settled_at, Date),
+        cast(ForecastSnapshot.snapshot_at, Date),
+    )
+    settled_conditions = conditions + [ForecastSnapshot.brier_score.isnot(None)]
     trend_q = await db.execute(
         select(
-            cast(ForecastSnapshot.snapshot_at, Date).label("dt"),
+            match_date_col.label("dt"),
             func.count().label("n"),
             func.avg(ForecastSnapshot.brier_score).label("avg_brier"),
         )
         .select_from(ForecastSnapshot)
-        .where(and_(*(conditions + [ForecastSnapshot.brier_score.isnot(None)])) if conditions else ForecastSnapshot.brier_score.isnot(None))
-        .group_by(cast(ForecastSnapshot.snapshot_at, Date))
-        .order_by(cast(ForecastSnapshot.snapshot_at, Date))
+        .where(and_(*settled_conditions) if settled_conditions else True)
+        .group_by(match_date_col)
+        .order_by(match_date_col)
     )
     brier_trend = [
         BrierTrendRow(
@@ -244,6 +287,7 @@ async def model_performance(
         by_market=by_market,
         by_horizon=by_horizon,
         by_engine=by_engine,
+        by_confidence=by_confidence,
         brier_trend=brier_trend,
         calibration_records=calibration_records,
     )

@@ -215,13 +215,15 @@ async def list_forecasts(
         )
     )
 
-    # Filter to fixtures playing on the requested date via Fixture.event_date
+    # Filter to fixtures playing on the requested date — Fixture.event_date is
+    # already a Date column so no cast needed. Inner join excludes backfill-only
+    # rows (historical_fixture_id set, fixture_id NULL) from today's signals,
+    # which is correct: today's signals come from live fixtures only.
     stmt = stmt.join(
         Fixture,
         Fixture.id == ForecastSnapshot.fixture_id,
-        isouter=True,
     ).where(
-        cast(Fixture.event_date, Date) == target_date
+        Fixture.event_date == target_date
     )
 
     if signal_only:
@@ -240,17 +242,26 @@ async def list_forecasts(
 
 @router.get("/archive", response_model=ArchivePage)
 async def archive(
-    date_from: Optional[str] = Query(default=None),
-    date_to: Optional[str] = Query(default=None),
+    date_from: Optional[str] = Query(default=None, description="Match date from (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(default=None, description="Match date to (YYYY-MM-DD)"),
     market: Optional[str] = Query(default=None),
+    league: Optional[str] = Query(default=None),
     outcome: Optional[str] = Query(default=None, description="WIN | LOSS | VOID | PUSH"),
+    confidence: Optional[str] = Query(default=None, description="High | Medium | Low"),
     signal_only: bool = Query(default=True),
+    exclude_backfill: bool = Query(default=False, description="Exclude horizon=backfill rows"),
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     _user: Optional[User] = Depends(get_current_user_optional),
 ):
-    """Paginated Forecast Archive — all settled ForecastSnapshot rows."""
+    """Paginated Forecast Archive — settled ForecastSnapshot rows.
+
+    Date filters apply to settled_at (the match date) not snapshot_at, so
+    backfill rows (all snapshot_at = backfill-run date) are correctly matched
+    by the actual match date.
+    """
+    from sqlalchemy import func as _func, coalesce, literal
     conditions = []
     if signal_only:
         conditions.append(ForecastSnapshot.signal_type == "SIGNAL")
@@ -258,20 +269,53 @@ async def archive(
         conditions.append(ForecastSnapshot.market == market)
     if outcome:
         conditions.append(ForecastSnapshot.outcome == outcome)
-    if date_from:
-        conditions.append(cast(ForecastSnapshot.snapshot_at, Date) >= date.fromisoformat(date_from))
-    if date_to:
-        conditions.append(cast(ForecastSnapshot.snapshot_at, Date) <= date.fromisoformat(date_to))
+    if confidence:
+        conditions.append(ForecastSnapshot.confidence == confidence)
+    if exclude_backfill:
+        conditions.append(ForecastSnapshot.horizon != "backfill")
 
-    count_stmt = select(func.count()).select_from(ForecastSnapshot)
-    if conditions:
-        count_stmt = count_stmt.where(and_(*conditions))
+    # For date filtering: use settled_at (the match date) when available,
+    # otherwise fall back to snapshot_at. Backfill rows have settled_at set
+    # to midnight of the match date.
+    from sqlalchemy import func as _func
+    match_date_col = func.coalesce(
+        cast(ForecastSnapshot.settled_at, Date),
+        cast(ForecastSnapshot.snapshot_at, Date),
+    )
+    if date_from:
+        conditions.append(match_date_col >= date.fromisoformat(date_from))
+    if date_to:
+        conditions.append(match_date_col <= date.fromisoformat(date_to))
+
+    # League filter requires a join to the fixture tables — we resolve this
+    # post-fetch by enriching and re-filtering; for pagination correctness we
+    # do it via a correlated subquery approach only when league is requested.
+    # Simpler: join HistoricalFixture when league is filtered (backfill is the
+    # main archive source anyway).
+    base_stmt = select(ForecastSnapshot)
+    if league:
+        base_stmt = base_stmt.join(
+            HistoricalFixture,
+            HistoricalFixture.id == ForecastSnapshot.historical_fixture_id,
+            isouter=True,
+        ).join(
+            Fixture,
+            Fixture.id == ForecastSnapshot.fixture_id,
+            isouter=True,
+        ).where(
+            and_(
+                *conditions,
+                func.coalesce(HistoricalFixture.league, Fixture.league) == league,
+            )
+        )
+    else:
+        if conditions:
+            base_stmt = base_stmt.where(and_(*conditions))
+
+    count_stmt = select(func.count()).select_from(base_stmt.subquery())
     total = (await db.execute(count_stmt)).scalar_one()
 
-    stmt = select(ForecastSnapshot)
-    if conditions:
-        stmt = stmt.where(and_(*conditions))
-    stmt = stmt.order_by(ForecastSnapshot.snapshot_at.desc())
+    stmt = base_stmt.order_by(match_date_col.desc())
     stmt = stmt.offset((page - 1) * per_page).limit(per_page)
 
     result = await db.execute(stmt)
@@ -293,7 +337,7 @@ async def fixture_forecasts(
     db: AsyncSession = Depends(get_db),
     _user: Optional[User] = Depends(get_current_user_optional),
 ):
-    """All ForecastSnapshot rows for one fixture, all horizons, all markets."""
+    """All ForecastSnapshot rows for one live fixture, all horizons, all markets."""
     stmt = (
         select(ForecastSnapshot)
         .where(ForecastSnapshot.fixture_id == fixture_id)
@@ -302,3 +346,76 @@ async def fixture_forecasts(
     result = await db.execute(stmt)
     rows = result.scalars().all()
     return await _enrich_with_fixture(rows, db)
+
+
+# ── Match Intelligence ────────────────────────────────────────────────────────
+
+class MatchIntelligenceOut(BaseModel):
+    historical_fixture_id: int
+    home_team: str
+    away_team: str
+    league: str
+    country: str
+    match_date: str
+    home_goals: Optional[int]
+    away_goals: Optional[int]
+    result: Optional[str]
+    # Model inputs
+    lambda_home: Optional[float]
+    lambda_away: Optional[float]
+    elo_home: Optional[float]
+    elo_away: Optional[float]
+    # Per-market snapshot (most recent horizon)
+    markets: list[ForecastOut]
+
+
+@router.get("/historical/{hist_fixture_id}", response_model=MatchIntelligenceOut)
+async def historical_match_intelligence(
+    hist_fixture_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user: Optional[User] = Depends(get_current_user_optional),
+):
+    """Match Intelligence for one historical fixture: all markets + model inputs."""
+    hf_result = await db.execute(
+        select(HistoricalFixture).where(HistoricalFixture.id == hist_fixture_id)
+    )
+    hf = hf_result.scalar_one_or_none()
+    if hf is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Historical fixture not found")
+
+    snap_result = await db.execute(
+        select(ForecastSnapshot)
+        .where(ForecastSnapshot.historical_fixture_id == hist_fixture_id)
+        .order_by(ForecastSnapshot.market, ForecastSnapshot.snapshot_at.desc())
+    )
+    all_snaps = snap_result.scalars().all()
+
+    # One row per market: keep most-recent snapshot only
+    seen: set[str] = set()
+    latest_snaps = []
+    for s in all_snaps:
+        if s.market not in seen:
+            seen.add(s.market)
+            latest_snaps.append(s)
+
+    market_outs = await _enrich_with_fixture(latest_snaps, db)
+
+    # Pull model inputs from the first snapshot (same for all markets of this fixture)
+    first = all_snaps[0] if all_snaps else None
+    return MatchIntelligenceOut(
+        historical_fixture_id=hf.id,
+        home_team=hf.home_team,
+        away_team=hf.away_team,
+        league=hf.league,
+        country=hf.country,
+        match_date=hf.match_date.isoformat(),
+        home_goals=hf.home_goals,
+        away_goals=hf.away_goals,
+        result=hf.result,
+        lambda_home=first.lambda_home if first else None,
+        lambda_away=first.lambda_away if first else None,
+        elo_home=first.elo_home if first else None,
+        elo_away=first.elo_away if first else None,
+        markets=market_outs,
+    )
