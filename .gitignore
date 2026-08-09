@@ -76,5 +76,4 @@ backend/promote_*.py
 backend/smoke_test.py
 backend/compare_gates.py
 backend/*_report.json
-backend/scripts/
 backend/tools/

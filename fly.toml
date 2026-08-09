@@ -13,11 +13,21 @@ primary_region = 'jnb'   # Johannesburg — closest region to Malawi
   SKIP_STARTUP_SYNC  = 'false'
   APP_URL            = 'https://qwantej.fly.dev'
   CORS_ORIGINS       = 'https://qwantej.fly.dev'
-  MODEL_CACHE_DIR    = '/data/.cache/advanced_models'
+  MAINTENANCE_MODE   = 'true'
 
-# All sensitive values (JWT_SECRET, DB_URL, API keys) are set via:
-#   fly secrets set KEY=value ...
-# They are NOT stored here.
+# All sensitive values are set via fly secrets — never committed here.
+# Required secrets:
+#   fly secrets set JWT_SECRET=<value>
+#   fly secrets set DATABASE_URL=<postgres-url>   # set automatically by Fly Postgres add-on
+#   fly secrets set API_FOOTBALL_KEY=<value>
+#   fly secrets set GROQ_API_KEY=<value>
+#   fly secrets set TELEGRAM_BOT_TOKEN=<value>
+#   fly secrets set TELEGRAM_FREE_CHAT_ID=<value>
+#   fly secrets set TELEGRAM_PRO_CHAT_ID=<value>
+#   fly secrets set Qwantej_CLAUDE_KEY=<value>
+# Provision Postgres:
+#   fly postgres create --name qwantej-db --region jnb
+#   fly postgres attach qwantej-db  (sets DATABASE_URL secret automatically)
 
 [http_service]
   internal_port        = 8000
@@ -39,8 +49,6 @@ primary_region = 'jnb'   # Johannesburg — closest region to Malawi
   cpu_kind = 'shared'
   cpus     = 1
 
-# Persistent volume — SQLite DB lives here across deploys
-[[mounts]]
-  source      = 'qwantej_data'
-  destination = '/data'
-  initial_size = '1gb'
+# SQLite volume removed — database is now PostgreSQL (Fly Postgres add-on).
+# If the old volume qwantej_data still exists, destroy it after data migration:
+#   fly volumes destroy <volume-id>

@@ -5,7 +5,7 @@ All thresholds are tunable here without touching business logic.
 from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
-from pydantic import model_validator
+from pydantic import Field, AliasChoices, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Resolve the .env path relative to this file so the server can be launched from any
@@ -30,7 +30,11 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""       # aistudio.google.com/apikey  (free, no card)
     cerebras_api_key: str = ""     # inference.cerebras.ai       (free, very fast)
     mistral_api_key: str = ""      # console.mistral.ai          (free tier)
-    db_url: str = "sqlite+aiosqlite:///./Qwantej.db"
+    # Accepts DATABASE_URL (Fly.io Postgres add-on standard) or the legacy DB_URL.
+    db_url: str = Field(
+        default="postgresql+asyncpg://postgres:postgres@localhost:5432/qwantej",
+        validation_alias=AliasChoices("database_url", "db_url"),
+    )
     backend_port: int = 8010
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
