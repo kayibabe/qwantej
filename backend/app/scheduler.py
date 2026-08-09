@@ -575,6 +575,23 @@ async def _daily_calibration_job() -> None:
                     logger.error("Calibration: failed to persist proposal for %s: %s", mkt, exc)
                     await db.rollback()
 
+            # ── Refit isotonic calibration knots ─────────────────────────────
+            # After audit, refresh CalibrationRecord rows so ensemble_service
+            # picks up updated knots on the next prediction run.
+            try:
+                from app.services.calibration_service import run_calibration
+                new_cal_records = await run_calibration(db)
+                if new_cal_records:
+                    logger.info(
+                        "Calibration: refitted isotonic knots for %d market(s): %s",
+                        len(new_cal_records),
+                        ", ".join(r.market for r in new_cal_records),
+                    )
+                else:
+                    logger.info("Calibration: no markets had enough samples for isotonic refit")
+            except Exception:
+                logger.exception("Isotonic calibration refit failed — continuing normally")
+
         except Exception:
             logger.exception("Calibration job failed")
 
