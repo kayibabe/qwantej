@@ -1,7 +1,7 @@
 ﻿"""One-shot admin user creation/reset. Run then delete. Set ADMIN_EMAIL and ADMIN_PASSWORD env vars."""
 import asyncio, os
 from app.core.database import AsyncSessionLocal
-from app.core.auth import get_password_hash
+from app.core.auth import hash_password as get_password_hash
 from sqlalchemy import text
 
 EMAIL = os.environ["ADMIN_EMAIL"]
