@@ -26,6 +26,6 @@ class MarketSnapshot(Base):
     market_type: Mapped[str] = mapped_column(String(120), index=True)
     selection_name: Mapped[str] = mapped_column(String(120))
     odds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    pulled_at: Mapped[datetime] = mapped_column(DateTime, index=True, server_default=func.now())
+    pulled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True, server_default=func.now())
 
     fixture: Mapped["Fixture"] = relationship("Fixture", back_populates="market_snapshots")

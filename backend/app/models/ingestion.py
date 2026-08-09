@@ -10,8 +10,8 @@ class IngestionRun(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     run_date: Mapped[Optional[date]] = mapped_column(Date, index=True, nullable=True)
-    started_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    ended_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    ended_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     fixtures_pulled: Mapped[int] = mapped_column(Integer, default=0)
     markets_pulled: Mapped[int] = mapped_column(Integer, default=0)
     signals_computed: Mapped[int] = mapped_column(Integer, default=0)

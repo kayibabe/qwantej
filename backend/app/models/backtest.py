@@ -29,4 +29,4 @@ class BacktestResult(Base):
     profit_loss: Mapped[float] = mapped_column(Float, default=0.0)
     flat_stake: Mapped[float] = mapped_column(Float, default=1.0)
     kelly_stake: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

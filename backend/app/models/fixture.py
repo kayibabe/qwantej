@@ -11,7 +11,7 @@ class Fixture(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     external_fixture_id: Mapped[int] = mapped_column(Integer, unique=True, index=True)
     event_date: Mapped[Optional[date]] = mapped_column(Date, index=True, nullable=True)
-    kickoff_at: Mapped[Optional[datetime]] = mapped_column(DateTime, index=True, nullable=True)
+    kickoff_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True, nullable=True)
     home_team: Mapped[str] = mapped_column(String(120))
     away_team: Mapped[str] = mapped_column(String(120))
     country: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
@@ -31,8 +31,8 @@ class Fixture(Base):
     # Actual corner counts — populated post-match from /fixtures/statistics.
     home_corners: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     away_corners: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=func.now(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
 
     market_snapshots: Mapped[list["MarketSnapshot"]] = relationship("MarketSnapshot", back_populates="fixture", lazy="selectin")  # noqa
     signals: Mapped[list["Signal"]] = relationship("Signal", back_populates="fixture", lazy="selectin")  # noqa: F821

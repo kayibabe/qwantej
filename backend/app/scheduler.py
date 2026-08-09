@@ -355,7 +355,7 @@ async def _cleanup_old_snapshots() -> None:
             result = await db.execute(text("""
                 DELETE FROM market_snapshots
                 WHERE fixture_id IN (
-                    SELECT id FROM fixtures WHERE event_date < date('now', '-30 days')
+                    SELECT id FROM fixtures WHERE event_date < CURRENT_DATE - INTERVAL '30 days'
                 )
             """))
             deleted_snaps = result.rowcount
@@ -367,29 +367,29 @@ async def _cleanup_old_snapshots() -> None:
             #    — change types not consumed by current code
             unused_types = ("tier_suppression", "quality_threshold")
             r1 = await db.execute(text("""
-                UPDATE learning_proposals SET is_active=0
-                WHERE is_active=1 AND change_type IN ('tier_suppression','quality_threshold')
+                UPDATE learning_proposals SET is_active=FALSE
+                WHERE is_active=TRUE AND change_type IN ('tier_suppression','quality_threshold')
             """))
             #    — market_suppression whose target is already in DISABLED_MARKETS
             disabled_mkt_list = ", ".join(f"'{m}'" for m in DISABLED_MARKETS)
             r2 = await db.execute(text(f"""
-                UPDATE learning_proposals SET is_active=0
-                WHERE is_active=1
+                UPDATE learning_proposals SET is_active=FALSE
+                WHERE is_active=TRUE
                   AND change_type='market_suppression'
                   AND target IN ({disabled_mkt_list})
             """))
             #    — league_suppression whose target is already in DISABLED_LEAGUES
             disabled_lg_list = ", ".join(f"'{lg}'" for lg in DISABLED_LEAGUES)
             r3 = await db.execute(text(f"""
-                UPDATE learning_proposals SET is_active=0
-                WHERE is_active=1
+                UPDATE learning_proposals SET is_active=FALSE
+                WHERE is_active=TRUE
                   AND change_type='league_suppression'
                   AND lower(trim(target)) IN ({disabled_lg_list})
             """))
             #    — market_odds_ceiling proposals whose target market is already in DISABLED_MARKETS
             r4 = await db.execute(text(f"""
-                UPDATE learning_proposals SET is_active=0
-                WHERE is_active=1
+                UPDATE learning_proposals SET is_active=FALSE
+                WHERE is_active=TRUE
                   AND change_type='market_odds_ceiling'
                   AND target IN ({disabled_mkt_list})
             """))
@@ -400,8 +400,8 @@ async def _cleanup_old_snapshots() -> None:
             # names. market_suppression is also unimplemented in the signal path.
             # market_odds_ceiling (non-DISABLED target) is similarly unconsumed.
             r5 = await db.execute(text("""
-                UPDATE learning_proposals SET is_active=0
-                WHERE is_active=1
+                UPDATE learning_proposals SET is_active=FALSE
+                WHERE is_active=TRUE
                   AND change_type IN ('rule_disable', 'min_confidence',
                                       'market_suppression', 'market_odds_ceiling')
             """))

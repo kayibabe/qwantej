@@ -104,6 +104,6 @@ class Signal(Base):
     # True for Over 1.5 / Over 2.5 Bayesian-only signals awaiting performance validation.
     is_candidate: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    computed_at: Mapped[datetime] = mapped_column(DateTime, index=True, server_default=func.now())
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True, server_default=func.now())
 
     fixture: Mapped["Fixture"] = relationship("Fixture", back_populates="signals")  # noqa: F821

@@ -17,7 +17,7 @@ class User(Base):
     tier: Mapped[str] = mapped_column(String(20), default="free", index=True)
     # Subscription: inactive / active / cancelled / past_due
     subscription_status: Mapped[str] = mapped_column(String(20), default="inactive")
-    subscription_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    subscription_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     # Payment provider reference (Paystack customer code or Stripe customer id)
     payment_customer_id: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
 
@@ -26,9 +26,9 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=func.now(), nullable=True)
-    last_active_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    last_active_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     def _subscription_valid(self) -> bool:
         """True if subscription is active and not past its expiry date."""

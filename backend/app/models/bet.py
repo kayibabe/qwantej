@@ -46,8 +46,8 @@ class TrackedBet(Base):
     # home_o05_odds_logged: Home Over 0.5 odds at signal time (logged only, never bet)
     home_o05_odds_logged: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=func.now(), nullable=True)
-    settled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    settled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     fixture: Mapped[Optional["Fixture"]] = relationship("Fixture", back_populates="tracked_bets")  # noqa: F821

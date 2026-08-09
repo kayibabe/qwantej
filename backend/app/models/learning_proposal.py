@@ -60,7 +60,7 @@ class LearningProposal(Base):
     )
 
     updated_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
     )

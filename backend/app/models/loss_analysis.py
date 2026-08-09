@@ -58,7 +58,7 @@ class LossAnalysis(Base):
     # 10 = completely avoidable with better filters; 1 = genuine bad luck
     avoidability_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     tracked_bet: Mapped[Optional["TrackedBet"]] = relationship(  # noqa: F821
         "TrackedBet", foreign_keys=[tracked_bet_id]
