@@ -55,6 +55,8 @@ async def compute_snapshots_for_date(
 
     Returns a summary dict: {total, signals, no_signals, fixtures_processed}
     """
+    from collections import defaultdict
+
     snapshot_at = datetime.now(tz=timezone.utc)
     summary = {"total": 0, "signals": 0, "no_signals": 0, "fixtures_processed": 0}
 
@@ -81,12 +83,30 @@ async def compute_snapshots_for_date(
     logger.info("ensemble_service: processing %d fixtures for %s (horizon=%s)",
                 len(fixtures), fixture_date, horizon)
 
+    # --- Group fixtures by league so models are fitted once per league, not per fixture ---
+    by_league: dict[tuple[str, str], list[Fixture]] = defaultdict(list)
     for fixture in fixtures:
-        n = await _process_fixture(db, fixture, snapshot_at, horizon, calibrators)
-        summary["total"] += n["total"]
-        summary["signals"] += n["signals"]
-        summary["no_signals"] += n["no_signals"]
-        summary["fixtures_processed"] += 1
+        by_league[(fixture.league or "", fixture.country or "")].append(fixture)
+
+    logger.info("ensemble_service: %d distinct leagues", len(by_league))
+
+    for (league, country), league_fixtures in by_league.items():
+        # Fit ZINB + load Elo once for the whole league
+        hist_matches = await _load_history(db, league, country)
+        zinb_model = ZINBMarketsModel()
+        if len(hist_matches) >= _MIN_HISTORY:
+            zinb_model.fit(hist_matches)
+            logger.debug("ensemble_service: ZINB fitted for '%s' (%d matches)", league, len(hist_matches))
+        elo = await _load_elo_for_league(db, league, country, hist_matches)
+
+        for fixture in league_fixtures:
+            n = await _process_fixture(
+                db, fixture, snapshot_at, horizon, calibrators, zinb_model, elo
+            )
+            summary["total"] += n["total"]
+            summary["signals"] += n["signals"]
+            summary["no_signals"] += n["no_signals"]
+            summary["fixtures_processed"] += 1
 
     logger.info("ensemble_service: done — %s", summary)
     return summary
@@ -98,29 +118,27 @@ async def _process_fixture(
     snapshot_at: datetime,
     horizon: str,
     calibrators: dict[str, str] | None = None,
+    zinb_model: ZINBMarketsModel | None = None,
+    elo: "EloSystem | None" = None,
 ) -> dict[str, int]:
     home = fixture.home_team
     away = fixture.away_team
-    league = fixture.league or ""
-    country = fixture.country or ""
 
-    # 1. Load historical matches for ZINB + Elo fitting
-    hist_matches = await _load_history(db, league, country)
+    # 1. ZINB probabilities (model already fitted per league)
+    if zinb_model is not None and zinb_model._model.fitted:
+        zinb_probs = zinb_model.predict_market_probs(home, away)
+        lambda_home, lambda_away = zinb_model.predict_lambdas(home, away)
+    else:
+        zinb_probs = {}
+        lambda_home, lambda_away = None, None
 
-    # 2. Fit ZINB
-    zinb_model = ZINBMarketsModel()
-    if len(hist_matches) >= _MIN_HISTORY:
-        zinb_model.fit(hist_matches)
-    zinb_probs = zinb_model.predict_market_probs(home, away)
-    lambda_home, lambda_away = (
-        zinb_model.predict_lambdas(home, away)
-        if zinb_model._model.fitted else (None, None)
-    )
-
-    # 3. Load or fit Elo
-    elo_home_rating, elo_away_rating, elo_1x2 = await _elo_predict(
-        db, home, away, league, country, hist_matches
-    )
+    # 2. Elo 1X2 probabilities (system already loaded/fitted per league)
+    if elo is not None:
+        elo_home_rating = elo.get_rating(home)
+        elo_away_rating = elo.get_rating(away)
+        elo_1x2 = elo.predict_1x2(home, away)
+    else:
+        elo_home_rating, elo_away_rating, elo_1x2 = None, None, None
 
     # 4. Pull Bayesian probs from existing Signal rows for this fixture
     bayesian_probs = await _load_bayesian_probs(db, fixture.id)
@@ -221,46 +239,42 @@ async def _load_history(
     ]
 
 
-async def _elo_predict(
+async def _load_elo_for_league(
     db: AsyncSession,
-    home: str,
-    away: str,
     league: str,
     country: str,
     hist_matches: list[dict],
-) -> tuple[Optional[float], Optional[float], Optional[tuple[float, float, float]]]:
+) -> "EloSystem | None":
     """
-    Load persisted Elo ratings from DB, or fit from historical matches if not present.
-    Returns (elo_home_rating, elo_away_rating, (p_home, p_draw, p_away)).
+    Load or fit an EloSystem for an entire league, to be shared across all
+    fixtures in that league within a single sync run.
+
+    Returns None if neither DB ratings nor hist_matches are available.
     """
-    # Try to load from elo_ratings table
     result = await db.execute(
-        select(EloRating).where(
-            EloRating.league == league,
-            EloRating.team_name.in_([home, away]),
-        ).order_by(EloRating.season.desc())
+        select(EloRating).where(EloRating.league == league).order_by(EloRating.season.desc())
     )
-    stored = {r.team_name: r for r in result.scalars().all()}
+    stored = result.scalars().all()
 
     elo = EloSystem()
-
-    if home in stored and away in stored:
+    if stored:
         elo.load_records([
-            {"team_name": r.team_name, "rating": r.rating, "n_matches": r.n_matches,
-             "last_match_date": r.last_match_date}
-            for r in stored.values()
+            {
+                "team_name": r.team_name,
+                "rating": r.rating,
+                "n_matches": r.n_matches,
+                "last_match_date": r.last_match_date,
+            }
+            for r in stored
         ])
-    elif hist_matches:
-        # Fit from warehouse data and persist
+        return elo
+
+    if hist_matches:
         elo.fit(hist_matches)
         await _persist_elo(db, elo, league, country)
-    else:
-        return None, None, None
+        return elo
 
-    elo_home = elo.get_rating(home)
-    elo_away = elo.get_rating(away)
-    p1x2 = elo.predict_1x2(home, away)
-    return elo_home, elo_away, p1x2
+    return None
 
 
 async def _persist_elo(
