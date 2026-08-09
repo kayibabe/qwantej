@@ -261,7 +261,6 @@ async def archive(
     backfill rows (all snapshot_at = backfill-run date) are correctly matched
     by the actual match date.
     """
-    from sqlalchemy import func as _func, coalesce, literal
     conditions = []
     if signal_only:
         conditions.append(ForecastSnapshot.signal_type == "SIGNAL")
@@ -277,7 +276,6 @@ async def archive(
     # For date filtering: use settled_at (the match date) when available,
     # otherwise fall back to snapshot_at. Backfill rows have settled_at set
     # to midnight of the match date.
-    from sqlalchemy import func as _func
     match_date_col = func.coalesce(
         cast(ForecastSnapshot.settled_at, Date),
         cast(ForecastSnapshot.snapshot_at, Date),
