@@ -68,7 +68,7 @@ def do_run_migrations(connection):
 
 async def run_async_migrations() -> None:
     url = _get_url()
-    connectable = create_async_engine(url)
+    connectable = create_async_engine(url, connect_args={"ssl": False})
     async with connectable.connect() as conn:
         await conn.run_sync(do_run_migrations)
     await connectable.dispose()

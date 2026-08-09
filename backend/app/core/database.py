@@ -18,7 +18,11 @@ def _clean_db_url(url: str) -> str:
     return urlunparse(parsed._replace(query=clean_query))
 
 
-engine = create_async_engine(_clean_db_url(settings.db_url), echo=False)
+engine = create_async_engine(
+    _clean_db_url(settings.db_url),
+    echo=False,
+    connect_args={"ssl": False},
+)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 
