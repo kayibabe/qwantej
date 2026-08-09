@@ -334,6 +334,14 @@ async def startup_sync() -> None:
     logger.info("Startup sync: pulling today (%s)", date.today())
     await sync_and_compute(date.today())
 
+    # Step 4: run calibration audit + isotonic refit so knots are current immediately
+    # after a deploy, without waiting for the 05:00 UTC scheduled window.
+    try:
+        await _daily_calibration_job()
+        logger.info("Startup calibration: audit + isotonic refit complete")
+    except Exception:
+        logger.exception("Startup calibration failed — continuing normally")
+
 
 async def _cleanup_old_snapshots() -> None:
     """
