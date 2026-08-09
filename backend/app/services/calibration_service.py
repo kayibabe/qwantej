@@ -178,6 +178,10 @@ async def _backfill_league(
     engine = EnsembleEngine()
     written = skipped = 0
     snapshot_at = datetime.now(tz=timezone.utc)
+    # Commit every N fixtures to keep INSERT batches small and the asyncpg
+    # connection alive across large leagues (13k+ rows per league otherwise).
+    _BATCH_SIZE = 100
+    batch_count = 0
 
     for hf in holdout:
         if hf.id in already_done:
@@ -267,6 +271,10 @@ async def _backfill_league(
             hf.home_goals, hf.away_goals,
             hf.match_date.isoformat(),
         )
+
+        batch_count += 1
+        if batch_count % _BATCH_SIZE == 0:
+            await db.commit()
 
     await db.commit()
     return {"fixtures": len(holdout), "written": written, "skipped": skipped}
