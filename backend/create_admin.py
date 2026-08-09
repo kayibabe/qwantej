@@ -1,47 +1,34 @@
-"""
-Create or reset an admin user on the database.
-Usage: python create_admin.py <email> <password>
-Run on Fly.io: fly ssh console -a qwantej -C "cd /app && python create_admin.py <email> <password>"
-"""
-import asyncio
-import sys
-from sqlalchemy import select
-from app.core.database import AsyncSessionLocal, init_db
-from app.core.auth import hash_password
-from app.models.user import User
+﻿"""One-shot admin user creation/reset. Run then delete. Set ADMIN_EMAIL and ADMIN_PASSWORD env vars."""
+import asyncio, os
+from app.core.database import AsyncSessionLocal
+from app.core.auth import get_password_hash
+from sqlalchemy import text
 
+EMAIL = os.environ["ADMIN_EMAIL"]
+PASSWORD = os.environ["ADMIN_PASSWORD"]
 
-async def main(email: str, password: str):
-    await init_db()
+async def main():
     async with AsyncSessionLocal() as db:
-        result = await db.execute(select(User).where(User.email == email))
-        user = result.scalar_one_or_none()
-
+        r = await db.execute(text("SELECT id, email, is_admin FROM users WHERE email = :e"), {"e": EMAIL})
+        user = r.one_or_none()
         if user:
-            user.hashed_password = hash_password(password)
-            user.is_active = True
-            user.is_admin = True
-            action = "updated"
+            print(f"User exists: id={user.id} is_admin={user.is_admin}")
+            hashed = get_password_hash(PASSWORD)
+            await db.execute(text("UPDATE users SET hashed_password=:h, is_admin=1, tier='elite' WHERE email=:e"), {"h": hashed, "e": EMAIL})
+            await db.commit()
+            print("Password reset and is_admin=1 set")
         else:
-            name = email.split("@")[0]
-            user = User(
-                email=email,
-                hashed_password=hash_password(password),
-                name=name,
-                tier="pro",
-                subscription_status="active",
-                is_admin=True,
-            )
-            db.add(user)
-            action = "created"
+            print("User NOT FOUND - listing all users:")
+            r2 = await db.execute(text("SELECT email, is_admin FROM users"))
+            rows = r2.all()
+            if not rows:
+                print("NO USERS - creating admin")
+                hashed = get_password_hash(PASSWORD)
+                await db.execute(text("INSERT INTO users (email,hashed_password,name,tier,is_admin,is_active,subscription_status,created_at) VALUES (:e,:h,'Cromwell','elite',1,1,'active',now())"), {"e": EMAIL, "h": hashed})
+                await db.commit()
+                print("Admin user created")
+            else:
+                for row in rows:
+                    print(row)
 
-        await db.commit()
-        await db.refresh(user)
-        print(f"User {action}: id={user.id} email={user.email} admin={user.is_admin} tier={user.tier}")
-
-
-if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print("Usage: python create_admin.py <email> <password>")
-        sys.exit(1)
-    asyncio.run(main(sys.argv[1], sys.argv[2]))
+asyncio.run(main())
