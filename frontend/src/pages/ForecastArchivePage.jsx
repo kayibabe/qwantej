@@ -80,7 +80,7 @@ export default function ForecastArchivePage({ onMatchIntelligence }) {
   const [outcome, setOutcome]   = useState('')
   const [activePreset, setActivePreset] = useState('30d')
   const [page, setPage]         = useState(1)
-  const [sortCol, setSortCol]   = useState('snapshot_at')
+  const [sortCol, setSortCol]   = useState('kickoff_at')
   const [sortDir, setSortDir]   = useState('desc')
 
   const [data, setData]       = useState(null)
@@ -232,7 +232,7 @@ export default function ForecastArchivePage({ onMatchIntelligence }) {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-[var(--border)] bg-[var(--code-bg)]">
-                  <SortTh label="Date"      col="snapshot_at"   active={sortCol==='snapshot_at'}   dir={sortDir} onToggle={toggleSort} align="left" />
+                  <SortTh label="Date"      col="kickoff_at"    active={sortCol==='kickoff_at'}    dir={sortDir} onToggle={toggleSort} align="left" />
                   <SortTh label="Match"     col="home_team"     active={sortCol==='home_team'}      dir={sortDir} onToggle={toggleSort} align="left" />
                   <SortTh label="Market"    col="market"        active={sortCol==='market'}         dir={sortDir} onToggle={toggleSort} align="left" />
                   <SortTh label="Ensemble"  col="ensemble_prob" active={sortCol==='ensemble_prob'}  dir={sortDir} onToggle={toggleSort} />
@@ -254,7 +254,9 @@ export default function ForecastArchivePage({ onMatchIntelligence }) {
                     onClick={() => row.fixture_id && onMatchIntelligence?.(row.fixture_id)}
                   >
                     <td className="px-3 py-2.5 text-[var(--text)] opacity-70 whitespace-nowrap">
-                      {row.snapshot_at ? new Date(row.snapshot_at).toLocaleDateString() : '—'}
+                      {row.kickoff_at
+                        ? new Date(row.kickoff_at.endsWith('Z') || row.kickoff_at.includes('+') ? row.kickoff_at : row.kickoff_at + 'Z').toLocaleDateString()
+                        : '—'}
                     </td>
                     <td className="px-3 py-2.5 text-[var(--text-h)] font-medium whitespace-nowrap">
                       {row.home_team && row.away_team

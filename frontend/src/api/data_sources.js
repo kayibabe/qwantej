@@ -5,3 +5,9 @@ export async function fetchDataSources() {
   if (!res.ok) throw new Error(`Data sources fetch failed: ${res.status}`)
   return res.json()
 }
+
+export async function fetchDataSourceCoverage() {
+  const res = await apiFetch('/api/data-sources/coverage')
+  if (!res.ok) throw new Error(`Coverage fetch failed: ${res.status}`)
+  return res.json()
+}
