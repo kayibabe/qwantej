@@ -134,6 +134,12 @@ async def _backfill_league(
     country: str,
     cutoff: date,
 ) -> dict[str, int]:
+    # Keepalive ping: ZINB/Elo fitting is CPU-bound and can idle the connection
+    # long enough for asyncpg to drop it. A SELECT 1 before the real query
+    # ensures the connection is alive before we start.
+    from sqlalchemy import text as _text_ping
+    await db.execute(_text_ping("SELECT 1"))
+
     # Load all completed fixtures for this league ordered by date
     result = await db.execute(
         select(HistoricalFixture).where(
