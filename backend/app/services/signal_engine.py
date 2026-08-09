@@ -567,6 +567,7 @@ async def compute_signals_for_date(db: AsyncSession, run_date: date) -> int:
     try:
         perf_weights: Optional[PerformanceWeights] = await compute_performance_weights(db)
     except Exception:
+        await db.rollback()
         perf_weights = None
 
     # Leagues with 5+ settled bets and ROI < 20% are suppressed entirely —
@@ -574,6 +575,7 @@ async def compute_signals_for_date(db: AsyncSession, run_date: date) -> int:
     try:
         underperforming_leagues: frozenset[str] = await _get_underperforming_leagues(db, min_roi_pct=-20.0)
     except Exception:
+        await db.rollback()
         underperforming_leagues = frozenset()
 
     # Merge dynamic ROI-suppressed leagues with hard-coded blocklist
@@ -587,6 +589,7 @@ async def compute_signals_for_date(db: AsyncSession, run_date: date) -> int:
     try:
         adv = await _adv_get(db, _date.today())
     except Exception as _adv_err:
+        await db.rollback()
         import logging as _l
         _l.getLogger(__name__).warning("AdvancedModelsService.load() failed: %s", _adv_err)
         from app.services.advanced_models_service import AdvancedModelsService
