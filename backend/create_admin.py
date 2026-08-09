@@ -14,7 +14,7 @@ async def main():
         if user:
             print(f"User exists: id={user.id} is_admin={user.is_admin}")
             hashed = get_password_hash(PASSWORD)
-            await db.execute(text("UPDATE users SET hashed_password=:h, is_admin=1, tier='elite' WHERE email=:e"), {"h": hashed, "e": EMAIL})
+            await db.execute(text("UPDATE users SET hashed_password=:h, is_admin=true, tier='elite' WHERE email=:e"), {"h": hashed, "e": EMAIL})
             await db.commit()
             print("Password reset and is_admin=1 set")
         else:
@@ -24,7 +24,7 @@ async def main():
             if not rows:
                 print("NO USERS - creating admin")
                 hashed = get_password_hash(PASSWORD)
-                await db.execute(text("INSERT INTO users (email,hashed_password,name,tier,is_admin,is_active,subscription_status,created_at) VALUES (:e,:h,'Cromwell','elite',1,1,'active',now())"), {"e": EMAIL, "h": hashed})
+                await db.execute(text("INSERT INTO users (email,hashed_password,name,tier,is_admin,is_active,subscription_status,created_at) VALUES (:e,:h,'Cromwell','elite',true,true,'active',now())"), {"e": EMAIL, "h": hashed})
                 await db.commit()
                 print("Admin user created")
             else:
