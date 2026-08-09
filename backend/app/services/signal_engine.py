@@ -560,6 +560,9 @@ async def compute_signals_for_date(db: AsyncSession, run_date: date) -> int:
         select(Fixture).where(Fixture.event_date == run_date)
     )
     fixtures: list[Fixture] = list(fixture_result.scalars().all())
+    # Snapshot mutable ORM attributes immediately — rollbacks below expire ORM objects,
+    # which triggers a sync lazy-reload on access (MissingGreenlet with asyncpg).
+    _fixture_status: dict[int, str] = {f.id: (f.status or "") for f in fixtures}
 
     # Load performance weights once for this date's signal batch.
     # Used to apply adaptive confidence downgrade when a (market, tier) slice
@@ -599,8 +602,8 @@ async def compute_signals_for_date(db: AsyncSession, run_date: date) -> int:
     # cached_ids rule: finished fixtures (FT/AET/PEN) keep their pre-match
     # snapshots and signals so a late manual recompute never wipes good data.
     _FINAL_STATUSES = {"FT", "AET", "PEN"}
-    upcoming_fixtures = [f for f in fixtures if (f.status or "").upper().strip() not in _FINAL_STATUSES]
-    finished_fixtures = [f for f in fixtures if (f.status or "").upper().strip() in _FINAL_STATUSES]
+    upcoming_fixtures = [f for f in fixtures if _fixture_status.get(f.id, "").upper().strip() not in _FINAL_STATUSES]
+    finished_fixtures = [f for f in fixtures if _fixture_status.get(f.id, "").upper().strip() in _FINAL_STATUSES]
 
     if upcoming_fixtures:
         upcoming_ids = [f.id for f in upcoming_fixtures]

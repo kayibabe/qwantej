@@ -104,7 +104,7 @@ async def _fixture_fingerprint(db: AsyncSession, reference_date: date) -> str:
         SELECT COUNT(*), COALESCE(MAX(id), 0) FROM fixtures
         WHERE home_score IS NOT NULL AND away_score IS NOT NULL
           AND event_date >= :cutoff AND event_date < :today
-    """), {"cutoff": cutoff.isoformat(), "today": reference_date.isoformat()})).first()
+    """), {"cutoff": cutoff, "today": reference_date})).first()
     count, max_id = (row[0], row[1]) if row else (0, 0)
     return f"{count}-{max_id}"
 
@@ -204,7 +204,7 @@ class AdvancedModelsService:
                   AND away_score IS NOT NULL
                   AND event_date >= :cutoff
                 ORDER BY event_date ASC
-            """), {"cutoff": cutoff.isoformat()})
+            """), {"cutoff": cutoff})
             records = [dict(r._mapping) for r in rows.all()]
         except Exception as exc:
             logger.warning("AdvancedModelsService: DB query failed — %s", exc)
