@@ -49,6 +49,10 @@ primary_region = 'jnb'   # Johannesburg — closest region to Malawi
   cpu_kind = 'shared'
   cpus     = 1
 
-# SQLite volume removed — database is now PostgreSQL (Fly Postgres add-on).
-# If the old volume qwantej_data still exists, destroy it after data migration:
-#   fly volumes destroy <volume-id>
+# Temporary: keep volume mount during Phase 0 so the SQLite data migration script
+# can access /data/Qwantej.db. After running migrate_sqlite_to_postgres.py, remove
+# this section and destroy the volume:
+#   fly volumes list  →  fly volumes destroy <vol-id>
+[[mounts]]
+  source      = 'qwantej_data'
+  destination = '/data'
