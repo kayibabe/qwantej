@@ -31,10 +31,22 @@ class Settings(BaseSettings):
     cerebras_api_key: str = ""     # inference.cerebras.ai       (free, very fast)
     mistral_api_key: str = ""      # console.mistral.ai          (free tier)
     # Accepts DATABASE_URL (Fly.io Postgres add-on standard) or the legacy DB_URL.
+    # Fly.io sets the URL as postgres://...; we normalise to postgresql+asyncpg://.
     db_url: str = Field(
         default="postgresql+asyncpg://postgres:postgres@localhost:5432/qwantej",
         validation_alias=AliasChoices("database_url", "db_url"),
     )
+
+    @model_validator(mode="after")
+    def _normalise_db_url(self) -> "Settings":
+        url = self.db_url
+        # Fly.io Postgres sets postgres:// — rewrite to the asyncpg driver scheme.
+        if url.startswith("postgres://"):
+            url = "postgresql+asyncpg://" + url[len("postgres://"):]
+        elif url.startswith("postgresql://") and "+asyncpg" not in url:
+            url = "postgresql+asyncpg://" + url[len("postgresql://"):]
+        self.db_url = url
+        return self
     backend_port: int = 8010
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
