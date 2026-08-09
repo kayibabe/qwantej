@@ -31,6 +31,7 @@ from app.core.database import AsyncSessionLocal
 from app.models import TrackedBet, Fixture
 from app.services import ingestion
 from app.services.signal_engine import compute_signals_for_date
+from app.services.ensemble_service import compute_snapshots_for_date as compute_ensemble_snapshots
 from app.services.auto_tracker import auto_track_date, auto_track_acca_signals
 from app.services.settlement import settle_bets_for_date, FINAL_STATUSES
 from app.services.loss_analysis_agent import run_loss_analysis_pipeline
@@ -194,6 +195,16 @@ async def sync_and_compute(run_date: date | None = None, *, morning_extras: bool
                         logger.info("Auto-tracker: %d new system bet(s) for %s", n_tracked, run_date)
                 except Exception:
                     logger.exception("Auto-tracker failed for %s — continuing normally", run_date)
+                # Run ensemble after signals so bayesian_prob / market_odds are available in Signal rows.
+                try:
+                    ens = await compute_ensemble_snapshots(db, run_date, horizon="D-0")
+                    logger.info(
+                        "Ensemble: %s — %d snapshots (%d signals, %d no-signal)",
+                        run_date, ens["total"], ens["signals"], ens["no_signals"],
+                    )
+                except Exception:
+                    logger.exception("Ensemble snapshot failed for %s — continuing normally", run_date)
+
                 # ACCA tracking runs in morning_extras (first daily sync) via auto_track_acca_legs.
                 # The signal-model fallback (auto_track_acca_signals) runs at the END of
                 # morning_extras — after the advisor ACCA has had a chance to build tickets,
@@ -282,6 +293,14 @@ async def sync_and_compute(run_date: date | None = None, *, morning_extras: bool
                             n_sig = await compute_signals_for_date(db, tomorrow)
                             await db.commit()
                             logger.info("Tomorrow pre-sync: %s — %d fixtures, %d signals", tomorrow, t_run.fixtures_pulled, n_sig)
+                            try:
+                                ens_t = await compute_ensemble_snapshots(db, tomorrow, horizon="D-1")
+                                logger.info(
+                                    "Ensemble (D-1): %s — %d snapshots (%d signals, %d no-signal)",
+                                    tomorrow, ens_t["total"], ens_t["signals"], ens_t["no_signals"],
+                                )
+                            except Exception:
+                                logger.exception("Ensemble D-1 snapshot for %s failed — continuing normally", tomorrow)
                         else:
                             logger.warning("Tomorrow pre-sync: %s status=%s", tomorrow, t_run.status)
                     except Exception:
