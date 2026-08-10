@@ -322,6 +322,13 @@ async def auto_track_date(db: AsyncSession, run_date: date) -> int:
             # Guard against 0.0 (falsy) falling back to FLAT_STAKE.
             stake = float(signal.recommended_stake) if signal.recommended_stake else FLAT_STAKE
         elif is_zinb_goals:
+            # CLV gate: skip when the Bayesian engine sees no positive edge.
+            # ZINB can fire on a fixture where the market has already priced out
+            # any edge (bayesian_edge ≤ 0 → implied prob ≥ model prob → no value).
+            # Zero CLV at settlement is the lagging indicator; zero/negative
+            # Bayesian edge at signal time is the actionable leading indicator.
+            if signal.bayesian_edge is not None and signal.bayesian_edge <= 0.0:
+                continue
             # ZINB goals signals carry deterministic Kelly-tier staking computed
             # in signal_engine.py — use recommended_stake directly.
             if signal.stake_tier == "SKIP" or not signal.recommended_stake:

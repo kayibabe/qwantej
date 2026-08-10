@@ -1136,6 +1136,16 @@ UNDER_GOALS_SUPPRESSED_LEAGUES: frozenset = frozenset({
     "primera b",      # Chilean Segunda División — backtest: 20% hit rate on Home Under 1.5 (1/5)
     "usl league one", # US lower division — high-scoring, volatile scoring patterns
     "usl championship",
+    # ── Disabled 2026-08-10 (ZINB data desert — no training coverage) ─────────
+    # Norwegian 3. Division - Girone groups contain reserve/II teams.
+    # ZINB has no historical match data for these sub-leagues; xG calibration
+    # is unreliable. Substring catches all Girone variants (1–6+) and any
+    # future sub-group names.
+    "3. division",
+    # Latvian Virsliga: 6-1 scoreline on 2026-08-10 confirmed ZINB has no
+    # reliable lambda estimates for this league. Thin bookmaker coverage makes
+    # the Under 3.5 probability estimates structurally wrong.
+    "virsliga",
 })
 
 # Keywords that indicate youth / reserve fixtures.

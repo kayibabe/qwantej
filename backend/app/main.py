@@ -221,6 +221,26 @@ async def lifespan(app: FastAPI):
             await _db.commit()
             logger.info("Startup cleanup: purged %d system_auto bets (Poisson/Bayesian-Only picks)", _n)
 
+    # One-shot: purge ZINB Under 3.5 bets from Norwegian 3. Division (all Girone
+    # groups) and Latvian Virsliga booked on 2026-08-10. ZINB has no training
+    # data for reserve-team leagues or the Virsliga; xG lambdas were noise and
+    # all 6 settled as losses (-K317k net). Remove all statuses (pending + settled)
+    # so the tracker P&L reflects only meaningful model coverage.
+    async with AsyncSessionLocal() as _db3:
+        from sqlalchemy import text as _t3
+        _r3 = await _db3.execute(_t3(
+            "DELETE FROM tracked_bets "
+            "WHERE user_id IS NULL "
+            "AND event_date = '2026-08-10' "
+            "AND (LOWER(league) LIKE '%3. division%' OR LOWER(league) LIKE '%virsliga%')"
+        ))
+        if _r3.rowcount:
+            await _db3.commit()
+            logger.info(
+                "Startup cleanup: purged %d ZINB bets from Norwegian 3. Division / Latvian Virsliga (2026-08-10)",
+                _r3.rowcount,
+            )
+
     scheduler = get_scheduler()
     scheduler.start()
     logger.info("Qwantej starting up — scheduler running %d jobs", len(scheduler.get_jobs()))
