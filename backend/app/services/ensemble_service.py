@@ -36,8 +36,13 @@ from app.models.elo_rating import EloRating
 from app.models.forecast_snapshot import ForecastSnapshot
 from app.models.historical_fixture import HistoricalFixture
 from app.models.fixture import Fixture
-from app.models.signal import Signal
+from app.models.odds import MarketSnapshot
 from app.services.calibration_service import apply_calibration_knots
+from app.services.market_preprocessing import (
+    latest_snapshots, build_cs_by_bookie, build_goals_ou, build_match_winner,
+    build_double_chance, build_home_totals, build_away_totals,
+    build_win_to_nil_home, build_win_to_nil_away, build_exact_goals,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -140,11 +145,8 @@ async def _process_fixture(
     else:
         elo_home_rating, elo_away_rating, elo_1x2 = None, None, None
 
-    # 4. Pull Bayesian probs from existing Signal rows for this fixture
-    bayesian_probs = await _load_bayesian_probs(db, fixture.id)
-
-    # 5. Pull market odds from Signal rows (best available per market)
-    market_odds = await _load_market_odds(db, fixture.id)
+    # 4+5. Load MarketSnapshot rows; run Bayesian engine to get probs + best odds
+    bayesian_probs, market_odds = await _load_bayesian_and_odds(db, fixture)
 
     # 6. Run ensemble
     engine = EnsembleEngine()
@@ -307,39 +309,50 @@ async def _persist_elo(
     await db.commit()
 
 
-async def _load_bayesian_probs(
+async def _load_bayesian_and_odds(
     db: AsyncSession,
-    fixture_id: int,
-) -> dict[str, float]:
-    """Pull derived_prob from existing Signal rows for the fixture (Bayesian engine output)."""
-    from app.engines.zinb_markets import PHASE1A_MARKETS
-    result = await db.execute(
-        select(Signal.market, Signal.bayesian_prob).where(
-            Signal.fixture_id == fixture_id,
-            Signal.market.in_(PHASE1A_MARKETS),
-        )
-    )
-    probs: dict[str, float] = {}
-    for market, prob in result.all():
-        if prob is not None and 0 < prob < 1:
-            probs[market] = float(prob)
-    return probs
+    fixture: "Fixture",
+) -> tuple[dict[str, float], dict[str, float]]:
+    """
+    Run the Bayesian engine directly on MarketSnapshot rows for a live fixture.
+    Returns (bayesian_probs, market_odds) dicts keyed by PHASE1A_MARKETS market names.
+    Falls back to ({}, {}) gracefully if no snapshot data exists.
+    """
+    from app.engines import bayesian as bay_engine
 
-
-async def _load_market_odds(
-    db: AsyncSession,
-    fixture_id: int,
-) -> dict[str, float]:
-    """Pull best bookmaker odds from Signal rows for the fixture."""
-    from app.engines.zinb_markets import PHASE1A_MARKETS
-    result = await db.execute(
-        select(Signal.market, Signal.bayesian_best_odd).where(
-            Signal.fixture_id == fixture_id,
-            Signal.market.in_(PHASE1A_MARKETS),
-        )
+    snap_result = await db.execute(
+        select(MarketSnapshot).where(MarketSnapshot.fixture_id == fixture.id)
     )
-    odds: dict[str, float] = {}
-    for market, best_odd in result.all():
-        if best_odd is not None and best_odd > 1.0:
-            odds[market] = float(best_odd)
-    return odds
+    raw_snaps = snap_result.scalars().all()
+    if not raw_snaps:
+        return {}, {}
+
+    snaps = latest_snapshots(list(raw_snaps))
+
+    bay_result = bay_engine.analyse_fixture(
+        fixture_id=fixture.id,
+        home_team=fixture.home_team,
+        away_team=fixture.away_team,
+        league=fixture.league or "",
+        country=fixture.country or "",
+        cs_by_bookie=build_cs_by_bookie(snaps),
+        goals_ou=build_goals_ou(snaps),
+        btts={},
+        match_winner=build_match_winner(snaps),
+        double_chance=build_double_chance(snaps),
+        home_totals=build_home_totals(snaps),
+        away_totals=build_away_totals(snaps),
+        win_to_nil_home=build_win_to_nil_home(snaps),
+        win_to_nil_away=build_win_to_nil_away(snaps),
+        exact_goals=build_exact_goals(snaps),
+        all_markets=True,
+    )
+
+    bayesian_probs: dict[str, float] = {}
+    market_odds: dict[str, float] = {}
+    for r in bay_result.market_results:
+        if r.derived_prob and 0 < r.derived_prob < 1:
+            bayesian_probs[r.market] = r.derived_prob
+        if r.best_actual_odd and r.best_actual_odd > 1.0:
+            market_odds[r.market] = r.best_actual_odd
+    return bayesian_probs, market_odds

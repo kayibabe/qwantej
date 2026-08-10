@@ -1,14 +1,11 @@
 from app.models.fixture import Fixture
 from app.models.odds import MarketSnapshot
-from app.models.signal import Signal
 from app.models.bet import TrackedBet
 from app.models.backtest import BacktestResult
 from app.models.ingestion import IngestionRun
-from app.models.loss_analysis import LossAnalysis
-from app.models.learning_proposal import LearningProposal
+from app.models.signal import Signal  # legacy bridge — still read by backtester + admin
 
 __all__ = [
-    "Fixture", "MarketSnapshot", "Signal", "TrackedBet",
-    "BacktestResult", "IngestionRun",
-    "LossAnalysis", "LearningProposal",
+    "Fixture", "MarketSnapshot", "TrackedBet",
+    "BacktestResult", "IngestionRun", "Signal",
 ]

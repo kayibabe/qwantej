@@ -21,11 +21,9 @@ from app.core.config import get_settings
 from app.core.database import init_db, engine, AsyncSessionLocal
 from app.routers import signals, tracker, analytics, backtest, arb as arb_router
 from app.routers import leaderboard as leaderboard_router
-from app.routers import loss_analysis as loss_analysis_router
 from app.routers import auth as auth_router
 from app.routers import admin as admin_router
 from app.routers import payments as payments_router
-from app.routers import accumulators as accumulators_router
 from app.routers import forecasts as forecasts_router
 from app.routers import model_performance as model_performance_router
 from app.routers import data_sources as data_sources_router
@@ -248,7 +246,7 @@ async def lifespan(app: FastAPI):
         async def _force_sync_today():
             from app.core.database import AsyncSessionLocal as _S
             from app.services import ingestion as _ing
-            from app.services.signal_engine import compute_signals_for_date as _csfd
+            from app.services.ensemble_service import compute_snapshots_for_date as _csfd
             from datetime import date as _d
             async with _S() as _db:
                 try:
@@ -256,7 +254,7 @@ async def lifespan(app: FastAPI):
                     logger.info("FORCE sync: status=%s fixtures=%s", run.status, run.fixtures_pulled)
                     count = await _csfd(_db, _d.today())
                     await _db.commit()
-                    logger.info("FORCE compute: %d signals for today", count)
+                    logger.info("FORCE compute: %d snapshots for today", count)
                 except Exception:
                     logger.exception("FORCE sync+compute failed")
 
@@ -287,10 +285,8 @@ app.include_router(signals.router)
 app.include_router(tracker.router)
 app.include_router(analytics.router)
 app.include_router(backtest.router)
-app.include_router(loss_analysis_router.router)
 app.include_router(arb_router.router)
 app.include_router(leaderboard_router.router)
-app.include_router(accumulators_router.router)
 app.include_router(forecasts_router.router)
 app.include_router(model_performance_router.router)
 app.include_router(data_sources_router.router)

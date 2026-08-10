@@ -30,13 +30,8 @@ from app.core.config import get_settings
 from app.core.database import AsyncSessionLocal
 from app.models import TrackedBet, Fixture
 from app.services import ingestion
-from app.services.signal_engine import compute_signals_for_date
 from app.services.ensemble_service import compute_snapshots_for_date as compute_ensemble_snapshots
-from app.services.auto_tracker import auto_track_date, auto_track_acca_signals
 from app.services.settlement import settle_bets_for_date, FINAL_STATUSES
-from app.services.loss_analysis_agent import run_loss_analysis_pipeline
-from app.services.strategy_pipeline import run_strategy_pipeline, check_suppression_reactivations
-from app.services.league_watch_guard import run_league_watch_guard
 from app.services.telegram import (
     push_kickoff_alerts,
     check_and_push_pending_results,
@@ -128,47 +123,6 @@ async def catchup_past_dates() -> int:
                     logger.info("Catch-up results report: pushed results for %d date(s)", n_results)
             except Exception:
                 logger.exception("Catch-up results push failed — continuing normally")
-            try:
-                report = await run_loss_analysis_pipeline(db)
-                logger.info(
-                    "Catch-up loss analysis (A): %d bets analysed, %d proposals accepted",
-                    report.bets_analysed, len(report.accepted_proposals),
-                )
-            except Exception:
-                logger.exception("Catch-up loss analysis (A) failed — continuing normally")
-            try:
-                strategy_report = await run_strategy_pipeline(db)
-                logger.info(
-                    "Catch-up strategy pipeline (B): %d bets analysed, %d/%d proposals accepted",
-                    strategy_report.bets_analysed,
-                    strategy_report.proposals_accepted,
-                    strategy_report.proposals_generated,
-                )
-            except Exception:
-                logger.exception("Catch-up strategy pipeline (B) failed — continuing normally")
-            try:
-                reactivated_count = await check_suppression_reactivations(db)
-                logger.info(
-                    "Suppression reactivation check: %d market(s) reactivated",
-                    reactivated_count,
-                )
-            except Exception:
-                logger.exception("Suppression reactivation check failed — continuing normally")
-            try:
-                wg_statuses = await run_league_watch_guard(db)
-                suppressed = [s for s in wg_statuses if s.action_taken == "suppressed"]
-                recovered  = [s for s in wg_statuses if s.action_taken == "reactivated"]
-                warned     = [s for s in wg_statuses if s.state == "WARNING"]
-                logger.info(
-                    "League watch guard: %d watched  %d suppressed  %d recovered  %d warnings",
-                    len(wg_statuses), len(suppressed), len(recovered), len(warned),
-                )
-                for s in suppressed:
-                    logger.warning("Watch guard suppressed: '%s'  ROI=%+.1f%%  bets=%d", s.keyword, s.roi_pct, s.total_bets)
-                for s in recovered:
-                    logger.info("Watch guard recovered: '%s'  ROI=%+.1f%%", s.keyword, s.roi_pct)
-            except Exception:
-                logger.exception("League watch guard failed — continuing normally")
         return n_settled
 
 
@@ -185,17 +139,7 @@ async def sync_and_compute(run_date: date | None = None, *, morning_extras: bool
                 except Exception:
                     logger.exception("Ingestion alert failed — non-fatal")
             if run.status == "success":
-                count = await compute_signals_for_date(db, run_date)
-                run.signals_computed = count
-                await db.commit()
-                # Auto-track all qualifying signals for this date as system picks.
-                try:
-                    n_tracked = await auto_track_date(db, run_date)
-                    if n_tracked:
-                        logger.info("Auto-tracker: %d new system bet(s) for %s", n_tracked, run_date)
-                except Exception:
-                    logger.exception("Auto-tracker failed for %s — continuing normally", run_date)
-                # Run ensemble after signals so bayesian_prob / market_odds are available in Signal rows.
+                # Run ensemble engine: produces ForecastSnapshot rows.
                 try:
                     ens = await compute_ensemble_snapshots(db, run_date, horizon="D-0")
                     logger.info(
@@ -205,15 +149,11 @@ async def sync_and_compute(run_date: date | None = None, *, morning_extras: bool
                 except Exception:
                     logger.exception("Ensemble snapshot failed for %s — continuing normally", run_date)
 
-                # ACCA tracking runs in morning_extras (first daily sync) via auto_track_acca_legs.
-                # The signal-model fallback (auto_track_acca_signals) runs at the END of
-                # morning_extras — after the advisor ACCA has had a chance to build tickets,
-                # so its deference guard correctly skips it when the advisor succeeded.
                 # Settle every pending bet with a final fixture (any event_date), not only run_date.
                 n_settled = (await settle_bets_for_date(db, None))["settled"]
                 logger.info(
-                    "Scheduler: %s done — %d fixtures, %d signals, %d bets settled",
-                    run_date, run.fixtures_pulled, count, n_settled,
+                    "Scheduler: %s done — %d fixtures, %d bets settled",
+                    run_date, run.fixtures_pulled, n_settled,
                 )
                 # Push results for any fully-settled date (today + last 2 days).
                 try:
@@ -222,60 +162,9 @@ async def sync_and_compute(run_date: date | None = None, *, morning_extras: bool
                         logger.info("Results report: pushed results for %d date(s)", n_results)
                 except Exception:
                     logger.exception("Telegram results push failed — continuing normally")
-                # After settlement, run the self-learning loss analysis pipeline.
-                # Analyses newly settled losses, detects patterns, proposes threshold changes.
-                if n_settled > 0:
-                    try:
-                        report = await run_loss_analysis_pipeline(db)
-                        logger.info(
-                            "Loss analysis pipeline (A): %d bets analysed, %d proposals accepted",
-                            report.bets_analysed,
-                            len(report.accepted_proposals),
-                        )
-                    except Exception:
-                        logger.exception("Loss analysis pipeline (A) failed — continuing normally")
-                    try:
-                        strategy_report = await run_strategy_pipeline(db)
-                        logger.info(
-                            "Strategy pipeline (B): %d bets analysed, %d/%d proposals accepted",
-                            strategy_report.bets_analysed,
-                            strategy_report.proposals_accepted,
-                            strategy_report.proposals_generated,
-                        )
-                    except Exception:
-                        logger.exception("Strategy pipeline (B) failed — continuing normally")
-                    try:
-                        reactivated_count = await check_suppression_reactivations(db)
-                        logger.info(
-                            "Suppression reactivation check: %d market(s) reactivated",
-                            reactivated_count,
-                        )
-                    except Exception:
-                        logger.exception("Suppression reactivation check failed — continuing normally")
-                    try:
-                        wg_statuses = await run_league_watch_guard(db)
-                        suppressed = [s for s in wg_statuses if s.action_taken == "suppressed"]
-                        recovered  = [s for s in wg_statuses if s.action_taken == "reactivated"]
-                        warned     = [s for s in wg_statuses if s.state == "WARNING"]
-                        logger.info(
-                            "League watch guard: %d watched  %d suppressed  %d recovered  %d warnings",
-                            len(wg_statuses), len(suppressed), len(recovered), len(warned),
-                        )
-                        for s in suppressed:
-                            logger.warning("Watch guard suppressed: '%s'  ROI=%+.1f%%  bets=%d", s.keyword, s.roi_pct, s.total_bets)
-                        for s in recovered:
-                            logger.info("Watch guard recovered: '%s'  ROI=%+.1f%%", s.keyword, s.roi_pct)
-                    except Exception:
-                        logger.exception("League watch guard failed — continuing normally")
 
                 # ── Morning extras (first daily sync only) ────────────────────
                 if morning_extras:
-                    try:
-                        n_signal_acca = await auto_track_acca_signals(db, run_date)
-                        if n_signal_acca:
-                            logger.info("Signal-model ACCA fallback: %d rows for %s", n_signal_acca, run_date)
-                    except Exception:
-                        logger.exception("Signal-model ACCA fallback failed — continuing normally")
                     try:
                         n_sent = await push_morning_digest(db)
                         if n_sent:
@@ -374,11 +263,10 @@ async def _cleanup_old_snapshots() -> None:
     DISABLED_LEAGUES.
     """
     from sqlalchemy import text
-    from app.core.config import DISABLED_MARKETS, DISABLED_LEAGUES
 
     async with AsyncSessionLocal() as db:
         try:
-            # 1. Purge stale market snapshots
+            # Purge stale market snapshots (fixtures older than 30 days).
             result = await db.execute(text("""
                 DELETE FROM market_snapshots
                 WHERE fixture_id IN (
@@ -389,53 +277,6 @@ async def _cleanup_old_snapshots() -> None:
             await db.commit()
             if deleted_snaps:
                 logger.info("Cleanup: removed %d stale market_snapshots rows.", deleted_snaps)
-
-            # 2. Deactivate stale learning proposals
-            #    — change types not consumed by current code
-            unused_types = ("tier_suppression", "quality_threshold")
-            r1 = await db.execute(text("""
-                UPDATE learning_proposals SET is_active=FALSE
-                WHERE is_active=TRUE AND change_type IN ('tier_suppression','quality_threshold')
-            """))
-            #    — market_suppression whose target is already in DISABLED_MARKETS
-            disabled_mkt_list = ", ".join(f"'{m}'" for m in DISABLED_MARKETS)
-            r2 = await db.execute(text(f"""
-                UPDATE learning_proposals SET is_active=FALSE
-                WHERE is_active=TRUE
-                  AND change_type='market_suppression'
-                  AND target IN ({disabled_mkt_list})
-            """))
-            #    — league_suppression whose target is already in DISABLED_LEAGUES
-            disabled_lg_list = ", ".join(f"'{lg}'" for lg in DISABLED_LEAGUES)
-            r3 = await db.execute(text(f"""
-                UPDATE learning_proposals SET is_active=FALSE
-                WHERE is_active=TRUE
-                  AND change_type='league_suppression'
-                  AND lower(trim(target)) IN ({disabled_lg_list})
-            """))
-            #    — market_odds_ceiling proposals whose target market is already in DISABLED_MARKETS
-            r4 = await db.execute(text(f"""
-                UPDATE learning_proposals SET is_active=FALSE
-                WHERE is_active=TRUE
-                  AND change_type='market_odds_ceiling'
-                  AND target IN ({disabled_mkt_list})
-            """))
-            # 2026-07-10: expire unimplemented proposal types. The signal engine and
-            # auto_tracker only consume league_suppression and kelly_fraction_adj.
-            # rule_disable and min_confidence are not wired to any consumer and were
-            # written by the LLM with free-text targets that don't match real market
-            # names. market_suppression is also unimplemented in the signal path.
-            # market_odds_ceiling (non-DISABLED target) is similarly unconsumed.
-            r5 = await db.execute(text("""
-                UPDATE learning_proposals SET is_active=FALSE
-                WHERE is_active=TRUE
-                  AND change_type IN ('rule_disable', 'min_confidence',
-                                      'market_suppression', 'market_odds_ceiling')
-            """))
-            deactivated = r1.rowcount + r2.rowcount + r3.rowcount + r4.rowcount + r5.rowcount
-            await db.commit()
-            if deactivated:
-                logger.info("Cleanup: deactivated %d stale learning proposals.", deactivated)
 
         except Exception:
             logger.exception("Cleanup job failed — continuing normally")
@@ -468,12 +309,8 @@ async def _daily_calibration_job() -> None:
     validated through the in-process backtester before persisting.
     """
     from app.services.calibration import (
-        compute_calibration_metrics, save_snapshot, load_recent_snapshots,
-        BRIER_SKILL_TARGET,
+        compute_calibration_metrics, save_snapshot,
     )
-    from app.models.learning_proposal import LearningProposal
-    from app.models.bet import TrackedBet
-    from sqlalchemy import select as _select, text as _text
     async with AsyncSessionLocal() as db:
         try:
             report = await compute_calibration_metrics(db, days=90)
@@ -491,116 +328,6 @@ async def _daily_calibration_job() -> None:
                     "Calibration FLAGGED: %s -- brier_skill below target or gap > 7pp",
                     mkt,
                 )
-
-            # ── Consecutive-failure suppression gate ─────────────────────────
-            # Only propose suppression when the SAME market fails in two
-            # consecutive snapshots — one failure could be statistical noise.
-            prior_snapshots = await load_recent_snapshots(db, n=2)
-            if len(prior_snapshots) < 2:
-                return   # need at least 2 snapshots to compare
-
-            # prior_snapshots[0] is the snapshot we just saved (most recent);
-            # prior_snapshots[1] is the one before it.
-            current_snap = prior_snapshots[0]
-            previous_snap = prior_snapshots[1]
-
-            import json as _json
-            current_mkt_skill: dict[str, float] = {
-                m["market"]: m["brier_skill"]
-                for m in (_json.loads(current_snap.get("market_summary") or "[]") if isinstance(current_snap.get("market_summary"), str) else current_snap.get("market_summary") or [])
-            }
-            previous_mkt_skill: dict[str, float] = {
-                m["market"]: m["brier_skill"]
-                for m in (_json.loads(previous_snap.get("market_summary") or "[]") if isinstance(previous_snap.get("market_summary"), str) else previous_snap.get("market_summary") or [])
-            }
-
-            # Markets failing in BOTH consecutive windows
-            both_failing = [
-                mkt for mkt in current_mkt_skill
-                if (
-                    current_mkt_skill[mkt] < BRIER_SKILL_TARGET
-                    and mkt in previous_mkt_skill
-                    and previous_mkt_skill[mkt] < BRIER_SKILL_TARGET
-                )
-            ]
-
-            if not both_failing:
-                return
-
-            # Load settled bets for backtester validation
-            all_settled_result = await db.execute(
-                _select(TrackedBet).where(TrackedBet.result_status.in_(["Won", "Lost"]))
-            )
-            all_settled = list(all_settled_result.scalars().all())
-
-            for mkt in both_failing:
-                # Skip if already hard-disabled — no point proposing suppression
-                from app.core.config import DISABLED_MARKETS
-                if mkt in DISABLED_MARKETS:
-                    continue
-
-                # Skip if already have an active market_suppression proposal
-                existing = (await db.execute(
-                    _select(LearningProposal).where(
-                        LearningProposal.change_type == "market_suppression",
-                        LearningProposal.target == mkt,
-                        LearningProposal.is_active == True,  # noqa: E712
-                    )
-                )).scalars().first()
-                if existing:
-                    logger.info(
-                        "Calibration: market_suppression for %s already active — skipping",
-                        mkt,
-                    )
-                    continue
-
-                # Simple backtest: does this market have negative ROI?
-                market_bets = [b for b in all_settled if b.market_type == mkt]
-                if len(market_bets) < 15:
-                    logger.info(
-                        "Calibration: %s has only %d bets — need 15 for suppression proposal",
-                        mkt, len(market_bets),
-                    )
-                    continue
-
-                total_stake = sum(b.stake for b in market_bets if b.stake)
-                total_pl = sum(b.profit_loss for b in market_bets if b.profit_loss is not None)
-                roi = (total_pl / total_stake) if total_stake > 0 else 0.0
-
-                if roi >= -0.05:
-                    logger.info(
-                        "Calibration: %s ROI=%.1f%% not negative enough for suppression "
-                        "(need < -5%%)",
-                        mkt, roi * 100,
-                    )
-                    continue
-
-                # Accepted — persist the proposal
-                try:
-                    new_proposal = LearningProposal(
-                        change_type="market_suppression",
-                        target=mkt,
-                        proposed_value=1.0,
-                        rationale=(
-                            f"Calibration: brier_skill below {BRIER_SKILL_TARGET} in two "
-                            f"consecutive 90-day windows. ROI={roi:.1%} on {len(market_bets)} bets."
-                        ),
-                        confidence="Medium",
-                        backtest_note=(
-                            f"Backtested: ROI={roi:.1%} over {len(market_bets)} settled bets — "
-                            "negative ROI confirms suppression justified."
-                        ),
-                        is_active=True,
-                    )
-                    db.add(new_proposal)
-                    await db.commit()
-                    logger.warning(
-                        "Calibration SUPPRESSION proposed: %s (brier_skill failed 2 windows, ROI=%.1f%%)",
-                        mkt, roi * 100,
-                    )
-                except Exception as exc:
-                    logger.error("Calibration: failed to persist proposal for %s: %s", mkt, exc)
-                    await db.rollback()
 
             # ── Refit isotonic calibration knots ─────────────────────────────
             # After audit, refresh CalibrationRecord rows so ensemble_service

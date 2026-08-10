@@ -18,7 +18,6 @@ from sqlalchemy import select, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fixture import Fixture
-from app.models.signal import Signal
 
 FINAL_STATUSES = {"FT", "AET", "PEN"}
 FORM_WINDOW   = 10   # games for stats
@@ -216,23 +215,8 @@ async def get_match_info(
     )
     h2h_fixtures = list((await db.execute(h2h_q)).scalars().all())
 
-    # ── Signals — probabilities from our engine ───────────────────────────
-    sig_q = select(Signal).where(Signal.fixture_id == fixture_id)
-    signals = list((await db.execute(sig_q)).scalars().all())
-
+    # Signal probabilities now served via /api/forecasts/{fixture_id} (ForecastSnapshot).
     probabilities = []
-    for sig in sorted(signals, key=lambda s: -(s.dual_quality_score or 0)):
-        if sig.bayesian_prob is not None:
-            probabilities.append({
-                "market":      sig.market,
-                "prob":        round(sig.bayesian_prob * 100, 1),
-                "confidence":  sig.dual_confidence,
-                "agreement":   sig.dual_agreement,
-                "best_odd":    sig.bayesian_best_odd,
-                "bookmaker":   sig.bayesian_bookmaker,
-                "quality":     sig.dual_quality_score,
-                "is_value":    sig.bayesian_is_value,
-            })
 
     # ── Compute stats using form window (last 10) ─────────────────────────
     home_stats = _team_stats(home_fixtures[:FORM_WINDOW], home)

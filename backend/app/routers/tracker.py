@@ -174,9 +174,9 @@ async def sync(
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    # Auto-compute signals after sync
-    from app.services.signal_engine import compute_signals_for_date
-    signal_count = await compute_signals_for_date(db, target)
+    # Run ensemble (ForecastSnapshot) after sync
+    from app.services.ensemble_service import compute_snapshots_for_date
+    signal_count = await compute_snapshots_for_date(db, target)
     run.signals_computed = signal_count
     await db.commit()
 

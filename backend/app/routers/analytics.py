@@ -14,7 +14,6 @@ from app.core.database import get_db
 from app.models import TrackedBet, Signal
 from app.models.fixture import Fixture
 from app.models.user import User
-from app.models.learning_proposal import LearningProposal
 from app.services.analytics import build_analytics, compute_parameter_status
 from app.services.performance_intelligence import compute_performance_weights
 from app.services.settlement import SCORE_SETTLEABLE_MARKETS
@@ -452,48 +451,9 @@ async def probability_calibration(
 
 
 @router.get("/model-intelligence")
-async def get_model_intelligence(
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Return all active LearningProposal rows for the Model Intelligence dashboard.
-    Groups by change_type and includes the full proposal detail so the UI can
-    show what the self-learning system has decided to change, and why.
-    """
-    result = await db.execute(
-        select(LearningProposal)
-        .where(LearningProposal.is_active == True)   # noqa: E712
-        .order_by(LearningProposal.created_at.desc())
-    )
-    proposals = result.scalars().all()
-
-    # Also fetch last 5 inactive proposals as history
-    history_result = await db.execute(
-        select(LearningProposal)
-        .where(LearningProposal.is_active == False)  # noqa: E712
-        .order_by(LearningProposal.created_at.desc())
-        .limit(5)
-    )
-    history = history_result.scalars().all()
-
-    def _fmt(p: LearningProposal) -> dict:
-        return {
-            "id":             p.id,
-            "change_type":    p.change_type,
-            "target":         p.target,
-            "proposed_value": p.proposed_value,
-            "rationale":      p.rationale,
-            "confidence":     p.confidence,
-            "backtest_note":  p.backtest_note,
-            "is_active":      p.is_active,
-            "created_at":     p.created_at.isoformat() if p.created_at else None,
-        }
-
-    return {
-        "active_count":   len(proposals),
-        "active":         [_fmt(p) for p in proposals],
-        "history":        [_fmt(p) for p in history],
-    }
+async def get_model_intelligence():
+    """Model Intelligence dashboard — self-learning pipelines retired in Phase 1."""
+    return {"active_count": 0, "active": [], "history": []}
 
 
 @router.get("/acca-performance")

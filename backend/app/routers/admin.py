@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.models.user import User
-from app.models.learning_proposal import LearningProposal
 import httpx
 
 from app.core.config import (
@@ -27,9 +26,6 @@ from app.core.config import (
 )
 from app.services.api_client import get_quota_info
 from app.services.settlement import refresh_stale_fixtures_and_settle
-from app.services.loss_analysis_agent import run_loss_analysis_pipeline
-from app.services.strategy_pipeline import run_strategy_pipeline
-from app.services.league_watch_guard import get_watchlist_status, run_league_watch_guard
 from app.services.telegram import (
     _send_to as telegram_send_to,
     push_results_report as telegram_push_results,
@@ -169,16 +165,6 @@ async def trigger_settlement(
     # Returns: { refreshed_fixtures, settled, voided, errors, api_calls_made }
     result = await refresh_stale_fixtures_and_settle(db)
     result["quota"] = get_quota_info()
-
-    if result["settled"] > 0 or result["voided"] > 0:
-        try:
-            await run_loss_analysis_pipeline(db)
-        except Exception:
-            pass
-        try:
-            await run_strategy_pipeline(db)
-        except Exception:
-            pass
 
     return result
 
@@ -387,55 +373,6 @@ async def api_quota(_admin: User = Depends(_require_admin)):
         "reset_note": "Quota resets daily at midnight UTC",
         "date":       _date.today().isoformat(),
     }
-
-
-# ── Learning Proposals ────────────────────────────────────────────────────────
-
-@router.get("/learning-proposals")
-async def list_learning_proposals(
-    active_only: bool = Query(True),
-    limit: int = Query(50),
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(_require_admin),
-):
-    """
-    List learning proposals written by the self-learning pipelines.
-    active_only=True (default) returns only currently applied proposals.
-    active_only=False returns all proposals (history).
-    """
-    q = select(LearningProposal).order_by(desc(LearningProposal.created_at)).limit(limit)
-    if active_only:
-        q = q.where(LearningProposal.is_active == True)
-    rows = list((await db.execute(q)).scalars().all())
-    return [
-        {
-            "id":            r.id,
-            "change_type":   r.change_type,
-            "target":        r.target,
-            "proposed_value": r.proposed_value,
-            "rationale":     r.rationale,
-            "confidence":    r.confidence,
-            "backtest_note": r.backtest_note,
-            "is_active":     r.is_active,
-            "created_at":    r.created_at.isoformat() if r.created_at else None,
-        }
-        for r in rows
-    ]
-
-
-@router.post("/learning-proposals/{proposal_id}/deactivate")
-async def deactivate_learning_proposal(
-    proposal_id: int,
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(_require_admin),
-):
-    """Manually deactivate (override) a learning proposal."""
-    proposal = await db.get(LearningProposal, proposal_id)
-    if not proposal:
-        raise HTTPException(404, "Proposal not found")
-    proposal.is_active = False
-    await db.commit()
-    return {"deactivated": True, "id": proposal_id}
 
 
 # ── Autobet catchup ──────────────────────────────────────────────────────────
@@ -733,84 +670,6 @@ async def trigger_phase1c_calibration(
 
     asyncio.create_task(_run())
     return {"status": "started", "cutoff": cutoff, "force_refresh": force_refresh}
-
-
-# ── Pipeline triggers ─────────────────────────────────────────────────────────
-
-@router.post("/pipelines/loss-analysis")
-async def trigger_loss_analysis(
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(_require_admin),
-):
-    """Manually trigger Pipeline A — Loss Analysis (threshold tuning from losses)."""
-    report = await run_loss_analysis_pipeline(db)
-    return {
-        "pipeline": "A",
-        "bets_analysed":       report.bets_analysed,
-        "patterns_detected":   report.patterns_detected,
-        "threshold_proposals": report.threshold_proposals,
-        "accepted_proposals":  report.accepted_proposals,
-        "skipped_proposals":   report.skipped_proposals,
-        "errors":              report.errors,
-    }
-
-
-@router.post("/pipelines/strategy")
-async def trigger_strategy_pipeline(
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(_require_admin),
-):
-    """Manually trigger Pipeline B — Strategy (market/league suppression + Kelly adj)."""
-    report = await run_strategy_pipeline(db)
-    return {
-        "pipeline":            "B",
-        "bets_analysed":       report.bets_analysed,
-        "overall_win_rate":    report.overall_win_rate,
-        "proposals_generated": report.proposals_generated,
-        "proposals_accepted":  report.proposals_accepted,
-        "error":               report.error,
-    }
-
-
-
-@router.get("/watchguard")
-async def get_watchguard_status(
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(_require_admin),
-):
-    """
-    Read-only view of the league watch guard — current state of every monitored league,
-    including ROI, bet count, warning/suppression thresholds, and active proposal ID.
-    """
-    return {"watchlist": await get_watchlist_status(db)}
-
-
-@router.post("/watchguard/run")
-async def trigger_watchguard(
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(_require_admin),
-):
-    """
-    Manually trigger the league watch guard cycle.
-    Evaluates all watched leagues and creates/deactivates suppression proposals as needed.
-    """
-    statuses = await run_league_watch_guard(db)
-    return {
-        "evaluated": len(statuses),
-        "results": [
-            {
-                "keyword":      s.keyword,
-                "state":        s.state,
-                "action_taken": s.action_taken,
-                "total_bets":   s.total_bets,
-                "wins":         s.wins,
-                "roi_pct":      s.roi_pct,
-                "proposal_id":  s.proposal_id,
-                "message":      s.message,
-            }
-            for s in statuses
-        ],
-    }
 
 
 @router.post("/cleanup-tracked-bets")

@@ -29,7 +29,6 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Signal, Fixture, TrackedBet
-from app.models.learning_proposal import LearningProposal
 from app.models.user import User as _User  # noqa: F401 — registers users table in SA metadata
 from app.core.config import (
     DUAL_HIGH_ODDS_CEILING, WOMEN_LEAGUE_KEYWORDS,
@@ -50,28 +49,8 @@ logger = logging.getLogger("Qwantej.auto_tracker")
 FLAT_STAKE = 50_000.0
 
 
-async def _load_kelly_multipliers(db: AsyncSession) -> dict[str, float]:
-    """
-    Returns active kelly_fraction_adj multipliers keyed by dual_confidence target.
-    E.g. {"High": 0.5} means Both+High stakes are halved before tracking.
-    Falls back to {} (no adjustment) on any error.
-    """
-    try:
-        result = await db.execute(
-            select(LearningProposal).where(
-                LearningProposal.change_type == "kelly_fraction_adj",
-                LearningProposal.is_active == True,  # noqa: E712
-            )
-        )
-        proposals = result.scalars().all()
-        return {
-            p.target: float(p.proposed_value)
-            for p in proposals
-            if p.proposed_value is not None and 0.1 <= float(p.proposed_value) <= 1.0
-        }
-    except Exception:
-        logger.warning("_load_kelly_multipliers: could not load proposals — using 1.0×")
-        return {}
+async def _load_kelly_multipliers(db: AsyncSession) -> dict[str, float]:  # noqa: ARG001
+    return {}
 
 
 def _grade(q: float | None) -> str | None:
