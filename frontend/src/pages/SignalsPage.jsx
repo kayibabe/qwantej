@@ -3,9 +3,8 @@ import {
   RefreshCw, Download, Calendar, AlertCircle, ChevronLeft, ChevronRight,
   TrendingUp, Zap, Activity, Clock, Filter, X
 } from 'lucide-react'
-import { fetchForecasts } from '../api/forecasts'
+import { fetchForecasts, computeForecasts } from '../api/forecasts'
 import { syncData } from '../api/tracker'
-import { computeSignals } from '../api/signals'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import { useAuth } from '../context/AuthContext'
 import useTier from '../hooks/useTier'
@@ -263,7 +262,7 @@ export default function SignalsPage({ onMatchIntelligence, onUpgrade }) {
     setSyncing(true)
     try {
       await syncData(date, { force: true })
-      await computeSignals(date)
+      await computeForecasts(date)
       await load(date, market)
     } catch (e) { console.error(e) }
     finally { setSyncing(false) }
@@ -272,7 +271,7 @@ export default function SignalsPage({ onMatchIntelligence, onUpgrade }) {
   async function handleRecompute() {
     setComputing(true)
     try {
-      await computeSignals(date)
+      await computeForecasts(date)
       await load(date, market)
     } catch (e) { console.error(e) }
     finally { setComputing(false) }

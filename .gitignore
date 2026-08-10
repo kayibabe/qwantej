@@ -51,6 +51,7 @@ qwantej.db
 
 # API-Football file cache (ephemeral, never commit)
 backend/.cache/
+.cache/
 
 # Temporary fix / debug scripts
 backend/fix_*.py

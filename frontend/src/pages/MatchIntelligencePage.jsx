@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ArrowLeft, Activity } from 'lucide-react'
 import { fetchMatchInfo, fetchOddsMatrix } from '../api/signals'
-import { fetchFixtureForecasts } from '../api/forecasts'
+import { fetchFixtureForecasts, fetchHistoricalMatchIntelligence } from '../api/forecasts'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 
 // ── Small reusables (carried over from DeepDivePage) ─────────────────────────
@@ -279,7 +279,7 @@ function ForecastTab({ forecasts, loading }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-export default function MatchIntelligencePage({ fixtureId, onBack }) {
+export default function MatchIntelligencePage({ fixtureId, historicalFixtureId, sourcePage, onBack }) {
   const [matchInfo,    setMatchInfo]    = useState(null)
   const [forecasts,    setForecasts]    = useState([])
   const [oddsMatrix,   setOddsMatrix]   = useState(null)
@@ -291,8 +291,16 @@ export default function MatchIntelligencePage({ fixtureId, onBack }) {
   const [activeTab,    setActiveTab]    = useState('overview')
 
   useEffect(() => {
-    if (!fixtureId) return
-    setLoading(false) // we have individual loaders
+    if (!fixtureId && !historicalFixtureId) return
+    setLoading(false)
+
+    if (historicalFixtureId) {
+      fetchHistoricalMatchIntelligence(historicalFixtureId)
+        .then(d => setForecasts(Array.isArray(d.markets) ? d.markets : []))
+        .catch(() => setForecasts([]))
+        .finally(() => { setFcLoading(false); setInfoLoading(false) })
+      return
+    }
 
     fetchMatchInfo(fixtureId)
       .then(d => setMatchInfo(d))
@@ -303,7 +311,7 @@ export default function MatchIntelligencePage({ fixtureId, onBack }) {
       .then(d => setForecasts(Array.isArray(d) ? d : []))
       .catch(() => setForecasts([]))
       .finally(() => setFcLoading(false))
-  }, [fixtureId])
+  }, [fixtureId, historicalFixtureId])
 
   const firstForecast = forecasts[0] ?? {}
   const fixture = matchInfo?.fixture ?? {}
@@ -317,7 +325,10 @@ export default function MatchIntelligencePage({ fixtureId, onBack }) {
         return new Date(utc).toLocaleString([], { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })
       })()
     : ''
-  const isFinished = ['FT', 'AET', 'PEN'].includes(fixture.status)
+  const fixtureStatus = fixture.status || firstForecast.fixture_status
+  const isFinished = ['FT', 'AET', 'PEN'].includes(fixtureStatus)
+  const homeScore = fixture.home_score ?? firstForecast.home_score
+  const awayScore = fixture.away_score ?? firstForecast.away_score
   const hs = matchInfo?.home_stats
   const as_ = matchInfo?.away_stats
 
@@ -332,7 +343,7 @@ export default function MatchIntelligencePage({ fixtureId, onBack }) {
   return (
     <div className="space-y-5">
       <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-[var(--text)] hover:text-[var(--accent)] transition-colors">
-        <ArrowLeft size={15} /> Back to Signals
+        <ArrowLeft size={15} /> {sourcePage === 'archive' ? 'Back to Archive' : 'Back to Signals'}
       </button>
 
       {/* Fixture header */}
@@ -348,11 +359,11 @@ export default function MatchIntelligencePage({ fixtureId, onBack }) {
           </div>
           {isFinished ? (
             <div className="text-2xl sm:text-3xl font-bold font-mono text-[var(--text-h)] shrink-0">
-              {fixture.home_score} – {fixture.away_score}
+              {homeScore} – {awayScore}
             </div>
-          ) : fixture.status ? (
+          ) : fixtureStatus ? (
             <span className="text-xs px-2 py-1 rounded-full border border-[var(--accent)] text-[var(--accent)] font-medium shrink-0">
-              {fixture.status}
+              {fixtureStatus}
             </span>
           ) : null}
         </div>

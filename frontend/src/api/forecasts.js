@@ -30,6 +30,16 @@ export async function fetchForecastArchive({ date_from, date_to, market, league,
   return res.json()
 }
 
+export async function computeForecasts(date) {
+  const res = await apiFetch(`${BASE}/compute`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ date }),
+  })
+  if (!res.ok) throw new Error(`Forecast compute failed: ${res.status}`)
+  return res.json()
+}
+
 export async function fetchHistoricalMatchIntelligence(histFixtureId) {
   const res = await apiFetch(`${BASE}/historical/${histFixtureId}`)
   if (!res.ok) throw new Error(`Historical match intelligence fetch failed: ${res.status}`)

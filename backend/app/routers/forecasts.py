@@ -176,6 +176,21 @@ async def _enrich_with_fixture(
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
+@router.post("/compute")
+async def compute_forecasts(
+    body: dict = {},
+    db: AsyncSession = Depends(get_db),
+    _user: Optional[User] = Depends(get_current_user),
+):
+    """Run the ensemble engine for a date and write ForecastSnapshot rows."""
+    from datetime import date as date_cls
+    from app.services.ensemble_service import compute_snapshots_for_date
+    date_str = body.get("date")
+    target_date = date_cls.fromisoformat(date_str) if date_str else date_cls.today()
+    summary = await compute_snapshots_for_date(db, target_date, horizon="D-0")
+    return {"date": target_date.isoformat(), **summary}
+
+
 @router.get("", response_model=list[ForecastOut])
 async def list_forecasts(
     date_str: Optional[str] = Query(default=None, alias="date", description="YYYY-MM-DD, defaults to today"),

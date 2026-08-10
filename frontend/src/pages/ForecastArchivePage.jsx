@@ -73,7 +73,7 @@ const OUTCOMES = ['', 'WIN', 'LOSS', 'VOID', 'PUSH']
 
 const PER_PAGE = 50
 
-export default function ForecastArchivePage({ onMatchIntelligence }) {
+export default function ForecastArchivePage({ onMatchIntelligence, onHistoricalMatch }) {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo]     = useState(todayStr())
   const [market, setMarket]     = useState('')
@@ -248,9 +248,12 @@ export default function ForecastArchivePage({ onMatchIntelligence }) {
                   <tr
                     key={row.id}
                     className={`border-b border-[var(--border)] last:border-0 transition-colors ${
-                      row.fixture_id && onMatchIntelligence ? 'cursor-pointer hover:bg-[var(--code-bg)]' : 'hover:bg-[var(--code-bg)]'
+                      (row.fixture_id || row.historical_fixture_id) ? 'cursor-pointer hover:bg-[var(--code-bg)]' : 'hover:bg-[var(--code-bg)]'
                     }`}
-                    onClick={() => row.fixture_id && onMatchIntelligence?.(row.fixture_id)}
+                    onClick={() => {
+                      if (row.fixture_id) onMatchIntelligence?.(row.fixture_id)
+                      else if (row.historical_fixture_id) onHistoricalMatch?.(row.historical_fixture_id)
+                    }}
                   >
                     <td className="px-3 py-2.5 text-[var(--text)] opacity-70 whitespace-nowrap">
                       {row.kickoff_at

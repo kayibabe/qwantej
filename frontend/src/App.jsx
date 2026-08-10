@@ -29,6 +29,8 @@ function pageFromPath() {
 export default function App() {
   const [activePage, setActivePage] = useState(pageFromPath)
   const [matchFixtureId, setMatchFixtureId] = useState(null)
+  const [matchHistFixtureId, setMatchHistFixtureId] = useState(null)
+  const [matchSourcePage, setMatchSourcePage] = useState('signals')
   const [authMode, setAuthMode] = useState('login')
   const [pendingSignalFilter, setPendingSignalFilter] = useState(null)
   const { settings, update } = useSettings()
@@ -111,12 +113,22 @@ export default function App() {
 
   function handleMatchIntelligence(fixtureId) {
     setMatchFixtureId(fixtureId)
+    setMatchHistFixtureId(null)
+    setMatchSourcePage('signals')
+    setActivePage('match')
+  }
+
+  function handleHistoricalMatch(histFixtureId) {
+    setMatchHistFixtureId(histFixtureId)
+    setMatchFixtureId(null)
+    setMatchSourcePage('archive')
     setActivePage('match')
   }
 
   function handleBackFromMatch() {
-    setActivePage('signals')
+    setActivePage(matchSourcePage)
     setMatchFixtureId(null)
+    setMatchHistFixtureId(null)
   }
 
   const goToPricing = () => setActivePage('pricing')
@@ -138,11 +150,11 @@ export default function App() {
           onFilterConsumed={() => setPendingSignalFilter(null)}
         />
       case 'match':
-        return <MatchIntelligencePage fixtureId={matchFixtureId} settings={settings} onBack={handleBackFromMatch} />
+        return <MatchIntelligencePage fixtureId={matchFixtureId} historicalFixtureId={matchHistFixtureId} sourcePage={matchSourcePage} settings={settings} onBack={handleBackFromMatch} />
       case 'tracker':
         return <TrackerPage user={user} settings={settings} onUpgrade={goToPricing} />
       case 'archive':
-        return <ForecastArchivePage onMatchIntelligence={handleMatchIntelligence} />
+        return <ForecastArchivePage onMatchIntelligence={handleMatchIntelligence} onHistoricalMatch={handleHistoricalMatch} />
       case 'performance':
         return <ModelPerformancePage />
       case 'sources':
