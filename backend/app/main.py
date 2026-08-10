@@ -19,6 +19,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import get_settings
 from app.core.database import init_db, engine, AsyncSessionLocal
+from app.core.migrations import run_migrations
 from app.routers import signals, tracker, analytics, backtest, arb as arb_router
 from app.routers import leaderboard as leaderboard_router
 from app.routers import auth as auth_router
@@ -194,10 +195,11 @@ async def _cleanup_stale_ingestion_runs() -> int:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # init_db creates tables on a fresh Postgres database.
-    # Alembic (run via docker-entrypoint.sh before server start) handles
-    # schema migrations on existing databases.
+    # init_db creates tables on a fresh Postgres database (create_all).
+    # run_migrations adds any new columns to existing tables — it runs every
+    # startup, each DDL in its own transaction so one failure doesn't abort the rest.
     await init_db()
+    await run_migrations(engine)
 
     # Housekeeping: recover from any mid-sync backend restarts
     stale = await _cleanup_stale_ingestion_runs()
