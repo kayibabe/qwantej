@@ -1,20 +1,24 @@
 """
-zinb_markets.py — ZINB score-matrix → Phase 1A market probabilities.
+zinb_markets.py — ZINB score-matrix → Phase 1A + Phase 2 market probabilities.
 
 Wraps the existing ZINBGoalModel so it:
   1. Fits from HistoricalFixture records using team names as keys.
   2. Converts a score matrix into a dict of market → probability
-     for all 9 Phase 1A markets.
+     for all Phase 1A + Phase 2 markets.
 
 Markets produced:
-  "Over 1.5", "Over 2.5", "Under 2.5", "Under 3.5",
-  "BTTS Yes", "1X (Home or Draw)", "X2 (Draw or Away)",
-  "Home Over 0.5", "Away Over 0.5"
+  Full-match (Phase 1A):
+    "Over 1.5", "Over 2.5", "Under 2.5", "Under 3.5",
+    "BTTS Yes", "1X (Home or Draw)", "X2 (Draw or Away)",
+    "Home Over 0.5", "Away Over 0.5"
+  First-half (Phase 2):
+    "1H Over 0.5", "1H Over 1.5", "1H Under 1.5"
 """
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+import math
+from typing import TYPE_CHECKING, Optional
 
 from app.engines.zinb import ZINBGoalModel
 
@@ -22,6 +26,10 @@ if TYPE_CHECKING:
     import numpy as np
 
 logger = logging.getLogger(__name__)
+
+# Fraction of full-match goals typically scored in the first half (~44%).
+# Used to scale ZINB full-match lambdas for first-half probability estimates.
+_HT_FRACTION = 0.44
 
 PHASE1A_MARKETS = (
     "Over 1.5",
@@ -33,6 +41,10 @@ PHASE1A_MARKETS = (
     "X2 (Draw or Away)",
     "Home Over 0.5",
     "Away Over 0.5",
+    # Phase 2 — first-half markets
+    "1H Over 0.5",
+    "1H Over 1.5",
+    "1H Under 1.5",
 )
 
 
@@ -73,6 +85,31 @@ def score_matrix_to_market_probs(matrix: "np.ndarray") -> dict[str, float]:
     probs["Away Over 0.5"] = _sum(lambda i, j: j >= 1)
 
     return probs
+
+
+def predict_ht_market_probs(
+    lambda_home: Optional[float],
+    lambda_away: Optional[float],
+) -> dict[str, float]:
+    """
+    Estimate first-half market probabilities using scaled full-match lambdas.
+
+    Models combined first-half goals as Poisson(_HT_FRACTION * (λh + λa)).
+    The sum of two independent Poissons is Poisson — this is exact, not an
+    approximation, provided independence holds across the two teams.
+    """
+    if lambda_home is None or lambda_away is None or lambda_home < 0 or lambda_away < 0:
+        return {}
+    l = _HT_FRACTION * (lambda_home + lambda_away)
+    if l <= 0:
+        return {}
+    p0 = math.exp(-l)
+    p1 = l * p0
+    return {
+        "1H Over 0.5":  round(max(0.0, min(1.0, 1.0 - p0)), 6),
+        "1H Over 1.5":  round(max(0.0, min(1.0, 1.0 - p0 - p1)), 6),
+        "1H Under 1.5": round(max(0.0, min(1.0, p0 + p1)), 6),
+    }
 
 
 class ZINBMarketsModel:
@@ -126,7 +163,7 @@ class ZINBMarketsModel:
 
     def predict_market_probs(self, home_team: str, away_team: str) -> dict[str, float]:
         """
-        Return Phase 1A market probabilities for a fixture.
+        Return Phase 1A + Phase 2 market probabilities for a fixture.
         Returns {} if the model isn't fitted or scipy is unavailable.
         """
         if not self._model.fitted:
@@ -138,4 +175,8 @@ class ZINBMarketsModel:
         if matrix is None:
             return {}
 
-        return score_matrix_to_market_probs(matrix)
+        probs = score_matrix_to_market_probs(matrix)
+        # Phase 2: first-half markets via scaled Poisson
+        lambda_home, lambda_away = self.predict_lambdas(home_team, away_team)
+        probs.update(predict_ht_market_probs(lambda_home, lambda_away))
+        return probs

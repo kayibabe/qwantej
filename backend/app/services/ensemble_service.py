@@ -42,6 +42,7 @@ from app.services.market_preprocessing import (
     latest_snapshots, build_cs_by_bookie, build_goals_ou, build_match_winner,
     build_double_chance, build_home_totals, build_away_totals,
     build_win_to_nil_home, build_win_to_nil_away, build_exact_goals,
+    build_goals_first_half,
 )
 
 logger = logging.getLogger(__name__)
@@ -314,7 +315,8 @@ async def _load_bayesian_and_odds(
     fixture: "Fixture",
 ) -> tuple[dict[str, float], dict[str, float]]:
     """
-    Run the Bayesian engine directly on MarketSnapshot rows for a live fixture.
+    Run the Bayesian engine on MarketSnapshot rows for a live fixture, then
+    augment with first-half implied probabilities from 1H bookmaker lines.
     Returns (bayesian_probs, market_odds) dicts keyed by PHASE1A_MARKETS market names.
     Falls back to ({}, {}) gracefully if no snapshot data exists.
     """
@@ -355,4 +357,33 @@ async def _load_bayesian_and_odds(
             bayesian_probs[r.market] = r.derived_prob
         if r.best_actual_odd and r.best_actual_odd > 1.0:
             market_odds[r.market] = r.best_actual_odd
+
+    # Phase 2: derive first-half implied probs from 1H market odds.
+    # Bookmaker over/under lines give a two-way market; removing the overround
+    # yields fair probabilities that serve as the "bayesian" component for 1H markets.
+    ht_odds = build_goals_first_half(snaps)
+    _HT_TARGETS: dict[str, tuple[str, str]] = {
+        "1H Over 0.5":  ("Over 0.5",  "Under 0.5"),
+        "1H Over 1.5":  ("Over 1.5",  "Under 1.5"),
+        "1H Under 1.5": ("Under 1.5", "Over 1.5"),
+    }
+    for ht_market, (target_sel, comp_sel) in _HT_TARGETS.items():
+        probs_sum = 0.0
+        probs_count = 0
+        best_bk_odds: float | None = None
+        for bk_odds in ht_odds.values():
+            t_o = bk_odds.get(target_sel)
+            c_o = bk_odds.get(comp_sel)
+            if t_o and c_o and t_o > 1.0 and c_o > 1.0:
+                overround = 1.0 / t_o + 1.0 / c_o
+                if overround > 0:
+                    probs_sum += (1.0 / t_o) / overround
+                    probs_count += 1
+                    if best_bk_odds is None or t_o > best_bk_odds:
+                        best_bk_odds = t_o
+        if probs_count > 0:
+            bayesian_probs[ht_market] = round(probs_sum / probs_count, 6)
+        if best_bk_odds is not None:
+            market_odds[ht_market] = best_bk_odds
+
     return bayesian_probs, market_odds

@@ -34,6 +34,14 @@ _MARKET_WEIGHTS: dict[str, dict[str, float]] = {
     "X2 (Draw or Away)":   {"zinb": 0.30, "bayesian": 0.35, "elo": 0.35},
     "Home Over 0.5":       {"zinb": 0.55, "bayesian": 0.45, "elo": 0.00},
     "Away Over 0.5":       {"zinb": 0.55, "bayesian": 0.45, "elo": 0.00},
+    # Phase 2 — first-half markets.
+    # Bayesian weight is primary: the "bayesian_prob" here is an implied
+    # probability derived directly from bookmaker first-half odds (more
+    # reliable than scaled-Poisson for 45-minute time windows). ZINB is a
+    # structural prior via scaled lambdas.
+    "1H Over 0.5":         {"zinb": 0.30, "bayesian": 0.70, "elo": 0.00},
+    "1H Over 1.5":         {"zinb": 0.30, "bayesian": 0.70, "elo": 0.00},
+    "1H Under 1.5":        {"zinb": 0.30, "bayesian": 0.70, "elo": 0.00},
 }
 
 

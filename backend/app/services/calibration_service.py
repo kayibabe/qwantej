@@ -75,6 +75,17 @@ def _market_outcome(hf: HistoricalFixture, market: str) -> Optional[int]:
         return int(hf.home_goals >= 1) if hf.home_goals is not None else None
     if market == "Away Over 0.5":
         return int(hf.away_goals >= 1) if hf.away_goals is not None else None
+    # Phase 2 — first-half markets
+    if market in ("1H Over 0.5", "1H Over 1.5", "1H Under 1.5"):
+        if hf.home_goals_ht is None or hf.away_goals_ht is None:
+            return None
+        ht_total = hf.home_goals_ht + hf.away_goals_ht
+        if market == "1H Over 0.5":
+            return int(ht_total >= 1)
+        if market == "1H Over 1.5":
+            return int(ht_total >= 2)
+        if market == "1H Under 1.5":
+            return int(ht_total <= 1)
     return None
 
 
