@@ -74,11 +74,11 @@ const OUTCOMES = ['', 'WIN', 'LOSS', 'VOID', 'PUSH']
 const PER_PAGE = 50
 
 export default function ForecastArchivePage({ onMatchIntelligence }) {
-  const [dateFrom, setDateFrom] = useState(daysAgo(30))
+  const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo]     = useState(todayStr())
   const [market, setMarket]     = useState('')
   const [outcome, setOutcome]   = useState('')
-  const [activePreset, setActivePreset] = useState('30d')
+  const [activePreset, setActivePreset] = useState('All')
   const [page, setPage]         = useState(1)
   const [sortCol, setSortCol]   = useState('kickoff_at')
   const [sortDir, setSortDir]   = useState('desc')
@@ -135,13 +135,12 @@ export default function ForecastArchivePage({ onMatchIntelligence }) {
     return sortDir === 'desc' ? vb - va : va - vb
   })
 
-  const wins   = items.filter(i => i.outcome === 'WIN').length
-  const losses = items.filter(i => i.outcome === 'LOSS').length
+  // Use API-aggregated stats (covers full result set, not just current page)
+  const wins    = data?.total_wins  ?? 0
+  const losses  = data?.total_losses ?? 0
   const settled = wins + losses
   const wr = settled > 0 ? Math.round(wins / settled * 100) : null
-  const avgBrier = items.filter(i => i.brier_score != null).length > 0
-    ? items.reduce((s, i) => s + (i.brier_score ?? 0), 0) / items.filter(i => i.brier_score != null).length
-    : null
+  const avgBrier = data?.avg_brier ?? null
 
   return (
     <div className="space-y-5">

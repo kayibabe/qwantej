@@ -695,6 +695,7 @@ async def get_calibration_history(
 @router.post("/calibration/phase1c")
 async def trigger_phase1c_calibration(
     cutoff: str = "2022-07-01",
+    force_refresh: bool = False,
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(_require_admin),
 ):
@@ -702,6 +703,10 @@ async def trigger_phase1c_calibration(
     Fire-and-forget: backfill ForecastSnapshots from historical warehouse data
     then fit per-market isotonic calibrators. Runs as a background task;
     returns immediately. Monitor progress via `flyctl logs`.
+
+    force_refresh=true deletes all existing historical snapshots and rebuilds
+    from scratch — use this to apply model changes (e.g. adding Bayesian/Elo)
+    to the full backfill dataset.
     """
     import asyncio
     from datetime import date as _date
@@ -714,8 +719,8 @@ async def trigger_phase1c_calibration(
 
     async def _run():
         async with AsyncSessionLocal() as session:
-            _log.info("phase1c: starting backfill (cutoff=%s)", cutoff_date)
-            counts = await backfill_and_settle(session, cutoff=cutoff_date)
+            _log.info("phase1c: starting backfill (cutoff=%s, force_refresh=%s)", cutoff_date, force_refresh)
+            counts = await backfill_and_settle(session, cutoff=cutoff_date, force_refresh=force_refresh)
             _log.info("phase1c: backfill done — %s", counts)
             records = await run_calibration(session)
             _log.info("phase1c: calibration done — %d markets calibrated", len(records))
@@ -727,7 +732,7 @@ async def trigger_phase1c_calibration(
                 )
 
     asyncio.create_task(_run())
-    return {"status": "started", "cutoff": cutoff}
+    return {"status": "started", "cutoff": cutoff, "force_refresh": force_refresh}
 
 
 # ── Pipeline triggers ─────────────────────────────────────────────────────────

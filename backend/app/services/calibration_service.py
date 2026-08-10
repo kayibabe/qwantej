@@ -88,6 +88,77 @@ _HIST_ODDS_MAP: dict[str, str] = {
 }
 
 
+def _bayesian_probs_from_hist(hf: HistoricalFixture) -> dict[str, float]:
+    """Compute vig-removed implied probabilities from historical pre-match odds.
+
+    Over/Under markets: 2-outcome normalisation (over + under = 1).
+    1X2 markets: 3-outcome normalisation using home/draw/away odds.
+    Returns only markets for which both sides of the market are available.
+    """
+    probs: dict[str, float] = {}
+
+    # Over/Under pairs — vig removed via 2-outcome normalisation
+    pairs = [
+        ("Over 1.5",  "odds_over_1_5",  "odds_under_1_5"),
+        ("Over 2.5",  "odds_over_2_5",  "odds_under_2_5"),
+        ("Under 2.5", "odds_under_2_5", "odds_over_2_5"),
+        ("Under 3.5", "odds_under_3_5", "odds_over_3_5"),
+    ]
+    for market, self_field, other_field in pairs:
+        o_self  = getattr(hf, self_field,  None)
+        o_other = getattr(hf, other_field, None)
+        if o_self and o_other and o_self > 1.0 and o_other > 1.0:
+            total = 1.0 / o_self + 1.0 / o_other
+            probs[market] = round((1.0 / o_self) / total, 6)
+
+    # BTTS — 2-outcome normalisation
+    if hf.odds_btts_yes and hf.odds_btts_no and hf.odds_btts_yes > 1.0 and hf.odds_btts_no > 1.0:
+        total = 1.0 / hf.odds_btts_yes + 1.0 / hf.odds_btts_no
+        probs["BTTS Yes"] = round((1.0 / hf.odds_btts_yes) / total, 6)
+
+    # 1X2 — 3-outcome normalisation for double-chance markets
+    h = hf.odds_home_win
+    d = hf.odds_draw
+    a = hf.odds_away_win
+    if h and d and a and h > 1.0 and d > 1.0 and a > 1.0:
+        overround = 1.0 / h + 1.0 / d + 1.0 / a
+        probs["1X (Home or Draw)"] = round((1.0 / h + 1.0 / d) / overround, 6)
+        probs["X2 (Draw or Away)"] = round((1.0 / d + 1.0 / a) / overround, 6)
+
+    return probs
+
+
+def _market_odds_from_hist(hf: HistoricalFixture) -> dict[str, float]:
+    """Build the market_odds dict for the ensemble engine.
+
+    For goals markets, uses the FD.co.uk closing odds directly.
+    For 1X/X2, derives fair odds from the 1X2 market (vig-free implied prob).
+    This is an approximation — actual 1X/X2 bookmaker prices carry a separate
+    margin, so value edges computed here are slightly inflated versus reality.
+    The approximation is acceptable for calibration purposes.
+    """
+    odds: dict[str, float] = {}
+    for market, field in _HIST_ODDS_MAP.items():
+        v = getattr(hf, field, None)
+        if v is not None and v > 1.0:
+            odds[market] = float(v)
+
+    # Derive 1X and X2 market odds from vig-free implied probability
+    h = hf.odds_home_win
+    d = hf.odds_draw
+    a = hf.odds_away_win
+    if h and d and a and h > 1.0 and d > 1.0 and a > 1.0:
+        overround = 1.0 / h + 1.0 / d + 1.0 / a
+        p_1x = (1.0 / h + 1.0 / d) / overround
+        p_x2 = (1.0 / d + 1.0 / a) / overround
+        if p_1x > 0:
+            odds["1X (Home or Draw)"] = round(1.0 / p_1x, 4)
+        if p_x2 > 0:
+            odds["X2 (Draw or Away)"] = round(1.0 / p_x2, 4)
+
+    return odds
+
+
 # ---------------------------------------------------------------------------
 # Backfill
 # ---------------------------------------------------------------------------
@@ -95,10 +166,12 @@ _HIST_ODDS_MAP: dict[str, str] = {
 async def backfill_and_settle(
     db: AsyncSession,
     cutoff: date = _TRAIN_CUTOFF,
+    force_refresh: bool = False,
 ) -> dict[str, int]:
     """
     Run the ensemble on all holdout HistoricalFixtures and write settled
-    ForecastSnapshot rows. Skips fixtures that already have a snapshot.
+    ForecastSnapshot rows. Skips fixtures that already have a snapshot unless
+    force_refresh=True, which deletes and re-computes all historical snapshots.
 
     Returns {"leagues_processed", "fixtures_processed", "snapshots_written", "skipped"}.
     """
@@ -108,6 +181,16 @@ async def backfill_and_settle(
         "snapshots_written": 0,
         "skipped": 0,
     }
+
+    if force_refresh:
+        from sqlalchemy import delete as _delete
+        await db.execute(
+            _delete(ForecastSnapshot).where(
+                ForecastSnapshot.historical_fixture_id.isnot(None)
+            )
+        )
+        await db.commit()
+        logger.info("calibration: force_refresh — deleted existing historical snapshots")
 
     # --- Fetch all distinct leagues in the warehouse -----------------------
     from sqlalchemy import text as _text
@@ -216,16 +299,12 @@ async def _backfill_league(
             if zinb._model.fitted else (None, None)
         )
 
-        # Historical odds where available
-        market_odds: dict[str, float] = {}
-        for market, field in _HIST_ODDS_MAP.items():
-            v = getattr(hf, field, None)
-            if v is not None and v > 1.0:
-                market_odds[market] = float(v)
+        bayesian_probs = _bayesian_probs_from_hist(hf)
+        market_odds = _market_odds_from_hist(hf)
 
         results = engine.compute(
             zinb_probs=zinb_probs,
-            bayesian_probs={},      # no Bayesian for backfill
+            bayesian_probs=bayesian_probs,
             elo_1x2=elo_1x2,
             market_odds=market_odds,
             lambda_home=lambda_home,
@@ -249,7 +328,7 @@ async def _backfill_league(
                 horizon="backfill",
                 market=r.market,
                 zinb_prob=r.zinb_prob,
-                bayesian_prob=None,
+                bayesian_prob=r.bayesian_prob,
                 elo_prob=r.elo_prob,
                 ensemble_prob=r.ensemble_prob,
                 calibrated_prob=None,

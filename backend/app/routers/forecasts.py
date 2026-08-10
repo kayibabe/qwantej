@@ -71,6 +71,9 @@ class ForecastOut(BaseModel):
 class ArchivePage(BaseModel):
     items: list[ForecastOut]
     total: int
+    total_wins: int
+    total_losses: int
+    avg_brier: Optional[float]
     page: int
     per_page: int
     pages: int
@@ -310,8 +313,16 @@ async def archive(
         if conditions:
             base_stmt = base_stmt.where(and_(*conditions))
 
-    count_stmt = select(func.count()).select_from(base_stmt.subquery())
+    sq = base_stmt.subquery()
+    count_stmt = select(func.count()).select_from(sq)
     total = (await db.execute(count_stmt)).scalar_one()
+
+    agg_stmt = select(
+        func.count().filter(sq.c.outcome == "WIN").label("wins"),
+        func.count().filter(sq.c.outcome == "LOSS").label("losses"),
+        func.avg(sq.c.brier_score).label("avg_brier"),
+    ).select_from(sq)
+    agg = (await db.execute(agg_stmt)).one()
 
     stmt = base_stmt.order_by(match_date_col.desc())
     stmt = stmt.offset((page - 1) * per_page).limit(per_page)
@@ -323,6 +334,9 @@ async def archive(
     return ArchivePage(
         items=items,
         total=total,
+        total_wins=agg.wins or 0,
+        total_losses=agg.losses or 0,
+        avg_brier=float(agg.avg_brier) if agg.avg_brier is not None else None,
         page=page,
         per_page=per_page,
         pages=max(1, (total + per_page - 1) // per_page),
