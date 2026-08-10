@@ -205,10 +205,14 @@ TABLE_MIGRATIONS: list[str] = [
 ]
 
 
-def _is_duplicate_column_error(exc: BaseException) -> bool:
-    """SQLite raises OperationalError with 'duplicate column name' in the message."""
+def _is_already_exists_error(exc: BaseException) -> bool:
+    """
+    Detects 'already exists' errors from both SQLite and PostgreSQL.
+    SQLite: 'duplicate column name: foo'
+    PostgreSQL: 'column "foo" of relation "bar" already exists'
+    """
     msg = str(exc).lower()
-    return "duplicate column" in msg
+    return "duplicate column" in msg or "already exists" in msg
 
 
 INDEX_MIGRATIONS: list[tuple[str, str]] = [
@@ -315,85 +319,92 @@ DATA_MIGRATIONS: list[str] = [
 ]
 
 
+async def _run_one(engine: AsyncEngine, sql: str, label: str) -> bool:
+    """
+    Execute a single DDL/DML statement in its own transaction.
+
+    Returns True on success, False if the statement was already applied
+    (already-exists / duplicate-column), logs a warning on any other error.
+
+    Running each migration in a separate connection is critical for PostgreSQL:
+    a single failed statement puts the whole transaction in an aborted state,
+    causing every subsequent statement to fail with "current transaction is
+    aborted". Isolation per statement avoids that cascade.
+    """
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text(sql))
+        return True
+    except (OperationalError, Exception) as e:  # noqa: BLE001
+        if _is_already_exists_error(e):
+            return False
+        log.warning("Migration FAILED — label=%r sql=%r err=%s", label, sql, e)
+        return False
+
+
 async def run_migrations(engine: AsyncEngine) -> None:
     """
-    Apply all pending column additions. Safe to call on every startup.
+    Apply all pending column additions and table creations. Safe to call on
+    every startup — each statement runs in its own transaction so a failure
+    (e.g. 'column already exists' on PostgreSQL) does not abort later steps.
     """
-    async with engine.begin() as conn:
-        for table, column, col_def in COLUMN_MIGRATIONS:
-            sql = f"ALTER TABLE {table} ADD COLUMN {column} {col_def}"
-            try:
-                await conn.execute(text(sql))
-                log.info("Migration applied: %s.%s %s", table, column, col_def)
-            except OperationalError as e:
-                if _is_duplicate_column_error(e):
-                    log.debug("Migration already applied: %s.%s", table, column)
-                else:
-                    log.warning(
-                        "Migration FAILED for %s.%s — schema may be out of "
-                        "sync with the model. Stop other writers and restart. "
-                        "SQL=%r err=%s",
-                        table, column, sql, e,
-                    )
-            except Exception as e:  # noqa: BLE001
-                log.warning(
-                    "Migration FAILED for %s.%s with unexpected error: %s",
-                    table, column, e,
-                )
+    for table, column, col_def in COLUMN_MIGRATIONS:
+        sql = f"ALTER TABLE {table} ADD COLUMN {column} {col_def}"
+        applied = await _run_one(engine, sql, f"{table}.{column}")
+        if applied:
+            log.info("Migration applied: %s.%s %s", table, column, col_def)
+        else:
+            log.debug("Migration already applied (or skipped): %s.%s", table, column)
 
-        for sql in TABLE_MIGRATIONS:
-            try:
-                await conn.execute(text(sql))
-                log.info("Table migration applied (CREATE TABLE IF NOT EXISTS)")
-            except Exception as e:  # noqa: BLE001
-                log.warning("Table migration FAILED: %s", e)
+    for sql in TABLE_MIGRATIONS:
+        applied = await _run_one(engine, sql.strip(), "CREATE TABLE")
+        if applied:
+            log.info("Table migration applied (CREATE TABLE IF NOT EXISTS)")
 
-        # ── Pre-index dedup pass ──────────────────────────────────────────────────
-        # Remove duplicate system signal bets (same fixture+market tracked multiple
-        # times due to a bookmaker-field race on concurrent startup syncs).
-        # Must run before uq_system_signal_bet index creation to avoid IntegrityError.
-        try:
-            result = await conn.execute(text("""
-                DELETE FROM tracked_bets
-                WHERE user_id IS NULL
-                  AND fixture_id IS NOT NULL
-                  AND market_type != 'Accumulator'
-                  AND id NOT IN (
-                    SELECT MIN(id)
-                    FROM tracked_bets
-                    WHERE user_id IS NULL
-                      AND fixture_id IS NOT NULL
-                      AND market_type != 'Accumulator'
-                    GROUP BY fixture_id, market_type
-                  )
-            """))
+    # ── Pre-index dedup pass ──────────────────────────────────────────────────
+    # Remove duplicate system signal bets (same fixture+market tracked multiple
+    # times due to a bookmaker-field race on concurrent startup syncs).
+    # Must run before uq_system_signal_bet index creation to avoid IntegrityError.
+    dedup_sql = """
+        DELETE FROM tracked_bets
+        WHERE user_id IS NULL
+          AND fixture_id IS NOT NULL
+          AND market_type != 'Accumulator'
+          AND id NOT IN (
+            SELECT MIN(id)
+            FROM tracked_bets
+            WHERE user_id IS NULL
+              AND fixture_id IS NOT NULL
+              AND market_type != 'Accumulator'
+            GROUP BY fixture_id, market_type
+          )
+    """
+    try:
+        async with engine.begin() as conn:
+            result = await conn.execute(text(dedup_sql))
             if result.rowcount:
                 log.info("Dedup migration: removed %d duplicate system signal bet(s)", result.rowcount)
-        except Exception as e:  # noqa: BLE001
-            log.warning("Dedup migration FAILED: %s", e)
+    except Exception as e:  # noqa: BLE001
+        log.warning("Dedup migration FAILED: %s", e)
 
-        for index_name, sql in INDEX_MIGRATIONS:
-            try:
-                await conn.execute(text(sql))
-                log.info("Index migration applied: %s", index_name)
-            except Exception as e:  # noqa: BLE001
-                log.warning("Index migration FAILED for %s: %s", index_name, e)
+    for index_name, sql in INDEX_MIGRATIONS:
+        applied = await _run_one(engine, sql, index_name)
+        if applied:
+            log.info("Index migration applied: %s", index_name)
 
-        # ── Data migrations ───────────────────────────────────────────────────
-        # Seed is_admin=1 for any existing elite users who predate the column.
-        # Idempotent: rows already at is_admin=1 are untouched.
+    # ── Data migrations ───────────────────────────────────────────────────
+    # Seed is_admin=1 for any existing elite users who predate the column.
+    await _run_one(
+        engine,
+        "UPDATE users SET is_admin=1 WHERE tier='elite' AND is_admin=0",
+        "seed is_admin",
+    )
+
+    for dm_sql in DATA_MIGRATIONS:
         try:
-            await conn.execute(text(
-                "UPDATE users SET is_admin=1 WHERE tier='elite' AND is_admin=0"
-            ))
-            log.info("Data migration applied: seeded is_admin for elite users")
-        except Exception as e:  # noqa: BLE001
-            log.warning("Data migration FAILED (is_admin seed): %s", e)
-
-        for dm_sql in DATA_MIGRATIONS:
-            try:
+            async with engine.begin() as conn:
                 result = await conn.execute(text(dm_sql))
                 if result.rowcount:
                     log.info("Data migration applied: %d row(s) updated", result.rowcount)
-            except Exception as e:  # noqa: BLE001
-                log.warning("Data migration FAILED: %s", e)
+        except Exception as e:  # noqa: BLE001
+            log.warning("Data migration FAILED: %s", e)
