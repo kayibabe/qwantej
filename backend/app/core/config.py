@@ -400,6 +400,15 @@ FIRST_HALF_GOALS_MARKET_NAMES: frozenset = frozenset({
     "HT Goals Over/Under",
 })
 
+SECOND_HALF_GOALS_MARKET_NAMES: frozenset = frozenset({
+    "Goals Second Half",
+    "Second Half Goals",
+    "Over/Under Second Half",
+    "Second Half Over/Under",
+    "2nd Half Goals",
+    "2H Goals Over/Under",
+})
+
 CORNERS_MARKET_NAMES: frozenset = frozenset({
     "Corner Kicks",
     "Total Corners",

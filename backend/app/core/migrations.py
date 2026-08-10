@@ -83,6 +83,17 @@ COLUMN_MIGRATIONS = [
     ("tracked_bets", "home_o05_odds_logged", "REAL"),
     # ── Hybrid B — weather override (Phase 6 Rule 5) needs venue location ──────
     ("fixtures", "venue_city", "TEXT"),
+    # ── XGBoost meta-learner probability (Phase 1 model addition) ─────────────
+    ("forecast_snapshots", "xgb_prob", "REAL"),
+    # ── Data Value Score components ───────────────────────────────────────────
+    ("data_source_experiments", "accuracy_score",    "REAL"),
+    ("data_source_experiments", "calibration_score", "REAL"),
+    ("data_source_experiments", "roi_score",         "REAL"),
+    ("data_source_experiments", "coverage_score",    "REAL"),
+    ("data_source_experiments", "timeliness_score",  "REAL"),
+    ("data_source_experiments", "cost_score",        "REAL"),
+    ("data_source_experiments", "data_value_score",  "REAL"),
+    ("data_source_experiments", "updated_at",        "DATETIME"),
 ]
 
 TABLE_MIGRATIONS: list[str] = [
@@ -151,6 +162,44 @@ TABLE_MIGRATIONS: list[str] = [
         backtest_note   TEXT,
         is_active       INTEGER NOT NULL DEFAULT 1,
         created_at      DATETIME DEFAULT (strftime('%Y-%m-%dT%H:%M:%S', 'now'))
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS external_forecasts (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        source              VARCHAR(40)  NOT NULL,
+        home_team           VARCHAR(120) NOT NULL,
+        away_team           VARCHAR(120) NOT NULL,
+        league              VARCHAR(120),
+        country             VARCHAR(80),
+        match_date          DATE         NOT NULL,
+        fixture_id          INTEGER,
+        scraped_at          DATETIME     DEFAULT (strftime('%Y-%m-%dT%H:%M:%S', 'now')),
+        home_win_prob       REAL,
+        draw_prob           REAL,
+        away_win_prob       REAL,
+        over_15_prob        REAL,
+        over_25_prob        REAL,
+        under_25_prob       REAL,
+        over_35_prob        REAL,
+        under_35_prob       REAL,
+        btts_yes_prob       REAL,
+        btts_no_prob        REAL,
+        pred_home_goals     REAL,
+        pred_away_goals     REAL,
+        confidence_label    VARCHAR(40),
+        actual_home_goals   INTEGER,
+        actual_away_goals   INTEGER,
+        settled             INTEGER      NOT NULL DEFAULT 0,
+        settled_at          DATETIME,
+        brier_1x2_home      REAL,
+        brier_1x2_draw      REAL,
+        brier_1x2_away      REAL,
+        brier_o15           REAL,
+        brier_o25           REAL,
+        brier_u25           REAL,
+        brier_btts          REAL,
+        UNIQUE(source, home_team, away_team, match_date)
     )
     """,
 ]

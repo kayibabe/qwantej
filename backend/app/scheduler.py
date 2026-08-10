@@ -31,6 +31,7 @@ from app.core.database import AsyncSessionLocal
 from app.models import TrackedBet, Fixture
 from app.services import ingestion
 from app.services.ensemble_service import compute_snapshots_for_date as compute_ensemble_snapshots
+from app.services.forebet_scraper import scrape_forebet, settle_external_forecasts
 from app.services.settlement import settle_bets_for_date, FINAL_STATUSES
 from app.services.telegram import (
     push_kickoff_alerts,
@@ -155,6 +156,15 @@ async def sync_and_compute(run_date: date | None = None, *, morning_extras: bool
                     "Scheduler: %s done — %d fixtures, %d bets settled",
                     run_date, run.fixtures_pulled, n_settled,
                 )
+                # Score external forecasts (Forebet etc.) for recently settled dates.
+                for _settle_d in [run_date, run_date - timedelta(days=1)]:
+                    try:
+                        ef_scored = await settle_external_forecasts(db, _settle_d)
+                        if ef_scored:
+                            logger.info("External forecasts scored for %s: %d rows", _settle_d, ef_scored)
+                    except Exception:
+                        logger.exception("External forecast settlement failed for %s — continuing normally", _settle_d)
+
                 # Push results for any fully-settled date (today + last 2 days).
                 try:
                     n_results = await check_and_push_pending_results(db)
@@ -165,6 +175,13 @@ async def sync_and_compute(run_date: date | None = None, *, morning_extras: bool
 
                 # ── Morning extras (first daily sync only) ────────────────────
                 if morning_extras:
+                    # Scrape Forebet predictions for today (odds already final, good match window).
+                    try:
+                        ef_today = await scrape_forebet(db, run_date)
+                        if ef_today:
+                            logger.info("Forebet scrape (today): %d predictions ingested for %s", ef_today, run_date)
+                    except Exception:
+                        logger.exception("Forebet scrape (today) failed — continuing normally")
                     try:
                         n_sent = await push_morning_digest(db)
                         if n_sent:
@@ -190,6 +207,13 @@ async def sync_and_compute(run_date: date | None = None, *, morning_extras: bool
                                 )
                             except Exception:
                                 logger.exception("Ensemble D-1 snapshot for %s failed — continuing normally", tomorrow)
+                            # Scrape Forebet for tomorrow at peak odds window (19:00 UTC).
+                            try:
+                                ef_tomorrow = await scrape_forebet(db, tomorrow)
+                                if ef_tomorrow:
+                                    logger.info("Forebet scrape (tomorrow): %d predictions for %s", ef_tomorrow, tomorrow)
+                            except Exception:
+                                logger.exception("Forebet scrape (tomorrow) failed — continuing normally")
                         else:
                             logger.warning("Tomorrow pre-sync: %s status=%s", tomorrow, t_run.status)
                     except Exception:
@@ -350,6 +374,24 @@ async def _daily_calibration_job() -> None:
             logger.exception("Calibration job failed")
 
 
+async def _weekly_historical_etl() -> None:
+    """
+    Weekly top-up: re-fetch this season's CSV from football-data.co.uk.
+    Keeps the historical warehouse current as the season progresses.
+    Idempotent — existing rows are skipped via ON CONFLICT DO NOTHING.
+    """
+    from app.services.historical_data_etl import run_current_season_etl
+    async with AsyncSessionLocal() as db:
+        try:
+            result = await run_current_season_etl(db)
+            logger.info(
+                "Weekly historical ETL: %d new rows inserted, %d skipped (existing)",
+                result["rows_inserted"], result["rows_skipped"],
+            )
+        except Exception:
+            logger.exception("Weekly historical ETL failed — continuing normally")
+
+
 def get_scheduler() -> AsyncIOScheduler:
     global _scheduler
     if _scheduler is None:
@@ -398,6 +440,16 @@ def get_scheduler() -> AsyncIOScheduler:
             _cleanup_old_snapshots,
             CronTrigger(day_of_week="wed", hour=2, minute=0),
             id="weekly-cleanup",
+            replace_existing=True,
+            misfire_grace_time=3600,
+        )
+        # Weekly historical ETL — every Sunday 03:00 UTC.
+        # Fetches the current season's CSV from football-data.co.uk (1 season, ~18 files)
+        # to keep the warehouse current as the season progresses.
+        _scheduler.add_job(
+            _weekly_historical_etl,
+            CronTrigger(day_of_week="sun", hour=3, minute=0),
+            id="weekly-historical-etl",
             replace_existing=True,
             misfire_grace_time=3600,
         )

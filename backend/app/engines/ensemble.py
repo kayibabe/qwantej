@@ -25,23 +25,31 @@ MIN_VALUE_EDGE = 0.03   # 3% minimum edge over fair price to call SIGNAL
 # Market weights: {market: {model: weight}}
 # Missing models get weight 0. Weights are normalised among available models.
 _MARKET_WEIGHTS: dict[str, dict[str, float]] = {
-    "Over 1.5":            {"zinb": 0.50, "bayesian": 0.50, "elo": 0.00},
-    "Over 2.5":            {"zinb": 0.50, "bayesian": 0.50, "elo": 0.00},
-    "Under 2.5":           {"zinb": 0.50, "bayesian": 0.50, "elo": 0.00},
-    "Under 3.5":           {"zinb": 0.50, "bayesian": 0.50, "elo": 0.00},
-    "BTTS Yes":            {"zinb": 0.50, "bayesian": 0.50, "elo": 0.00},
-    "1X (Home or Draw)":   {"zinb": 0.30, "bayesian": 0.35, "elo": 0.35},
-    "X2 (Draw or Away)":   {"zinb": 0.30, "bayesian": 0.35, "elo": 0.35},
-    "Home Over 0.5":       {"zinb": 0.55, "bayesian": 0.45, "elo": 0.00},
-    "Away Over 0.5":       {"zinb": 0.55, "bayesian": 0.45, "elo": 0.00},
-    # Phase 2 — first-half markets.
+    # When XGBoost is active (trained models exist on disk), it takes a 15%
+    # slice and the other weights are renormalised proportionally.
+    # XGBoost weights = 0.0 when no model file is present (silently skipped).
+    "Over 1.5":            {"zinb": 0.425, "bayesian": 0.425, "elo": 0.00, "xgb": 0.15},
+    "Over 2.5":            {"zinb": 0.425, "bayesian": 0.425, "elo": 0.00, "xgb": 0.15},
+    "Under 2.5":           {"zinb": 0.425, "bayesian": 0.425, "elo": 0.00, "xgb": 0.15},
+    "Under 3.5":           {"zinb": 0.425, "bayesian": 0.425, "elo": 0.00, "xgb": 0.15},
+    "BTTS Yes":            {"zinb": 0.425, "bayesian": 0.425, "elo": 0.00, "xgb": 0.15},
+    "1X (Home or Draw)":   {"zinb": 0.255, "bayesian": 0.300, "elo": 0.295, "xgb": 0.15},
+    "X2 (Draw or Away)":   {"zinb": 0.255, "bayesian": 0.300, "elo": 0.295, "xgb": 0.15},
+    "Home Over 0.5":       {"zinb": 0.468, "bayesian": 0.382, "elo": 0.00, "xgb": 0.15},
+    "Away Over 0.5":       {"zinb": 0.468, "bayesian": 0.382, "elo": 0.00, "xgb": 0.15},
+    # Phase 1B — first-half markets.
     # Bayesian weight is primary: the "bayesian_prob" here is an implied
     # probability derived directly from bookmaker first-half odds (more
     # reliable than scaled-Poisson for 45-minute time windows). ZINB is a
-    # structural prior via scaled lambdas.
-    "1H Over 0.5":         {"zinb": 0.30, "bayesian": 0.70, "elo": 0.00},
-    "1H Over 1.5":         {"zinb": 0.30, "bayesian": 0.70, "elo": 0.00},
-    "1H Under 1.5":        {"zinb": 0.30, "bayesian": 0.70, "elo": 0.00},
+    # structural prior via scaled lambdas. No XGBoost (insufficient historical
+    # half-time odds data for training).
+    "1H Over 0.5":         {"zinb": 0.30, "bayesian": 0.70, "elo": 0.00, "xgb": 0.00},
+    "1H Over 1.5":         {"zinb": 0.30, "bayesian": 0.70, "elo": 0.00, "xgb": 0.00},
+    "1H Under 1.5":        {"zinb": 0.30, "bayesian": 0.70, "elo": 0.00, "xgb": 0.00},
+    # Phase 1B — second-half markets.
+    "2H Over 0.5":         {"zinb": 0.30, "bayesian": 0.70, "elo": 0.00, "xgb": 0.00},
+    "2H Over 1.5":         {"zinb": 0.30, "bayesian": 0.70, "elo": 0.00, "xgb": 0.00},
+    "2H Under 1.5":        {"zinb": 0.30, "bayesian": 0.70, "elo": 0.00, "xgb": 0.00},
 }
 
 
@@ -51,6 +59,7 @@ class EnsembleResult:
     zinb_prob: Optional[float]
     bayesian_prob: Optional[float]
     elo_prob: Optional[float]
+    xgb_prob: Optional[float]
     ensemble_prob: float
     confidence: str            # "High" | "Medium" | "Low"
     fair_odds: float           # 1 / ensemble_prob
@@ -79,16 +88,19 @@ def _data_quality(
     bayesian_prob: Optional[float],
     elo_prob: Optional[float],
     market_odds: Optional[float],
+    xgb_prob: Optional[float] = None,
 ) -> float:
     """0–1 score reflecting how many model inputs were available."""
     score = 0.0
     if zinb_prob is not None:
-        score += 0.35
+        score += 0.30
     if bayesian_prob is not None:
-        score += 0.40
+        score += 0.35
     if elo_prob is not None:
         score += 0.15
     if market_odds is not None:
+        score += 0.10
+    if xgb_prob is not None:
         score += 0.10
     return round(score, 3)
 
@@ -98,13 +110,15 @@ def _weighted_ensemble(
     zinb_prob: Optional[float],
     bayesian_prob: Optional[float],
     elo_prob: Optional[float],
+    xgb_prob: Optional[float] = None,
 ) -> float:
     """Compute weighted ensemble probability for a market."""
-    weights = _MARKET_WEIGHTS.get(market, {"zinb": 0.40, "bayesian": 0.60, "elo": 0.00})
+    weights = _MARKET_WEIGHTS.get(market, {"zinb": 0.40, "bayesian": 0.60, "elo": 0.00, "xgb": 0.00})
     probs = {
         "zinb": zinb_prob,
         "bayesian": bayesian_prob,
         "elo": elo_prob,
+        "xgb": xgb_prob,
     }
     total_weight = 0.0
     weighted_sum = 0.0
@@ -116,7 +130,7 @@ def _weighted_ensemble(
 
     if total_weight == 0.0:
         # No model produced a valid probability — fall back to prior
-        available = [p for p in (zinb_prob, bayesian_prob, elo_prob) if p is not None]
+        available = [p for p in (zinb_prob, bayesian_prob, elo_prob, xgb_prob) if p is not None]
         return sum(available) / len(available) if available else 0.5
 
     # Renormalise among available models to preserve weight semantics
@@ -148,6 +162,7 @@ class EnsembleEngine:
         lambda_away: Optional[float] = None,
         elo_home: Optional[float] = None,
         elo_away: Optional[float] = None,
+        xgb_probs: dict[str, float] | None = None,
     ) -> list[EnsembleResult]:
 
         # Map Elo 1X2 to the double-chance markets we serve
@@ -164,8 +179,9 @@ class EnsembleEngine:
             z_prob = zinb_probs.get(market)
             b_prob = bayesian_probs.get(market)
             e_prob = elo_probs.get(market)
+            x_prob = (xgb_probs or {}).get(market)
 
-            ensemble = _weighted_ensemble(market, z_prob, b_prob, e_prob)
+            ensemble = _weighted_ensemble(market, z_prob, b_prob, e_prob, x_prob)
             if ensemble <= 0.0:
                 continue
 
@@ -175,13 +191,14 @@ class EnsembleEngine:
             is_value = edge is not None and edge >= MIN_VALUE_EDGE
             signal_type = "SIGNAL" if is_value else "NO_SIGNAL"
             conf = _confidence(ensemble)
-            dq = _data_quality(z_prob, b_prob, e_prob, m_odds)
+            dq = _data_quality(z_prob, b_prob, e_prob, m_odds, x_prob)
 
             results.append(EnsembleResult(
                 market=market,
                 zinb_prob=z_prob,
                 bayesian_prob=b_prob,
                 elo_prob=e_prob,
+                xgb_prob=x_prob,
                 ensemble_prob=ensemble,
                 confidence=conf,
                 fair_odds=fair,

@@ -1484,3 +1484,144 @@ async def clv_backfill(
         "skipped_no_snapshot_data": result["skipped_no_data"],
         "note": "CLV computed from local market_snapshots — no API calls made.",
     }
+
+
+# ── Historical Data ETL ───────────────────────────────────────────────────────
+
+@router.post("/etl/historical")
+async def trigger_historical_etl(
+    seasons: int = Query(10, ge=1, le=30, description="How many past seasons to ingest (default 10)"),
+    concurrency: int = Query(4, ge=1, le=8, description="Parallel HTTP connections to football-data.co.uk"),
+    _admin: User = Depends(_require_admin),
+):
+    """
+    Download and ingest historical match data from football-data.co.uk.
+
+    Fetches CSVs for the last `seasons` seasons across 18 major leagues.
+    Each row goes into the historical_fixtures warehouse; upserts are idempotent.
+
+    Runs as a background task — returns immediately. Monitor progress via server logs.
+    Approximate scale: 10 seasons × 18 leagues ≈ 180 files ≈ 200-300K rows.
+    """
+    import asyncio
+    from app.core.database import AsyncSessionLocal
+    from app.services.historical_data_etl import run_full_etl
+
+    async def _run():
+        async with AsyncSessionLocal() as db:
+            result = await run_full_etl(db, seasons=seasons, concurrency=concurrency)
+            logger.info("Historical ETL complete: %s", result)
+
+    asyncio.create_task(_run())
+    return {
+        "status": "started",
+        "seasons": seasons,
+        "concurrency": concurrency,
+        "note": "Running in background — check server logs for progress. Re-running is safe (idempotent).",
+    }
+
+
+@router.post("/etl/xgb-train")
+async def trigger_xgb_training(
+    model_dir: str = Query("xgb_models", description="Directory to save model files"),
+    _admin: User = Depends(_require_admin),
+):
+    """
+    Train per-market XGBoost classifiers from historical_fixtures and save to disk.
+
+    Requires:
+    1. historical_fixtures populated (run /api/admin/etl/historical first if empty)
+    2. xgboost package installed
+
+    Runs as a background task. Models are saved to `model_dir` as {market}.pkl files.
+    The ensemble immediately uses them for all subsequent predictions.
+    """
+    import asyncio
+    from pathlib import Path
+    from app.core.database import AsyncSessionLocal
+    from app.engines.xgboost_model import train_and_save
+
+    target_dir = Path(model_dir)
+
+    async def _run():
+        async with AsyncSessionLocal() as db:
+            result = await train_and_save(db, model_dir=target_dir)
+            logger.info("XGBoost training complete: %s", result)
+
+    asyncio.create_task(_run())
+    return {
+        "status": "started",
+        "model_dir": str(target_dir),
+        "note": "Training runs in background. Call /api/admin/etl/xgb-status to check.",
+    }
+
+
+@router.get("/etl/xgb-status")
+async def xgb_model_status(_admin: User = Depends(_require_admin)):
+    """Return which per-market XGBoost models are currently loaded."""
+    from app.engines.xgboost_model import get_xgb_ensemble, _MODEL_DIR
+    ens = get_xgb_ensemble()
+    return {
+        "model_dir": str(_MODEL_DIR),
+        "markets": {
+            market: model.is_fitted
+            for market, model in ens._models.items()
+        },
+        "active_count": sum(1 for m in ens._models.values() if m.is_fitted),
+        "total_markets": len(ens._models),
+    }
+
+
+@router.post("/data-sources/recompute-dvs")
+async def recompute_data_value_scores(
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(_require_admin),
+):
+    """
+    Recompute Data Value Score for all DataSourceExperiment rows.
+
+    Formula: Accuracy 30% + Calibration 20% + ROI 20% + Coverage 15% + Timeliness 10% + Cost 5%.
+    Reads settled external_forecasts for calibration + ROI simulation.
+    """
+    from app.services.data_source_service import compute_all_data_value_scores
+    results = await compute_all_data_value_scores(db)
+    return {
+        "updated": len(results),
+        "scores": results,
+    }
+
+
+@router.get("/data-sources/rankings")
+async def data_source_rankings(
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(_require_admin),
+):
+    """
+    Return all known data sources ranked by average Data Value Score.
+    Sources without experiments fall back to static timeliness + cost defaults.
+    """
+    from app.services.data_source_service import get_source_rankings
+    rankings = await get_source_rankings(db)
+    return {"rankings": rankings}
+
+
+@router.get("/etl/historical/count")
+async def historical_etl_count(
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(_require_admin),
+):
+    """Return row count and source breakdown from the historical_fixtures warehouse."""
+    total = (await db.execute(text("SELECT COUNT(*) FROM historical_fixtures"))).scalar() or 0
+    by_source = (await db.execute(text(
+        "SELECT source, COUNT(*) n, MIN(match_date) earliest, MAX(match_date) latest "
+        "FROM historical_fixtures GROUP BY source ORDER BY n DESC"
+    ))).all()
+    by_league = (await db.execute(text(
+        "SELECT league, country, COUNT(*) n FROM historical_fixtures "
+        "GROUP BY league, country ORDER BY n DESC LIMIT 25"
+    ))).all()
+    return {
+        "total_rows": total,
+        "by_source": [{"source": r.source, "rows": r.n, "earliest": str(r.earliest), "latest": str(r.latest)} for r in by_source],
+        "top_leagues": [{"league": r.league, "country": r.country, "rows": r.n} for r in by_league],
+    }

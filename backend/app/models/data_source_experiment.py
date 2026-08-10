@@ -46,6 +46,21 @@ class DataSourceExperiment(Base):
 
     notes: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
+    # ── Data Value Score (0-1) ────────────────────────────────────────────────
+    # Composite score: Accuracy 30% + Calibration 20% + ROI 20% +
+    #                  Coverage 15% + Timeliness 10% + Cost 5%
+    # Updated by compute_data_value_scores() in data_source_service.py.
+    accuracy_score:    Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    calibration_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    roi_score:         Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    coverage_score:    Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    timeliness_score:  Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    cost_score:        Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    data_value_score:  Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), onupdate=func.now(), nullable=True
     )

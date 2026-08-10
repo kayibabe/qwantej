@@ -51,6 +51,7 @@ class ForecastSnapshot(Base):
     zinb_prob: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     bayesian_prob: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     elo_prob: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    xgb_prob: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     # Weighted combination of available models
     ensemble_prob: Mapped[float] = mapped_column(Float, nullable=False)
     # Post-calibration (isotonic regression) — populated by calibration.py

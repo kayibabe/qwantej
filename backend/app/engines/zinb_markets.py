@@ -1,18 +1,20 @@
 """
-zinb_markets.py — ZINB score-matrix → Phase 1A + Phase 2 market probabilities.
+zinb_markets.py — ZINB score-matrix → Phase 1A + Phase 1B market probabilities.
 
 Wraps the existing ZINBGoalModel so it:
   1. Fits from HistoricalFixture records using team names as keys.
   2. Converts a score matrix into a dict of market → probability
-     for all Phase 1A + Phase 2 markets.
+     for all Phase 1A + Phase 1B markets.
 
 Markets produced:
   Full-match (Phase 1A):
     "Over 1.5", "Over 2.5", "Under 2.5", "Under 3.5",
     "BTTS Yes", "1X (Home or Draw)", "X2 (Draw or Away)",
     "Home Over 0.5", "Away Over 0.5"
-  First-half (Phase 2):
+  First-half (Phase 1B):
     "1H Over 0.5", "1H Over 1.5", "1H Under 1.5"
+  Second-half (Phase 1B):
+    "2H Over 0.5", "2H Over 1.5", "2H Under 1.5"
 """
 from __future__ import annotations
 
@@ -27,9 +29,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Fraction of full-match goals typically scored in the first half (~44%).
-# Used to scale ZINB full-match lambdas for first-half probability estimates.
-_HT_FRACTION = 0.44
+# Fraction of full-match goals scored in each half (empirical averages).
+_HT_FRACTION = 0.44   # first half  (~44%)
+_2H_FRACTION = 0.56   # second half (~56%, more goals late due to fatigue/open play)
 
 PHASE1A_MARKETS = (
     "Over 1.5",
@@ -41,10 +43,14 @@ PHASE1A_MARKETS = (
     "X2 (Draw or Away)",
     "Home Over 0.5",
     "Away Over 0.5",
-    # Phase 2 — first-half markets
+    # Phase 1B — first-half markets
     "1H Over 0.5",
     "1H Over 1.5",
     "1H Under 1.5",
+    # Phase 1B — second-half markets
+    "2H Over 0.5",
+    "2H Over 1.5",
+    "2H Under 1.5",
 )
 
 
@@ -87,28 +93,53 @@ def score_matrix_to_market_probs(matrix: "np.ndarray") -> dict[str, float]:
     return probs
 
 
+def _half_poisson_probs(fraction: float, lambda_home: Optional[float], lambda_away: Optional[float]) -> tuple[float, float, float]:
+    """Return (p0, p1, lambda) for a half-match Poisson model given full-match lambdas."""
+    l = fraction * (lambda_home + lambda_away)
+    p0 = math.exp(-l)
+    p1 = l * p0
+    return p0, p1, l
+
+
 def predict_ht_market_probs(
     lambda_home: Optional[float],
     lambda_away: Optional[float],
 ) -> dict[str, float]:
-    """
-    Estimate first-half market probabilities using scaled full-match lambdas.
+    """Estimate first-half market probabilities using scaled full-match lambdas.
 
     Models combined first-half goals as Poisson(_HT_FRACTION * (λh + λa)).
-    The sum of two independent Poissons is Poisson — this is exact, not an
-    approximation, provided independence holds across the two teams.
+    The sum of two independent Poissons is Poisson — exact under independence.
     """
     if lambda_home is None or lambda_away is None or lambda_home < 0 or lambda_away < 0:
         return {}
-    l = _HT_FRACTION * (lambda_home + lambda_away)
+    p0, p1, l = _half_poisson_probs(_HT_FRACTION, lambda_home, lambda_away)
     if l <= 0:
         return {}
-    p0 = math.exp(-l)
-    p1 = l * p0
     return {
         "1H Over 0.5":  round(max(0.0, min(1.0, 1.0 - p0)), 6),
         "1H Over 1.5":  round(max(0.0, min(1.0, 1.0 - p0 - p1)), 6),
         "1H Under 1.5": round(max(0.0, min(1.0, p0 + p1)), 6),
+    }
+
+
+def predict_2h_market_probs(
+    lambda_home: Optional[float],
+    lambda_away: Optional[float],
+) -> dict[str, float]:
+    """Estimate second-half market probabilities using scaled full-match lambdas.
+
+    Second half accounts for ~56% of total goals (more open play, tired defences).
+    Models combined 2H goals as Poisson(_2H_FRACTION * (λh + λa)).
+    """
+    if lambda_home is None or lambda_away is None or lambda_home < 0 or lambda_away < 0:
+        return {}
+    p0, p1, l = _half_poisson_probs(_2H_FRACTION, lambda_home, lambda_away)
+    if l <= 0:
+        return {}
+    return {
+        "2H Over 0.5":  round(max(0.0, min(1.0, 1.0 - p0)), 6),
+        "2H Over 1.5":  round(max(0.0, min(1.0, 1.0 - p0 - p1)), 6),
+        "2H Under 1.5": round(max(0.0, min(1.0, p0 + p1)), 6),
     }
 
 
@@ -176,7 +207,8 @@ class ZINBMarketsModel:
             return {}
 
         probs = score_matrix_to_market_probs(matrix)
-        # Phase 2: first-half markets via scaled Poisson
+        # Phase 1B: half-time markets via scaled Poisson
         lambda_home, lambda_away = self.predict_lambdas(home_team, away_team)
         probs.update(predict_ht_market_probs(lambda_home, lambda_away))
+        probs.update(predict_2h_market_probs(lambda_home, lambda_away))
         return probs

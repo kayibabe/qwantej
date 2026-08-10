@@ -23,3 +23,10 @@ scipy>=1.13.0
 pandas>=2.2.0
 # Phase 1A ETL loaders — async HTTP for downloading historical data CSVs/JSON
 aiohttp>=3.9.0
+# HTML scraping for external benchmark sources (Forebet, BetMines, SoccerAiTips)
+beautifulsoup4>=4.12.0
+lxml>=5.2.0
+# XGBoost meta-learner (Phase 1) + model persistence
+xgboost>=2.0.0
+lightgbm>=4.3.0
+joblib>=1.4.0

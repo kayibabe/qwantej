@@ -27,6 +27,7 @@ from app.routers import payments as payments_router
 from app.routers import forecasts as forecasts_router
 from app.routers import model_performance as model_performance_router
 from app.routers import data_sources as data_sources_router
+from app.routers import advisor as advisor_router
 from app.scheduler import get_scheduler
 import app.models.user  # noqa: F401 — ensures users table is created by init_db
 
@@ -290,6 +291,7 @@ app.include_router(leaderboard_router.router)
 app.include_router(forecasts_router.router)
 app.include_router(model_performance_router.router)
 app.include_router(data_sources_router.router)
+app.include_router(advisor_router.router)
 
 
 @app.get("/health")

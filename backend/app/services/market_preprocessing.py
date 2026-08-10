@@ -23,6 +23,7 @@ from app.core.config import (
     WIN_TO_NIL_COMBINED_MARKET_NAMES,
     EXACT_GOALS_MARKET_NAMES,
     FIRST_HALF_GOALS_MARKET_NAMES,
+    SECOND_HALF_GOALS_MARKET_NAMES,
 )
 
 
@@ -123,5 +124,14 @@ def build_goals_first_half(snapshots: list[MarketSnapshot]) -> dict[str, dict[st
     result: dict[str, dict[str, float]] = {}
     for s in snapshots:
         if s.market_type in FIRST_HALF_GOALS_MARKET_NAMES:
+            result.setdefault(s.bookmaker, {})[s.selection_name] = s.odds
+    return result
+
+
+def build_goals_second_half(snapshots: list[MarketSnapshot]) -> dict[str, dict[str, float]]:
+    """Extract second-half goals Over/Under odds: {bookmaker: {selection: odds}}."""
+    result: dict[str, dict[str, float]] = {}
+    for s in snapshots:
+        if s.market_type in SECOND_HALF_GOALS_MARKET_NAMES:
             result.setdefault(s.bookmaker, {})[s.selection_name] = s.odds
     return result

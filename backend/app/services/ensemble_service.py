@@ -42,7 +42,7 @@ from app.services.market_preprocessing import (
     latest_snapshots, build_cs_by_bookie, build_goals_ou, build_match_winner,
     build_double_chance, build_home_totals, build_away_totals,
     build_win_to_nil_home, build_win_to_nil_away, build_exact_goals,
-    build_goals_first_half,
+    build_goals_first_half, build_goals_second_half,
 )
 
 logger = logging.getLogger(__name__)
@@ -149,7 +149,24 @@ async def _process_fixture(
     # 4+5. Load MarketSnapshot rows; run Bayesian engine to get probs + best odds
     bayesian_probs, market_odds = await _load_bayesian_and_odds(db, fixture)
 
-    # 6. Run ensemble
+    # 6. XGBoost meta-learner (active only when models exist on disk)
+    try:
+        from app.engines.xgboost_model import get_xgb_ensemble
+        xgb_ens = get_xgb_ensemble()
+        xgb_probs = xgb_ens.predict_all(
+            zinb_probs=zinb_probs,
+            bayesian_probs=bayesian_probs,
+            elo_1x2=elo_1x2,
+            market_odds=market_odds,
+            lambda_home=lambda_home,
+            lambda_away=lambda_away,
+            elo_home=elo_home_rating,
+            elo_away=elo_away_rating,
+        ) if any(m.is_fitted for m in xgb_ens._models.values()) else None
+    except Exception:
+        xgb_probs = None
+
+    # 7. Run ensemble
     engine = EnsembleEngine()
     results = engine.compute(
         zinb_probs=zinb_probs,
@@ -160,6 +177,7 @@ async def _process_fixture(
         lambda_away=lambda_away,
         elo_home=elo_home_rating,
         elo_away=elo_away_rating,
+        xgb_probs=xgb_probs,
     )
 
     # 7. Archive ForecastSnapshot rows
@@ -177,6 +195,7 @@ async def _process_fixture(
             zinb_prob=r.zinb_prob,
             bayesian_prob=r.bayesian_prob,
             elo_prob=r.elo_prob,
+            xgb_prob=r.xgb_prob,
             ensemble_prob=r.ensemble_prob,
             calibrated_prob=cal_prob,
             signal_type=r.signal_type,
@@ -358,32 +377,39 @@ async def _load_bayesian_and_odds(
         if r.best_actual_odd and r.best_actual_odd > 1.0:
             market_odds[r.market] = r.best_actual_odd
 
-    # Phase 2: derive first-half implied probs from 1H market odds.
+    # Phase 1B: derive first-half implied probs from 1H market odds.
     # Bookmaker over/under lines give a two-way market; removing the overround
     # yields fair probabilities that serve as the "bayesian" component for 1H markets.
-    ht_odds = build_goals_first_half(snaps)
-    _HT_TARGETS: dict[str, tuple[str, str]] = {
+    def _implied_probs_from_ou(ou_odds: dict, targets: dict[str, tuple[str, str]]) -> None:
+        for market_key, (target_sel, comp_sel) in targets.items():
+            probs_sum = 0.0
+            probs_count = 0
+            best_bk_odds: float | None = None
+            for bk_odds in ou_odds.values():
+                t_o = bk_odds.get(target_sel)
+                c_o = bk_odds.get(comp_sel)
+                if t_o and c_o and t_o > 1.0 and c_o > 1.0:
+                    overround = 1.0 / t_o + 1.0 / c_o
+                    if overround > 0:
+                        probs_sum += (1.0 / t_o) / overround
+                        probs_count += 1
+                        if best_bk_odds is None or t_o > best_bk_odds:
+                            best_bk_odds = t_o
+            if probs_count > 0:
+                bayesian_probs[market_key] = round(probs_sum / probs_count, 6)
+            if best_bk_odds is not None:
+                market_odds[market_key] = best_bk_odds
+
+    _implied_probs_from_ou(build_goals_first_half(snaps), {
         "1H Over 0.5":  ("Over 0.5",  "Under 0.5"),
         "1H Over 1.5":  ("Over 1.5",  "Under 1.5"),
         "1H Under 1.5": ("Under 1.5", "Over 1.5"),
-    }
-    for ht_market, (target_sel, comp_sel) in _HT_TARGETS.items():
-        probs_sum = 0.0
-        probs_count = 0
-        best_bk_odds: float | None = None
-        for bk_odds in ht_odds.values():
-            t_o = bk_odds.get(target_sel)
-            c_o = bk_odds.get(comp_sel)
-            if t_o and c_o and t_o > 1.0 and c_o > 1.0:
-                overround = 1.0 / t_o + 1.0 / c_o
-                if overround > 0:
-                    probs_sum += (1.0 / t_o) / overround
-                    probs_count += 1
-                    if best_bk_odds is None or t_o > best_bk_odds:
-                        best_bk_odds = t_o
-        if probs_count > 0:
-            bayesian_probs[ht_market] = round(probs_sum / probs_count, 6)
-        if best_bk_odds is not None:
-            market_odds[ht_market] = best_bk_odds
+    })
+
+    _implied_probs_from_ou(build_goals_second_half(snaps), {
+        "2H Over 0.5":  ("Over 0.5",  "Under 0.5"),
+        "2H Over 1.5":  ("Over 1.5",  "Under 1.5"),
+        "2H Under 1.5": ("Under 1.5", "Over 1.5"),
+    })
 
     return bayesian_probs, market_odds
