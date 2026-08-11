@@ -127,7 +127,7 @@ async def compute_calibration_metrics(
             "SELECT COUNT(*) FROM tracked_bets "
             "WHERE result_status IN ('Won','Lost') AND event_date >= :since"
         ),
-        {"since": since.isoformat()},
+        {"since": since},
     )
     total_bets = total_result.scalar() or 0
 
@@ -155,7 +155,7 @@ async def compute_calibration_metrics(
               AND tb.event_date >= :since
               AND COALESCE(s.bayesian_prob, s.poisson_prob) IS NOT NULL
         """),
-        {"since": since.isoformat()},
+        {"since": since},
     )
     rows = rows_result.fetchall()
 
@@ -299,7 +299,7 @@ async def save_snapshot(db: AsyncSession, report: CalibrationReport) -> None:
                      :brier_score, :brier_skill, :ece, :flagged, :mkt_summary)
             """),
             {
-                "snap_date":    report.generated_at.date().isoformat(),
+                "snap_date":    report.generated_at.date(),
                 "window_days":  report.window_days,
                 "n_bets":       report.signal_join_bets,
                 "win_rate":     report.overall_win_rate,
