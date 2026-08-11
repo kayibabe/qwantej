@@ -1146,6 +1146,15 @@ UNDER_GOALS_SUPPRESSED_LEAGUES: frozenset = frozenset({
     # reliable lambda estimates for this league. Thin bookmaker coverage makes
     # the Under 3.5 probability estimates structurally wrong.
     "virsliga",
+    # Norwegian 1. Division (OBOS-ligaen, second tier): 3-3 scoreline on
+    # 2026-08-10 (Moss vs ODD). football-data.co.uk training data only covers
+    # Eliteserien (top flight); 1. Division has no ZINB calibration.
+    "1. division",
+    # Úrvalsdeild (Icelandic top flight): 2-5 scoreline on 2026-08-10
+    # (Fram Reykjavik vs KR Reykjavik, 7 goals). Iceland is not in the
+    # football-data.co.uk dataset; ZINB lambdas are pure noise here.
+    "úrvalsdeild",
+    "urvalsdeild",  # accent-stripped form in case API stores it without accent
 })
 
 # Keywords that indicate youth / reserve fixtures.
