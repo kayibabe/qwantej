@@ -178,6 +178,20 @@ calculated `edge`, `expected_value`, ordered JSON `reason_codes`, complete JSON
 TRUNCATE so later policy changes cannot rewrite why a historical candidate
 passed or failed.
 
+### `reliability_snapshots` (immutable league-market matrix — Phase 6)
+
+`competition_id` → `competitions`, `competition_class`, `market_family`,
+evaluation cutoff and evidence window, `policy_version`, raw/effective sample
+sizes, shrinkage weight, LRS, MRS, segment posterior, posterior standard
+deviation, conservative lower bound, dynamic status, grade, JSON components
+and diagnostics, future-row exclusion count, input snapshot reference/hash,
+`code_commit` and `created_at`. A unique segment/cutoff/policy key prevents
+ambiguous duplicates. Database triggers forbid UPDATE, DELETE and TRUNCATE.
+
+`predictions.reliability_snapshot_id` optionally links a new immutable decision
+to the exact matrix snapshot used. Existing archived predictions remain null
+rather than being rewritten with hindsight.
+
 ### `audit_events` (immutable, append-only)
 
 `id`, `event_type` (enum `audit_event_type`: model_promoted, model_retired,

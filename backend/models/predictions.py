@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from backend.models.calibration import CalibrationModel
     from backend.models.fixtures import Fixture
     from backend.models.registry import ModelRegistry, ModelRun
+    from backend.models.reliability import ReliabilitySnapshot
 
 
 def _probability_check(column: str) -> CheckConstraint:
@@ -133,6 +134,9 @@ class Prediction(UUIDPKMixin, CreatedAtMixin, Base):
     calibration_model_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("calibration_models.id"), index=True
     )
+    reliability_snapshot_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("reliability_snapshots.id"), index=True
+    )
 
     # --- Linkage & diagnostics ---
     # Polymorphic linkage to a future accumulators row (that table lands with
@@ -151,3 +155,4 @@ class Prediction(UUIDPKMixin, CreatedAtMixin, Base):
     calibration_model: Mapped["CalibrationModel | None"] = relationship(
         back_populates="predictions"
     )
+    reliability_snapshot: Mapped["ReliabilitySnapshot | None"] = relationship()

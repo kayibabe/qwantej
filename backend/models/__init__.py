@@ -31,6 +31,7 @@ from backend.models.registry import (
     ModelRunStatus,
     ModelStatus,
 )
+from backend.models.reliability import ReliabilitySnapshot, ReliabilityState
 from backend.models.stats import StatsSnapshot, StatsSubjectType
 
 __all__ = [
@@ -67,4 +68,7 @@ __all__ = [
     "ExperimentKind",
     "ExperimentStatus",
     "SelectionCandidate",
+    # Phase 6 — point-in-time reliability matrix
+    "ReliabilitySnapshot",
+    "ReliabilityState",
 ]

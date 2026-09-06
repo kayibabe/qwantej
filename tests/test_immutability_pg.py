@@ -39,6 +39,8 @@ from backend.models import (
     ModelRunKind,
     ModelStatus,
     Prediction,
+    ReliabilitySnapshot,
+    ReliabilityState,
     Season,
     SelectionCandidate,
     Team,
@@ -222,6 +224,7 @@ class TestCalibrationModelArtifactImmutable:
         "TRUNCATE calibration_snapshots",
         "TRUNCATE experiments",
         "TRUNCATE selection_candidates",
+        "TRUNCATE reliability_snapshots CASCADE",
     ],
 )
 def test_append_only_tables_block_truncate(session: Session, statement: str) -> None:
@@ -348,4 +351,41 @@ class TestSelectionCandidatesImmutable:
         _assert_blocked(
             session, "DELETE FROM selection_candidates WHERE id = :id",
             {"id": str(candidate.id)},
+        )
+
+
+def _new_reliability_snapshot(session: Session) -> ReliabilitySnapshot:
+    now = datetime.now(UTC)
+    competition = Competition(name=f"Reliability League {now.timestamp()}")
+    snapshot = ReliabilitySnapshot(
+        competition=competition, competition_class="tier-1", market_family="O2.5",
+        evaluated_as_of=now, window_start=now, window_end=now,
+        policy_version="reliability-v1", observation_count=10,
+        effective_sample_size=9, shrinkage_weight=0.08,
+        league_reliability=55, market_reliability=56, segment_reliability=54,
+        posterior_standard_deviation=0.04, conservative_lower_bound=0.46,
+        status=ReliabilityState.RESTRICTED, grade="Reject",
+        components={"calibration": 0.7}, diagnostics={}, future_rows_excluded=0,
+        input_snapshot_ref="snapshot:test", input_snapshot_hash="sha256:test",
+        code_commit="test",
+    )
+    session.add(snapshot)
+    session.flush()
+    return snapshot
+
+
+class TestReliabilitySnapshotsImmutable:
+    def test_update_is_blocked(self, session: Session) -> None:
+        snapshot = _new_reliability_snapshot(session)
+        _assert_blocked(
+            session,
+            "UPDATE reliability_snapshots SET segment_reliability = 99 WHERE id = :id",
+            {"id": str(snapshot.id)},
+        )
+
+    def test_delete_is_blocked(self, session: Session) -> None:
+        snapshot = _new_reliability_snapshot(session)
+        _assert_blocked(
+            session, "DELETE FROM reliability_snapshots WHERE id = :id",
+            {"id": str(snapshot.id)},
         )

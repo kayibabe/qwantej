@@ -7,10 +7,13 @@ archived and measured against realized outcomes.
 
 ## Status
 
-Rebuild through Phase 4: canonical point-in-time storage, immutable prediction
-lineage, coherent baseline probability models, calibration monitoring and a
-versioned conservative-probability research policy. Production promotion still
-requires the Phase 5 walk-forward backtest and leakage validation.
+Rebuild through Phase 6: canonical point-in-time storage, immutable prediction
+lineage, coherent baseline probability models, calibration monitoring, a
+versioned conservative-probability policy, an explicit reason-coded Value Gate,
+reproducible walk-forward evaluation against a de-vigged market baseline, and
+recency-weighted Bayesian LRS/MRS with an immutable league-market matrix.
+These components remain research-only until a real historical snapshot passes
+the model-governance promotion criteria.
 
 ## Start here
 
