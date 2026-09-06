@@ -13,6 +13,12 @@ from backend.models.calibration import (
     CalibrationSnapshot,
     CalibrationStatus,
 )
+from backend.models.experiments import (
+    Experiment,
+    ExperimentKind,
+    ExperimentStatus,
+    SelectionCandidate,
+)
 from backend.models.fixtures import Competition, Fixture, FixtureStatus, Season, Team
 from backend.models.odds import OddsQuote
 from backend.models.predictions import Prediction
@@ -56,4 +62,9 @@ __all__ = [
     "CalibrationMethod",
     "CalibrationStatus",
     "CalibrationSnapshot",
+    # Phase 5 — experiment registry and immutable Value Gate decisions
+    "Experiment",
+    "ExperimentKind",
+    "ExperimentStatus",
+    "SelectionCandidate",
 ]

@@ -28,6 +28,11 @@ treat every rule below as non-negotiable, matching `DEVELOPMENT.md`'s
 - Preserve every backtest configuration, code version and result in the
   experiment registry (`experiments` table).
 
+The Phase 5 implementation is specified in
+[`modelling/VALUE_BACKTESTING.md`](modelling/VALUE_BACKTESTING.md). It enforces
+these cutoffs in `walk_forward_backtest` and archives completed reports through
+`backend.services.experiments`.
+
 ## Point-in-time integrity (framework §13, restated for backtests)
 
 A backtested "prediction" for a historical fixture must only use data whose

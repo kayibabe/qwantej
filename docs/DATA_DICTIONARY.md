@@ -159,6 +159,25 @@ log loss, ECE, calibration intercept/slope, optional Brier Skill Score,
 reliability-curve bins and `created_at`. Database triggers forbid UPDATE,
 DELETE and TRUNCATE.
 
+### `experiments` (configuration frozen; completed rows immutable — Phase 5)
+
+`id`, unique (`name`, `version`), `kind`, lifecycle `status`, model,
+calibration, Value Gate and conservative-policy versions, `code_commit`,
+`data_snapshot_ref`, comparison `baseline`, deterministic `random_seed`, full
+JSON `configuration`, start/finish timestamps, training/test windows,
+`sample_size`, rejected leakage count, JSON `metrics`, `result_hash` and row
+timestamps. Configuration cannot change after insertion. A successful result
+requires its completion time, sample size, metrics and content hash; after
+completion no field may change. DELETE and TRUNCATE are forbidden.
+
+### `selection_candidates` (immutable Value Gate archive — Phase 5)
+
+`prediction_id` → `predictions`, `evaluated_at`, `policy_version`, `passed`,
+calculated `edge`, `expected_value`, ordered JSON `reason_codes`, complete JSON
+`gate_inputs` and `created_at`. Database triggers forbid UPDATE, DELETE and
+TRUNCATE so later policy changes cannot rewrite why a historical candidate
+passed or failed.
+
 ### `audit_events` (immutable, append-only)
 
 `id`, `event_type` (enum `audit_event_type`: model_promoted, model_retired,

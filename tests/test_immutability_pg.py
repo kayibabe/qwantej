@@ -28,6 +28,9 @@ from backend.models import (
     CalibrationSnapshot,
     CalibrationStatus,
     Competition,
+    Experiment,
+    ExperimentKind,
+    ExperimentStatus,
     Fixture,
     FixtureStatus,
     ModelFamily,
@@ -37,6 +40,7 @@ from backend.models import (
     ModelStatus,
     Prediction,
     Season,
+    SelectionCandidate,
     Team,
 )
 
@@ -53,12 +57,14 @@ def engine():
             present = conn.execute(
                 text(
                     "select count(*) from pg_trigger "
-                    "where tgname = 'trg_audit_events_no_row_mutation'"
+                    "where tgname in "
+                    "('trg_audit_events_no_row_mutation', "
+                    "'trg_selection_candidates_no_update')"
                 )
             ).scalar_one()
     except OperationalError:
         pytest.skip("dev Postgres not reachable (docker compose up -d db)")
-    if not present:
+    if present != 2:
         pytest.skip("append-only triggers absent; run: alembic upgrade head")
     return eng
 
@@ -210,10 +216,12 @@ class TestCalibrationModelArtifactImmutable:
 @pytest.mark.parametrize(
     "statement",
     [
-        "TRUNCATE predictions",
+        "TRUNCATE predictions CASCADE",
         "TRUNCATE audit_events",
         "TRUNCATE calibration_models CASCADE",
         "TRUNCATE calibration_snapshots",
+        "TRUNCATE experiments",
+        "TRUNCATE selection_candidates",
     ],
 )
 def test_append_only_tables_block_truncate(session: Session, statement: str) -> None:
@@ -253,3 +261,91 @@ def test_prediction_run_must_belong_to_named_model(session: Session) -> None:
             _new_prediction(
                 session, model_version_id=first.id, model_run_id=run.id
             )
+
+
+def _new_experiment(session: Session) -> Experiment:
+    now = datetime.now(UTC)
+    experiment = Experiment(
+        name=f"immutability-{now.timestamp()}", version="v1",
+        kind=ExperimentKind.WALK_FORWARD_BACKTEST,
+        status=ExperimentStatus.RUNNING, model_version="model-v1",
+        calibration_version="cal-v1", value_policy_version="gate-v1",
+        conservative_policy_version="pcons-v1", code_commit="test",
+        data_snapshot_ref="snapshot:test", baseline="devig-market", random_seed=7,
+        configuration={"minimum_training_size": 30}, started_at=now,
+        training_window_start=now, training_window_end=now,
+        test_window_start=now, test_window_end=now,
+    )
+    session.add(experiment)
+    session.flush()
+    return experiment
+
+
+class TestExperimentRegistryImmutable:
+    def test_running_experiment_can_complete(self, session: Session) -> None:
+        experiment = _new_experiment(session)
+        session.execute(
+            text(
+                "UPDATE experiments SET status = 'succeeded', finished_at = :now, "
+                "sample_size = 10, metrics = '{\"roi\": 0.1}', "
+                "result_hash = 'sha256:test' WHERE id = :id"
+            ),
+            {"id": str(experiment.id), "now": datetime.now(UTC)},
+        )
+
+    def test_configuration_update_is_blocked(self, session: Session) -> None:
+        experiment = _new_experiment(session)
+        _assert_blocked(
+            session, "UPDATE experiments SET random_seed = 8 WHERE id = :id",
+            {"id": str(experiment.id)}, message="configuration is immutable",
+        )
+
+    def test_completed_result_update_is_blocked(self, session: Session) -> None:
+        experiment = _new_experiment(session)
+        session.execute(
+            text(
+                "UPDATE experiments SET status = 'succeeded', finished_at = :now, "
+                "sample_size = 10, metrics = '{\"roi\": 0.1}', "
+                "result_hash = 'sha256:test' WHERE id = :id"
+            ),
+            {"id": str(experiment.id), "now": datetime.now(UTC)},
+        )
+        _assert_blocked(
+            session, "UPDATE experiments SET sample_size = 99 WHERE id = :id",
+            {"id": str(experiment.id)}, message="completed experiment",
+        )
+
+    def test_delete_is_blocked(self, session: Session) -> None:
+        experiment = _new_experiment(session)
+        _assert_blocked(
+            session, "DELETE FROM experiments WHERE id = :id",
+            {"id": str(experiment.id)},
+        )
+
+
+def _new_selection_candidate(session: Session) -> SelectionCandidate:
+    prediction = _new_prediction(session)
+    candidate = SelectionCandidate(
+        prediction=prediction, evaluated_at=datetime.now(UTC),
+        policy_version="gate-v1", passed=False, reason_codes=["EDGE_TOO_LOW"],
+        gate_inputs={"minimum_edge": 0.03},
+    )
+    session.add(candidate)
+    session.flush()
+    return candidate
+
+
+class TestSelectionCandidatesImmutable:
+    def test_update_is_blocked(self, session: Session) -> None:
+        candidate = _new_selection_candidate(session)
+        _assert_blocked(
+            session, "UPDATE selection_candidates SET passed = true WHERE id = :id",
+            {"id": str(candidate.id)},
+        )
+
+    def test_delete_is_blocked(self, session: Session) -> None:
+        candidate = _new_selection_candidate(session)
+        _assert_blocked(
+            session, "DELETE FROM selection_candidates WHERE id = :id",
+            {"id": str(candidate.id)},
+        )
