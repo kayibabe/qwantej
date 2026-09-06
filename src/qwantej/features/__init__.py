@@ -1,3 +1,5 @@
-"""Feature Engineering engine (framework §8, engine 2): point-in-time
-model features with versioned transformations (feature_version,
-as_of_timestamp)."""
+"""Versioned point-in-time Feature Engineering contracts (framework engine 2)."""
+
+from qwantej.features.snapshots import FeatureValue, validate_feature_vector
+
+__all__ = ["FeatureValue", "validate_feature_vector"]

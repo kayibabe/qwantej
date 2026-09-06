@@ -25,6 +25,7 @@ from backend.models.experiments import (
     ExperimentStatus,
     SelectionCandidate,
 )
+from backend.models.features import FeatureSnapshot
 from backend.models.fixtures import Competition, Fixture, FixtureStatus, Season, Team
 from backend.models.odds import OddsQuote
 from backend.models.predictions import Prediction
@@ -53,6 +54,7 @@ __all__ = [
     "OddsQuote",
     "StatsSnapshot",
     "StatsSubjectType",
+    "FeatureSnapshot",
     # Phase 2 — model registry, prediction archive, audit trail
     "ModelRegistry",
     "ModelFamily",

@@ -32,6 +32,7 @@ from backend.models import (
     Experiment,
     ExperimentKind,
     ExperimentStatus,
+    FeatureSnapshot,
     Fixture,
     FixtureStatus,
     LedgerEntryType,
@@ -53,6 +54,7 @@ from backend.models import (
     StatsSubjectType,
     Team,
 )
+from qwantej.audit import canonical_hash
 
 DATABASE_URL = get_settings().database_url
 
@@ -70,12 +72,13 @@ def engine():
                     "where tgname in "
                     "('trg_audit_events_no_row_mutation', "
                     "'trg_selection_candidates_no_update', "
-                    "'trg_odds_quotes_no_row_mutation')"
+                    "'trg_odds_quotes_no_row_mutation', "
+                    "'trg_feature_snapshots_no_row_mutation')"
                 )
             ).scalar_one()
     except OperationalError:
         pytest.skip("dev Postgres not reachable (docker compose up -d db)")
-    if present != 3:
+    if present != 4:
         pytest.skip("append-only triggers absent; run: alembic upgrade head")
     return eng
 
@@ -238,6 +241,7 @@ class TestCalibrationModelArtifactImmutable:
         "TRUNCATE risk_state_snapshots",
         "TRUNCATE odds_quotes CASCADE",
         "TRUNCATE stats_snapshots CASCADE",
+        "TRUNCATE feature_snapshots CASCADE",
         "TRUNCATE model_registry CASCADE",
         "TRUNCATE model_runs CASCADE",
     ],
@@ -279,6 +283,53 @@ def test_prediction_run_must_belong_to_named_model(session: Session) -> None:
             _new_prediction(
                 session, model_version_id=first.id, model_run_id=run.id
             )
+
+
+def _new_feature_snapshot(session: Session) -> FeatureSnapshot:
+    now = datetime.now(UTC)
+    comp = Competition(name=f"Feature Snapshot League {now.timestamp()}")
+    season = Season(competition=comp, label="2026")
+    home, away = Team(name="Feature Home"), Team(name="Feature Away")
+    fixture = Fixture(
+        competition=comp,
+        season=season,
+        home_team=home,
+        away_team=away,
+        kickoff_utc=now,
+        status=FixtureStatus.SCHEDULED,
+    )
+    snapshot = FeatureSnapshot(
+        fixture=fixture,
+        feature_version="immutability-v1",
+        as_of_timestamp=now,
+        features={"x": 1.0},
+        stats_snapshot_ids=[],
+        odds_quote_ids=[],
+        imputation_policy_version="none-v1",
+        source_data_hash=canonical_hash({"source": []}),
+        feature_hash=canonical_hash({"x": 1.0}),
+        snapshot_hash=canonical_hash({"created_for_test": now}),
+        code_commit="test",
+    )
+    session.add_all([comp, season, home, away, fixture, snapshot])
+    session.flush()
+    return snapshot
+
+
+class TestFeatureSnapshotsImmutable:
+    def test_update_is_blocked(self, session: Session) -> None:
+        snapshot = _new_feature_snapshot(session)
+        _assert_blocked(
+            session,
+            "UPDATE feature_snapshots SET features = '{\"x\": 9}' WHERE id = :id",
+            {"id": str(snapshot.id)},
+        )
+
+    def test_delete_is_blocked(self, session: Session) -> None:
+        snapshot = _new_feature_snapshot(session)
+        _assert_blocked(
+            session, "DELETE FROM feature_snapshots WHERE id = :id", {"id": str(snapshot.id)}
+        )
 
 
 def _new_experiment(session: Session) -> Experiment:

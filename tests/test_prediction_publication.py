@@ -26,8 +26,11 @@ from backend.models import (
     ReliabilitySnapshot,
     ReliabilityState,
     Season,
+    StatsSnapshot,
+    StatsSubjectType,
     Team,
 )
+from backend.services.features import create_feature_snapshot
 from backend.services.predictions import (
     MinimumPredictionRecord,
     PredictionLineage,
@@ -60,10 +63,31 @@ def _seed(session: Session):
     )
     session.add_all([comp, season, home, away, fixture, model])
     session.flush()
+    stats = StatsSnapshot(
+        subject_type=StatsSubjectType.FIXTURE,
+        fixture_id=fixture.id,
+        as_of_timestamp=NOW,
+        payload={"home_form": 0.6},
+        source="test",
+    )
+    session.add(stats)
+    session.flush()
+    feature_snapshot = create_feature_snapshot(
+        session,
+        fixture_id=fixture.id,
+        feature_version="feat-1",
+        as_of_timestamp=NOW,
+        features={"home_form": 0.6},
+        stats_snapshot_ids=[stats.id],
+        imputation_policy_version="none-v1",
+        code_commit="abc123",
+    )
     run = ModelRun(
         model=model, kind=ModelRunKind.INFERENCE, status=ModelRunStatus.SUCCEEDED,
         started_at=NOW, finished_at=NOW, data_as_of=NOW,
-        data_snapshot_ref="snapshot:v1", code_commit="abc123", metrics={"ok": True},
+        data_snapshot_ref=feature_snapshot.snapshot_ref,
+        code_commit="abc123",
+        metrics={"ok": True},
     )
     calibrator = CalibrationModel(
         version="cal-1", method=CalibrationMethod.PLATT,
@@ -86,11 +110,11 @@ def _seed(session: Session):
     )
     session.add_all([run, calibrator, reliability])
     session.flush()
-    return fixture, model, run, calibrator, reliability
+    return fixture, model, run, calibrator, reliability, feature_snapshot
 
 
 def _valid(session: Session):
-    fixture, model, run, calibrator, reliability = _seed(session)
+    fixture, model, run, calibrator, reliability, feature_snapshot = _seed(session)
     record = MinimumPredictionRecord(
         fixture_id=fixture.id, prediction_timestamp=NOW, decision_as_of=NOW,
         market="1X2", selection="home",
@@ -107,8 +131,9 @@ def _valid(session: Session):
         reliability_snapshot_id=reliability.id, feature_version="feat-1",
         calibration_version="cal-1", risk_policy_version="risk-v1",
         optimiser_version="pre-optimiser-v1",
-        code_commit="abc123", input_snapshot_ref="snapshot:v1",
-        input_snapshot_hash="sha256:inputs",
+        code_commit="abc123",
+        input_snapshot_ref=feature_snapshot.snapshot_ref,
+        input_snapshot_hash=feature_snapshot.snapshot_hash,
     )
     return record, lineage
 
@@ -121,7 +146,7 @@ def test_complete_record_publishes(session: Session) -> None:
     stored = session.query(Prediction).one()
     assert stored.id == prediction.id
     assert float(stored.conservative_probability) == pytest.approx(0.50)
-    assert stored.input_snapshot_hash == "sha256:inputs"
+    assert stored.input_snapshot_hash == lineage.input_snapshot_hash
     assert stored.model_run_id == lineage.model_run_id
 
 
@@ -214,6 +239,16 @@ def test_future_model_run_fails_closed(session: Session) -> None:
         publish_prediction(session, record=record, lineage=lineage)
 
 
+def test_model_run_cutoff_must_match_feature_snapshot(session: Session) -> None:
+    record, lineage = _valid(session)
+    run = session.get(ModelRun, lineage.model_run_id)
+    assert run is not None
+    run.data_as_of = NOW - timedelta(minutes=1)
+    session.flush()
+    with pytest.raises(PredictionPublicationError, match="cutoff does not match"):
+        publish_prediction(session, record=record, lineage=lineage)
+
+
 def test_future_calibrator_fails_closed(session: Session) -> None:
     record, lineage = _valid(session)
     calibrator = session.get(CalibrationModel, lineage.calibration_model_id)
@@ -232,6 +267,13 @@ def test_non_champion_model_fails_closed(session: Session) -> None:
     model.status = ModelStatus.CHALLENGER
     session.flush()
     with pytest.raises(PredictionPublicationError, match="not the champion"):
+        publish_prediction(session, record=record, lineage=lineage)
+
+
+def test_feature_snapshot_hash_mismatch_fails_closed(session: Session) -> None:
+    record, lineage = _valid(session)
+    lineage = replace(lineage, input_snapshot_hash="sha256:wrong")
+    with pytest.raises(PredictionPublicationError, match="does not match its snapshot"):
         publish_prediction(session, record=record, lineage=lineage)
 
 

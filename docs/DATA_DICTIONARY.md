@@ -60,6 +60,27 @@ entities, each carrying a mapping confidence and provenance:
 - Where practical, store input snapshot identifiers/hashes and the code
   commit SHA for full reproduction.
 
+## `feature_snapshots` (immutable point-in-time feature store — Phase 7.5)
+
+`id`, `fixture_id` → `fixtures`, `feature_version`, `as_of_timestamp`, JSON
+`features`, ordered JSON `stats_snapshot_ids` and `odds_quote_ids`,
+`imputation_policy_version`, `source_data_hash`, `feature_hash`,
+`snapshot_hash`, `code_commit` and `created_at`.
+
+The v1 feature-vector contract is a non-empty map of named JSON scalars. A
+missing value is stored explicitly as `null` and the imputation policy is
+always versioned; nested/opaque feature objects and non-finite numbers are
+rejected. The creation service verifies that every referenced source exists,
+belongs to the fixture or one of its teams, and was observable at or before
+`as_of_timestamp`; the cutoff itself must precede kickoff. It hashes both the
+exact source observations and the normalized feature vector, then hashes the
+complete snapshot envelope. `feature-snapshot:<id>` and `snapshot_hash` are the
+canonical `model_runs.data_snapshot_ref` and prediction input lineage pair.
+
+Exact retries return the existing content-addressed row. Any changed source,
+feature, policy, version or code commit produces a new row; database triggers
+forbid UPDATE, DELETE and TRUNCATE so historical inputs cannot be rewritten.
+
 ## Minimum prediction record (Appendix C)
 
 ```

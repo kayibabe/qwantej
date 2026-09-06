@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from backend.models import (
     CalibrationModel,
     CalibrationStatus,
+    FeatureSnapshot,
     Fixture,
     ModelRegistry,
     ModelRun,
@@ -30,6 +31,7 @@ from backend.models import (
     Prediction,
     ReliabilitySnapshot,
 )
+from backend.services.features import verify_feature_snapshot
 
 
 class PredictionPublicationError(ValueError):
@@ -269,6 +271,20 @@ def _lineage_existence_problems(
     lineage: PredictionLineage,
 ) -> list[str]:
     problems: list[str] = []
+    feature_snapshot = _get_feature_snapshot(session, lineage.input_snapshot_ref)
+    if feature_snapshot is None:
+        problems.append("lineage.input_snapshot_ref is not a feature snapshot")
+    else:
+        if feature_snapshot.fixture_id != record.fixture_id:
+            problems.append("lineage feature snapshot belongs to another fixture")
+        if feature_snapshot.feature_version != lineage.feature_version:
+            problems.append("lineage.feature_version does not match its snapshot")
+        if _as_utc(feature_snapshot.as_of_timestamp) > record.decision_as_of:
+            problems.append("lineage feature snapshot is not valid at decision_as_of")
+        if feature_snapshot.snapshot_hash != lineage.input_snapshot_hash:
+            problems.append("lineage.input_snapshot_hash does not match its snapshot")
+        elif not verify_feature_snapshot(session, feature_snapshot):
+            problems.append("lineage feature snapshot failed content verification")
     model = session.get(ModelRegistry, lineage.model_version_id)
     if model is None:
         problems.append("lineage.model_version_id does not exist")
@@ -289,6 +305,10 @@ def _lineage_existence_problems(
             problems.append("lineage.model_run_id has not succeeded")
         if run.data_as_of is None or _as_utc(run.data_as_of) > record.decision_as_of:
             problems.append("lineage model run is not valid at decision_as_of")
+        elif feature_snapshot is not None and _as_utc(run.data_as_of) != _as_utc(
+            feature_snapshot.as_of_timestamp
+        ):
+            problems.append("lineage model run cutoff does not match the feature snapshot")
         if run.data_snapshot_ref != lineage.input_snapshot_ref:
             problems.append("lineage input snapshot does not match the model run")
         if run.code_commit != lineage.code_commit:
@@ -340,3 +360,14 @@ def _as_utc(value: datetime) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
         return value.replace(tzinfo=UTC)
     return value.astimezone(UTC)
+
+
+def _get_feature_snapshot(session: Session, reference: str) -> FeatureSnapshot | None:
+    prefix = "feature-snapshot:"
+    if not reference.startswith(prefix):
+        return None
+    try:
+        snapshot_id = uuid.UUID(reference.removeprefix(prefix))
+    except ValueError:
+        return None
+    return session.get(FeatureSnapshot, snapshot_id)
