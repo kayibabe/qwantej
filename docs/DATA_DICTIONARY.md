@@ -196,11 +196,15 @@ rather than being rewritten with hindsight.
 
 `id`, `account`, `entry_type` (enum `ledger_entry_type`: deposit, withdrawal,
 settlement, adjustment), signed `amount`, running `balance_after`, `occurred_at`
-(point-in-time value date), optional `reference`, `reason` and `created_at`. The
-current bankroll is the sum of an account's amounts — a derived, reproducible
-figure, never a mutable field. Entries are appended in chronological order per
-account. A deposit must be positive and a withdrawal negative; zero amounts are
-rejected. Database triggers forbid UPDATE, DELETE and TRUNCATE.
+(point-in-time value date), optional `reference`, `reason`, optional
+`idempotency_key` and `created_at`. The current bankroll is the sum of an
+account's amounts up to a cutoff — a derived, reproducible figure, never a
+mutable field. Entries are appended in chronological order per account under a
+per-account lock. A deposit must be positive and a withdrawal negative (CHECK
+`ck_ledger_sign_by_type`); zero amounts are rejected. `(account,
+idempotency_key)` is unique, so a retried event is deduplicated — and a key
+reused with different details is rejected, not silently dropped. Database
+triggers forbid UPDATE, DELETE and TRUNCATE.
 
 ### `risk_state_snapshots` (immutable risk-state evaluations — Phase 7)
 
@@ -208,10 +212,16 @@ rejected. Database triggers forbid UPDATE, DELETE and TRUNCATE.
 `available_bankroll`, `committed_exposure`, `daily_exposure`,
 `drawdown_fraction`, optional `rolling_volatility`, `operating_state` (enum
 `risk_operating_state`: normal, caution, defensive, review), `policy_version`,
-JSON `diagnostics` and `created_at`. Check constraints enforce
-`available_bankroll ≤ current_bankroll`, `peak_bankroll ≥ current_bankroll` and
-a unit-interval drawdown. A unique account/cutoff/policy key prevents ambiguous
-duplicates. Database triggers forbid UPDATE, DELETE and TRUNCATE.
+JSON `diagnostics` and `created_at`. Every bankroll/drawdown/state figure is
+**derived** from the ledger as it stood at `evaluated_as_of` (never the future)
+and from the policy, not trusted from the caller. `drawdown_fraction` is measured
+on a cash-flow-adjusted NAV equity curve, so deposits and withdrawals do not
+register as performance. An exposure breach (committed exposure exceeding
+bankroll) or a non-positive bankroll fails closed into REVIEW. Check constraints
+enforce `available_bankroll ≤ current_bankroll`, `available_bankroll ≥ 0`,
+`current_bankroll ≥ 0`, `peak_bankroll ≥ current_bankroll` and a unit-interval
+drawdown. A unique account/cutoff/policy key prevents ambiguous duplicates.
+Database triggers forbid UPDATE, DELETE and TRUNCATE.
 
 ### `audit_events` (immutable, append-only)
 

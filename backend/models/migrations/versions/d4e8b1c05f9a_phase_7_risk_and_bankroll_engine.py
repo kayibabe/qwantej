@@ -75,6 +75,8 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "available_bankroll <= current_bankroll", name="ck_risk_available_le_current"
         ),
+        sa.CheckConstraint("available_bankroll >= 0", name="ck_risk_available_nonneg"),
+        sa.CheckConstraint("current_bankroll >= 0", name="ck_risk_current_nonneg"),
         sa.CheckConstraint(
             "peak_bankroll >= current_bankroll", name="ck_risk_peak_ge_current"
         ),

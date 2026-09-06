@@ -153,6 +153,81 @@ def test_db_check_rejects_deposit_with_negative_amount(session: Session) -> None
         session.commit()
 
 
+def _seed(session: Session, entry_type: LedgerEntryType, amount, hours: int) -> None:
+    append_ledger_entry(
+        session, account="primary", entry_type=entry_type, amount=amount,
+        occurred_at=NOW + timedelta(hours=hours), reason="seed",
+    )
+
+
+def test_snapshot_ignores_ledger_entries_after_its_cutoff(session: Session) -> None:
+    _seed(session, LedgerEntryType.DEPOSIT, 1000, 0)
+    _seed(session, LedgerEntryType.SETTLEMENT, -100, 1)   # as-of here: current 900
+    _seed(session, LedgerEntryType.SETTLEMENT, -200, 2)   # future relative to cutoff
+    early = record_risk_state(
+        session, account="primary", evaluated_as_of=NOW + timedelta(hours=1),
+        committed_exposure=0, daily_exposure=0,
+    )
+    assert float(early.current_bankroll) == pytest.approx(900.0)
+    assert float(early.drawdown_fraction) == pytest.approx(0.10)
+    assert early.operating_state.value == "caution"
+    # A later cutoff does see the second loss.
+    late = record_risk_state(
+        session, account="primary", evaluated_as_of=NOW + timedelta(hours=2),
+        committed_exposure=0, daily_exposure=0,
+    )
+    assert float(late.current_bankroll) == pytest.approx(700.0)
+    assert float(late.drawdown_fraction) == pytest.approx(0.30)
+    assert late.operating_state.value == "review"
+
+
+def test_deposits_and_withdrawals_do_not_create_drawdown(session: Session) -> None:
+    _seed(session, LedgerEntryType.DEPOSIT, 1000, 0)
+    _seed(session, LedgerEntryType.WITHDRAWAL, -500, 1)
+    snapshot = record_risk_state(
+        session, account="primary", evaluated_as_of=NOW + timedelta(hours=2),
+        committed_exposure=0, daily_exposure=0,
+    )
+    assert float(snapshot.current_bankroll) == pytest.approx(500.0)
+    assert float(snapshot.drawdown_fraction) == pytest.approx(0.0)
+    assert snapshot.operating_state.value == "normal"
+
+
+def test_conflicting_idempotency_key_is_rejected(session: Session) -> None:
+    append_ledger_entry(
+        session, account="primary", entry_type=LedgerEntryType.DEPOSIT,
+        amount=100, occurred_at=NOW, reason="deposit", idempotency_key="evt-1",
+    )
+    with pytest.raises(ValueError, match="different event"):
+        append_ledger_entry(
+            session, account="primary", entry_type=LedgerEntryType.WITHDRAWAL,
+            amount=-50, occurred_at=NOW, reason="withdrawal", idempotency_key="evt-1",
+        )
+
+
+def test_overcommitted_account_fails_closed_to_review(session: Session) -> None:
+    _seed(session, LedgerEntryType.DEPOSIT, 100, 0)
+    snapshot = record_risk_state(
+        session, account="primary", evaluated_as_of=NOW + timedelta(hours=1),
+        committed_exposure=150, daily_exposure=0,
+    )
+    assert float(snapshot.available_bankroll) == pytest.approx(0.0)
+    assert snapshot.operating_state.value == "review"
+    assert snapshot.diagnostics["exposure_breach"] is True
+
+
+def test_db_check_rejects_negative_available_bankroll(session: Session) -> None:
+    snapshot = RiskStateSnapshot(
+        account="primary", evaluated_as_of=NOW,
+        current_bankroll=100, peak_bankroll=100, available_bankroll=-50,
+        committed_exposure=150, daily_exposure=0, drawdown_fraction=0,
+        operating_state="review", policy_version="risk-v1", diagnostics={},
+    )
+    session.add(snapshot)
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+
 def test_db_check_rejects_peak_below_current(session: Session) -> None:
     snapshot = RiskStateSnapshot(
         account="primary", evaluated_as_of=NOW,

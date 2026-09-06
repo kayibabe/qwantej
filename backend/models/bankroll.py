@@ -86,6 +86,8 @@ class RiskStateSnapshot(UUIDPKMixin, CreatedAtMixin, Base):
         CheckConstraint(
             "available_bankroll <= current_bankroll", name="ck_risk_available_le_current"
         ),
+        CheckConstraint("available_bankroll >= 0", name="ck_risk_available_nonneg"),
+        CheckConstraint("current_bankroll >= 0", name="ck_risk_current_nonneg"),
         CheckConstraint("peak_bankroll >= current_bankroll", name="ck_risk_peak_ge_current"),
         CheckConstraint("committed_exposure >= 0", name="ck_risk_committed_nonneg"),
         CheckConstraint("daily_exposure >= 0", name="ck_risk_daily_nonneg"),

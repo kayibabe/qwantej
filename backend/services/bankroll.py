@@ -5,12 +5,19 @@ mutable figure, so it can always be reconstructed and audited. Entries are
 recorded in chronological order per account; a per-account lock and an optional
 idempotency key make concurrent or retried appends safe, so each row's
 ``balance_after`` stays a coherent running total.
+
+Drawdown is measured on a cash-flow-adjusted equity curve (a unit/NAV model, as
+an investment fund would): deposits and withdrawals buy and sell units at the
+current NAV and so never register as performance — only settlements and
+adjustments move the NAV. Every risk-state figure is computed from the ledger as
+it stood at ``evaluated_as_of``, under the account lock, so a snapshot can never
+see the future.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_EVEN, Decimal
 
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
@@ -23,35 +30,35 @@ from backend.models import (
 )
 from qwantej.bankroll import (
     DEFAULT_RISK_POLICY,
+    OperatingState,
     RiskPolicy,
     classify_state,
 )
 
+_EXTERNAL_FLOWS = (LedgerEntryType.DEPOSIT, LedgerEntryType.WITHDRAWAL)
+_DRAWDOWN_QUANTUM = Decimal("0.00000001")
 
-def current_bankroll(session: Session, account: str = "primary") -> Decimal:
-    """Settled bankroll for an account: the sum of every ledger amount."""
 
+def current_bankroll(
+    session: Session, account: str = "primary", *, as_of: datetime | None = None
+) -> Decimal:
+    """Settled bankroll for an account: the sum of ledger amounts up to ``as_of``.
+
+    ``as_of=None`` sums the whole ledger (used when appending a new entry, which
+    is by construction the latest event).
+    """
+
+    conditions = [BankrollLedgerEntry.account == account]
+    if as_of is not None:
+        conditions.append(BankrollLedgerEntry.occurred_at <= as_of)
     total = session.execute(
-        select(func.coalesce(func.sum(BankrollLedgerEntry.amount), 0)).where(
-            BankrollLedgerEntry.account == account
-        )
+        select(func.coalesce(func.sum(BankrollLedgerEntry.amount), 0)).where(*conditions)
     ).scalar_one()
     return Decimal(str(total))
 
 
-def _peak_bankroll(session: Session, account: str) -> Decimal:
-    """High-water mark of the running balance for drawdown measurement."""
-
-    peak = session.execute(
-        select(func.max(BankrollLedgerEntry.balance_after)).where(
-            BankrollLedgerEntry.account == account
-        )
-    ).scalar_one()
-    return Decimal(str(peak)) if peak is not None else Decimal(0)
-
-
 def _lock_account(session: Session, account: str) -> None:
-    """Serialise appends for one account (PostgreSQL advisory lock).
+    """Serialise reads/appends for one account (PostgreSQL advisory lock).
 
     SQLite has a single writer, so no explicit lock is needed there.
     """
@@ -61,6 +68,54 @@ def _lock_account(session: Session, account: str) -> None:
             text("SELECT pg_advisory_xact_lock(hashtext(:account)::bigint)"),
             {"account": account},
         )
+
+
+def _evaluate_equity(
+    session: Session, account: str, as_of: datetime
+) -> tuple[Decimal, Decimal, Decimal]:
+    """Return (current_balance, peak_balance, performance_drawdown) at ``as_of``.
+
+    Drawdown is the peak-to-current decline of the NAV (performance per unit of
+    capital), so external cash flows do not create or mask drawdown.
+    """
+
+    rows = session.execute(
+        select(BankrollLedgerEntry.entry_type, BankrollLedgerEntry.amount)
+        .where(
+            BankrollLedgerEntry.account == account,
+            BankrollLedgerEntry.occurred_at <= as_of,
+        )
+        .order_by(BankrollLedgerEntry.occurred_at, BankrollLedgerEntry.id)
+    ).all()
+
+    units = Decimal(0)
+    nav = Decimal(1)
+    peak_nav = Decimal(1)
+    balance = Decimal(0)
+    peak_balance = Decimal(0)
+    for entry_type, amount in rows:
+        amount = Decimal(str(amount))
+        balance += amount
+        if entry_type in _EXTERNAL_FLOWS:
+            # Buy/sell units at the current NAV — no change in performance.
+            if nav > 0:
+                units += amount / nav
+            if units <= 0:
+                # Account fully redeemed: re-base performance tracking.
+                units = Decimal(0)
+                nav = Decimal(1)
+                peak_nav = Decimal(1)
+        elif units > 0:
+            # Settlement/adjustment: performance moves the NAV.
+            nav = balance / units
+        peak_nav = max(peak_nav, nav)
+        peak_balance = max(peak_balance, balance)
+
+    drawdown = (peak_nav - nav) / peak_nav if peak_nav > 0 else Decimal(0)
+    drawdown = min(Decimal(1), max(Decimal(0), drawdown)).quantize(
+        _DRAWDOWN_QUANTUM, rounding=ROUND_HALF_EVEN
+    )
+    return balance, peak_balance, drawdown
 
 
 def append_ledger_entry(
@@ -77,7 +132,8 @@ def append_ledger_entry(
     """Append one settled cashflow, deriving ``balance_after`` from history.
 
     Passing the same ``idempotency_key`` twice for an account returns the
-    existing entry instead of double-counting a retried event.
+    existing entry (a safe retry) only when the request matches it exactly; a
+    key reused with different details is rejected rather than silently dropped.
     """
 
     if not account.strip():
@@ -106,6 +162,9 @@ def append_ledger_entry(
             )
         ).scalar_one_or_none()
         if existing is not None:
+            _assert_idempotent_match(
+                existing, entry_type, amount, occurred_at, reason, reference
+            )
             return existing
 
     last_occurred_at = session.execute(
@@ -137,6 +196,30 @@ def append_ledger_entry(
     return entry
 
 
+def _assert_idempotent_match(
+    existing: BankrollLedgerEntry,
+    entry_type: LedgerEntryType,
+    amount: Decimal,
+    occurred_at: datetime,
+    reason: str,
+    reference: str | None,
+) -> None:
+    stored_occurred = existing.occurred_at
+    if stored_occurred.tzinfo is None:
+        stored_occurred = stored_occurred.replace(tzinfo=UTC)
+    mismatched = (
+        existing.entry_type is not entry_type
+        or Decimal(str(existing.amount)) != amount
+        or stored_occurred != occurred_at
+        or existing.reason != reason
+        or existing.reference != reference
+    )
+    if mismatched:
+        raise ValueError(
+            "idempotency_key reused with a different event; refusing to discard it"
+        )
+
+
 def record_risk_state(
     session: Session,
     *,
@@ -152,12 +235,13 @@ def record_risk_state(
     soft_deterioration: bool = False,
     diagnostics: dict | None = None,
 ) -> RiskStateSnapshot:
-    """Persist an immutable risk-state evaluation derived from the ledger.
+    """Persist an immutable, point-in-time risk-state evaluation.
 
-    Current bankroll, peak, available bankroll, drawdown and operating state are
-    all *derived* here — from the ledger and the policy — rather than trusted
-    from the caller. Only genuinely external figures (committed/daily exposure,
-    and the qualitative drift/calibration signals) are supplied.
+    Current/peak/available bankroll, drawdown and operating state are all derived
+    from the ledger as it stood at ``evaluated_as_of`` (under the account lock)
+    and from the policy — never trusted from the caller. An exposure breach
+    (committed exposure exceeding bankroll) or a non-positive bankroll fails
+    closed into REVIEW, and available bankroll is never stored negative.
     """
 
     if not account.strip():
@@ -169,12 +253,17 @@ def record_risk_state(
     if committed < 0 or daily < 0:
         raise ValueError("exposure figures must be non-negative")
 
-    current = current_bankroll(session, account)
-    peak = _peak_bankroll(session, account)
-    if peak < current:  # defensive: cannot happen for a coherent ledger
-        peak = current
-    available = current - committed
-    drawdown = (peak - current) / peak if peak > 0 else Decimal(0)
+    _lock_account(session, account)
+    current, peak, drawdown = _evaluate_equity(session, account, evaluated_as_of)
+    if current < 0:
+        # A negative ledger balance is an accounting error, not a risk state.
+        raise ValueError("ledger balance is negative; cannot evaluate risk state")
+
+    raw_available = current - committed
+    available = max(Decimal(0), raw_available)
+    exposure_breach = raw_available < 0
+    no_capital = current <= 0
+
     operating_state = classify_state(
         float(drawdown),
         policy=policy,
@@ -183,6 +272,15 @@ def record_risk_state(
         drift=drift,
         soft_deterioration=soft_deterioration,
     )
+    if exposure_breach or no_capital:
+        operating_state = OperatingState.REVIEW
+
+    snapshot_diagnostics = dict(diagnostics or {})
+    if exposure_breach:
+        snapshot_diagnostics["exposure_breach"] = True
+        snapshot_diagnostics["raw_available_bankroll"] = str(raw_available)
+    if no_capital:
+        snapshot_diagnostics["no_capital"] = True
 
     snapshot = RiskStateSnapshot(
         account=account,
@@ -198,7 +296,7 @@ def record_risk_state(
         ),
         operating_state=RiskState(operating_state.value),
         policy_version=policy.version,
-        diagnostics=diagnostics or {},
+        diagnostics=snapshot_diagnostics,
     )
     session.add(snapshot)
     session.flush()
