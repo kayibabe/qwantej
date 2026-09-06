@@ -23,6 +23,7 @@ from backend.models import (
     AuditActor,
     AuditEvent,
     AuditEventType,
+    BankrollLedgerEntry,
     CalibrationMethod,
     CalibrationModel,
     CalibrationSnapshot,
@@ -33,6 +34,7 @@ from backend.models import (
     ExperimentStatus,
     Fixture,
     FixtureStatus,
+    LedgerEntryType,
     ModelFamily,
     ModelRegistry,
     ModelRun,
@@ -41,6 +43,8 @@ from backend.models import (
     Prediction,
     ReliabilitySnapshot,
     ReliabilityState,
+    RiskState,
+    RiskStateSnapshot,
     Season,
     SelectionCandidate,
     Team,
@@ -225,6 +229,8 @@ class TestCalibrationModelArtifactImmutable:
         "TRUNCATE experiments",
         "TRUNCATE selection_candidates",
         "TRUNCATE reliability_snapshots CASCADE",
+        "TRUNCATE bankroll_ledger_entries",
+        "TRUNCATE risk_state_snapshots",
     ],
 )
 def test_append_only_tables_block_truncate(session: Session, statement: str) -> None:
@@ -387,5 +393,63 @@ class TestReliabilitySnapshotsImmutable:
         snapshot = _new_reliability_snapshot(session)
         _assert_blocked(
             session, "DELETE FROM reliability_snapshots WHERE id = :id",
+            {"id": str(snapshot.id)},
+        )
+
+
+def _new_ledger_entry(session: Session) -> BankrollLedgerEntry:
+    now = datetime.now(UTC)
+    entry = BankrollLedgerEntry(
+        account=f"acct-{now.timestamp()}", entry_type=LedgerEntryType.DEPOSIT,
+        amount=1000, balance_after=1000, occurred_at=now, reason="seed",
+    )
+    session.add(entry)
+    session.flush()
+    return entry
+
+
+class TestBankrollLedgerImmutable:
+    def test_update_is_blocked(self, session: Session) -> None:
+        entry = _new_ledger_entry(session)
+        _assert_blocked(
+            session,
+            "UPDATE bankroll_ledger_entries SET amount = 5 WHERE id = :id",
+            {"id": str(entry.id)},
+        )
+
+    def test_delete_is_blocked(self, session: Session) -> None:
+        entry = _new_ledger_entry(session)
+        _assert_blocked(
+            session, "DELETE FROM bankroll_ledger_entries WHERE id = :id",
+            {"id": str(entry.id)},
+        )
+
+
+def _new_risk_state_snapshot(session: Session) -> RiskStateSnapshot:
+    now = datetime.now(UTC)
+    snapshot = RiskStateSnapshot(
+        account=f"acct-{now.timestamp()}", evaluated_as_of=now,
+        current_bankroll=900, peak_bankroll=1000, available_bankroll=850,
+        committed_exposure=50, daily_exposure=40, drawdown_fraction=0.1,
+        operating_state=RiskState.CAUTION, policy_version="risk-v1", diagnostics={},
+    )
+    session.add(snapshot)
+    session.flush()
+    return snapshot
+
+
+class TestRiskStateSnapshotImmutable:
+    def test_update_is_blocked(self, session: Session) -> None:
+        snapshot = _new_risk_state_snapshot(session)
+        _assert_blocked(
+            session,
+            "UPDATE risk_state_snapshots SET current_bankroll = 1 WHERE id = :id",
+            {"id": str(snapshot.id)},
+        )
+
+    def test_delete_is_blocked(self, session: Session) -> None:
+        snapshot = _new_risk_state_snapshot(session)
+        _assert_blocked(
+            session, "DELETE FROM risk_state_snapshots WHERE id = :id",
             {"id": str(snapshot.id)},
         )

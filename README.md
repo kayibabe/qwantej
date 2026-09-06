@@ -7,13 +7,14 @@ archived and measured against realized outcomes.
 
 ## Status
 
-Rebuild through Phase 6: canonical point-in-time storage, immutable prediction
+Rebuild through Phase 7: canonical point-in-time storage, immutable prediction
 lineage, coherent baseline probability models, calibration monitoring, a
 versioned conservative-probability policy, an explicit reason-coded Value Gate,
-reproducible walk-forward evaluation against a de-vigged market baseline, and
-recency-weighted Bayesian LRS/MRS with an immutable league-market matrix.
-These components remain research-only until a real historical snapshot passes
-the model-governance promotion criteria.
+reproducible walk-forward evaluation against a de-vigged market baseline,
+recency-weighted Bayesian LRS/MRS with an immutable league-market matrix, and a
+risk engine — fractional Kelly, exposure caps and a drawdown-aware operating
+state over an append-only bankroll ledger. These components remain research-only
+until a real historical snapshot passes the model-governance promotion criteria.
 
 ## Start here
 

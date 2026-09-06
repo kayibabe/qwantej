@@ -192,6 +192,27 @@ ambiguous duplicates. Database triggers forbid UPDATE, DELETE and TRUNCATE.
 to the exact matrix snapshot used. Existing archived predictions remain null
 rather than being rewritten with hindsight.
 
+### `bankroll_ledger_entries` (append-only financial ledger — Phase 7)
+
+`id`, `account`, `entry_type` (enum `ledger_entry_type`: deposit, withdrawal,
+settlement, adjustment), signed `amount`, running `balance_after`, `occurred_at`
+(point-in-time value date), optional `reference`, `reason` and `created_at`. The
+current bankroll is the sum of an account's amounts — a derived, reproducible
+figure, never a mutable field. Entries are appended in chronological order per
+account. A deposit must be positive and a withdrawal negative; zero amounts are
+rejected. Database triggers forbid UPDATE, DELETE and TRUNCATE.
+
+### `risk_state_snapshots` (immutable risk-state evaluations — Phase 7)
+
+`id`, `account`, `evaluated_as_of`, `current_bankroll`, `peak_bankroll`,
+`available_bankroll`, `committed_exposure`, `daily_exposure`,
+`drawdown_fraction`, optional `rolling_volatility`, `operating_state` (enum
+`risk_operating_state`: normal, caution, defensive, review), `policy_version`,
+JSON `diagnostics` and `created_at`. Check constraints enforce
+`available_bankroll ≤ current_bankroll`, `peak_bankroll ≥ current_bankroll` and
+a unit-interval drawdown. A unique account/cutoff/policy key prevents ambiguous
+duplicates. Database triggers forbid UPDATE, DELETE and TRUNCATE.
+
 ### `audit_events` (immutable, append-only)
 
 `id`, `event_type` (enum `audit_event_type`: model_promoted, model_retired,

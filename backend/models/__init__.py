@@ -6,6 +6,12 @@ Alembic autogenerate and `Base.metadata.create_all()` both rely on it.
 """
 
 from backend.models.audit import AuditActor, AuditEvent, AuditEventType
+from backend.models.bankroll import (
+    BankrollLedgerEntry,
+    LedgerEntryType,
+    RiskState,
+    RiskStateSnapshot,
+)
 from backend.models.base import Base
 from backend.models.calibration import (
     CalibrationMethod,
@@ -71,4 +77,9 @@ __all__ = [
     # Phase 6 — point-in-time reliability matrix
     "ReliabilitySnapshot",
     "ReliabilityState",
+    # Phase 7 — append-only bankroll ledger and immutable risk-state snapshots
+    "BankrollLedgerEntry",
+    "LedgerEntryType",
+    "RiskState",
+    "RiskStateSnapshot",
 ]
