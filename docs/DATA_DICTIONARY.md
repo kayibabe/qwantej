@@ -194,14 +194,18 @@ rather than being rewritten with hindsight.
 
 ### `bankroll_ledger_entries` (append-only financial ledger — Phase 7)
 
-`id`, `account`, `entry_type` (enum `ledger_entry_type`: deposit, withdrawal,
-settlement, adjustment), signed `amount`, running `balance_after`, `occurred_at`
+`id`, `account`, monotonic per-account `sequence`, `entry_type` (enum
+`ledger_entry_type`: deposit, withdrawal, settlement, adjustment), signed
+`amount` (canonicalised to 4 dp), running `balance_after`, `occurred_at`
 (point-in-time value date), optional `reference`, `reason`, optional
 `idempotency_key` and `created_at`. The current bankroll is the sum of an
 account's amounts up to a cutoff — a derived, reproducible figure, never a
-mutable field. Entries are appended in chronological order per account under a
-per-account lock. A deposit must be positive and a withdrawal negative (CHECK
-`ck_ledger_sign_by_type`); zero amounts are rejected. `(account,
+mutable field. Entries are appended under a per-account lock, in chronological
+order, and `sequence` (unique per account, assigned under that lock) is the
+authoritative tie-breaker for replaying the ledger when timestamps are equal —
+UUID id order is arbitrary. `balance_after` can never go negative (CHECK
+`ck_ledger_balance_nonneg`). A deposit must be positive and a withdrawal
+negative (CHECK `ck_ledger_sign_by_type`); zero amounts are rejected. `(account,
 idempotency_key)` is unique, so a retried event is deduplicated — and a key
 reused with different details is rejected, not silently dropped. Database
 triggers forbid UPDATE, DELETE and TRUNCATE.

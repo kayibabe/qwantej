@@ -37,6 +37,15 @@ from qwantej.bankroll import (
 
 _EXTERNAL_FLOWS = (LedgerEntryType.DEPOSIT, LedgerEntryType.WITHDRAWAL)
 _DRAWDOWN_QUANTUM = Decimal("0.00000001")
+# Canonical monetary precision — matches the Numeric(18, 4) storage columns so a
+# value never changes when it round-trips through the database.
+_MONEY_QUANTUM = Decimal("0.0001")
+
+
+def _money(value: Decimal | float | int) -> Decimal:
+    """Canonicalise a monetary amount to the stored 4-dp precision."""
+
+    return Decimal(str(value)).quantize(_MONEY_QUANTUM, rounding=ROUND_HALF_EVEN)
 
 
 def current_bankroll(
@@ -85,7 +94,7 @@ def _evaluate_equity(
             BankrollLedgerEntry.account == account,
             BankrollLedgerEntry.occurred_at <= as_of,
         )
-        .order_by(BankrollLedgerEntry.occurred_at, BankrollLedgerEntry.id)
+        .order_by(BankrollLedgerEntry.occurred_at, BankrollLedgerEntry.sequence)
     ).all()
 
     units = Decimal(0)
@@ -142,9 +151,11 @@ def append_ledger_entry(
         raise ValueError("reason must not be blank")
     if occurred_at.tzinfo is None or occurred_at.utcoffset() is None:
         raise ValueError("occurred_at must be timezone-aware")
-    amount = Decimal(str(amount))
+    # Canonicalise to stored precision up front so idempotent retries compare
+    # equal after a database round-trip.
+    amount = _money(amount)
     if amount == 0:
-        raise ValueError("ledger amount must be non-zero")
+        raise ValueError("ledger amount must be non-zero at 4-dp precision")
     if entry_type is LedgerEntryType.DEPOSIT and amount <= 0:
         raise ValueError("a deposit must be a positive amount")
     if entry_type is LedgerEntryType.WITHDRAWAL and amount >= 0:
@@ -181,8 +192,22 @@ def append_ledger_entry(
             raise ValueError("ledger entries must be appended in chronological order")
 
     balance_after = current_bankroll(session, account) + amount
+    if balance_after < 0:
+        raise ValueError("ledger balance cannot go negative")
+
+    # Monotonic per-account append counter, assigned under the account lock so
+    # it reflects true insertion order regardless of equal timestamps.
+    next_sequence = (
+        session.execute(
+            select(func.coalesce(func.max(BankrollLedgerEntry.sequence), 0)).where(
+                BankrollLedgerEntry.account == account
+            )
+        ).scalar_one()
+        + 1
+    )
     entry = BankrollLedgerEntry(
         account=account,
+        sequence=next_sequence,
         entry_type=entry_type,
         amount=amount,
         balance_after=balance_after,
@@ -209,7 +234,7 @@ def _assert_idempotent_match(
         stored_occurred = stored_occurred.replace(tzinfo=UTC)
     mismatched = (
         existing.entry_type is not entry_type
-        or Decimal(str(existing.amount)) != amount
+        or _money(existing.amount) != amount
         or stored_occurred != occurred_at
         or existing.reason != reason
         or existing.reference != reference

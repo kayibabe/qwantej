@@ -13,6 +13,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     CheckConstraint,
     DateTime,
     Enum,
@@ -43,6 +44,8 @@ class BankrollLedgerEntry(UUIDPKMixin, CreatedAtMixin, Base):
     __tablename__ = "bankroll_ledger_entries"
     __table_args__ = (
         CheckConstraint("amount <> 0", name="ck_ledger_amount_nonzero"),
+        CheckConstraint("balance_after >= 0", name="ck_ledger_balance_nonneg"),
+        CheckConstraint("sequence > 0", name="ck_ledger_sequence_positive"),
         CheckConstraint(
             "(entry_type <> 'deposit' OR amount > 0) "
             "AND (entry_type <> 'withdrawal' OR amount < 0)",
@@ -51,12 +54,16 @@ class BankrollLedgerEntry(UUIDPKMixin, CreatedAtMixin, Base):
         UniqueConstraint(
             "account", "occurred_at", "id", name="uq_ledger_account_occurred"
         ),
+        UniqueConstraint("account", "sequence", name="uq_ledger_account_sequence"),
         UniqueConstraint("account", "idempotency_key", name="uq_ledger_idempotency"),
     )
 
     account: Mapped[str] = mapped_column(
         String(80), nullable=False, index=True, default="primary"
     )
+    # Monotonic per-account append counter; the authoritative tie-breaker for
+    # replaying the ledger in true insertion order (UUID id order is arbitrary).
+    sequence: Mapped[int] = mapped_column(BigInteger, nullable=False)
     entry_type: Mapped[LedgerEntryType] = mapped_column(
         Enum(
             LedgerEntryType,

@@ -400,7 +400,8 @@ class TestReliabilitySnapshotsImmutable:
 def _new_ledger_entry(session: Session) -> BankrollLedgerEntry:
     now = datetime.now(UTC)
     entry = BankrollLedgerEntry(
-        account=f"acct-{now.timestamp()}", entry_type=LedgerEntryType.DEPOSIT,
+        account=f"acct-{now.timestamp()}", sequence=1,
+        entry_type=LedgerEntryType.DEPOSIT,
         amount=1000, balance_after=1000, occurred_at=now, reason="seed",
     )
     session.add(entry)

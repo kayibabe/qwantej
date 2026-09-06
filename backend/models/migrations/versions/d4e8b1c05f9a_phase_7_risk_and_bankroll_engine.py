@@ -28,6 +28,7 @@ def upgrade() -> None:
         "bankroll_ledger_entries",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("account", sa.String(80), nullable=False),
+        sa.Column("sequence", sa.BigInteger(), nullable=False),
         sa.Column("entry_type", entry_type, nullable=False),
         sa.Column("amount", sa.Numeric(18, 4), nullable=False),
         sa.Column("balance_after", sa.Numeric(18, 4), nullable=False),
@@ -37,12 +38,15 @@ def upgrade() -> None:
         sa.Column("idempotency_key", sa.String(128), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.CheckConstraint("amount <> 0", name="ck_ledger_amount_nonzero"),
+        sa.CheckConstraint("balance_after >= 0", name="ck_ledger_balance_nonneg"),
+        sa.CheckConstraint("sequence > 0", name="ck_ledger_sequence_positive"),
         sa.CheckConstraint(
             "(entry_type <> 'deposit' OR amount > 0) "
             "AND (entry_type <> 'withdrawal' OR amount < 0)",
             name="ck_ledger_sign_by_type",
         ),
         sa.UniqueConstraint("account", "occurred_at", "id", name="uq_ledger_account_occurred"),
+        sa.UniqueConstraint("account", "sequence", name="uq_ledger_account_sequence"),
         sa.UniqueConstraint("account", "idempotency_key", name="uq_ledger_idempotency"),
     )
     op.create_index(

@@ -145,12 +145,69 @@ def test_idempotent_append_does_not_double_count(session: Session) -> None:
 def test_db_check_rejects_deposit_with_negative_amount(session: Session) -> None:
     # Bypass the service guard to prove the database itself enforces the sign.
     entry = BankrollLedgerEntry(
-        account="primary", entry_type=LedgerEntryType.DEPOSIT,
-        amount=-100, balance_after=-100, occurred_at=NOW, reason="bad",
+        account="primary", sequence=1, entry_type=LedgerEntryType.DEPOSIT,
+        amount=-100, balance_after=0, occurred_at=NOW, reason="bad",
     )
     session.add(entry)
     with pytest.raises(IntegrityError):
         session.commit()
+
+
+def test_db_check_rejects_negative_balance_after(session: Session) -> None:
+    entry = BankrollLedgerEntry(
+        account="primary", sequence=1, entry_type=LedgerEntryType.WITHDRAWAL,
+        amount=-50, balance_after=-50, occurred_at=NOW, reason="overdraw",
+    )
+    session.add(entry)
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+
+def test_service_rejects_entry_that_would_make_balance_negative(session: Session) -> None:
+    append_ledger_entry(
+        session, account="primary", entry_type=LedgerEntryType.DEPOSIT,
+        amount=100, occurred_at=NOW, reason="seed",
+    )
+    with pytest.raises(ValueError, match="negative"):
+        append_ledger_entry(
+            session, account="primary", entry_type=LedgerEntryType.WITHDRAWAL,
+            amount=-150, occurred_at=NOW + timedelta(hours=1), reason="overdraw",
+        )
+
+
+def test_equal_timestamp_entries_replay_in_append_order(session: Session) -> None:
+    # Deposit and loss share a timestamp; sequence (not UUID) fixes the order.
+    deposit = append_ledger_entry(
+        session, account="primary", entry_type=LedgerEntryType.DEPOSIT,
+        amount=1000, occurred_at=NOW, reason="seed",
+    )
+    loss = append_ledger_entry(
+        session, account="primary", entry_type=LedgerEntryType.SETTLEMENT,
+        amount=-100, occurred_at=NOW, reason="lost",
+    )
+    assert loss.sequence > deposit.sequence
+    snapshot = record_risk_state(
+        session, account="primary", evaluated_as_of=NOW,
+        committed_exposure=0, daily_exposure=0,
+    )
+    assert float(snapshot.current_bankroll) == pytest.approx(900.0)
+    assert float(snapshot.drawdown_fraction) == pytest.approx(0.10)
+
+
+def test_exact_retry_after_decimal_normalization_is_not_a_conflict(session: Session) -> None:
+    first = append_ledger_entry(
+        session, account="primary", entry_type=LedgerEntryType.SETTLEMENT,
+        amount=Decimal("1.00001"), occurred_at=NOW, reason="won",
+        idempotency_key="evt-9",
+    )
+    # Stored at 4 dp; the same request must dedupe rather than conflict.
+    assert float(first.amount) == pytest.approx(1.0000)
+    second = append_ledger_entry(
+        session, account="primary", entry_type=LedgerEntryType.SETTLEMENT,
+        amount=Decimal("1.00001"), occurred_at=NOW, reason="won",
+        idempotency_key="evt-9",
+    )
+    assert first.id == second.id
 
 
 def _seed(session: Session, entry_type: LedgerEntryType, amount, hours: int) -> None:
