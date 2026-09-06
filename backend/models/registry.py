@@ -112,6 +112,9 @@ class ModelRunStatus(enum.StrEnum):
 
 class ModelRun(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "model_runs"
+    __table_args__ = (
+        UniqueConstraint("id", "model_id", name="uq_model_runs_id_model_id"),
+    )
 
     model_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("model_registry.id"), nullable=False, index=True

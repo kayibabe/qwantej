@@ -38,6 +38,11 @@ class TestDevig:
         with pytest.raises(ValueError):
             devig(odds)
 
+    @pytest.mark.parametrize("odds", [[float("nan"), 2.0], [2.0, float("inf")]])
+    def test_non_finite_odds_rejected(self, odds: list[float]) -> None:
+        with pytest.raises(ValueError):
+            devig(odds)
+
     def test_unknown_method_rejected(self) -> None:
         with pytest.raises(ValueError):
             devig([2.0, 2.0], method="shin")

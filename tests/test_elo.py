@@ -44,8 +44,20 @@ class TestResultProbabilities:
         with pytest.raises(ValueError):
             result_probabilities(1500, 1500, draw_width=0.0)
 
+    @pytest.mark.parametrize("rating", [float("nan"), float("inf")])
+    def test_non_finite_rating_rejected(self, rating: float) -> None:
+        with pytest.raises(ValueError):
+            result_probabilities(rating, 1500)
+        with pytest.raises(ValueError):
+            expected_score(1500, rating)
+
 
 class TestUpdateRatings:
+    @pytest.mark.parametrize("k", [float("nan"), float("inf")])
+    def test_non_finite_k_rejected(self, k: float) -> None:
+        with pytest.raises(ValueError, match="finite"):
+            update_ratings(1500, 1500, 1, 0, k=k)
+
     def test_update_is_zero_sum(self) -> None:
         h0, a0 = 1500.0, 1500.0
         h1, a1 = update_ratings(h0, a0, home_goals=2, away_goals=0)

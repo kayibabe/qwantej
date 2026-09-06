@@ -7,9 +7,10 @@ archived and measured against realized outcomes.
 
 ## Status
 
-Early rebuild (Phase 1 forecasting-lab pivot). The repository currently
-holds the project scaffold and governance docs; application code is being
-built out.
+Rebuild through Phase 4: canonical point-in-time storage, immutable prediction
+lineage, coherent baseline probability models, calibration monitoring and a
+versioned conservative-probability research policy. Production promotion still
+requires the Phase 5 walk-forward backtest and leakage validation.
 
 ## Start here
 

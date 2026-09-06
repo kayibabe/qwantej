@@ -11,6 +11,8 @@ derivations below are model-agnostic.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 from qwantej.models.probabilities import (
@@ -28,12 +30,18 @@ class ScorelineDistribution:
         matrix = np.asarray(matrix, dtype=float)
         if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]:
             raise ValueError(f"scoreline matrix must be square 2-D, got shape {matrix.shape}")
+        # Check finiteness first: NaN/inf silently pass ordinary <, > comparisons
+        # (NaN < -1e-12 is False, abs(NaN - 1) > tol is False), so without this a
+        # NaN matrix would slip through the negativity and sum checks below.
+        if not np.isfinite(matrix).all():
+            raise ValueError("scoreline matrix has non-finite (NaN/inf) probabilities")
         if np.any(matrix < -1e-12):
             raise ValueError("scoreline matrix has negative probabilities")
         total = float(matrix.sum())
         if abs(total - 1.0) > SUM_TOLERANCE:
             raise ValueError(f"scoreline matrix must sum to 1, got {total}")
-        self.matrix = matrix
+        self.matrix = matrix.copy()
+        self.matrix.setflags(write=False)
         self.max_goals = matrix.shape[0] - 1
         # Diagnostic: probability mass lost to truncation before renormalising
         # (framework §15's tail-handling sanity check).
@@ -54,10 +62,10 @@ class ScorelineDistribution:
         return _normalise_triple(home, draw, away)
 
     def over_under(self, line: float) -> BinaryProbs:
-        """Over/under total match goals. `line` is a half-line (e.g. 2.5) — a
-        whole-number line would make a push possible and is rejected."""
-        if line == int(line):
-            raise ValueError(f"over_under needs a half-line (e.g. 2.5) to avoid a push, got {line}")
+        """Over/under total match goals. `line` must be a half-line (e.g. 2.5):
+        a whole line allows a push and a quarter line (2.25) settles as a split
+        stake — neither maps to a single binary probability."""
+        _require_half_line("over_under", line)
         totals = np.add.outer(np.arange(self.max_goals + 1), np.arange(self.max_goals + 1))
         over = float(self.matrix[totals > line].sum())
         return _binary(over)
@@ -68,8 +76,7 @@ class ScorelineDistribution:
 
     def team_over(self, side: str, line: float) -> BinaryProbs:
         """Over/under goals for one team. `side` is 'home' or 'away'."""
-        if line == int(line):
-            raise ValueError(f"team_over expects a half-line (e.g. 1.5), got {line}")
+        _require_half_line("team_over", line)
         if side == "home":
             goals = np.arange(self.max_goals + 1)[:, None]
         elif side == "away":
@@ -78,6 +85,19 @@ class ScorelineDistribution:
             raise ValueError(f"side must be 'home' or 'away', got {side!r}")
         over = float(self.matrix[np.broadcast_to(goals > line, self.matrix.shape)].sum())
         return _binary(over)
+
+
+def _require_half_line(market: str, line: float) -> None:
+    """A settleable two-way goals line must be an integer + 0.5 (e.g. 2.5).
+
+    Rejects whole lines (push possible), quarter lines like 2.25 (settle as a
+    split stake, not one binary outcome) and non-finite values. A half-line L
+    is exactly one for which 2L is an odd integer.
+    """
+    if not (math.isfinite(line) and float(2 * line).is_integer() and not float(line).is_integer()):
+        raise ValueError(
+            f"{market} needs a half-line (integer + 0.5, e.g. 2.5), got {line}"
+        )
 
 
 def _binary(yes: float) -> BinaryProbs:

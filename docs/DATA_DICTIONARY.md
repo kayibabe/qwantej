@@ -36,6 +36,7 @@ entities, each carrying a mapping confidence and provenance:
 | `model_runs` | Execution metadata, data snapshot, parameters, outputs |
 | `predictions` | Raw/ensemble/calibrated/conservative probabilities by market/selection |
 | `calibration_models` | Calibrator version, segment, training sample and diagnostics |
+| `calibration_snapshots` | Immutable out-of-sample calibration monitoring windows |
 | `reliability_snapshots` | LRS/MRS and posterior uncertainty at a point in time |
 | `selection_candidates` | QSS, Value Gate result and rejection/pass reasons |
 | `accumulators` / `accumulator_legs` | Ticket product, odds, probability, EV, legs and optimiser version |
@@ -111,6 +112,11 @@ Decision-time fields only; a correction is a new row. Post-fixture data
 contributions from Appendix C) lives in the separate `settlements` table so
 it can never leak into the decision record — Appendix C is the union view.
 
+Immutability is **enforced in the database** (migrations `da3a07d4e74e` and
+`c84f2d19a6b1`): a trigger raises on any UPDATE, DELETE or TRUNCATE of
+`predictions`, `audit_events` and `calibration_snapshots`. Calibration-model
+artifact fields are frozen after insertion while lifecycle status remains mutable.
+
 - **Identity/PIT**: `id`, `fixture_id` → `fixtures` (competition/season/team
   ids reached via the fixture, not duplicated), `prediction_timestamp`,
   `decision_as_of`.
@@ -125,13 +131,33 @@ it can never leak into the decision record — Appendix C is the union view.
   `uncertainty_measure`.
 - **Quality/reliability**: `dqs`, `qss`, `lrs`, `mrs` (0–100),
   `dynamic_states` (JSON).
-- **Version spine**: `model_version_id` → `model_registry`,
+- **Version spine (attribution)**: `model_version_id` → `model_registry`,
   `feature_version`, `calibration_version`, `risk_policy_version`,
-  `optimiser_version`, `code_commit`. Completeness is enforced by
-  `qwantej.audit.reproducibility.check_reproducibility` — a prediction is
-  reproducible only if every spine field is present.
+  `optimiser_version`, `code_commit` — which versions were in force.
+- **Execution/input lineage (replay)**: `model_run_id` → `model_runs` (the
+  concrete run that supplied the parameters), `input_snapshot_ref` (retrievable
+  canonical inputs) and `input_snapshot_hash` (content verification). The
+  database requires the run to belong to `model_version_id`.
+- **Calibration lineage**: `calibration_model_id` → `calibration_models`, plus
+  the denormalized `calibration_version` written into the immutable record.
 - **Linkage/diagnostics**: `accumulator_id` (polymorphic UUID, no FK until
   the accumulators table lands), `reason_codes` (JSON; Appendix D), `created_at`.
+
+### `calibration_models` (versioned lifecycle entity — Phase 4)
+
+`id`, unique `version`, `method` (`platt` or `isotonic`), lifecycle `status`,
+optional `parent_id`, nullable segment dimensions (`market`, `competition`,
+`model_family`), `trained_as_of`, training window, `sample_size`,
+`minimum_sample_size`, serializable `parameters`, validation `diagnostics`,
+`artefact_hash`, `code_commit`, promotion/retirement and row timestamps.
+Database checks enforce the training cutoff and minimum sample contract.
+
+### `calibration_snapshots` (immutable monitoring archive — Phase 4)
+
+`calibration_model_id`, evaluation cutoff/window, `sample_size`, Brier score,
+log loss, ECE, calibration intercept/slope, optional Brier Skill Score,
+reliability-curve bins and `created_at`. Database triggers forbid UPDATE,
+DELETE and TRUNCATE.
 
 ### `audit_events` (immutable, append-only)
 

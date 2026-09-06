@@ -23,6 +23,7 @@ CLV) lands with the value/backtesting phase; this module is the baseline the
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -70,5 +71,9 @@ def _validate_odds(odds: Sequence[float]) -> None:
     if len(odds) < 2:
         raise ValueError(f"need at least 2 outcomes to de-vig, got {len(odds)}")
     for o in odds:
+        # Finiteness first: NaN/inf pass the <= 1.0 check and yield NaN fair
+        # probabilities that then escape unvalidated.
+        if not math.isfinite(o):
+            raise ValueError(f"decimal odds must be finite, got {o}")
         if o <= 1.0:
             raise ValueError(f"decimal odds must be > 1.0, got {o}")

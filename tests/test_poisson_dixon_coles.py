@@ -27,6 +27,14 @@ class TestPoissonNumericalSanity:
         with pytest.raises(ValueError):
             poisson_scoreline(home_xg, away_xg)
 
+    @pytest.mark.parametrize(
+        "home_xg,away_xg",
+        [(float("nan"), 1.5), (1.5, float("nan")), (float("inf"), 1.5)],
+    )
+    def test_non_finite_rates_rejected(self, home_xg: float, away_xg: float) -> None:
+        with pytest.raises(ValueError):
+            poisson_scoreline(home_xg, away_xg)
+
 
 class TestDixonColes:
     def test_rho_zero_recovers_independent_poisson(self) -> None:
@@ -50,3 +58,7 @@ class TestDixonColes:
         # rho large enough to make a tau factor negative must be refused.
         with pytest.raises(ValueError):
             dixon_coles_scoreline(1.5, 1.5, rho=1.0)
+
+    def test_non_finite_rho_rejected(self) -> None:
+        with pytest.raises(ValueError):
+            dixon_coles_scoreline(1.5, 1.5, rho=float("nan"))
