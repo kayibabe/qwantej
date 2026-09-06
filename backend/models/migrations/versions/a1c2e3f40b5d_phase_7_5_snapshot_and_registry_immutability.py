@@ -69,6 +69,19 @@ BEGIN
         RAISE EXCEPTION 'finished model_run % is immutable', OLD.id
             USING ERRCODE = 'restrict_violation';
     END IF;
+    IF NEW.status::text = 'running' AND NEW.finished_at IS NOT NULL THEN
+        RAISE EXCEPTION 'running model_run % cannot have finished_at', OLD.id
+            USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.status::text IN ('succeeded', 'failed')
+       AND (NEW.finished_at IS NULL OR NEW.finished_at < NEW.started_at) THEN
+        RAISE EXCEPTION 'terminal model_run % requires a valid finished_at', OLD.id
+            USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.status::text = 'succeeded' AND NEW.metrics IS NULL THEN
+        RAISE EXCEPTION 'succeeded model_run % requires metrics', OLD.id
+            USING ERRCODE = 'check_violation';
+    END IF;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

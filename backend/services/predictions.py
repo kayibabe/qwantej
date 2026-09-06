@@ -11,16 +11,22 @@ rather than archiving a record that cannot be replayed or scored later.
 
 from __future__ import annotations
 
+import math
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
 from backend.models import (
     CalibrationModel,
+    CalibrationStatus,
+    Fixture,
     ModelRegistry,
     ModelRun,
+    ModelRunKind,
+    ModelRunStatus,
+    ModelStatus,
     Prediction,
     ReliabilitySnapshot,
 )
@@ -59,7 +65,8 @@ class PredictionLineage:
     input_snapshot_ref: str
     input_snapshot_hash: str
     reliability_snapshot_id: uuid.UUID | None = None
-    risk_policy_version: str | None = None
+    risk_policy_version: str = "risk-v1"
+    optimiser_version: str = "pre-optimiser-v1"
 
 
 @dataclass(frozen=True)
@@ -138,6 +145,7 @@ def publish_prediction(
         feature_version=lineage.feature_version,
         calibration_version=lineage.calibration_version,
         risk_policy_version=lineage.risk_policy_version,
+        optimiser_version=lineage.optimiser_version,
         code_commit=lineage.code_commit,
         input_snapshot_ref=lineage.input_snapshot_ref,
         input_snapshot_hash=lineage.input_snapshot_hash,
@@ -161,6 +169,14 @@ def _record_problems(record: MinimumPredictionRecord) -> list[str]:
             problems.append(f"{name} is required")
     if not record.model_probabilities:
         problems.append("model_probabilities must be a non-empty map")
+    else:
+        for model_name, probability in record.model_probabilities.items():
+            if not isinstance(model_name, str) or not model_name.strip():
+                problems.append("model_probabilities keys must be non-blank strings")
+            if not isinstance(probability, (int, float)) or not math.isfinite(probability):
+                problems.append(f"model_probabilities[{model_name!r}] must be finite")
+            elif not 0.0 <= probability <= 1.0:
+                problems.append(f"model_probabilities[{model_name!r}] must be in [0, 1]")
     for name, probability in (
         ("ensemble_probability", record.ensemble_probability),
         ("calibrated_probability", record.calibrated_probability),
@@ -168,10 +184,24 @@ def _record_problems(record: MinimumPredictionRecord) -> list[str]:
     ):
         if probability is None:
             problems.append(f"{name} is required")
-        elif not 0.0 <= probability <= 1.0:
+        elif not math.isfinite(probability) or not 0.0 <= probability <= 1.0:
             problems.append(f"{name} must be in [0, 1]")
-    if record.dqs is None or not 0.0 <= record.dqs <= 100.0:
+    if record.dqs is None or not math.isfinite(record.dqs) or not 0.0 <= record.dqs <= 100.0:
         problems.append("dqs is required and must be in [0, 100]")
+    for name, score in (("qss", record.qss), ("lrs", record.lrs), ("mrs", record.mrs)):
+        if score is not None and (not math.isfinite(score) or not 0.0 <= score <= 100.0):
+            problems.append(f"{name} must be in [0, 100]")
+    if record.uncertainty_measure is not None and (
+        not math.isfinite(record.uncertainty_measure)
+        or not 0.0 <= record.uncertainty_measure <= 1.0
+    ):
+        problems.append("uncertainty_measure must be in [0, 1]")
+    if (
+        record.prediction_timestamp.tzinfo is not None
+        and record.decision_as_of.tzinfo is not None
+        and record.prediction_timestamp < record.decision_as_of
+    ):
+        problems.append("prediction_timestamp cannot precede decision_as_of")
 
     present_price = [f for f in _PRICE_FIELDS if getattr(record, f) is not None]
     if present_price and len(present_price) != len(_PRICE_FIELDS):
@@ -179,6 +209,34 @@ def _record_problems(record: MinimumPredictionRecord) -> list[str]:
         problems.append(
             "price block is incomplete; missing " + ", ".join(missing)
         )
+    elif (
+        len(present_price) == len(_PRICE_FIELDS)
+        and record.conservative_probability is not None
+        and math.isfinite(record.conservative_probability)
+    ):
+        assert record.executable_odds is not None
+        assert record.fair_market_probability is not None
+        assert record.edge_pp is not None
+        assert record.expected_value is not None
+        if not math.isfinite(record.executable_odds) or record.executable_odds <= 1.0:
+            problems.append("executable_odds must be finite decimal odds greater than 1")
+        if (
+            not math.isfinite(record.fair_market_probability)
+            or not 0.0 <= record.fair_market_probability <= 1.0
+        ):
+            problems.append("fair_market_probability must be in [0, 1]")
+        expected_edge_pp = (
+            record.conservative_probability - record.fair_market_probability
+        ) * 100.0
+        expected_ev = record.conservative_probability * record.executable_odds - 1.0
+        if not math.isfinite(record.edge_pp) or not math.isclose(
+            record.edge_pp, expected_edge_pp, rel_tol=0.0, abs_tol=1e-8
+        ):
+            problems.append("edge_pp does not match conservative and market probabilities")
+        if not math.isfinite(record.expected_value) or not math.isclose(
+            record.expected_value, expected_ev, rel_tol=0.0, abs_tol=1e-8
+        ):
+            problems.append("expected_value does not match probability and executable odds")
     if record.quote_timestamp is not None:
         if record.quote_timestamp.tzinfo is None:
             problems.append("quote_timestamp must be timezone-aware")
@@ -197,6 +255,8 @@ def _lineage_field_problems(lineage: PredictionLineage) -> list[str]:
         ("code_commit", lineage.code_commit),
         ("input_snapshot_ref", lineage.input_snapshot_ref),
         ("input_snapshot_hash", lineage.input_snapshot_hash),
+        ("risk_policy_version", lineage.risk_policy_version),
+        ("optimiser_version", lineage.optimiser_version),
     ):
         if not value or not value.strip():
             problems.append(f"lineage.{name} is required")
@@ -212,18 +272,71 @@ def _lineage_existence_problems(
     model = session.get(ModelRegistry, lineage.model_version_id)
     if model is None:
         problems.append("lineage.model_version_id does not exist")
+    else:
+        if model.status is not ModelStatus.CHAMPION:
+            problems.append("lineage.model_version_id is not the champion model")
+        if model.code_commit != lineage.code_commit:
+            problems.append("lineage.code_commit does not match the model version")
     run = session.get(ModelRun, lineage.model_run_id)
     if run is None:
         problems.append("lineage.model_run_id does not exist")
     elif run.model_id != lineage.model_version_id:
         problems.append("lineage.model_run_id belongs to a different model")
-    if session.get(CalibrationModel, lineage.calibration_model_id) is None:
+    else:
+        if run.kind is not ModelRunKind.INFERENCE:
+            problems.append("lineage.model_run_id is not an inference run")
+        if run.status is not ModelRunStatus.SUCCEEDED:
+            problems.append("lineage.model_run_id has not succeeded")
+        if run.data_as_of is None or _as_utc(run.data_as_of) > record.decision_as_of:
+            problems.append("lineage model run is not valid at decision_as_of")
+        if run.data_snapshot_ref != lineage.input_snapshot_ref:
+            problems.append("lineage input snapshot does not match the model run")
+        if run.code_commit != lineage.code_commit:
+            problems.append("lineage.code_commit does not match the model run")
+    calibrator = session.get(CalibrationModel, lineage.calibration_model_id)
+    if calibrator is None:
         problems.append("lineage.calibration_model_id does not exist")
+    else:
+        if calibrator.status is not CalibrationStatus.CHAMPION:
+            problems.append("lineage.calibration_model_id is not champion")
+        if calibrator.version != lineage.calibration_version:
+            problems.append("lineage.calibration_version does not match its artifact")
+        if _as_utc(calibrator.trained_as_of) > record.decision_as_of:
+            problems.append("lineage calibrator is not valid at decision_as_of")
+    fixture = session.get(Fixture, record.fixture_id)
+    if fixture is None:
+        problems.append("fixture_id does not exist")
+    else:
+        kickoff_utc = _as_utc(fixture.kickoff_utc)
+        if record.decision_as_of >= kickoff_utc:
+            problems.append("decision_as_of must be before fixture kickoff")
+        if record.prediction_timestamp >= kickoff_utc:
+            problems.append("prediction_timestamp must be before fixture kickoff")
     if lineage.reliability_snapshot_id is not None:
-        if session.get(ReliabilitySnapshot, lineage.reliability_snapshot_id) is None:
+        reliability = session.get(ReliabilitySnapshot, lineage.reliability_snapshot_id)
+        if reliability is None:
             problems.append("lineage.reliability_snapshot_id does not exist")
+        else:
+            if _as_utc(reliability.evaluated_as_of) > record.decision_as_of:
+                problems.append("lineage reliability is not valid at decision_as_of")
+            if record.lrs is not None and not math.isclose(
+                record.lrs, float(reliability.league_reliability), abs_tol=1e-6
+            ):
+                problems.append("lrs does not match its reliability snapshot")
+            if record.mrs is not None and not math.isclose(
+                record.mrs, float(reliability.market_reliability), abs_tol=1e-6
+            ):
+                problems.append("mrs does not match its reliability snapshot")
     elif record.lrs is not None or record.mrs is not None:
         problems.append(
             "lrs/mrs require a reliability_snapshot_id identifying their source"
         )
     return problems
+
+
+def _as_utc(value: datetime) -> datetime:
+    """Normalize SQLite's timezone-naive round trips to the UTC DB convention."""
+
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)

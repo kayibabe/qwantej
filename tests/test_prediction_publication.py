@@ -63,6 +63,7 @@ def _seed(session: Session):
     run = ModelRun(
         model=model, kind=ModelRunKind.INFERENCE, status=ModelRunStatus.SUCCEEDED,
         started_at=NOW, finished_at=NOW, data_as_of=NOW,
+        data_snapshot_ref="snapshot:v1", code_commit="abc123", metrics={"ok": True},
     )
     calibrator = CalibrationModel(
         version="cal-1", method=CalibrationMethod.PLATT,
@@ -105,6 +106,7 @@ def _valid(session: Session):
         calibration_model_id=calibrator.id,
         reliability_snapshot_id=reliability.id, feature_version="feat-1",
         calibration_version="cal-1", risk_policy_version="risk-v1",
+        optimiser_version="pre-optimiser-v1",
         code_commit="abc123", input_snapshot_ref="snapshot:v1",
         input_snapshot_hash="sha256:inputs",
     )
@@ -183,3 +185,58 @@ def test_reliability_scores_require_snapshot(session: Session) -> None:
     with pytest.raises(PredictionPublicationError, match="reliability_snapshot_id"):
         publish_prediction(session, record=record, lineage=lineage)
     assert session.query(Prediction).count() == 0
+
+
+@pytest.mark.parametrize(
+    "field,value,message",
+    [
+        ("edge_pp", 99.0, "edge_pp does not match"),
+        ("expected_value", 99.0, "expected_value does not match"),
+    ],
+)
+def test_inconsistent_value_fields_fail_closed(
+    session: Session, field: str, value: float, message: str
+) -> None:
+    record, lineage = _valid(session)
+    record = replace(record, **{field: value})
+    with pytest.raises(PredictionPublicationError, match=message):
+        publish_prediction(session, record=record, lineage=lineage)
+    assert session.query(Prediction).count() == 0
+
+
+def test_future_model_run_fails_closed(session: Session) -> None:
+    record, lineage = _valid(session)
+    run = session.get(ModelRun, lineage.model_run_id)
+    assert run is not None
+    run.data_as_of = NOW + timedelta(hours=1)
+    session.flush()
+    with pytest.raises(PredictionPublicationError, match="model run.*decision_as_of"):
+        publish_prediction(session, record=record, lineage=lineage)
+
+
+def test_future_calibrator_fails_closed(session: Session) -> None:
+    record, lineage = _valid(session)
+    calibrator = session.get(CalibrationModel, lineage.calibration_model_id)
+    assert calibrator is not None
+    calibrator.trained_as_of = NOW + timedelta(hours=1)
+    calibrator.training_window_end = NOW + timedelta(hours=1)
+    session.flush()
+    with pytest.raises(PredictionPublicationError, match="calibrator.*decision_as_of"):
+        publish_prediction(session, record=record, lineage=lineage)
+
+
+def test_non_champion_model_fails_closed(session: Session) -> None:
+    record, lineage = _valid(session)
+    model = session.get(ModelRegistry, lineage.model_version_id)
+    assert model is not None
+    model.status = ModelStatus.CHALLENGER
+    session.flush()
+    with pytest.raises(PredictionPublicationError, match="not the champion"):
+        publish_prediction(session, record=record, lineage=lineage)
+
+
+def test_published_prediction_has_complete_version_spine(session: Session) -> None:
+    record, lineage = _valid(session)
+    prediction = publish_prediction(session, record=record, lineage=lineage)
+    assert prediction.risk_policy_version == "risk-v1"
+    assert prediction.optimiser_version == "pre-optimiser-v1"

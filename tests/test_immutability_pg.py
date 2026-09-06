@@ -614,3 +614,19 @@ class TestModelRunFieldFreeze:
             "UPDATE model_runs SET metrics = '{\"brier\": 0.9}' WHERE id = :id",
             {"id": str(run.id)}, message="finished",
         )
+
+    def test_success_without_metrics_is_blocked(self, session: Session) -> None:
+        run = _new_model_run(session)
+        _assert_blocked(
+            session,
+            "UPDATE model_runs SET status = 'succeeded', finished_at = :now WHERE id = :id",
+            {"id": str(run.id), "now": datetime.now(UTC)}, message="requires metrics",
+        )
+
+    def test_terminal_run_requires_valid_finished_at(self, session: Session) -> None:
+        run = _new_model_run(session)
+        _assert_blocked(
+            session,
+            "UPDATE model_runs SET status = 'failed' WHERE id = :id",
+            {"id": str(run.id)}, message="requires a valid finished_at",
+        )
