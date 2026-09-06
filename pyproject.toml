@@ -56,3 +56,10 @@ select = ["E", "F", "I", "UP", "B"]
 python_version = "3.11"
 files = ["src/qwantej", "backend"]
 ignore_missing_imports = true
+
+# numpy 2.5's bundled stubs use 3.12+ typing syntax that trips our 3.11 target
+# (we keep the 3.11 floor for our own code). Don't follow into them.
+[[tool.mypy.overrides]]
+module = ["numpy.*", "scipy.*"]
+follow_imports = "skip"
+follow_imports_for_stubs = true
