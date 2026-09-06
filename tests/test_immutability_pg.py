@@ -39,7 +39,9 @@ from backend.models import (
     ModelRegistry,
     ModelRun,
     ModelRunKind,
+    ModelRunStatus,
     ModelStatus,
+    OddsQuote,
     Prediction,
     ReliabilitySnapshot,
     ReliabilityState,
@@ -47,6 +49,8 @@ from backend.models import (
     RiskStateSnapshot,
     Season,
     SelectionCandidate,
+    StatsSnapshot,
+    StatsSubjectType,
     Team,
 )
 
@@ -65,12 +69,13 @@ def engine():
                     "select count(*) from pg_trigger "
                     "where tgname in "
                     "('trg_audit_events_no_row_mutation', "
-                    "'trg_selection_candidates_no_update')"
+                    "'trg_selection_candidates_no_update', "
+                    "'trg_odds_quotes_no_row_mutation')"
                 )
             ).scalar_one()
     except OperationalError:
         pytest.skip("dev Postgres not reachable (docker compose up -d db)")
-    if present != 2:
+    if present != 3:
         pytest.skip("append-only triggers absent; run: alembic upgrade head")
     return eng
 
@@ -231,6 +236,10 @@ class TestCalibrationModelArtifactImmutable:
         "TRUNCATE reliability_snapshots CASCADE",
         "TRUNCATE bankroll_ledger_entries",
         "TRUNCATE risk_state_snapshots",
+        "TRUNCATE odds_quotes CASCADE",
+        "TRUNCATE stats_snapshots CASCADE",
+        "TRUNCATE model_registry CASCADE",
+        "TRUNCATE model_runs CASCADE",
     ],
 )
 def test_append_only_tables_block_truncate(session: Session, statement: str) -> None:
@@ -453,4 +462,155 @@ class TestRiskStateSnapshotImmutable:
         _assert_blocked(
             session, "DELETE FROM risk_state_snapshots WHERE id = :id",
             {"id": str(snapshot.id)},
+        )
+
+
+def _new_fixture(session: Session) -> Fixture:
+    now = datetime.now(UTC)
+    comp = Competition(name=f"Snapshot League {now.timestamp()}")
+    season = Season(competition=comp, label="2025/2026")
+    home, away = Team(name="Home FC"), Team(name="Away FC")
+    fixture = Fixture(
+        competition=comp, season=season, home_team=home, away_team=away,
+        kickoff_utc=now, status=FixtureStatus.SCHEDULED,
+    )
+    session.add_all([comp, season, home, away, fixture])
+    session.flush()
+    return fixture
+
+
+def _new_odds_quote(session: Session) -> OddsQuote:
+    quote = OddsQuote(
+        fixture=_new_fixture(session), bookmaker="bk", market="1X2",
+        selection="home", decimal_odds=2.5, captured_at=datetime.now(UTC),
+        source="test",
+    )
+    session.add(quote)
+    session.flush()
+    return quote
+
+
+class TestOddsQuotesImmutable:
+    def test_update_is_blocked(self, session: Session) -> None:
+        quote = _new_odds_quote(session)
+        _assert_blocked(
+            session, "UPDATE odds_quotes SET decimal_odds = 9.9 WHERE id = :id",
+            {"id": str(quote.id)},
+        )
+
+    def test_delete_is_blocked(self, session: Session) -> None:
+        quote = _new_odds_quote(session)
+        _assert_blocked(
+            session, "DELETE FROM odds_quotes WHERE id = :id", {"id": str(quote.id)}
+        )
+
+
+def _new_stats_snapshot(session: Session) -> StatsSnapshot:
+    snapshot = StatsSnapshot(
+        subject_type=StatsSubjectType.FIXTURE, fixture=_new_fixture(session),
+        as_of_timestamp=datetime.now(UTC), payload={"xg": 1.2}, source="test",
+    )
+    session.add(snapshot)
+    session.flush()
+    return snapshot
+
+
+class TestStatsSnapshotsImmutable:
+    def test_update_is_blocked(self, session: Session) -> None:
+        snapshot = _new_stats_snapshot(session)
+        _assert_blocked(
+            session, "UPDATE stats_snapshots SET source = 'x' WHERE id = :id",
+            {"id": str(snapshot.id)},
+        )
+
+    def test_delete_is_blocked(self, session: Session) -> None:
+        snapshot = _new_stats_snapshot(session)
+        _assert_blocked(
+            session, "DELETE FROM stats_snapshots WHERE id = :id",
+            {"id": str(snapshot.id)},
+        )
+
+
+def _new_model_registry(session: Session) -> ModelRegistry:
+    now = datetime.now(UTC)
+    model = ModelRegistry(
+        family=ModelFamily.POISSON, name=f"model-{now.timestamp()}", version="1.0.0",
+        status=ModelStatus.DEVELOPMENT, code_commit="abc123",
+        hyperparameters={"alpha": 1.0},
+    )
+    session.add(model)
+    session.flush()
+    return model
+
+
+class TestModelRegistryFieldFreeze:
+    def test_identity_field_update_is_blocked(self, session: Session) -> None:
+        model = _new_model_registry(session)
+        _assert_blocked(
+            session, "UPDATE model_registry SET version = '2.0.0' WHERE id = :id",
+            {"id": str(model.id)}, message="immutable",
+        )
+
+    def test_code_commit_update_is_blocked(self, session: Session) -> None:
+        model = _new_model_registry(session)
+        _assert_blocked(
+            session, "UPDATE model_registry SET code_commit = 'tampered' WHERE id = :id",
+            {"id": str(model.id)}, message="immutable",
+        )
+
+    def test_lifecycle_status_change_is_allowed(self, session: Session) -> None:
+        model = _new_model_registry(session)
+        # A promotion is a lifecycle transition, not a lineage change.
+        session.execute(
+            text(
+                "UPDATE model_registry SET status = 'champion', promoted_at = :now "
+                "WHERE id = :id"
+            ),
+            {"id": str(model.id), "now": datetime.now(UTC)},
+        )
+
+
+def _new_model_run(session: Session) -> ModelRun:
+    now = datetime.now(UTC)
+    run = ModelRun(
+        model=_new_model_registry(session), kind=ModelRunKind.TRAINING,
+        status=ModelRunStatus.RUNNING, started_at=now, parameters={"lr": 0.1},
+    )
+    session.add(run)
+    session.flush()
+    return run
+
+
+class TestModelRunFieldFreeze:
+    def test_input_field_update_is_blocked(self, session: Session) -> None:
+        run = _new_model_run(session)
+        _assert_blocked(
+            session,
+            "UPDATE model_runs SET parameters = '{\"lr\": 9}' WHERE id = :id",
+            {"id": str(run.id)}, message="immutable",
+        )
+
+    def test_completion_is_allowed(self, session: Session) -> None:
+        run = _new_model_run(session)
+        session.execute(
+            text(
+                "UPDATE model_runs SET status = 'succeeded', finished_at = :now, "
+                "metrics = '{\"brier\": 0.2}' WHERE id = :id"
+            ),
+            {"id": str(run.id), "now": datetime.now(UTC)},
+        )
+
+    def test_finished_run_update_is_blocked(self, session: Session) -> None:
+        run = _new_model_run(session)
+        session.execute(
+            text(
+                "UPDATE model_runs SET status = 'succeeded', finished_at = :now, "
+                "metrics = '{\"brier\": 0.2}' WHERE id = :id"
+            ),
+            {"id": str(run.id), "now": datetime.now(UTC)},
+        )
+        _assert_blocked(
+            session,
+            "UPDATE model_runs SET metrics = '{\"brier\": 0.9}' WHERE id = :id",
+            {"id": str(run.id)}, message="finished",
         )

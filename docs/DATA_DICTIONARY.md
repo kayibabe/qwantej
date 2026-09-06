@@ -94,7 +94,12 @@ development, challenger, champion, retired),
 `training_window_start`/`training_window_end`, `code_commit`,
 `artefact_hash`, `artefact_uri`, `hyperparameters` (JSON), `description`,
 `promoted_at`, `retired_at`, `created_at`, `updated_at`. **No model is live
-without a registry row** (`MODEL_GOVERNANCE.md`).
+without a registry row** (`MODEL_GOVERNANCE.md`). Since Phase 7.5, the identity
+and lineage fields (family, name, version, training window, code_commit,
+artefact hash/uri, hyperparameters) are frozen by a guard trigger — only the
+lifecycle fields (status, promoted/retired timestamps, description) may change,
+so a prediction's model lineage cannot be rewritten. Rows are never deleted or
+truncated.
 
 ### `model_runs` (mutable: running → succeeded/failed)
 
@@ -103,7 +108,11 @@ training, backtest, inference, evaluation), `status` (enum
 `model_run_status`: running, succeeded, failed), `started_at`,
 `finished_at`, `data_as_of` (point-in-time cutoff), `data_snapshot_ref`,
 `code_commit`, `parameters` (JSON), `metrics` (JSON), `log_uri`,
-`created_at`, `updated_at`.
+`created_at`, `updated_at`. Since Phase 7.5, a guard trigger freezes the run's
+inputs (model_id, kind, started_at, data_as_of, data_snapshot_ref, code_commit,
+parameters) and locks the row entirely once it reaches a terminal status
+(succeeded/failed) — completion may set status/finished_at/metrics/log_uri once,
+after which the run is immutable. Rows are never deleted or truncated.
 
 ### `predictions` (immutable, append-only — framework §13)
 
