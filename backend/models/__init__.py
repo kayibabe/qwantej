@@ -5,10 +5,20 @@ Every model module must be imported here so `Base.metadata` is complete —
 Alembic autogenerate and `Base.metadata.create_all()` both rely on it.
 """
 
+from backend.models.audit import AuditActor, AuditEvent, AuditEventType
 from backend.models.base import Base
 from backend.models.fixtures import Competition, Fixture, FixtureStatus, Season, Team
 from backend.models.odds import OddsQuote
+from backend.models.predictions import Prediction
 from backend.models.providers import EntityType, Provider, SourceMapping
+from backend.models.registry import (
+    ModelFamily,
+    ModelRegistry,
+    ModelRun,
+    ModelRunKind,
+    ModelRunStatus,
+    ModelStatus,
+)
 from backend.models.stats import StatsSnapshot, StatsSubjectType
 
 __all__ = [
@@ -24,4 +34,15 @@ __all__ = [
     "OddsQuote",
     "StatsSnapshot",
     "StatsSubjectType",
+    # Phase 2 — model registry, prediction archive, audit trail
+    "ModelRegistry",
+    "ModelFamily",
+    "ModelStatus",
+    "ModelRun",
+    "ModelRunKind",
+    "ModelRunStatus",
+    "Prediction",
+    "AuditEvent",
+    "AuditActor",
+    "AuditEventType",
 ]

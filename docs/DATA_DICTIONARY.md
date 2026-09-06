@@ -79,6 +79,70 @@ closing_odds, CLV, Brier contribution, log-loss contribution
 created_at, audit/reason codes
 ```
 
+## Phase 2 concrete columns (model registry, prediction archive, audit)
+
+Implemented in `backend/models/{registry,predictions,audit}.py`, migration
+`e461c24386f2`. Column-level companion to the core-table summaries above.
+
+### `model_registry` (mutable lifecycle entity)
+
+`id`, `family` (enum `model_family`: poisson, dixon_coles, zinb, elo,
+bayesian_hierarchical, market, ensemble), `name`, `version`
+(`uq_model_registry_name_version`), `status` (enum `model_status`:
+development, challenger, champion, retired),
+`training_window_start`/`training_window_end`, `code_commit`,
+`artefact_hash`, `artefact_uri`, `hyperparameters` (JSON), `description`,
+`promoted_at`, `retired_at`, `created_at`, `updated_at`. **No model is live
+without a registry row** (`MODEL_GOVERNANCE.md`).
+
+### `model_runs` (mutable: running → succeeded/failed)
+
+`id`, `model_id` → `model_registry`, `kind` (enum `model_run_kind`:
+training, backtest, inference, evaluation), `status` (enum
+`model_run_status`: running, succeeded, failed), `started_at`,
+`finished_at`, `data_as_of` (point-in-time cutoff), `data_snapshot_ref`,
+`code_commit`, `parameters` (JSON), `metrics` (JSON), `log_uri`,
+`created_at`, `updated_at`.
+
+### `predictions` (immutable, append-only — framework §13)
+
+Decision-time fields only; a correction is a new row. Post-fixture data
+(`result`, settlement, stake/return/PL, closing odds, CLV, Brier/log-loss
+contributions from Appendix C) lives in the separate `settlements` table so
+it can never leak into the decision record — Appendix C is the union view.
+
+- **Identity/PIT**: `id`, `fixture_id` → `fixtures` (competition/season/team
+  ids reached via the fixture, not duplicated), `prediction_timestamp`,
+  `decision_as_of`.
+- **Market**: `market`, `selection`, `line`.
+- **Probabilities**: `model_probabilities` (JSON map family→probability —
+  one column per family would force a migration per new model, so this
+  follows the `stats_snapshots.payload` precedent), plus explicit
+  `ensemble_probability`, `calibrated_probability`,
+  `conservative_probability` (each `CHECK` in `[0, 1]` when set).
+- **Price/value**: `bookmaker`, `executable_odds`, `quote_timestamp`,
+  `fair_market_probability` (`[0, 1]`), `edge_pp`, `expected_value`,
+  `uncertainty_measure`.
+- **Quality/reliability**: `dqs`, `qss`, `lrs`, `mrs` (0–100),
+  `dynamic_states` (JSON).
+- **Version spine**: `model_version_id` → `model_registry`,
+  `feature_version`, `calibration_version`, `risk_policy_version`,
+  `optimiser_version`, `code_commit`. Completeness is enforced by
+  `qwantej.audit.reproducibility.check_reproducibility` — a prediction is
+  reproducible only if every spine field is present.
+- **Linkage/diagnostics**: `accumulator_id` (polymorphic UUID, no FK until
+  the accumulators table lands), `reason_codes` (JSON; Appendix D), `created_at`.
+
+### `audit_events` (immutable, append-only)
+
+`id`, `event_type` (enum `audit_event_type`: model_promoted, model_retired,
+policy_change, config_change, override, data_revision, job_failure,
+governance, other), `actor` (enum `audit_actor`: system, human), `actor_ref`,
+`action`, `summary`, `entity_type` + `entity_id` (polymorphic target, no FK,
+mirroring `source_mappings.canonical_id`), `payload` (JSON, e.g. before/after),
+`occurred_at` (when the action happened — may precede the row-write
+`created_at`).
+
 ## Rejection reason taxonomy (Appendix D)
 
 | Code | Meaning |
