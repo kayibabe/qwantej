@@ -42,6 +42,27 @@ def test_default_policy_state_multipliers_are_non_increasing() -> None:
     assert policy.allocation(ProductTier.GROWTH) >= policy.allocation(ProductTier.ALPHA)
 
 
+def test_policy_mappings_are_immutable() -> None:
+    policy = RiskPolicy()
+    with pytest.raises(TypeError):
+        policy.state_multipliers[OperatingState.REVIEW] = 1.0  # type: ignore[index]
+    with pytest.raises(TypeError):
+        policy.product_allocations[ProductTier.ALPHA] = 1.0  # type: ignore[index]
+
+
+def test_policy_copies_input_mappings_defensively() -> None:
+    multipliers = {
+        OperatingState.NORMAL: 1.0,
+        OperatingState.CAUTION: 0.5,
+        OperatingState.DEFENSIVE: 0.25,
+        OperatingState.REVIEW: 0.0,
+    }
+    policy = RiskPolicy(state_multipliers=multipliers)
+    # Mutating the original dict after construction must not affect the policy.
+    multipliers[OperatingState.REVIEW] = 0.9
+    assert policy.state_multiplier(OperatingState.REVIEW) == 0.0
+
+
 def test_single_ticket_cap_cannot_exceed_daily_cap() -> None:
     with pytest.raises(ValueError):
         RiskPolicy(single_ticket_cap=0.06, daily_exposure_cap=0.05)

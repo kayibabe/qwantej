@@ -9,8 +9,10 @@ that increases stakes to recover losses.
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
+from types import MappingProxyType
 
 
 class OperatingState(StrEnum):
@@ -54,14 +56,24 @@ class RiskPolicy:
     review_drawdown: float = 0.20
     minimum_stake_fraction: float = 0.001
     stake_rounding: int = 2
-    state_multipliers: dict[OperatingState, float] = field(
+    state_multipliers: Mapping[OperatingState, float] = field(
         default_factory=_default_state_multipliers
     )
-    product_allocations: dict[ProductTier, float] = field(
+    product_allocations: Mapping[ProductTier, float] = field(
         default_factory=_default_product_allocations
     )
 
     def __post_init__(self) -> None:
+        # Freeze the mappings so a frozen policy is genuinely immutable — a plain
+        # dict field on a frozen dataclass can still be mutated in place.
+        object.__setattr__(
+            self, "state_multipliers", MappingProxyType(dict(self.state_multipliers))
+        )
+        object.__setattr__(
+            self,
+            "product_allocations",
+            MappingProxyType(dict(self.product_allocations)),
+        )
         if not self.version.strip():
             raise ValueError("risk policy version must not be blank")
         if not math.isfinite(self.kelly_multiplier) or not 0 < self.kelly_multiplier <= 1:

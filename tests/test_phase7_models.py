@@ -8,13 +8,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.models import Base, LedgerEntryType, RiskStateSnapshot
+from backend.models import BankrollLedgerEntry, Base, LedgerEntryType, RiskStateSnapshot
 from backend.services.bankroll import (
     append_ledger_entry,
     current_bankroll,
     record_risk_state,
 )
-from qwantej.bankroll import OperatingState
 
 NOW = datetime(2026, 9, 1, tzinfo=UTC)
 
@@ -91,29 +90,67 @@ def test_zero_amount_rejected_by_service_and_db(session: Session) -> None:
         )
 
 
-def test_risk_state_snapshot_derives_drawdown(session: Session) -> None:
+def test_risk_state_derives_bankroll_peak_and_state_from_ledger(session: Session) -> None:
+    # Deposit 1000 (peak), then lose 100 -> current 900, drawdown 10% -> CAUTION.
+    append_ledger_entry(
+        session, account="primary", entry_type=LedgerEntryType.DEPOSIT,
+        amount=1000, occurred_at=NOW, reason="seed",
+    )
+    append_ledger_entry(
+        session, account="primary", entry_type=LedgerEntryType.SETTLEMENT,
+        amount=-100, occurred_at=NOW + timedelta(hours=1), reason="lost",
+    )
     snapshot = record_risk_state(
-        session, account="primary", evaluated_as_of=NOW,
-        current_bankroll_amount=850, peak_bankroll=1000, available_bankroll=800,
+        session, account="primary", evaluated_as_of=NOW + timedelta(hours=2),
         committed_exposure=50, daily_exposure=40,
-        operating_state=OperatingState.CAUTION, policy_version="risk-v1",
     )
     session.commit()
     session.expire_all()
     stored = session.query(RiskStateSnapshot).one()
     assert stored.id == snapshot.id
-    assert float(stored.drawdown_fraction) == pytest.approx(0.15)
+    assert float(stored.current_bankroll) == pytest.approx(900.0)
+    assert float(stored.peak_bankroll) == pytest.approx(1000.0)
+    assert float(stored.available_bankroll) == pytest.approx(850.0)  # 900 - 50 committed
+    assert float(stored.drawdown_fraction) == pytest.approx(0.10)
     assert stored.operating_state.value == "caution"
+    assert stored.policy_version == "risk-v1"
 
 
-def test_risk_state_rejects_available_above_current(session: Session) -> None:
-    with pytest.raises(ValueError, match="available_bankroll"):
-        record_risk_state(
-            session, account="primary", evaluated_as_of=NOW,
-            current_bankroll_amount=500, peak_bankroll=1000, available_bankroll=600,
-            committed_exposure=0, daily_exposure=0,
-            operating_state=OperatingState.NORMAL, policy_version="risk-v1",
-        )
+def test_risk_state_qualitative_signal_forces_review(session: Session) -> None:
+    append_ledger_entry(
+        session, account="primary", entry_type=LedgerEntryType.DEPOSIT,
+        amount=1000, occurred_at=NOW, reason="seed",
+    )
+    snapshot = record_risk_state(
+        session, account="primary", evaluated_as_of=NOW + timedelta(hours=1),
+        committed_exposure=0, daily_exposure=0, calibration_failure=True,
+    )
+    # No drawdown, but a calibration failure still forces REVIEW.
+    assert snapshot.operating_state.value == "review"
+
+
+def test_idempotent_append_does_not_double_count(session: Session) -> None:
+    first = append_ledger_entry(
+        session, account="primary", entry_type=LedgerEntryType.SETTLEMENT,
+        amount=45, occurred_at=NOW, reason="won", idempotency_key="ticket-42",
+    )
+    second = append_ledger_entry(
+        session, account="primary", entry_type=LedgerEntryType.SETTLEMENT,
+        amount=45, occurred_at=NOW, reason="won", idempotency_key="ticket-42",
+    )
+    assert first.id == second.id
+    assert float(current_bankroll(session, "primary")) == pytest.approx(45.0)
+
+
+def test_db_check_rejects_deposit_with_negative_amount(session: Session) -> None:
+    # Bypass the service guard to prove the database itself enforces the sign.
+    entry = BankrollLedgerEntry(
+        account="primary", entry_type=LedgerEntryType.DEPOSIT,
+        amount=-100, balance_after=-100, occurred_at=NOW, reason="bad",
+    )
+    session.add(entry)
+    with pytest.raises(IntegrityError):
+        session.commit()
 
 
 def test_db_check_rejects_peak_below_current(session: Session) -> None:

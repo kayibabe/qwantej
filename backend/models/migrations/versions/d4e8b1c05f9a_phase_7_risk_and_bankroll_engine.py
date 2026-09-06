@@ -34,9 +34,16 @@ def upgrade() -> None:
         sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("reference", sa.String(255), nullable=True),
         sa.Column("reason", sa.String(255), nullable=False),
+        sa.Column("idempotency_key", sa.String(128), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.CheckConstraint("amount <> 0", name="ck_ledger_amount_nonzero"),
+        sa.CheckConstraint(
+            "(entry_type <> 'deposit' OR amount > 0) "
+            "AND (entry_type <> 'withdrawal' OR amount < 0)",
+            name="ck_ledger_sign_by_type",
+        ),
         sa.UniqueConstraint("account", "occurred_at", "id", name="uq_ledger_account_occurred"),
+        sa.UniqueConstraint("account", "idempotency_key", name="uq_ledger_idempotency"),
     )
     op.create_index(
         "ix_bankroll_ledger_entries_account", "bankroll_ledger_entries", ["account"]

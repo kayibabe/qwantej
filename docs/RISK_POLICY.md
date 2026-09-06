@@ -54,6 +54,32 @@ transition logic should also weigh expected drawdown distributions, sample
 size, calibration drift, and whether losses are statistically consistent
 with the model's predicted variance.
 
+## Versioned policy `risk-v1` (implemented defaults)
+
+`RiskPolicy` in `src/qwantej/bankroll/state.py` is the enforced,
+version-stamped policy object; `risk-v1` is its default instance. All values
+are research defaults per framework §35 and must be revalidated under realistic
+historical drawdowns before promotion.
+
+| Parameter | `risk-v1` value | Meaning |
+| --- | --- | --- |
+| `kelly_multiplier` | 0.25 | Quarter-Kelly scaling of the full-Kelly fraction |
+| `single_ticket_cap` | 0.02 | Max stake per ticket, fraction of bankroll |
+| `daily_exposure_cap` | 0.05 | Max total daily stakes, fraction of bankroll |
+| `caution_drawdown` | 0.10 | Drawdown entering CAUTION |
+| `defensive_drawdown` | 0.15 | Drawdown entering DEFENSIVE |
+| `review_drawdown` | 0.20 | Drawdown entering REVIEW |
+| `minimum_stake_fraction` | 0.001 | Below this fraction a stake is not placed |
+| `stake_rounding` | 2 | Stakes floored to 2 dp (never rounded above a cap) |
+| State multipliers | NORMAL 1.0, CAUTION 0.50, DEFENSIVE 0.25, REVIEW 0.0 | Stake scaling by state (non-increasing; REVIEW suspends) |
+| Product allocations | Core 1.0, Growth 0.60, Alpha 0.30 | Stake scaling by product tier |
+
+Invariants enforced at construction: `single_ticket_cap ≤ daily_exposure_cap`;
+drawdown thresholds strictly ascending; state multipliers non-increasing from
+NORMAL to REVIEW with REVIEW = 0. The policy object is deeply immutable (its
+multiplier/allocation mappings are read-only), so a stamped `policy_version`
+uniquely identifies the exact numbers used.
+
 ## Responsible-use controls (framework §37)
 
 - Bankroll limits and exposure caps must be visible and enforceable, not

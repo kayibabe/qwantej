@@ -9,7 +9,6 @@ triggers forbid UPDATE, DELETE and TRUNCATE.
 """
 
 import enum
-import uuid
 from datetime import datetime
 
 from sqlalchemy import (
@@ -44,9 +43,15 @@ class BankrollLedgerEntry(UUIDPKMixin, CreatedAtMixin, Base):
     __tablename__ = "bankroll_ledger_entries"
     __table_args__ = (
         CheckConstraint("amount <> 0", name="ck_ledger_amount_nonzero"),
+        CheckConstraint(
+            "(entry_type <> 'deposit' OR amount > 0) "
+            "AND (entry_type <> 'withdrawal' OR amount < 0)",
+            name="ck_ledger_sign_by_type",
+        ),
         UniqueConstraint(
             "account", "occurred_at", "id", name="uq_ledger_account_occurred"
         ),
+        UniqueConstraint("account", "idempotency_key", name="uq_ledger_idempotency"),
     )
 
     account: Mapped[str] = mapped_column(
@@ -68,6 +73,7 @@ class BankrollLedgerEntry(UUIDPKMixin, CreatedAtMixin, Base):
     )
     reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
     reason: Mapped[str] = mapped_column(String(255), nullable=False)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
 
 class RiskStateSnapshot(UUIDPKMixin, CreatedAtMixin, Base):
