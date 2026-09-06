@@ -1,0 +1,39 @@
+# Local development stack for Qwantej.
+#
+# Currently just the canonical Postgres instance the data layer (SQLAlchemy +
+# Alembic) targets. It is intentionally isolated from any native Postgres you
+# may already run on the host: it publishes on host port 5433 (not 5432) and
+# keeps its data in a dedicated named volume, so bringing it up/down never
+# touches an existing local database.
+#
+# Usage:
+#   docker compose up -d db      # start the dev database
+#   alembic upgrade head         # apply migrations (reads DATABASE_URL from .env)
+#   docker compose down          # stop (data persists in the named volume)
+#   docker compose down -v       # stop AND delete the volume (full reset)
+#
+# Credentials below are development-only and match .env.example. Never point
+# these at, or reuse them for, a real/production database.
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: qwantej-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-qwantej}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-qwantej}
+    ports:
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      - qwantej_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-qwantej} -d ${POSTGRES_DB:-qwantej}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  qwantej_pgdata:
+    name: qwantej_pgdata

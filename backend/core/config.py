@@ -14,8 +14,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     environment: str = "development"
+    # Defaults to the containerised dev database (docker-compose.yml), which
+    # publishes on host port 5433 to avoid colliding with a native Postgres.
     database_url: str = (
-        "postgresql+psycopg://qwantej:password@localhost:5432/qwantej"
+        "postgresql+psycopg://qwantej:password@localhost:5433/qwantej"
     )
     secret_key: str = "change-me"
 
