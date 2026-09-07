@@ -100,7 +100,8 @@ class FakeTransport:
     def get_json(self, url, *, headers, timeout_seconds):
         self.calls.append((url, dict(headers), timeout_seconds))
         page = int(parse_qs(urlparse(url).query).get("page", [1])[0])
-        return self.status, {"x-ratelimit-requests-remaining": str(self.remaining)}, self.pages[page]
+        headers = {"x-ratelimit-requests-remaining": str(self.remaining)}
+        return self.status, headers, self.pages[page]
 
 
 def _wrapper(response: list[dict], *, page: int = 1, total: int = 1) -> dict:
@@ -131,7 +132,9 @@ def test_client_warns_when_quota_is_low(caplog: pytest.LogCaptureFixture) -> Non
     client = ApiFootballClient(api_key="key", transport=transport)
     with caplog.at_level(logging.WARNING, logger="backend.services.api_football_client"):
         client.fixtures(league=39, season=2026)
-    assert any("quota low" in record.message and "10" in record.message for record in caplog.records)
+    assert any(
+        "quota low" in record.message and "10" in record.message for record in caplog.records
+    )
 
 
 def test_client_no_warning_when_quota_is_healthy(caplog: pytest.LogCaptureFixture) -> None:

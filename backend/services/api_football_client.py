@@ -10,9 +10,9 @@ from typing import Any, Protocol
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-log = logging.getLogger(__name__)
-
 from backend.core.config import Settings
+
+log = logging.getLogger(__name__)
 
 
 class ApiFootballError(RuntimeError):
