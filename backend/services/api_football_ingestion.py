@@ -69,6 +69,7 @@ def ingest_walk_forward_window(
     end_date: date,
     captured_at: datetime,
     include_fixture_statistics: bool = False,
+    include_odds: bool = True,
 ) -> IngestionSummary:
     """Fetch and stage one bounded league-season window without committing it."""
 
@@ -95,11 +96,13 @@ def ingest_walk_forward_window(
 
     # The provider retains only a short pre-match odds history. This call captures
     # what is currently available; repeated scheduled runs build Qwantej's archive.
-    odds_payloads = tuple(
-        payload
-        for payload in client.odds(league=league_id, season=season)
-        if _payload_fixture_id(payload) in window_fixture_ids
-    )
+    odds_payloads: tuple[dict[str, Any], ...] = ()
+    if include_odds:
+        odds_payloads = tuple(
+            payload
+            for payload in client.odds(league=league_id, season=season)
+            if _payload_fixture_id(payload) in window_fixture_ids
+        )
     with session.begin_nested():
         fixture_summary = _ingest_fixtures(
             session, fixture_payloads, captured_at=captured_at

@@ -1,7 +1,7 @@
-"""End-to-end walk-forward experiment: ingest → extract features → model → backtest.
+"""End-to-end walk-forward experiment: ingest -> extract features -> model -> backtest.
 
 Ingests a full league-season from API-Football, builds point-in-time feature
-snapshots for each finished fixture in the test window, runs the Poisson model,
+snapshots for each finished fixture in the train and test windows, runs the Poisson model,
 applies the configured calibration and value gate, and records the experiment
 and its metrics in the database.
 
@@ -12,8 +12,8 @@ Usage:
         [--test-from 2026-02-01] [--test-to 2026-05-31] \\
         [--n-recent 30] [--dry-run]
 
-The script never reads the training window's test fixtures during fitting —
-all calibration is trained on the train window only (framework §41).
+The script never reads the test window's outcomes during fitting - all
+calibration is trained on the train window only (framework section 41).
 """
 
 from __future__ import annotations
@@ -54,10 +54,7 @@ class ExperimentConfig:
 
 
 def _ingest_season(client: Any, session: Any, cfg: ExperimentConfig) -> None:
-    from backend.services.api_football_ingestion import (
-        ingest_odds,
-        ingest_walk_forward_window,
-    )
+    from backend.services.api_football_ingestion import ingest_walk_forward_window
 
     captured_at = datetime.now(UTC)
     log.info("Ingesting fixtures for league=%d season=%d ...", cfg.league_id, cfg.season)
@@ -71,54 +68,93 @@ def _ingest_season(client: Any, session: Any, cfg: ExperimentConfig) -> None:
         captured_at=captured_at,
     )
     log.info(
-        "  fixtures +%d/~%d snapshots=%d",
+        "  fixtures +%d/~%d snapshots=%d odds +%d (deduped=%d unsupported=%d)",
         summary.fixtures_created, summary.fixtures_updated,
         summary.fixture_snapshots_created,
-    )
-
-    log.info("Ingesting odds for league=%d season=%d ...", cfg.league_id, cfg.season)
-    odds_payloads = client.odds(league=cfg.league_id, season=cfg.season)
-    odds_summary = ingest_odds(session, odds_payloads)
-    log.info(
-        "  odds +%d (deduped=%d unsupported=%d)",
-        odds_summary.odds_quotes_created,
-        odds_summary.odds_quotes_deduplicated,
-        odds_summary.odds_quotes_unsupported,
+        summary.odds_quotes_created,
+        summary.odds_quotes_deduplicated,
+        summary.odds_quotes_unsupported,
     )
 
 
 def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[Any]:
-    """Build BacktestObservation list for finished fixtures in the test window."""
+    """Build snapshots and observations for the requested train+test window."""
 
-    from sqlalchemy import select
+    from sqlalchemy import and_, or_, select
 
-    from backend.models import Fixture, FixtureStatus
+    from backend.models import (
+        EntityType,
+        Fixture,
+        FixtureStatus,
+        Provider,
+        Season,
+        SourceMapping,
+    )
     from backend.services.feature_extraction import extract_fixture_features
+    from backend.services.features import create_feature_snapshot
+    from qwantej.features.engineering import features_to_dict
     from qwantej.markets.devig import devig_multiplicative
     from qwantej.models.elo.model import result_probabilities as elo_probs
     from qwantej.models.poisson.model import poisson_scoreline
     from qwantej.performance.backtest import BacktestObservation
 
+    train_from_utc = datetime.combine(cfg.train_from, datetime.min.time(), tzinfo=UTC)
+    train_to_utc = datetime.combine(cfg.train_to, datetime.max.time(), tzinfo=UTC)
     test_from_utc = datetime.combine(cfg.test_from, datetime.min.time(), tzinfo=UTC)
     test_to_utc = datetime.combine(cfg.test_to, datetime.max.time(), tzinfo=UTC)
 
-    finished_test_fixtures = session.scalars(
+    provider_id = session.scalar(
+        select(Provider.id).where(Provider.name == "API-Football")
+    )
+    competition_id = session.scalar(
+        select(SourceMapping.canonical_id).where(
+            SourceMapping.provider_id == provider_id,
+            SourceMapping.entity_type == EntityType.COMPETITION,
+            SourceMapping.external_id == str(cfg.league_id),
+        )
+    )
+    if competition_id is None:
+        log.warning("No API-Football competition mapping for league=%d", cfg.league_id)
+        return []
+
+    season_id = session.scalar(
+        select(Season.id).where(
+            Season.competition_id == competition_id,
+            Season.label == str(cfg.season),
+        )
+    )
+    if season_id is None:
+        log.warning("No season mapping for league=%d season=%d", cfg.league_id, cfg.season)
+        return []
+
+    finished_fixtures = session.scalars(
         select(Fixture)
         .where(
+            Fixture.competition_id == competition_id,
+            Fixture.season_id == season_id,
             Fixture.status == FixtureStatus.FINISHED,
-            Fixture.kickoff_utc >= test_from_utc,
-            Fixture.kickoff_utc <= test_to_utc,
+            or_(
+                and_(
+                    Fixture.kickoff_utc >= train_from_utc,
+                    Fixture.kickoff_utc <= train_to_utc,
+                ),
+                and_(
+                    Fixture.kickoff_utc >= test_from_utc,
+                    Fixture.kickoff_utc <= test_to_utc,
+                ),
+            ),
             Fixture.home_goals.is_not(None),
             Fixture.away_goals.is_not(None),
         )
         .order_by(Fixture.kickoff_utc)
     ).all()
 
-    log.info("Found %d finished fixtures in test window", len(finished_test_fixtures))
+    log.info("Found %d finished fixtures in train+test window", len(finished_fixtures))
     observations: list[BacktestObservation] = []
     skipped = 0
+    code_commit = _current_code_commit()
 
-    for fixture in finished_test_fixtures:
+    for fixture in finished_fixtures:
         kickoff = fixture.kickoff_utc
         if kickoff.tzinfo is None:
             kickoff = kickoff.replace(tzinfo=UTC)
@@ -137,7 +173,13 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
             skipped += 1
             continue
 
-        # Poisson model — home win probability (1X2)
+        # Rows without any pre-kickoff odds source cannot enter this odds-based
+        # backtest or produce a replayable feature snapshot.
+        if not odds_ids:
+            skipped += 1
+            continue
+
+        # Poisson model - home win probability (1X2)
         dist = poisson_scoreline(features.home_xg, features.away_xg)
         model_home_win = float(dist.p_home_win())
         model_draw = float(dist.p_draw())
@@ -153,25 +195,44 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
         # Best market odds (1X2 home, if available)
         executable_odds: float | None = None
         fair_market_prob: float | None = None
-        best_odds_row = _best_odds(session, fixture.id, market="1X2", selection="home")
-        if best_odds_row is not None:
+        odds_rows = _best_1x2_odds(session, fixture.id, as_of=as_of)
+        if odds_rows is not None:
+            best_odds_row = odds_rows["home"]
             raw_home = float(best_odds_row.decimal_odds)
             executable_odds = raw_home
             # de-vig against best available draw and away for a 3-way market
-            away_row = _best_odds(session, fixture.id, market="1X2", selection="away")
-            draw_row = _best_odds(session, fixture.id, market="1X2", selection="draw")
-            if away_row and draw_row:
-                try:
-                    devigged = devig_multiplicative(
-                        {
-                            "home": 1.0 / float(best_odds_row.decimal_odds),
-                            "draw": 1.0 / float(draw_row.decimal_odds),
-                            "away": 1.0 / float(away_row.decimal_odds),
-                        }
-                    )
-                    fair_market_prob = devigged["home"]
-                except Exception:
-                    pass
+            away_row = odds_rows["away"]
+            draw_row = odds_rows["draw"]
+            try:
+                devigged = devig_multiplicative(
+                    {
+                        "home": 1.0 / float(best_odds_row.decimal_odds),
+                        "draw": 1.0 / float(draw_row.decimal_odds),
+                        "away": 1.0 / float(away_row.decimal_odds),
+                    }
+                )
+                fair_market_prob = devigged["home"]
+            except Exception:
+                executable_odds = None
+
+        # Include the exact quote bundle used for the market baseline even when
+        # it falls outside the extraction service's bounded source-id list.
+        source_odds_ids = list(odds_ids)
+        if odds_rows is not None:
+            for row in odds_rows.values():
+                if row.id not in source_odds_ids:
+                    source_odds_ids.append(row.id)
+        create_feature_snapshot(
+            session,
+            fixture_id=fixture.id,
+            feature_version="poisson-elo-features:1.0.0",
+            as_of_timestamp=as_of,
+            features=features_to_dict(features),
+            stats_snapshot_ids=_stats_ids,
+            odds_quote_ids=source_odds_ids,
+            imputation_policy_version="explicit-fallback-v1",
+            code_commit=code_commit,
+        )
 
         outcome: int | None = None
         outcome_observed_at: datetime | None = None
@@ -189,7 +250,7 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
             outcome=outcome,
             fair_market_probability=fair_market_prob,
             executable_odds=executable_odds,
-            quote_timestamp=best_odds_row.captured_at if best_odds_row else None,
+            quote_timestamp=best_odds_row.captured_at if odds_rows else None,
             model_probabilities=(model_home_win, model_draw, model_away_win),
         )
         observations.append(obs)
@@ -198,81 +259,102 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
     return observations
 
 
-def _best_odds(session: Any, fixture_id: Any, *, market: str, selection: str) -> Any:
-    """Return the highest decimal-odds row for a market/selection."""
+def _best_1x2_odds(
+    session: Any, fixture_id: Any, *, as_of: datetime
+) -> dict[str, Any] | None:
+    """Return one coherent pre-kickoff 1X2 quote bundle.
+
+    The three outcomes must come from the same bookmaker and capture timestamp;
+    mixing books or post-kickoff prices would invalidate the de-vig baseline.
+    """
     from sqlalchemy import select
 
     from backend.models import OddsQuote
 
-    return session.scalar(
+    rows = session.scalars(
         select(OddsQuote)
         .where(
             OddsQuote.fixture_id == fixture_id,
-            OddsQuote.market == market,
-            OddsQuote.selection == selection,
+            OddsQuote.market == "1X2",
+            OddsQuote.selection.in_(("home", "draw", "away")),
+            OddsQuote.line.is_(None),
+            OddsQuote.captured_at <= as_of,
         )
-        .order_by(OddsQuote.decimal_odds.desc())
-        .limit(1)
-    )
+    ).all()
+    bundles: dict[tuple[str, datetime], dict[str, Any]] = {}
+    for row in rows:
+        key = (row.bookmaker, row.captured_at)
+        bundle = bundles.setdefault(key, {})
+        current = bundle.get(row.selection)
+        if current is None or row.decimal_odds > current.decimal_odds:
+            bundle[row.selection] = row
+    complete = [bundle for bundle in bundles.values() if len(bundle) == 3]
+    return max(complete, key=lambda bundle: bundle["home"].decimal_odds) if complete else None
 
 
 def _run_backtest(
     observations: list[Any], cfg: ExperimentConfig
 ) -> Any:
-    """Fit calibrator on train-set subset and evaluate on all observations."""
+    """Run one fixed train-window/test-window walk-forward fold."""
 
-    from qwantej.calibration import CalibrationMethod, CalibrationObservation, fit_calibrator
+    from qwantej.calibration import CalibrationMethod, ConservativePolicy
     from qwantej.performance.backtest import (
         WalkForwardConfig,
-        run_walk_forward,
+        walk_forward_backtest,
     )
     from qwantej.value import ValueGatePolicy
 
-    train_to_utc = datetime.combine(cfg.train_to, datetime.min.time(), tzinfo=UTC)
-
-    # Calibration training: use only observations from before the test window
-    # (Here we don't have separate train obs as they'd come from a prior season run,
-    # so we fit on the same dataset as a research baseline. In production this would
-    # use archived predictions from the training window.)
-    train_obs = [o for o in observations if o.decision_as_of < train_to_utc]
-    calib_obs = [
-        CalibrationObservation(predicted=o.raw_probability, actual=float(o.outcome))
-        for o in train_obs
-        if o.outcome is not None
+    test_from_utc = datetime.combine(cfg.test_from, datetime.min.time(), tzinfo=UTC)
+    train_rows = [
+        o for o in observations
+        if o.decision_as_of < test_from_utc and _eligible_walk_forward_row(o)
     ]
+    test_rows = [
+        o for o in observations
+        if o.decision_as_of >= test_from_utc and _eligible_walk_forward_row(o)
+    ]
+    if len(train_rows) < 10:
+        raise ValueError(
+            f"only {len(train_rows)} eligible training rows; at least 10 are required"
+        )
+    if not test_rows:
+        raise ValueError("no eligible test rows in the requested test window")
 
     calibration_method = CalibrationMethod.ISOTONIC
-    if len(calib_obs) >= 10:
-        calibrator = fit_calibrator(calib_obs, method=calibration_method)
-    else:
-        calibrator = None
-        log.warning(
-            "Insufficient calibration data (%d obs); using raw probabilities",
-            len(calib_obs),
-        )
-
     wf_config = WalkForwardConfig(
+        version="walk-forward:1.0.0",
         model_version="poisson+elo-ensemble:1.0.0",
         calibration_method=calibration_method,
-        calibrator=calibrator,
-        value_policy=ValueGatePolicy(),
-        conservative_policy=None,
-        train_window_months=6,
-        test_window_months=1,
-        min_observations=10,
-        bootstrap_iterations=500,
+        minimum_training_size=len(train_rows),
+        test_window_size=len(test_rows),
+        bootstrap_samples=500,
         bootstrap_seed=42,
+        value_policy=ValueGatePolicy(),
+        conservative_policy=ConservativePolicy(),
     )
 
-    report = run_walk_forward(observations, config=wf_config)
+    report = walk_forward_backtest(observations, config=wf_config)
     return report, wf_config
+
+
+def _eligible_walk_forward_row(observation: Any) -> bool:
+    """Mirror the core evaluator's input contract for train/test sizing."""
+
+    return (
+        observation.outcome is not None
+        and observation.outcome_observed_at is not None
+        and observation.outcome_observed_at > observation.decision_as_of
+        and observation.feature_as_of <= observation.decision_as_of
+        and observation.fair_market_probability is not None
+        and observation.executable_odds is not None
+        and observation.quote_timestamp is not None
+        and observation.quote_timestamp <= observation.decision_as_of
+    )
 
 
 def _record_experiment(
     session: Any, report: Any, cfg: ExperimentConfig, started_at: datetime
 ) -> None:
-    import subprocess
-
     from backend.services.experiments import (
         ExperimentIdentity,
         complete_walk_forward_experiment,
@@ -280,9 +362,7 @@ def _record_experiment(
     )
 
     try:
-        code_commit = subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"], cwd=repo_root, text=True
-        ).strip()
+        code_commit = _current_code_commit()
     except Exception:
         code_commit = "unknown"
 
@@ -328,9 +408,20 @@ def _print_report(report: Any) -> None:
         log.info("  ROI:                  %.2f%%", report.roi * 100)
     if hasattr(report, "hit_rate") and report.hit_rate is not None:
         log.info("  hit_rate:             %.2f%%", report.hit_rate * 100)
-    if hasattr(report, "calibration") and report.calibration is not None:
-        log.info("  brier_score:          %.4f", report.calibration.brier_score)
-        log.info("  ece:                  %.4f", report.calibration.ece)
+    if report.calibrated_calibration is not None:
+        log.info(
+            "  calibrated_brier_score: %.4f",
+            report.calibrated_calibration.brier_score,
+        )
+        log.info("  calibrated_ece:         %.4f", report.calibrated_calibration.ece)
+
+
+def _current_code_commit() -> str:
+    import subprocess
+
+    return subprocess.check_output(
+        ["git", "rev-parse", "--short", "HEAD"], cwd=repo_root, text=True
+    ).strip()
 
 
 def parse_args() -> argparse.Namespace:
@@ -364,7 +455,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--dry-run", action="store_true",
-        help="Roll back after experiment — no DB rows persisted",
+        help="Roll back after experiment - no DB rows persisted",
     )
     return parser.parse_args()
 
@@ -389,7 +480,7 @@ def main() -> None:
 
     settings = get_settings()
     if not settings.database_url.startswith("postgresql"):
-        log.error("DATABASE_URL must point at Postgres — update your .env file")
+        log.error("DATABASE_URL must point at Postgres - update your .env file")
         sys.exit(1)
 
     engine = make_engine(settings.database_url)
@@ -404,12 +495,15 @@ def main() -> None:
         client = ApiFootballClient.from_settings(settings)
         with session_scope(engine) as session:
             _ingest_season(client, session, cfg)
+            if cfg.dry_run:
+                session.rollback()
+                log.info("Dry-run: ingestion changes rolled back")
 
     # Phase 2: feature extraction + backtest + record experiment
     with session_scope(engine) as session:
         observations = _build_backtest_observations(session, cfg)
         if not observations:
-            log.warning("No observations built — cannot run backtest")
+            log.warning("No observations built - cannot run backtest")
             sys.exit(0)
 
         report, wf_config = _run_backtest(observations, cfg)
@@ -418,6 +512,7 @@ def main() -> None:
         if not cfg.dry_run:
             _record_experiment(session, (report, wf_config), cfg, started_at)
         else:
+            session.rollback()
             log.info("Dry-run: experiment NOT recorded in DB")
 
     log.info("Walk-forward experiment complete.")

@@ -55,18 +55,14 @@ def run_once(config: WorkerConfig | None = None) -> RunSummary:
     from backend.core.db import make_engine, session_scope
     from backend.core.logging import configure_logging
     from backend.services.api_football_client import ApiFootballClient
-    from backend.services.api_football_ingestion import (
-        IngestionSummary,
-        ingest_odds,
-        ingest_walk_forward_window,
-    )
+    from backend.services.api_football_ingestion import IngestionSummary, ingest_walk_forward_window
 
     configure_logging()
     settings = get_settings()
     cfg = config or WorkerConfig()
 
     if not settings.api_football_key.strip():
-        log.error("API_FOOTBALL_KEY is not set — ingestion aborted")
+        log.error("API_FOOTBALL_KEY is not set - ingestion aborted")
         return RunSummary(errors=1)
 
     client = ApiFootballClient.from_settings(settings)
@@ -79,7 +75,7 @@ def run_once(config: WorkerConfig | None = None) -> RunSummary:
 
     aggregate = RunSummary()
     log.info(
-        "ingestion_worker: starting run for %d league-season windows, window %s→%s",
+        "ingestion_worker: starting run for %d league-season windows, window %s->%s",
         len(cfg.leagues), start, end,
     )
 
@@ -95,39 +91,31 @@ def run_once(config: WorkerConfig | None = None) -> RunSummary:
                     end_date=end,
                     captured_at=captured_at,
                     include_fixture_statistics=cfg.include_statistics,
+                    include_odds=cfg.include_odds,
                 )
 
-                if cfg.include_odds:
-                    odds_payloads = client.odds(league=league_id, season=season)
-                    odds_summary = ingest_odds(session, odds_payloads)
-                    log.info(
-                        "ingestion_worker: league=%d season=%d — "
-                        "fixtures +%d/~%d, odds +%d (deduped %d)",
-                        league_id, season,
-                        summary.fixtures_created, summary.fixtures_updated,
-                        odds_summary.odds_quotes_created,
-                        odds_summary.odds_quotes_deduplicated,
-                    )
-                    aggregate.odds_quotes_created += odds_summary.odds_quotes_created
-                else:
-                    log.info(
-                        "ingestion_worker: league=%d season=%d — fixtures +%d/~%d",
-                        league_id, season,
-                        summary.fixtures_created, summary.fixtures_updated,
-                    )
+                log.info(
+                    "ingestion_worker: league=%d season=%d - "
+                    "fixtures +%d/~%d, odds +%d (deduped %d)",
+                    league_id, season,
+                    summary.fixtures_created, summary.fixtures_updated,
+                    summary.odds_quotes_created,
+                    summary.odds_quotes_deduplicated,
+                )
+                aggregate.odds_quotes_created += summary.odds_quotes_created
 
                 aggregate.fixtures_created += summary.fixtures_created
                 aggregate.fixtures_updated += summary.fixtures_updated
 
         except Exception:
             log.exception(
-                "ingestion_worker: league=%d season=%d — ingestion failed",
+                "ingestion_worker: league=%d season=%d - ingestion failed",
                 league_id, season,
             )
             aggregate.errors += 1
 
     log.info(
-        "ingestion_worker: run complete — "
+        "ingestion_worker: run complete - "
         "fixtures_created=%d fixtures_updated=%d odds_created=%d errors=%d",
         aggregate.fixtures_created,
         aggregate.fixtures_updated,
@@ -201,7 +189,7 @@ def main() -> None:
     )
 
     if args.loop:
-        log.info("ingestion_worker: loop mode — running every %ds", config.interval_seconds)
+        log.info("ingestion_worker: loop mode - running every %ds", config.interval_seconds)
         while True:
             summary = run_once(config)
             if summary.errors:
