@@ -328,3 +328,31 @@ class TestDriftInputs:
         _make_prediction(session, f)
         probs, outcomes, _ = _drift_inputs(session)
         assert len(probs) == 0
+
+
+# ---------------------------------------------------------------------------
+# IntegrityError savepoint (P2 fix): duplicate treated as idempotent skip
+# ---------------------------------------------------------------------------
+
+class TestIntegrityErrorSavepoint:
+    def test_integrity_error_counted_as_skipped(self, session: Session) -> None:
+        """Simulate a concurrent-write race: settle_prediction raises IntegrityError
+        (as if the DB partial unique index fired after the advisory check raced).
+        The savepoint must absorb the error and count the prediction as
+        skipped_already_settled rather than propagating an unhandled exception.
+        """
+        from unittest.mock import patch
+
+        from sqlalchemy.exc import IntegrityError
+
+        f = _make_fixture(session, home_goals=2, away_goals=0)
+        _make_prediction(session, f, selection="home")
+
+        with patch(
+            "backend.workers.settlement_worker.settle_prediction",
+            side_effect=IntegrityError("concurrent write", {}, None),
+        ):
+            run = run_settlement(session, now=NOW)
+
+        assert run.total_errors == 0
+        assert sum(b.skipped_already_settled for b in run.batches) == 1

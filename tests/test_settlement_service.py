@@ -264,16 +264,26 @@ class TestSettlePrediction:
     def test_closing_quote_id_stored(
         self, session: Session, finished_fixture: Fixture
     ) -> None:
-        import uuid as _uuid
-        fake_quote_id = _uuid.uuid4()
+        q = OddsQuote(
+            fixture_id=finished_fixture.id,
+            bookmaker="BetFair",
+            market="1X2",
+            selection="home",
+            decimal_odds=1.80,
+            captured_at=KICKOFF + timedelta(minutes=90),
+            source="api-football",
+        )
+        session.add(q)
+        session.flush()
         pred = _make_prediction(session, finished_fixture)
         row = settle_prediction(
             session, pred,
             outcome=EngineOutcome.WIN,
             settled_at=NOW,
-            closing_quote_id=fake_quote_id,
+            closing_odds=1.80,
+            closing_quote_id=q.id,
         )
-        assert row.closing_quote_id == fake_quote_id
+        assert row.closing_quote_id == q.id
 
     def test_void_omits_brier_and_log_loss(
         self, session: Session, finished_fixture: Fixture
@@ -519,3 +529,123 @@ class TestFindClosingOdds:
         )
         # Exactly one of the two is returned; either way it is deterministic.
         assert odds in (pytest.approx(1.80), pytest.approx(1.85))
+
+
+# ---------------------------------------------------------------------------
+# closing_quote_id validation (P2 fix)
+# ---------------------------------------------------------------------------
+
+class TestClosingQuoteIdValidation:
+    def _make_quote(
+        self,
+        session: Session,
+        fixture: Fixture,
+        *,
+        market: str = "1X2",
+        decimal_odds: float = 1.75,
+    ) -> OddsQuote:
+        q = OddsQuote(
+            fixture_id=fixture.id,
+            bookmaker="BetFair",
+            market=market,
+            selection="home",
+            decimal_odds=decimal_odds,
+            captured_at=KICKOFF + timedelta(minutes=90),
+            source="api-football",
+        )
+        session.add(q)
+        session.flush()
+        return q
+
+    def test_valid_quote_accepted(
+        self, session: Session, finished_fixture: Fixture
+    ) -> None:
+        pred = _make_prediction(session, finished_fixture)
+        q = self._make_quote(session, finished_fixture)
+        row = settle_prediction(
+            session, pred,
+            outcome=EngineOutcome.WIN,
+            settled_at=NOW,
+            closing_odds=float(q.decimal_odds),
+            closing_quote_id=q.id,
+        )
+        assert row.closing_quote_id == q.id
+
+    def test_nonexistent_quote_raises(
+        self, session: Session, finished_fixture: Fixture
+    ) -> None:
+        import uuid
+        pred = _make_prediction(session, finished_fixture)
+        with pytest.raises(SettlementError, match="does not exist"):
+            settle_prediction(
+                session, pred,
+                outcome=EngineOutcome.WIN,
+                settled_at=NOW,
+                closing_quote_id=uuid.uuid4(),
+            )
+
+    def test_wrong_fixture_raises(
+        self, session: Session, finished_fixture: Fixture
+    ) -> None:
+        other_fixture = _make_fixture(session, home_goals=1, away_goals=0)
+        pred = _make_prediction(session, finished_fixture)
+        q = OddsQuote(
+            fixture_id=other_fixture.id,
+            bookmaker="BetFair",
+            market="1X2",
+            selection="home",
+            decimal_odds=1.75,
+            captured_at=KICKOFF + timedelta(minutes=90),
+            source="api-football",
+        )
+        session.add(q)
+        session.flush()
+        with pytest.raises(SettlementError, match="belongs to fixture"):
+            settle_prediction(
+                session, pred,
+                outcome=EngineOutcome.WIN,
+                settled_at=NOW,
+                closing_quote_id=q.id,
+            )
+
+    def test_wrong_market_raises(
+        self, session: Session, finished_fixture: Fixture
+    ) -> None:
+        pred = _make_prediction(session, finished_fixture, market="1X2")
+        q = self._make_quote(session, finished_fixture, market="BTTS")
+        with pytest.raises(SettlementError, match="is for market"):
+            settle_prediction(
+                session, pred,
+                outcome=EngineOutcome.WIN,
+                settled_at=NOW,
+                closing_quote_id=q.id,
+            )
+
+    def test_odds_mismatch_raises(
+        self, session: Session, finished_fixture: Fixture
+    ) -> None:
+        pred = _make_prediction(session, finished_fixture)
+        q = self._make_quote(session, finished_fixture, decimal_odds=1.75)
+        with pytest.raises(SettlementError, match="decimal_odds"):
+            settle_prediction(
+                session, pred,
+                outcome=EngineOutcome.WIN,
+                settled_at=NOW,
+                closing_odds=2.50,    # deliberately mismatched
+                closing_quote_id=q.id,
+            )
+
+    def test_odds_within_tolerance_accepted(
+        self, session: Session, finished_fixture: Fixture
+    ) -> None:
+        pred = _make_prediction(session, finished_fixture)
+        q = self._make_quote(session, finished_fixture, decimal_odds=1.75)
+        # 1e-5 difference — inside 1e-4 tolerance
+        row = settle_prediction(
+            session, pred,
+            outcome=EngineOutcome.WIN,
+            settled_at=NOW,
+            closing_odds=1.75001,
+            closing_quote_id=q.id,
+        )
+        assert row.closing_quote_id == q.id

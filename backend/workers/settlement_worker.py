@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.core.db import session_scope
@@ -230,16 +231,25 @@ def run_settlement(session: Session, *, now: datetime | None = None) -> WorkerRu
             )
 
             try:
-                settle_prediction(
-                    session,
-                    prediction,
-                    outcome=outcome,
-                    settled_at=now,
-                    closing_odds=closing_odds,
-                    closing_quote_id=closing_quote_id,
-                    result_source=_RESULT_SOURCE,
-                )
+                with session.begin_nested():
+                    settle_prediction(
+                        session,
+                        prediction,
+                        outcome=outcome,
+                        settled_at=now,
+                        closing_odds=closing_odds,
+                        closing_quote_id=closing_quote_id,
+                        result_source=_RESULT_SOURCE,
+                    )
                 batch.settled += 1
+            except IntegrityError:
+                # Concurrent worker won the race — partial unique index fired.
+                # Treat as an idempotent skip; the savepoint was already rolled back.
+                log.debug(
+                    "settlement_worker: prediction %s already settled (concurrent write)",
+                    prediction.id,
+                )
+                batch.skipped_already_settled += 1
             except SettlementError as exc:
                 if "already settled" in str(exc):
                     batch.skipped_already_settled += 1

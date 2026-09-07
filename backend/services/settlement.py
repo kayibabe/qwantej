@@ -271,6 +271,28 @@ def settle_prediction(
                 f"{original.subject_id}, not {prediction.id}"
             )
 
+    if closing_quote_id is not None:
+        quote = session.get(OddsQuote, closing_quote_id)
+        if quote is None:
+            raise SettlementError(
+                f"closing_quote_id {closing_quote_id} does not exist"
+            )
+        if quote.fixture_id != prediction.fixture_id:
+            raise SettlementError(
+                f"closing_quote_id {closing_quote_id} belongs to fixture "
+                f"{quote.fixture_id}, not {prediction.fixture_id}"
+            )
+        if quote.market.upper() != prediction.market.upper():
+            raise SettlementError(
+                f"closing_quote_id {closing_quote_id} is for market "
+                f"{quote.market!r}, not {prediction.market!r}"
+            )
+        if closing_odds is not None and abs(float(quote.decimal_odds) - closing_odds) > 1e-4:
+            raise SettlementError(
+                f"closing_quote_id {closing_quote_id} has decimal_odds "
+                f"{float(quote.decimal_odds):.4f} but closing_odds={closing_odds:.4f}"
+            )
+
     taken_p = (
         float(prediction.conservative_probability)
         if prediction.conservative_probability is not None
