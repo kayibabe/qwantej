@@ -35,10 +35,11 @@ class SettledPrediction:
     profit_loss: float | None
 
     # Market evaluation
-    taken_probability: float | None   # P_cons at decision time
+    taken_odds: float | None           # decimal odds at which the bet was struck (for CLV)
+    taken_probability: float | None    # P_cons at decision time (for Brier / log-loss)
     closing_odds: float | None
     closing_probability: float | None
-    clv: float | None                 # see clv.py
+    clv: float | None                  # see clv.py
 
     # Predictive evaluation
     brier_contribution: float | None
@@ -59,6 +60,8 @@ class SettledPrediction:
             raise ValueError("settled_at must be timezone-aware")
         if self.stake is not None and self.stake <= 0:
             raise ValueError("stake must be positive")
+        if self.taken_odds is not None and self.taken_odds <= 1:
+            raise ValueError("taken_odds must be > 1 (decimal odds)")
         if self.taken_probability is not None and not 0 < self.taken_probability <= 1:
             raise ValueError("taken_probability must be in (0, 1]")
         if self.closing_odds is not None and self.closing_odds <= 1:

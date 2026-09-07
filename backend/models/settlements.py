@@ -156,6 +156,10 @@ class Settlement(UUIDPKMixin, CreatedAtMixin, Base):
             name="ck_settlements_subject_type",
         ),
         CheckConstraint(
+            "taken_odds IS NULL OR taken_odds > 1",
+            name="ck_settlements_taken_odds_gt_1",
+        ),
+        CheckConstraint(
             "closing_odds IS NULL OR closing_odds > 1",
             name="ck_settlements_closing_odds_gt_1",
         ),
@@ -193,6 +197,7 @@ class Settlement(UUIDPKMixin, CreatedAtMixin, Base):
     profit_loss: Mapped[float | None] = mapped_column(Numeric(18, 4))
 
     # Market evaluation
+    taken_odds: Mapped[float | None] = mapped_column(Numeric(8, 3))
     closing_odds: Mapped[float | None] = mapped_column(Numeric(8, 3))
     closing_probability: Mapped[float | None] = mapped_column(Numeric(9, 8))
     clv: Mapped[float | None] = mapped_column(Numeric(9, 6))

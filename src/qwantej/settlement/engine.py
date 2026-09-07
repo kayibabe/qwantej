@@ -10,11 +10,7 @@ from __future__ import annotations
 import math
 from datetime import datetime
 
-from qwantej.settlement.clv import (
-    calibration_bin,
-    closing_probability_from_odds,
-    clv_probability,
-)
+from qwantej.settlement.clv import calibration_bin, closing_probability_from_odds
 from qwantej.settlement.types import SettledPrediction, SettlementOutcome
 
 
@@ -70,6 +66,7 @@ def settle(
     outcome: SettlementOutcome,
     settled_at: datetime,
     taken_probability: float | None = None,
+    taken_odds: float | None = None,
     decimal_odds: float | None = None,
     closing_odds: float | None = None,
     closing_vig_factor: float = 1.0,
@@ -88,37 +85,51 @@ def settle(
         subject_id: UUID string of the subject.
         outcome: win/loss/void/push.
         settled_at: timezone-aware settlement timestamp.
-        taken_probability: P_cons recorded at decision time (for Brier/CLV).
-        decimal_odds: odds at which the bet was struck (for P/L and CLV).
+        taken_probability: P_cons recorded at decision time (for Brier/log-loss only).
+        taken_odds: decimal odds at which the bet was struck (for CLV; use this,
+            not taken_probability, when computing CLV — pass the bookmaker price).
+        decimal_odds: alias / synonym for taken_odds when the same value drives P/L.
+            If both are supplied, taken_odds is used for CLV; decimal_odds for P/L.
+            Prefer supplying taken_odds explicitly.
         closing_odds: final market odds (for CLV).
         closing_vig_factor: total overround of the closing market (default 1.0).
         stake: amount staked (None → paper tracking, financial fields omitted).
         result_source: where the result came from (e.g. "api-football").
         reason_codes: any audit codes to attach (e.g. ["CORRECTION"]).
     """
+    # Resolve taken_odds: explicit parameter wins; fall back to decimal_odds.
+    _taken_odds: float | None = taken_odds if taken_odds is not None else decimal_odds
+
     # Financial
     gross_ret: float | None = None
     pl: float | None = None
-    if stake is not None and decimal_odds is not None:
-        gross_ret = gross_return_for_outcome(stake, decimal_odds, outcome)
+    odds_for_pl = _taken_odds if _taken_odds is not None else decimal_odds
+    if stake is not None and odds_for_pl is not None:
+        gross_ret = gross_return_for_outcome(stake, odds_for_pl, outcome)
         pl = gross_ret - stake
 
-    # CLV
+    # CLV — closing_implied − taken_implied so positive = beat the line (§39).
+    # Higher taken_odds > closing_odds → taken_implied < closing_implied → CLV > 0.
+    # Uses the bookmaker price (taken_odds), NOT the model's P_cons.
     clv_val: float | None = None
     closing_p: float | None = None
     if closing_odds is not None:
         closing_p = closing_probability_from_odds(closing_odds, closing_vig_factor)
-        if taken_probability is not None:
-            clv_val = clv_probability(taken_probability, closing_p)
+        if _taken_odds is not None:
+            taken_implied_p = 1.0 / _taken_odds
+            clv_val = closing_p - taken_implied_p
 
-    # Brier / log-loss
+    # Brier / log-loss / calibration bin (model probability vs outcome, §38).
+    # Calibration bin is only meaningful for settled WIN/LOSS outcomes — voids
+    # and pushes have no outcome to contribute to the reliability diagram.
     brier: float | None = None
     ll: float | None = None
     cal_bin: str | None = None
     if taken_probability is not None:
         brier = brier_contribution(taken_probability, outcome)
         ll = log_loss_contribution(taken_probability, outcome)
-        cal_bin = calibration_bin(taken_probability)
+        if outcome not in (SettlementOutcome.VOID, SettlementOutcome.PUSH):
+            cal_bin = calibration_bin(taken_probability)
 
     return SettledPrediction(
         subject_type=subject_type,
@@ -128,6 +139,7 @@ def settle(
         stake=stake,
         gross_return=gross_ret,
         profit_loss=pl,
+        taken_odds=_taken_odds,
         taken_probability=taken_probability,
         closing_odds=closing_odds,
         closing_probability=closing_p,
