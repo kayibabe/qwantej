@@ -25,7 +25,11 @@ from sqlalchemy import text
 from backend.core.config import get_settings
 from backend.core.db import make_engine, session_scope
 from backend.services.api_football_client import ApiFootballClient
-from backend.services.api_football_ingestion import ingest_walk_forward_window
+from backend.services.api_football_ingestion import (
+    IngestionSummary,
+    ingest_odds,
+    ingest_walk_forward_window,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -37,7 +41,9 @@ log = logging.getLogger("smoke")
 
 def parse_args() -> argparse.Namespace:
     today = date.today()
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--league", type=int, default=39, metavar="ID",
                         help="API-Football league id (default: 39 = Premier League)")
     parser.add_argument("--season", type=int, default=today.year,
@@ -90,9 +96,7 @@ def main() -> None:
             )
 
             if args.with_odds:
-                from backend.services.api_football_ingestion import ingest_odds  # noqa: PLC0415
                 odds_payloads = client.odds(league=args.league, season=args.season)
-                from backend.services.api_football_ingestion import IngestionSummary  # noqa: PLC0415
                 odds_summary = ingest_odds(session, odds_payloads)
                 summary = IngestionSummary(
                     fixtures_created=summary.fixtures_created,

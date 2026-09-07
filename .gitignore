@@ -28,7 +28,6 @@ build/
 
 # IDE / OS
 .vscode/*
-!.vscode/tasks.json
 .idea/
 .DS_Store
 Thumbs.db
@@ -36,4 +35,3 @@ Thumbs.db
 # Logs
 *.log
 logs/
-.ai/router_logs/
