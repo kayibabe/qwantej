@@ -58,6 +58,15 @@ _LOOKBACK_DAYS = 7
 _DRIFT_MIN_SAMPLES = 30
 _RESULT_SOURCE = "api-football"
 
+# Markers that identify a settlement-table uniqueness violation in the error
+# string — the only IntegrityError that is safe to treat as an idempotent skip.
+# PostgreSQL includes the constraint name; SQLite includes the column path.
+_SETTLEMENT_UNIQUE_MARKERS: tuple[str, ...] = (
+    "uq_settlements_active_subject",      # PG partial unique index
+    "uq_settlements_subject_settled_at",  # PG / SQLite named unique constraint
+    "settlements.subject_type",           # SQLite UNIQUE constraint failed message
+)
+
 
 # ---------------------------------------------------------------------------
 # Result containers
@@ -243,11 +252,12 @@ def run_settlement(session: Session, *, now: datetime | None = None) -> WorkerRu
                     )
                 batch.settled += 1
             except IntegrityError as exc:
-                # Only treat uniqueness conflicts as idempotent skips (concurrent
-                # worker won the race against the partial unique index).  FK
-                # violations or NOT NULL failures are re-raised so they surface
-                # as real errors rather than silently vanishing.
-                if "unique" not in str(exc).lower():
+                # Only suppress settlement-table uniqueness conflicts — the
+                # signal that a concurrent worker won the race.  Any other
+                # IntegrityError (FK violation, NOT NULL failure, wrong table)
+                # is a real bug and must not be silently swallowed.
+                err_str = str(exc).lower()
+                if not any(m in err_str for m in _SETTLEMENT_UNIQUE_MARKERS):
                     raise
                 log.debug(
                     "settlement_worker: prediction %s already settled (concurrent write)",

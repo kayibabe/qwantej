@@ -686,19 +686,98 @@ class TestClosingQuoteIdValidation:
     def test_matching_line_accepted(
         self, session: Session, finished_fixture: Fixture
     ) -> None:
-        pred = _make_prediction(session, finished_fixture, market="TOTALS", selection="over")
-        q = self._make_quote(
-            session, finished_fixture, market="TOTALS", selection="over", line=2.5
+        """Both None==None (no line) and 2.5==2.5 paths must be accepted."""
+        # None == None: prediction has no line, quote has no line
+        pred_no_line = _make_prediction(
+            session, finished_fixture, market="TOTALS", selection="over"
         )
-        # Both prediction.line and quote.line are None by default for pred,
-        # but this test explicitly gives the quote a line that matches pred (None vs None).
-        # Instead verify the matching-line path with both None.
-        q_no_line = self._make_quote(session, finished_fixture, market="TOTALS", selection="over")
+        q_no_line = self._make_quote(
+            session, finished_fixture, market="TOTALS", selection="over"
+        )
         row = settle_prediction(
-            session, pred,
+            session, pred_no_line,
             outcome=EngineOutcome.WIN,
             settled_at=NOW,
             closing_quote_id=q_no_line.id,
         )
         assert row.closing_quote_id == q_no_line.id
-        _ = q  # referenced only to confirm the fixture-level line mismatch
+
+    def test_matching_non_null_line_accepted(
+        self, session: Session, finished_fixture: Fixture
+    ) -> None:
+        """prediction.line == quote.line == 2.5 must be accepted."""
+        from decimal import Decimal
+
+        from backend.models import Prediction as _Prediction
+        pred = _Prediction(
+            fixture_id=finished_fixture.id,
+            prediction_timestamp=KICKOFF - timedelta(hours=1),
+            decision_as_of=KICKOFF - timedelta(hours=1),
+            market="TOTALS",
+            selection="over",
+            conservative_probability=0.55,
+            executable_odds=1.90,
+            line=Decimal("2.5"),
+        )
+        session.add(pred)
+        session.flush()
+        q = self._make_quote(
+            session, finished_fixture, market="TOTALS", selection="over", line=2.5
+        )
+        row = settle_prediction(
+            session, pred,
+            outcome=EngineOutcome.WIN,
+            settled_at=NOW,
+            closing_quote_id=q.id,
+        )
+        assert row.closing_quote_id == q.id
+
+    def test_quote_before_kickoff_raises(
+        self, session: Session, finished_fixture: Fixture
+    ) -> None:
+        """A quote captured before kickoff must be rejected (decision-time price)."""
+        from backend.models import OddsQuote as _OQ
+        q = _OQ(
+            fixture_id=finished_fixture.id,
+            bookmaker="BetFair",
+            market="1X2",
+            selection="home",
+            decimal_odds=1.75,
+            captured_at=KICKOFF - timedelta(minutes=5),  # before kickoff
+            source="api-football",
+        )
+        session.add(q)
+        session.flush()
+        pred = _make_prediction(session, finished_fixture)
+        with pytest.raises(SettlementError, match="outside the closing window"):
+            settle_prediction(
+                session, pred,
+                outcome=EngineOutcome.WIN,
+                settled_at=NOW,
+                closing_quote_id=q.id,
+            )
+
+    def test_quote_outside_closing_window_raises(
+        self, session: Session, finished_fixture: Fixture
+    ) -> None:
+        """A quote captured more than 5 hours after kickoff must be rejected."""
+        from backend.models import OddsQuote as _OQ
+        q = _OQ(
+            fixture_id=finished_fixture.id,
+            bookmaker="BetFair",
+            market="1X2",
+            selection="home",
+            decimal_odds=1.60,
+            captured_at=KICKOFF + timedelta(hours=6),  # outside window
+            source="api-football",
+        )
+        session.add(q)
+        session.flush()
+        pred = _make_prediction(session, finished_fixture)
+        with pytest.raises(SettlementError, match="outside the closing window"):
+            settle_prediction(
+                session, pred,
+                outcome=EngineOutcome.WIN,
+                settled_at=NOW,
+                closing_quote_id=q.id,
+            )

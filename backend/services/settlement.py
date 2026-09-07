@@ -300,6 +300,17 @@ def settle_prediction(
                 f"closing_quote_id {closing_quote_id} has line "
                 f"{quote.line!r}, not {pred_line!r}"
             )
+        fixture = session.get(Fixture, prediction.fixture_id)
+        if fixture is not None and fixture.kickoff_utc is not None:
+            window_open = fixture.kickoff_utc
+            window_close = fixture.kickoff_utc + timedelta(hours=_CLOSING_WINDOW_HOURS)
+            if not (window_open < quote.captured_at <= window_close):
+                raise SettlementError(
+                    f"closing_quote_id {closing_quote_id} captured_at "
+                    f"{quote.captured_at.isoformat()} is outside the closing "
+                    f"window ({window_open.isoformat()}, "
+                    f"{window_close.isoformat()}]"
+                )
         if closing_odds is not None and abs(float(quote.decimal_odds) - closing_odds) > 1e-4:
             raise SettlementError(
                 f"closing_quote_id {closing_quote_id} has decimal_odds "
