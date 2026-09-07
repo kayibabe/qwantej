@@ -91,15 +91,16 @@ def session():
 
 
 class FakeTransport:
-    def __init__(self, pages: dict[int, dict], *, status: int = 200) -> None:
+    def __init__(self, pages: dict[int, dict], *, status: int = 200, remaining: int = 99) -> None:
         self.pages = pages
         self.status = status
+        self.remaining = remaining
         self.calls: list[tuple[str, dict[str, str], float]] = []
 
     def get_json(self, url, *, headers, timeout_seconds):
         self.calls.append((url, dict(headers), timeout_seconds))
         page = int(parse_qs(urlparse(url).query).get("page", [1])[0])
-        return self.status, {"x-ratelimit-requests-remaining": "99"}, self.pages[page]
+        return self.status, {"x-ratelimit-requests-remaining": str(self.remaining)}, self.pages[page]
 
 
 def _wrapper(response: list[dict], *, page: int = 1, total: int = 1) -> dict:
@@ -126,25 +127,16 @@ def test_client_pages_and_keeps_key_out_of_url() -> None:
 
 
 def test_client_warns_when_quota_is_low(caplog: pytest.LogCaptureFixture) -> None:
-    transport = FakeTransport({1: _wrapper([{"id": 1}])})
-    transport.pages[1]["paging"] = {"current": 1, "total": 1}
-    # Override remaining to a value at the threshold
-    original_get_json = transport.get_json
-
-    def low_quota_get_json(url, *, headers, timeout_seconds):
-        status, _, payload = original_get_json(url, headers=headers, timeout_seconds=timeout_seconds)
-        return status, {"x-ratelimit-requests-remaining": "10"}, payload
-
-    transport.get_json = low_quota_get_json  # type: ignore[method-assign]
-    client = ApiFootballClient(api_key="key", transport=transport, quota_warning_threshold=50)
+    transport = FakeTransport({1: _wrapper([{"id": 1}])}, remaining=10)
+    client = ApiFootballClient(api_key="key", transport=transport)
     with caplog.at_level(logging.WARNING, logger="backend.services.api_football_client"):
         client.fixtures(league=39, season=2026)
     assert any("quota low" in record.message and "10" in record.message for record in caplog.records)
 
 
 def test_client_no_warning_when_quota_is_healthy(caplog: pytest.LogCaptureFixture) -> None:
-    transport = FakeTransport({1: _wrapper([{"id": 1}])})
-    client = ApiFootballClient(api_key="key", transport=transport, quota_warning_threshold=50)
+    transport = FakeTransport({1: _wrapper([{"id": 1}])}, remaining=500)
+    client = ApiFootballClient(api_key="key", transport=transport)
     with caplog.at_level(logging.WARNING, logger="backend.services.api_football_client"):
         client.fixtures(league=39, season=2026)
     assert not any("quota low" in record.message for record in caplog.records)

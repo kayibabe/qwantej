@@ -50,7 +50,7 @@ class ApiPage:
 class ApiFootballClient:
     """GET-only client for fixtures, pre-match odds, and fixture statistics."""
 
-    QUOTA_WARNING_THRESHOLD = 50
+    QUOTA_WARNING_THRESHOLD = 200
 
     def __init__(
         self,
