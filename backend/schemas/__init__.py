@@ -1,1 +1,1 @@
-"""Pydantic request/response contracts for the API layer."""
+"""Pydantic response schemas for the Qwantej API."""
