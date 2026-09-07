@@ -5,14 +5,16 @@ CLV measures how the taken price compares to the market's final consensus
 the market eventually implied — a key indicator that the selection process
 is exploiting real edge rather than noise.
 
-Convention used here: probability-space CLV (taken_p - closing_p).
-Positive → taken probability was higher than the closing market implied
-(Qwantej got the best of the market).
+The `settle()` engine computes CLV as:
+    clv = closing_implied − taken_implied
+        = 1/closing_odds − 1/taken_odds
 
-Alternative: log-odds CLV = log(taken_odds / closing_odds).  Both are
-recorded — log-odds CLV is symmetric and easier to aggregate; probability
-CLV is more intuitive.  The framework leaves the choice open (DATA_DICTIONARY
-§F.1: "consistent odds/probability convention").
+Positive → taken_odds > closing_odds (better price than closing) → beat the line.
+Negative → taken_odds < closing_odds (worse price than closing) → market moved away.
+
+`clv_probability(a, b)` is a generic helper returning a − b; pass arguments in
+the order you want the subtraction to happen.  `clv_log_odds` follows the same
+sign convention: log(taken_odds/closing_odds) > 0 when taken_odds > closing_odds.
 """
 
 from __future__ import annotations
@@ -20,15 +22,16 @@ from __future__ import annotations
 import math
 
 
-def clv_probability(taken_probability: float, closing_probability: float) -> float:
-    """Probability-space CLV: taken_p − closing_p.
+def clv_probability(a: float, b: float) -> float:
+    """Generic probability difference: a − b.
 
-    Positive means Qwantej's price implied a higher win probability than
-    the closing market, i.e. Qwantej captured the better side of the line.
+    The sign is determined by caller convention.  `settle()` calls this as
+    clv_probability(closing_implied, taken_implied) so the result is
+    positive when taken_odds beat closing (higher odds → better execution).
     """
-    _validate_probability("taken_probability", taken_probability)
-    _validate_probability("closing_probability", closing_probability)
-    return taken_probability - closing_probability
+    _validate_probability("a", a)
+    _validate_probability("b", b)
+    return a - b
 
 
 def clv_log_odds(taken_odds: float, closing_odds: float) -> float:

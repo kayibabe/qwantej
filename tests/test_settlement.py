@@ -27,14 +27,13 @@ NOW = datetime(2026, 9, 7, 20, tzinfo=UTC)
 # ---------------------------------------------------------------------------
 
 class TestClvProbability:
-    def test_positive_clv_when_taken_better(self) -> None:
-        # Taken p=0.60, closing p=0.55 → CLV = +0.05 (got the better price)
+    def test_positive_result(self) -> None:
         assert clv_probability(0.60, 0.55) == pytest.approx(0.05)
 
-    def test_negative_clv_when_taken_worse(self) -> None:
+    def test_negative_result(self) -> None:
         assert clv_probability(0.50, 0.58) == pytest.approx(-0.08)
 
-    def test_zero_clv_same_probability(self) -> None:
+    def test_zero_when_equal(self) -> None:
         assert clv_probability(0.55, 0.55) == pytest.approx(0.0)
 
     def test_rejects_invalid_probability(self) -> None:
@@ -202,19 +201,95 @@ class TestSettle:
         assert s.gross_return == pytest.approx(10.0)
         assert s.profit_loss == pytest.approx(0.0)
 
-    def test_clv_computed(self) -> None:
+    def test_clv_computed_from_taken_odds(self) -> None:
+        # CLV = closing_implied − taken_implied (positive = beat the closing line)
+        # taken_odds=2.00 → implied 0.500; closing_odds=1.80 → implied 0.5556
+        # CLV ≈ 0.5556 − 0.500 = +0.056 (positive: closing shortened = we beat the line)
         s = self._win()
-        # taken_p=0.60, closing = 1/1.80 ≈ 0.5556 → CLV ≈ +0.044
+        assert s.clv is not None
+        assert s.taken_odds == pytest.approx(2.00)
+        assert s.clv == pytest.approx(1 / 1.80 - 1 / 2.00, abs=1e-6)
+
+    def test_clv_positive_when_taken_odds_higher_than_closing(self) -> None:
+        # taken_odds=2.20 > closing_odds=2.00 → closing_implied > taken_implied → CLV > 0
+        s = settle(
+            subject_type="prediction",
+            subject_id="pred-001",
+            outcome=SettlementOutcome.WIN,
+            settled_at=NOW,
+            taken_odds=2.20,
+            closing_odds=2.00,
+        )
         assert s.clv is not None
         assert s.clv > 0
+
+    def test_clv_negative_when_taken_odds_lower_than_closing(self) -> None:
+        # taken_odds=1.80 < closing_odds=2.00 → we got shorter odds → CLV < 0
+        s = settle(
+            subject_type="prediction",
+            subject_id="pred-001",
+            outcome=SettlementOutcome.WIN,
+            settled_at=NOW,
+            taken_odds=1.80,
+            closing_odds=2.00,
+        )
+        assert s.clv is not None
+        assert s.clv < 0
+
+    def test_clv_not_driven_by_model_probability(self) -> None:
+        # CLV depends only on taken_odds and closing_odds, not taken_probability
+        s1 = settle(
+            subject_type="prediction", subject_id="p1", outcome=SettlementOutcome.WIN,
+            settled_at=NOW, taken_odds=2.00, closing_odds=1.80, taken_probability=0.55,
+        )
+        s2 = settle(
+            subject_type="prediction", subject_id="p1", outcome=SettlementOutcome.WIN,
+            settled_at=NOW, taken_odds=2.00, closing_odds=1.80, taken_probability=0.70,
+        )
+        assert s1.clv == pytest.approx(s2.clv or 0.0)
+
+    def test_no_clv_without_taken_odds(self) -> None:
+        # taken_probability alone is not enough for CLV; taken_odds is required
+        s = settle(
+            subject_type="prediction",
+            subject_id="pred-001",
+            outcome=SettlementOutcome.WIN,
+            settled_at=NOW,
+            taken_probability=0.60,
+            closing_odds=1.80,
+        )
+        assert s.clv is None
 
     def test_brier_computed_for_win(self) -> None:
         s = self._win()
         assert s.brier_contribution == pytest.approx((0.60 - 1.0) ** 2)
 
-    def test_calibration_bin_set(self) -> None:
+    def test_calibration_bin_set_for_win(self) -> None:
         s = self._win()
         assert s.calibration_bin == "0.60-0.70"
+
+    def test_calibration_bin_none_for_void(self) -> None:
+        s = settle(
+            subject_type="prediction",
+            subject_id="pred-001",
+            outcome=SettlementOutcome.VOID,
+            settled_at=NOW,
+            taken_probability=0.60,
+        )
+        assert s.calibration_bin is None
+        # Brier and log-loss are still 0.0 (voids don't contribute)
+        assert s.brier_contribution == pytest.approx(0.0)
+        assert s.log_loss_contribution == pytest.approx(0.0)
+
+    def test_calibration_bin_none_for_push(self) -> None:
+        s = settle(
+            subject_type="prediction",
+            subject_id="pred-001",
+            outcome=SettlementOutcome.PUSH,
+            settled_at=NOW,
+            taken_probability=0.65,
+        )
+        assert s.calibration_bin is None
 
     def test_paper_mode_no_financials(self) -> None:
         s = settle(
@@ -288,6 +363,7 @@ class TestSettledPredictionValidation:
             stake=None,
             gross_return=None,
             profit_loss=None,
+            taken_odds=None,
             taken_probability=None,
             closing_odds=None,
             closing_probability=None,
@@ -320,3 +396,7 @@ class TestSettledPredictionValidation:
     def test_rejects_non_finite_log_loss(self) -> None:
         with pytest.raises(ValueError, match="log_loss"):
             self._base(log_loss_contribution=math.inf)
+
+    def test_rejects_invalid_taken_odds(self) -> None:
+        with pytest.raises(ValueError, match="taken_odds"):
+            self._base(taken_odds=1.0)  # must be > 1
