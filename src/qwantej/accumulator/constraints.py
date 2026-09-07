@@ -6,7 +6,7 @@ All functions are pure — no I/O, no side effects.
 from __future__ import annotations
 
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from qwantej.accumulator.policy import AccumulatorPolicy
@@ -20,7 +20,8 @@ def passes_leg_gate(leg: AccumulatorLeg, policy: AccumulatorPolicy, *, as_of: da
     if leg.dqs < policy.min_dqs:
         return False
     age = as_of - leg.captured_at
-    if age > policy.price_freshness_max_age:
+    # Reject future-dated captures (age < 0) and stale prices.
+    if age < timedelta(0) or age > policy.price_freshness_max_age:
         return False
     return True
 
@@ -40,11 +41,38 @@ def conservative_joint_probability(legs: tuple[AccumulatorLeg, ...]) -> float:
     return p
 
 
+def stressed_joint_probability(legs: tuple[AccumulatorLeg, ...], haircut: float) -> float:
+    """Joint probability under a ticket-level stress haircut.
+
+    The full joint probability is multiplied by (1 − haircut) once.  This
+    models the scenario where the whole ticket's combined probability might be
+    lower than estimated (model bias, systemic market correlation) without
+    applying a per-leg compounding factor that would make even high-quality
+    tickets fail under modest haircuts.  This is a conservative proxy; replace
+    with empirically calibrated values once sufficient outcome data exists.
+    """
+    return conservative_joint_probability(legs) * (1.0 - haircut)
+
+
+def ticket_passes_ev_gate(
+    legs: tuple[AccumulatorLeg, ...],
+    policy: AccumulatorPolicy,
+) -> bool:
+    """Return True if the ticket is EV-positive under both base and stressed assumptions."""
+    odds_float = float(combined_odds(legs))
+    joint_p = conservative_joint_probability(legs)
+    stressed_p = stressed_joint_probability(legs, policy.stress_haircut)
+    return (
+        joint_p * odds_float - 1 > policy.minimum_ticket_ev
+        and stressed_p * odds_float - 1 > policy.minimum_ticket_ev
+    )
+
+
 def passes_combination_constraints(
     legs: tuple[AccumulatorLeg, ...],
     policy: AccumulatorPolicy,
 ) -> bool:
-    """Return True if a combination of legs satisfies all hard accumulator constraints."""
+    """Return True if a combination satisfies all hard accumulator constraints."""
     n = len(legs)
     if n < policy.min_legs or n > policy.max_legs:
         return False
@@ -75,12 +103,12 @@ def passes_combination_constraints(
 def dependence_penalty(legs: tuple[AccumulatorLeg, ...]) -> float:
     """Conservative proxy penalty for systemic dependence.
 
-    Penalises same-league and same-market-family concentration.  Coefficients
-    are intentionally conservative until empirical covariance matrices are
-    available (framework §31).
+    Penalises same-league and same-market-family concentration. Coefficients
+    are intentionally conservative proxies until empirical covariance matrices
+    are available (framework §31). Do not treat these as calibrated correlation
+    coefficients.
     """
-    n = len(legs)
-    if n < 2:
+    if len(legs) < 2:
         return 0.0
 
     league_counts = Counter(leg.league_id for leg in legs)
