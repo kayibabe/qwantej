@@ -32,42 +32,44 @@ export default async function DashboardPage() {
 
       {/* KPI tiles */}
       <section aria-label="Key performance indicators">
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <StatTile
-            label="Win rate"
-            value={summary ? fmtPct(summary.win_rate) : null}
-            sub={
-              summary
-                ? `${summary.n_wins}W / ${summary.n_losses}L / ${summary.n_voids}V`
-                : undefined
-            }
-            valueClass={
-              summary?.win_rate !== null && summary?.win_rate !== undefined && summary.win_rate >= 0.5
-                ? "text-[var(--win)]"
-                : "text-[var(--text-primary)]"
-            }
-          />
-          <StatTile
-            label="Settled"
-            value={summary?.n_settled ?? null}
-            sub="total effective settlements"
-          />
-          <StatTile
-            label="Avg CLV"
-            value={summary ? fmtNum(summary.avg_clv) : null}
-            sub="closing-line value"
-            valueClass={
-              summary?.avg_clv !== null && summary?.avg_clv !== undefined && summary.avg_clv > 0
-                ? "text-[var(--win)]"
-                : "text-[var(--text-primary)]"
-            }
-          />
-          <StatTile
-            label="Avg Brier"
-            value={summary ? fmtNum(summary.avg_brier) : null}
-            sub="lower is better"
-          />
-        </div>
+        {summary === null ? (
+          <p className="text-sm text-[var(--loss)]">
+            Could not load settlement summary — is the backend running?
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <StatTile
+              label="Win rate"
+              value={fmtPct(summary.win_rate)}
+              sub={`${summary.n_wins}W / ${summary.n_losses}L / ${summary.n_voids}V`}
+              valueClass={
+                summary.win_rate !== null && summary.win_rate >= 0.5
+                  ? "text-[var(--win)]"
+                  : "text-[var(--text-primary)]"
+              }
+            />
+            <StatTile
+              label="Settled"
+              value={summary.n_settled}
+              sub="total effective settlements"
+            />
+            <StatTile
+              label="Avg CLV"
+              value={fmtNum(summary.avg_clv)}
+              sub="closing-line value"
+              valueClass={
+                summary.avg_clv !== null && summary.avg_clv > 0
+                  ? "text-[var(--win)]"
+                  : "text-[var(--text-primary)]"
+              }
+            />
+            <StatTile
+              label="Avg Brier"
+              value={fmtNum(summary.avg_brier)}
+              sub="lower is better"
+            />
+          </div>
+        )}
       </section>
 
       {/* Recent accumulators */}

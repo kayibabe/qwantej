@@ -1,20 +1,27 @@
-/** Currency symbol used across the UI. Change here to update everywhere. */
-export const CURRENCY_SYMBOL = "£"
+/**
+ * Currency symbol for the UI.
+ * Set NEXT_PUBLIC_CURRENCY_SYMBOL in the environment to override.
+ */
+export const CURRENCY_SYMBOL =
+  process.env.NEXT_PUBLIC_CURRENCY_SYMBOL ?? "£"
 
-/** Format an ISO timestamp as a UTC date string, e.g. "07 Sep 2026". */
+/** Qwantej operates in CAT (UTC+2). All stored timestamps are UTC ISO strings. */
+const TZ = "Africa/Blantyre"
+
+/** Format an ISO timestamp in CAT, e.g. "07 Sep 2026". */
 export function fmtDate(iso: string): string {
   return new Intl.DateTimeFormat("en-GB", {
-    timeZone: "UTC",
+    timeZone: TZ,
     day: "2-digit",
     month: "short",
     year: "numeric",
   }).format(new Date(iso))
 }
 
-/** Format an ISO timestamp as a UTC datetime string, e.g. "07 Sep 2026, 08:00". */
+/** Format an ISO timestamp in CAT, e.g. "07 Sep 2026, 08:00". */
 export function fmtDatetime(iso: string): string {
   return new Intl.DateTimeFormat("en-GB", {
-    timeZone: "UTC",
+    timeZone: TZ,
     day: "2-digit",
     month: "short",
     year: "numeric",
