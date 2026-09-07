@@ -215,6 +215,30 @@ def test_telegram_http_transport_ok_on_success():
         m.urlopen = original
 
 
+def test_telegram_http_transport_non_object_raises_oserror():
+    """A JSON non-object body (array, scalar) must raise OSError — not AttributeError."""
+    import json as _json
+
+    from backend.services.notifier import TelegramHttpTransport
+
+    class _FakeResp:
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def read(self): return _json.dumps([{"ok": True}]).encode()  # array, not object
+
+    import backend.services.notifier as m
+    original = m.urlopen
+    m.urlopen = lambda req, timeout: _FakeResp()
+    try:
+        transport = TelegramHttpTransport()
+        with pytest.raises(OSError, match="non-object"):
+            transport.post_json("https://api.telegram.org/botX/sendMessage",
+                                payload={"chat_id": "1", "text": "hi"},
+                                timeout_seconds=5.0)
+    finally:
+        m.urlopen = original
+
+
 def test_telegram_http_transport_non_json_raises_oserror():
     """A non-JSON body must raise OSError, not propagate ValueError."""
     from backend.services.notifier import TelegramHttpTransport

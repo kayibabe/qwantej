@@ -69,6 +69,10 @@ class TelegramHttpTransport:
             data = json.loads(raw.decode("utf-8"))
         except ValueError as exc:
             raise OSError("Telegram returned a non-JSON response") from exc
+        if not isinstance(data, dict):
+            raise OSError(
+                f"Telegram returned a non-object response: {type(data).__name__}"
+            )
         if not data.get("ok"):
             description = data.get("description", "unknown error")
             raise OSError(f"Telegram API error: {description}")
@@ -174,6 +178,6 @@ class TelegramNotifier:
             with urlopen(req, timeout=self._timeout) as resp:  # noqa: S310
                 raw = resp.read()
             data = json.loads(raw.decode("utf-8"))
-            return bool(data.get("ok"))
+            return isinstance(data, dict) and bool(data.get("ok"))
         except Exception:  # noqa: BLE001
             return False
