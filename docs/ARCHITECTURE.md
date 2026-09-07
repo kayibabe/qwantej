@@ -45,6 +45,13 @@ wins — file an issue/PR to reconcile rather than silently diverging.
 | 11 | Settlement & Performance | `qwantej/performance/` |
 | 12 | Continuous Learning & Model Governance | `qwantej/performance/` + `backend/workers` (scheduling) |
 
+The API-Football boundary is split deliberately: provider payload parsing and
+normalization live in `qwantej/fixtures/api_football.py`; authenticated HTTP,
+canonical mapping, reconciliation, and persistence live in
+`backend/services/api_football_{client,ingestion}.py`. Model-ready vectors are
+then frozen through `backend/services/features.py` before an inference run can
+publish a prediction.
+
 The **governance & audit layer** surrounding all 12 engines (framework §8) is
 not a separate module — it is a repo-wide obligation: every engine that
 writes a decision-relevant record writes it through `backend/models` tables

@@ -13,7 +13,9 @@ versioned conservative-probability policy, an explicit reason-coded Value Gate,
 reproducible walk-forward evaluation against a de-vigged market baseline,
 recency-weighted Bayesian LRS/MRS with an immutable league-market matrix, and a
 risk engine — fractional Kelly, exposure caps and a drawdown-aware operating
-state over an append-only bankroll ledger. These components remain research-only
+state over an append-only bankroll ledger. The foundation also includes an
+immutable point-in-time feature store and an API-Football acquisition adapter.
+These components remain research-only
 until a real historical snapshot passes the model-governance promotion criteria.
 
 ## Start here
