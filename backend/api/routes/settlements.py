@@ -94,7 +94,9 @@ def list_settlements(
 
     rows = list(
         db.scalars(
-            stmt.order_by(Settlement.settled_at.desc()).offset(offset).limit(limit)
+            stmt.order_by(Settlement.settled_at.desc(), Settlement.id.desc())
+            .offset(offset)
+            .limit(limit)
         )
     )
     return SettlementPage(

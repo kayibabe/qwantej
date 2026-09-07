@@ -167,13 +167,81 @@ class TestSettlementSummary:
         expected = (0.15 + 0.40 + 0.12) / 3
         assert abs(r.json()["avg_brier"] - expected) < 1e-4
 
-    def test_correction_excluded_from_summary(self, seeded_client: TestClient) -> None:
-        """A superseded original must not appear in the summary."""
-        # This test verifies that only effective (non-superseded) rows count.
-        # All three rows in this fixture are originals (no supersedes_id), so
-        # the summary total stays at 3 — verifying the base constraint.
-        r = seeded_client.get("/settlements/summary")
-        assert r.json()["n_settled"] == 3
+    def test_correction_excluded_from_summary(self) -> None:
+        """A superseded original must not appear in the summary; only the correction counts."""
+        engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        Base.metadata.create_all(engine)
+        factory = sessionmaker(bind=engine, expire_on_commit=False)
+
+        def _override():
+            with factory() as s:
+                yield s
+
+        app.dependency_overrides[get_db] = _override
+        try:
+            with factory() as seed:
+                comp = Competition(name="EPL")
+                ssn = Season(competition=comp, label="2026/27")
+                home, away = Team(name="Home FC"), Team(name="Away FC")
+                fixture = Fixture(
+                    competition=comp,
+                    season=ssn,
+                    home_team=home,
+                    away_team=away,
+                    kickoff_utc=KICKOFF,
+                    status=FixtureStatus.FINISHED,
+                    home_goals=1,
+                    away_goals=0,
+                )
+                seed.add_all([comp, ssn, home, away, fixture])
+                seed.flush()
+                pred = Prediction(
+                    fixture_id=fixture.id,
+                    prediction_timestamp=KICKOFF - timedelta(hours=1),
+                    decision_as_of=KICKOFF - timedelta(hours=1),
+                    market="1X2",
+                    selection="home",
+                    conservative_probability=0.60,
+                    executable_odds=1.85,
+                )
+                seed.add(pred)
+                seed.flush()
+                # Original settlement (WIN)
+                original = Settlement(
+                    subject_type="prediction",
+                    subject_id=pred.id,
+                    outcome=OrmOutcome.WIN,
+                    settled_at=NOW,
+                    reason_codes=[],
+                )
+                seed.add(original)
+                seed.flush()
+                # Correction row that supersedes the original (flipped to LOSS)
+                correction = Settlement(
+                    subject_type="prediction",
+                    subject_id=pred.id,
+                    outcome=OrmOutcome.LOSS,
+                    settled_at=NOW + timedelta(seconds=1),
+                    reason_codes=["CORRECTION"],
+                    supersedes_id=original.id,
+                )
+                seed.add(correction)
+                seed.commit()
+
+            with TestClient(app) as client:
+                r = client.get("/settlements/summary")
+            assert r.status_code == 200
+            data = r.json()
+            # Only the correction (LOSS) is effective; the original (WIN) is superseded.
+            assert data["n_settled"] == 1
+            assert data["n_wins"] == 0
+            assert data["n_losses"] == 1
+        finally:
+            app.dependency_overrides.clear()
 
     def test_empty_when_no_settlements(self) -> None:
         engine = create_engine(

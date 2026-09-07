@@ -45,6 +45,9 @@ def list_accumulators(
             .limit(limit)
         )
     )
+    # Sort legs by leg_index in Python — selectinload does not guarantee order.
+    for row in rows:
+        row.legs.sort(key=lambda leg: leg.leg_index)
     return AccumulatorPage(
         items=[AccumulatorOut.model_validate(r) for r in rows],
         total=total,
@@ -66,4 +69,5 @@ def get_accumulator(
     )
     if row is None:
         raise HTTPException(status_code=404, detail="Accumulator not found")
+    row.legs.sort(key=lambda leg: leg.leg_index)
     return AccumulatorOut.model_validate(row)
