@@ -33,6 +33,8 @@ class ExperimentStatus(enum.StrEnum):
 
 class ExperimentKind(enum.StrEnum):
     WALK_FORWARD_BACKTEST = "walk_forward_backtest"
+    CHAMPION_CHALLENGER = "champion_challenger"
+    DRIFT_CHECK = "drift_check"
 
 
 class Experiment(UUIDPKMixin, TimestampMixin, Base):
