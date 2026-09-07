@@ -100,7 +100,11 @@ def build_ticket(
         )
 
     # Sort by heuristic so when the budget is hit we've seen the best candidates.
-    pool = sorted(qualified, key=lambda leg: (leg.qss, leg.edge), reverse=True)
+    # fixture_id is a stable, deterministic tiebreaker so pool order is
+    # independent of the input ordering when qss and edge are equal.
+    pool = sorted(
+        qualified, key=lambda leg: (leg.qss, leg.edge, leg.fixture_id), reverse=True
+    )
 
     best_ticket: AccumulatorTicket | None = None
     best_score = float("-inf")
