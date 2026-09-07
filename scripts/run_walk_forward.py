@@ -51,6 +51,8 @@ class ExperimentConfig:
     n_recent: int
     dry_run: bool
     name: str
+    calibration_only: bool = False
+    all_leagues: bool = False
 
 
 def _ingest_season(client: Any, session: Any, cfg: ExperimentConfig) -> None:
@@ -77,26 +79,19 @@ def _ingest_season(client: Any, session: Any, cfg: ExperimentConfig) -> None:
     )
 
 
-def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[Any]:
+def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[Any]:  # noqa: C901
     """Build snapshots and observations for the requested train+test window."""
 
     from sqlalchemy import and_, or_, select
 
-    from backend.models import (
-        EntityType,
-        Fixture,
-        FixtureStatus,
-        Provider,
-        Season,
-        SourceMapping,
-    )
+    from backend.models import Fixture, FixtureStatus
     from backend.services.feature_extraction import (
         extract_fixture_features,
         historical_training_hash,
     )
     from backend.services.features import create_feature_snapshot
     from qwantej.features.engineering import features_to_dict
-    from qwantej.markets.devig import devig_multiplicative
+    from qwantej.markets.devig import devig
     from qwantej.models.elo.model import result_probabilities as elo_probs
     from qwantej.models.poisson.model import poisson_scoreline
     from qwantej.performance.backtest import BacktestObservation
@@ -106,51 +101,74 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
     test_from_utc = datetime.combine(cfg.test_from, datetime.min.time(), tzinfo=UTC)
     test_to_utc = datetime.combine(cfg.test_to, datetime.max.time(), tzinfo=UTC)
 
-    provider_id = session.scalar(
-        select(Provider.id).where(Provider.name == "API-Football")
-    )
-    competition_id = session.scalar(
-        select(SourceMapping.canonical_id).where(
-            SourceMapping.provider_id == provider_id,
-            SourceMapping.entity_type == EntityType.COMPETITION,
-            SourceMapping.external_id == str(cfg.league_id),
-        )
-    )
-    if competition_id is None:
-        log.warning("No API-Football competition mapping for league=%d", cfg.league_id)
-        return []
-
-    season_id = session.scalar(
-        select(Season.id).where(
-            Season.competition_id == competition_id,
-            Season.label == str(cfg.season),
-        )
-    )
-    if season_id is None:
-        log.warning("No season mapping for league=%d season=%d", cfg.league_id, cfg.season)
-        return []
-
-    finished_fixtures = session.scalars(
-        select(Fixture)
-        .where(
-            Fixture.competition_id == competition_id,
-            Fixture.season_id == season_id,
-            Fixture.status == FixtureStatus.FINISHED,
-            or_(
-                and_(
-                    Fixture.kickoff_utc >= train_from_utc,
-                    Fixture.kickoff_utc <= train_to_utc,
+    if cfg.all_leagues:
+        finished_fixtures = session.scalars(
+            select(Fixture)
+            .where(
+                Fixture.status == FixtureStatus.FINISHED,
+                or_(
+                    and_(
+                        Fixture.kickoff_utc >= train_from_utc,
+                        Fixture.kickoff_utc <= train_to_utc,
+                    ),
+                    and_(
+                        Fixture.kickoff_utc >= test_from_utc,
+                        Fixture.kickoff_utc <= test_to_utc,
+                    ),
                 ),
-                and_(
-                    Fixture.kickoff_utc >= test_from_utc,
-                    Fixture.kickoff_utc <= test_to_utc,
-                ),
-            ),
-            Fixture.home_goals.is_not(None),
-            Fixture.away_goals.is_not(None),
+                Fixture.home_goals.is_not(None),
+                Fixture.away_goals.is_not(None),
+            )
+            .order_by(Fixture.kickoff_utc)
+        ).all()
+    else:
+        from backend.models import EntityType, Provider, Season, SourceMapping
+
+        provider_id = session.scalar(
+            select(Provider.id).where(Provider.name == "API-Football")
         )
-        .order_by(Fixture.kickoff_utc)
-    ).all()
+        competition_id = session.scalar(
+            select(SourceMapping.canonical_id).where(
+                SourceMapping.provider_id == provider_id,
+                SourceMapping.entity_type == EntityType.COMPETITION,
+                SourceMapping.external_id == str(cfg.league_id),
+            )
+        )
+        if competition_id is None:
+            log.warning("No API-Football competition mapping for league=%d", cfg.league_id)
+            return []
+
+        season_id = session.scalar(
+            select(Season.id).where(
+                Season.competition_id == competition_id,
+                Season.label == str(cfg.season),
+            )
+        )
+        if season_id is None:
+            log.warning("No season mapping for league=%d season=%d", cfg.league_id, cfg.season)
+            return []
+
+        finished_fixtures = session.scalars(
+            select(Fixture)
+            .where(
+                Fixture.competition_id == competition_id,
+                Fixture.season_id == season_id,
+                Fixture.status == FixtureStatus.FINISHED,
+                or_(
+                    and_(
+                        Fixture.kickoff_utc >= train_from_utc,
+                        Fixture.kickoff_utc <= train_to_utc,
+                    ),
+                    and_(
+                        Fixture.kickoff_utc >= test_from_utc,
+                        Fixture.kickoff_utc <= test_to_utc,
+                    ),
+                ),
+                Fixture.home_goals.is_not(None),
+                Fixture.away_goals.is_not(None),
+            )
+            .order_by(Fixture.kickoff_utc)
+        ).all()
 
     log.info("Found %d finished fixtures in train+test window", len(finished_fixtures))
     observations: list[BacktestObservation] = []
@@ -176,17 +194,20 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
             skipped += 1
             continue
 
-        # Rows without any pre-kickoff odds source cannot enter this odds-based
-        # backtest or produce a replayable feature snapshot.
-        if not odds_ids:
+        # In standard mode, skip fixtures without pre-kickoff source data — they
+        # cannot produce a replayable feature snapshot nor a valid market baseline.
+        # In --calibration-only mode, keep them: they contribute to calibration
+        # training even without a market baseline (fair_market_probability=None).
+        if not odds_ids and not cfg.calibration_only:
             skipped += 1
             continue
 
         # Poisson model - home win probability (1X2)
         dist = poisson_scoreline(features.home_xg, features.away_xg)
-        model_home_win = float(dist.p_home_win())
-        model_draw = float(dist.p_draw())
-        model_away_win = float(dist.p_away_win())
+        poisson_result = dist.match_result()
+        model_home_win = float(poisson_result.home)
+        model_draw = float(poisson_result.draw)
+        model_away_win = float(poisson_result.away)
 
         # ELO model for ensemble blend
         elo_result = elo_probs(features.elo_home_rating, features.elo_away_rating)
@@ -207,14 +228,12 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
             away_row = odds_rows["away"]
             draw_row = odds_rows["draw"]
             try:
-                devigged = devig_multiplicative(
-                    {
-                        "home": 1.0 / float(best_odds_row.decimal_odds),
-                        "draw": 1.0 / float(draw_row.decimal_odds),
-                        "away": 1.0 / float(away_row.decimal_odds),
-                    }
-                )
-                fair_market_prob = devigged["home"]
+                result = devig([
+                    float(best_odds_row.decimal_odds),
+                    float(draw_row.decimal_odds),
+                    float(away_row.decimal_odds),
+                ])
+                fair_market_prob = result.fair[0]  # home probability
             except Exception:
                 executable_odds = None
 
@@ -235,17 +254,18 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
         feature_dict["_training_fixture_count"] = float(len(hist_rows))
         feature_dict["_training_fixture_ids_hash"] = historical_training_hash(hist_rows)
 
-        create_feature_snapshot(
-            session,
-            fixture_id=fixture.id,
-            feature_version="poisson-elo-features:1.0.0",
-            as_of_timestamp=as_of,
-            features=feature_dict,
-            stats_snapshot_ids=_stats_ids,
-            odds_quote_ids=source_odds_ids,
-            imputation_policy_version="explicit-fallback-v1",
-            code_commit=code_commit,
-        )
+        if _stats_ids or source_odds_ids:
+            create_feature_snapshot(
+                session,
+                fixture_id=fixture.id,
+                feature_version="poisson-elo-features:1.0.0",
+                as_of_timestamp=as_of,
+                features=feature_dict,
+                stats_snapshot_ids=_stats_ids,
+                odds_quote_ids=source_odds_ids,
+                imputation_policy_version="explicit-fallback-v1",
+                code_commit=code_commit,
+            )
 
         outcome: int | None = None
         outcome_observed_at: datetime | None = None
@@ -322,28 +342,37 @@ def _run_backtest(
     from qwantej.value import ValueGatePolicy
 
     test_from_utc = datetime.combine(cfg.test_from, datetime.min.time(), tzinfo=UTC)
-    train_rows = [
+    # Eligible rows for sizing: must have a valid market baseline (odds).
+    # In calibration-only mode, rows without odds still enter the walk-forward
+    # and contribute to calibration training, but the min/test sizing uses only
+    # observations with a market baseline so the evaluation window is well-defined.
+    eligible_train = [
         o for o in observations
         if o.decision_as_of < test_from_utc and _eligible_walk_forward_row(o)
     ]
-    test_rows = [
+    eligible_test = [
         o for o in observations
         if o.decision_as_of >= test_from_utc and _eligible_walk_forward_row(o)
     ]
-    if len(train_rows) < 10:
+
+    min_train = 1 if cfg.calibration_only else 10
+    if len(eligible_train) < min_train:
         raise ValueError(
-            f"only {len(train_rows)} eligible training rows; at least 10 are required"
+            f"only {len(eligible_train)} eligible training rows; "
+            f"at least {min_train} are required"
         )
-    if not test_rows:
+    if not eligible_test:
         raise ValueError("no eligible test rows in the requested test window")
 
     calibration_method = CalibrationMethod.ISOTONIC
+    # Use eligible counts for the walk-forward window sizing, capped at
+    # reasonable values so a small calibration-only run doesn't create degenerate folds.
     wf_config = WalkForwardConfig(
         version="walk-forward:1.0.0",
         model_version="poisson+elo-ensemble:1.0.0",
         calibration_method=calibration_method,
-        minimum_training_size=len(train_rows),
-        test_window_size=len(test_rows),
+        minimum_training_size=max(2, len(eligible_train)),
+        test_window_size=max(1, len(eligible_test)),
         bootstrap_samples=500,
         bootstrap_seed=42,
         value_policy=ValueGatePolicy(),
@@ -388,12 +417,17 @@ def _record_experiment(
     test_from_utc = datetime.combine(cfg.test_from, datetime.min.time(), tzinfo=UTC)
     test_to_utc = datetime.combine(cfg.test_to, datetime.max.time(), tzinfo=UTC)
 
+    data_snapshot_ref = (
+        "api-football:all-leagues"
+        if cfg.all_leagues
+        else f"api-football:league={cfg.league_id}:season={cfg.season}"
+    )
     identity = ExperimentIdentity(
         name=cfg.name,
         version="1.0.0",
         calibration_version="isotonic:1.0.0",
         code_commit=code_commit,
-        data_snapshot_ref=f"api-football:league={cfg.league_id}:season={cfg.season}",
+        data_snapshot_ref=data_snapshot_ref,
         training_window_start=train_from_utc,
         training_window_end=train_to_utc,
         test_window_start=test_from_utc,
@@ -430,7 +464,10 @@ def _print_report(report: Any) -> None:
             "  calibrated_brier_score: %.4f",
             report.calibrated_calibration.brier_score,
         )
-        log.info("  calibrated_ece:         %.4f", report.calibrated_calibration.ece)
+        log.info(
+            "  calibrated_ece:         %.4f",
+            report.calibrated_calibration.expected_calibration_error,
+        )
 
 
 def _current_code_commit() -> str:
@@ -474,6 +511,18 @@ def parse_args() -> argparse.Namespace:
         "--dry-run", action="store_true",
         help="Roll back after experiment - no DB rows persisted",
     )
+    parser.add_argument(
+        "--calibration-only", action="store_true",
+        help="Build observations for all finished fixtures (no pre-kickoff odds required). "
+             "Rows without odds contribute to calibration training only; evaluation "
+             "metrics still require at least 3 observations with a valid market baseline.",
+    )
+    parser.add_argument(
+        "--all-leagues", action="store_true",
+        help="Pool finished fixtures from ALL competitions in the DB (ignores --league "
+             "and --season for observation building). Useful when a single league lacks "
+             "enough PIT-valid pre-match odds for a walk-forward split.",
+    )
     return parser.parse_args()
 
 
@@ -489,6 +538,8 @@ def main() -> None:
         test_to=args.test_to,
         n_recent=args.n_recent,
         dry_run=args.dry_run,
+        calibration_only=args.calibration_only,
+        all_leagues=args.all_leagues,
     )
 
     from backend.core.config import get_settings
