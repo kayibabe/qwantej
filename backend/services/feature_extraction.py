@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -38,14 +39,14 @@ def extract_fixture_features(
     initial_elo: float = 1500.0,
     league_home_avg_fallback: float = 1.5,
     league_away_avg_fallback: float = 1.2,
-) -> tuple[MatchFeatures, list[uuid.UUID], list[uuid.UUID], list[uuid.UUID]]:
+) -> tuple[MatchFeatures, list[uuid.UUID], list[uuid.UUID], list[Fixture]]:
     """Extract features for *fixture* from the DB, using only data before *as_of*.
 
-    Returns ``(MatchFeatures, stats_snapshot_ids, odds_quote_ids, historical_fixture_ids)``.
+    Returns ``(MatchFeatures, stats_snapshot_ids, odds_quote_ids, historical_rows_settled)``.
     ``stats_snapshot_ids`` and ``odds_quote_ids`` are the odds/stats source rows used;
-    ``historical_fixture_ids`` are the canonical Fixture rows whose results were fed
-    to the ELO and Poisson strength computation — include their hash in the feature
-    snapshot so the training set can be replayed and verified independently.
+    ``historical_rows_settled`` are the settled Fixture ORM rows whose results were fed
+    to the ELO and Poisson computation — pass them to ``historical_training_hash()``
+    to embed a content-addressed digest in the feature snapshot.
 
     Raises FeatureExtractionError if the feature point-in-time contract is
     violated (e.g. as_of is not before kickoff).
@@ -101,26 +102,30 @@ def extract_fixture_features(
     # Record source ids for lineage
     stats_ids = _fixture_stats_ids(session, fixture.id, as_of_utc)
     odds_ids = _fixture_odds_ids(session, fixture.id, as_of_utc)
-    # Historical fixture IDs used for ELO/Poisson training — only settled rows
-    # (home_goals/away_goals not None) actually entered the computation.
-    historical_fixture_ids = [
-        row.id for row in historical_rows
+    # Settled rows actually fed into ELO/Poisson (home_goals/away_goals not None).
+    # Returned as ORM objects so callers can pass them directly to
+    # historical_training_hash(), which covers both IDs and result data.
+    historical_rows_settled = [
+        row for row in historical_rows
         if row.home_goals is not None and row.away_goals is not None
     ]
 
-    return features, stats_ids, odds_ids, historical_fixture_ids
+    return features, stats_ids, odds_ids, historical_rows_settled
 
 
-def historical_training_hash(fixture_ids: list[uuid.UUID]) -> str:
-    """SHA-256 hex digest of the sorted training fixture IDs.
+def historical_training_hash(fixture_rows: Sequence[Fixture]) -> str:
+    """SHA-256 hex digest of the settled training fixtures, covering result data.
 
-    Include this as ``_training_fixture_ids_hash`` in the feature snapshot so
-    the ELO/Poisson training set can be replayed: re-run the same DB query with
-    the same as_of and competition scope, filter to settled rows, sort by ID,
-    and compare the digest to verify the snapshot is reproducible.
+    Each entry is ``<id>:<home_goals>:<away_goals>`` so any change to a
+    result (not just the set of fixture IDs) changes the digest.  Include this
+    as ``_training_fixture_ids_hash`` in the feature snapshot; verification
+    re-queries the same point-in-time training set and recomputes the digest.
     """
-    sorted_ids = sorted(str(fid) for fid in fixture_ids)
-    payload = "\n".join(sorted_ids).encode()
+    entries = sorted(
+        f"{row.id}:{row.home_goals or 0}:{row.away_goals or 0}"
+        for row in fixture_rows
+    )
+    payload = "\n".join(entries).encode()
     return hashlib.sha256(payload).hexdigest()
 
 

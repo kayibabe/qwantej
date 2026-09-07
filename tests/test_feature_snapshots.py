@@ -214,3 +214,42 @@ def test_hash_verification_detects_tampering(session: Session) -> None:
     snapshot, _ = _create(session)
     snapshot.features = {"home_rolling_xg": 9.9}
     assert not verify_feature_snapshot(session, snapshot)
+
+
+def test_training_hash_detects_result_tampering(session: Session) -> None:
+    """Mutating a training fixture's goals after snapshot creation fails verification."""
+    from backend.services.feature_extraction import historical_training_hash
+
+    fixture, _, stats, odds = _seed(session)
+    # Historical fixture: same competition, finished before as_of (NOW).
+    hist = Fixture(
+        competition=fixture.competition,
+        season=fixture.season,
+        home_team=fixture.home_team,
+        away_team=fixture.away_team,
+        kickoff_utc=NOW - timedelta(days=7),
+        status=FixtureStatus.FINISHED,
+        home_goals=2,
+        away_goals=1,
+    )
+    session.add(hist)
+    session.flush()
+
+    training_hash = historical_training_hash([hist])
+    snapshot = create_feature_snapshot(
+        session,
+        fixture_id=fixture.id,
+        feature_version="v1",
+        as_of_timestamp=NOW,
+        features={"x": 1.0, "_training_fixture_ids_hash": training_hash},
+        stats_snapshot_ids=[stats.id],
+        odds_quote_ids=[odds.id],
+        imputation_policy_version="none-v1",
+        code_commit="abc123",
+    )
+    assert verify_feature_snapshot(session, snapshot)
+
+    # Tamper: change the historical result after the snapshot was taken.
+    hist.home_goals = 0
+    session.flush()
+    assert not verify_feature_snapshot(session, snapshot)

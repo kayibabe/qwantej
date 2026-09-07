@@ -164,7 +164,7 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
         as_of = kickoff - timedelta(hours=2)  # simulate 2h pre-match decision
 
         try:
-            features, _stats_ids, odds_ids, hist_ids = extract_fixture_features(
+            features, _stats_ids, odds_ids, hist_rows = extract_fixture_features(
                 session, fixture, as_of=as_of, n_recent=cfg.n_recent
             )
         except Exception as exc:
@@ -232,8 +232,8 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
         # as_of + competition scope, filter to settled rows, sort by ID, and
         # compare the SHA-256 digest.
         feature_dict = features_to_dict(features)
-        feature_dict["_training_fixture_count"] = float(len(hist_ids))
-        feature_dict["_training_fixture_ids_hash"] = historical_training_hash(hist_ids)
+        feature_dict["_training_fixture_count"] = float(len(hist_rows))
+        feature_dict["_training_fixture_ids_hash"] = historical_training_hash(hist_rows)
 
         create_feature_snapshot(
             session,
