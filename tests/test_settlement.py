@@ -66,8 +66,9 @@ class TestClosingProbabilityFromOdds:
         assert closing_probability_from_odds(2.0) == pytest.approx(0.5)
 
     def test_with_vig_factor(self) -> None:
-        # 5% vig: 1/2.0 * 1.05 = 0.525
-        assert closing_probability_from_odds(2.0, vig_factor=1.05) == pytest.approx(0.525)
+        # 5% vig removal: (1/2.0) / 1.05 ≈ 0.4762 — dividing shrinks the implied
+        # probability to strip the bookmaker's overround, yielding a fair-price estimate.
+        assert closing_probability_from_odds(2.0, vig_factor=1.05) == pytest.approx(0.5 / 1.05)
 
     def test_rejects_odds_le_1(self) -> None:
         with pytest.raises(ValueError):
@@ -248,6 +249,28 @@ class TestSettle:
         )
         assert s1.clv == pytest.approx(s2.clv or 0.0)
 
+    def test_both_odds_params_raises(self) -> None:
+        with pytest.raises(ValueError, match="taken_odds or decimal_odds, not both"):
+            settle(
+                subject_type="prediction",
+                subject_id="pred-001",
+                outcome=SettlementOutcome.WIN,
+                settled_at=NOW,
+                taken_odds=2.00,
+                decimal_odds=2.00,
+            )
+
+    def test_decimal_odds_alias_accepted(self) -> None:
+        s = settle(
+            subject_type="prediction",
+            subject_id="pred-001",
+            outcome=SettlementOutcome.WIN,
+            settled_at=NOW,
+            decimal_odds=2.00,
+            stake=10.0,
+        )
+        assert s.gross_return == pytest.approx(20.0)
+
     def test_no_clv_without_taken_odds(self) -> None:
         # taken_probability alone is not enough for CLV; taken_odds is required
         s = settle(
@@ -277,9 +300,10 @@ class TestSettle:
             taken_probability=0.60,
         )
         assert s.calibration_bin is None
-        # Brier and log-loss are still 0.0 (voids don't contribute)
-        assert s.brier_contribution == pytest.approx(0.0)
-        assert s.log_loss_contribution == pytest.approx(0.0)
+        # Brier and log-loss are None for void outcomes — no settled result to score against.
+        # Storing None (rather than 0.0) prevents contaminating AVG aggregations.
+        assert s.brier_contribution is None
+        assert s.log_loss_contribution is None
 
     def test_calibration_bin_none_for_push(self) -> None:
         s = settle(

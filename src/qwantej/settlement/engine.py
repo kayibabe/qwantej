@@ -86,26 +86,27 @@ def settle(
         outcome: win/loss/void/push.
         settled_at: timezone-aware settlement timestamp.
         taken_probability: P_cons recorded at decision time (for Brier/log-loss only).
-        taken_odds: decimal odds at which the bet was struck (for CLV; use this,
-            not taken_probability, when computing CLV — pass the bookmaker price).
-        decimal_odds: alias / synonym for taken_odds when the same value drives P/L.
-            If both are supplied, taken_odds is used for CLV; decimal_odds for P/L.
-            Prefer supplying taken_odds explicitly.
+        taken_odds: decimal odds at which the bet was struck (drives both CLV and
+            P/L).  Preferred — pass this when the execution price is known.
+        decimal_odds: backward-compat alias for taken_odds.  Raises ValueError if
+            both are supplied; use taken_odds when both would carry the same value.
         closing_odds: final market odds (for CLV).
         closing_vig_factor: total overround of the closing market (default 1.0).
         stake: amount staked (None → paper tracking, financial fields omitted).
         result_source: where the result came from (e.g. "api-football").
         reason_codes: any audit codes to attach (e.g. ["CORRECTION"]).
     """
-    # Resolve taken_odds: explicit parameter wins; fall back to decimal_odds.
+    if taken_odds is not None and decimal_odds is not None:
+        raise ValueError(
+            "supply taken_odds or decimal_odds, not both — they name the same price"
+        )
     _taken_odds: float | None = taken_odds if taken_odds is not None else decimal_odds
 
     # Financial
     gross_ret: float | None = None
     pl: float | None = None
-    odds_for_pl = _taken_odds if _taken_odds is not None else decimal_odds
-    if stake is not None and odds_for_pl is not None:
-        gross_ret = gross_return_for_outcome(stake, odds_for_pl, outcome)
+    if stake is not None and _taken_odds is not None:
+        gross_ret = gross_return_for_outcome(stake, _taken_odds, outcome)
         pl = gross_ret - stake
 
     # CLV — closing_implied − taken_implied so positive = beat the line (§39).
@@ -125,11 +126,11 @@ def settle(
     brier: float | None = None
     ll: float | None = None
     cal_bin: str | None = None
-    if taken_probability is not None:
+    void_or_push = outcome in (SettlementOutcome.VOID, SettlementOutcome.PUSH)
+    if taken_probability is not None and not void_or_push:
         brier = brier_contribution(taken_probability, outcome)
         ll = log_loss_contribution(taken_probability, outcome)
-        if outcome not in (SettlementOutcome.VOID, SettlementOutcome.PUSH):
-            cal_bin = calibration_bin(taken_probability)
+        cal_bin = calibration_bin(taken_probability)
 
     return SettledPrediction(
         subject_type=subject_type,

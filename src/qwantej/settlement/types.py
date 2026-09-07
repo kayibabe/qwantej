@@ -60,12 +60,16 @@ class SettledPrediction:
             raise ValueError("settled_at must be timezone-aware")
         if self.stake is not None and self.stake <= 0:
             raise ValueError("stake must be positive")
-        if self.taken_odds is not None and self.taken_odds <= 1:
-            raise ValueError("taken_odds must be > 1 (decimal odds)")
+        if self.taken_odds is not None and (
+            not math.isfinite(self.taken_odds) or self.taken_odds <= 1
+        ):
+            raise ValueError("taken_odds must be a finite number > 1 (decimal odds)")
         if self.taken_probability is not None and not 0 < self.taken_probability <= 1:
             raise ValueError("taken_probability must be in (0, 1]")
-        if self.closing_odds is not None and self.closing_odds <= 1:
-            raise ValueError("closing_odds must be > 1")
+        if self.closing_odds is not None and (
+            not math.isfinite(self.closing_odds) or self.closing_odds <= 1
+        ):
+            raise ValueError("closing_odds must be a finite number > 1")
         if self.closing_probability is not None and not 0 < self.closing_probability <= 1:
             raise ValueError("closing_probability must be in (0, 1]")
         if self.brier_contribution is not None:

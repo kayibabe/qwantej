@@ -215,4 +215,9 @@ class Settlement(UUIDPKMixin, CreatedAtMixin, Base):
     supersedes_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("settlements.id"), index=True
     )
+    # The exact OddsQuote row used for CLV — stored for full reproducibility
+    # (framework §13).  NULL when no closing quote was available.
+    closing_quote_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("odds_quotes.id", name="fk_settlements_closing_quote"), index=True
+    )
 
