@@ -6,6 +6,8 @@ from fastapi import APIRouter
 from sqlalchemy import text
 
 from backend.api.deps import DbDep
+from backend.core.config import get_settings
+from backend.services.notifier import TelegramNotifier
 
 router = APIRouter(prefix="/health", tags=["health"])
 
@@ -17,7 +19,21 @@ def liveness() -> dict[str, str]:
 
 
 @router.get("/ready")
-def readiness(db: DbDep) -> dict[str, str]:
-    """Returns 200 when the database is reachable."""
+def readiness(db: DbDep) -> dict[str, str | bool]:
+    """Returns 200 when required services are reachable.
+
+    Checks:
+    - Database (required — 500 if unreachable)
+    - Telegram (optional — reported but never fails the check)
+    """
     db.execute(text("SELECT 1"))
-    return {"status": "ok", "db": "ok"}
+
+    settings = get_settings()
+    notifier = TelegramNotifier.from_settings(settings)
+    telegram_status: str | bool
+    if notifier.enabled:
+        telegram_status = notifier.ping()
+    else:
+        telegram_status = "not_configured"
+
+    return {"status": "ok", "db": "ok", "telegram": telegram_status}

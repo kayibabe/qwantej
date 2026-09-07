@@ -9,10 +9,11 @@ from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, select
 
 from backend.api.deps import DbDep
+from backend.core.security import RequireApiKey
 from backend.models import Prediction
 from backend.schemas.predictions import PredictionOut, PredictionPage
 
-router = APIRouter(prefix="/predictions", tags=["predictions"])
+router = APIRouter(prefix="/predictions", tags=["predictions"], dependencies=[RequireApiKey])
 
 _MAX_LIMIT = 200
 

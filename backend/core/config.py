@@ -21,11 +21,26 @@ class Settings(BaseSettings):
     )
     secret_key: str = "change-me"
 
+    # Security — empty string disables API key auth (dev only).
+    api_key: str = ""
+
+    # Logging
+    log_level: str = "INFO"
+    log_format: str = "plain"  # "json" in production
+
+    # Data sources
     api_football_key: str = ""
     api_football_base_url: str = "https://v3.football.api-sports.io"
     api_football_timeout_seconds: float = 30.0
+
+    # Notifications
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
+    telegram_timeout_seconds: float = 10.0
+
+    # Backups
+    backup_dir: str = "backups"
+    backup_keep_count: int = 7
 
 
 @lru_cache

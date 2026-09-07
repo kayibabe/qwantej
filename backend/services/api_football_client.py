@@ -7,6 +7,7 @@ import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -26,17 +27,61 @@ class JsonTransport(Protocol):
 
 
 class UrllibJsonTransport:
-    """Standard-library transport; tests inject an in-memory replacement."""
+    """Standard-library transport with exponential-backoff retry.
+
+    Transient network errors and HTTP 429/5xx responses are retried up to
+    *max_attempts* times.  Permanent errors (4xx except 429) are not retried.
+    Tests inject an in-memory replacement instead of this class.
+    """
+
+    _RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504})
+
+    def __init__(self, *, max_attempts: int = 3, backoff_base: float = 1.0) -> None:
+        self._max_attempts = max_attempts
+        self._backoff_base = backoff_base
 
     def get_json(
         self, url: str, *, headers: Mapping[str, str], timeout_seconds: float
     ) -> tuple[int, Mapping[str, str], Mapping[str, Any]]:
-        request = Request(url, headers=dict(headers), method="GET")
-        with urlopen(request, timeout=timeout_seconds) as response:  # noqa: S310
-            payload = json.loads(response.read().decode("utf-8"))
-            if not isinstance(payload, dict):
-                raise ApiFootballError("API-Football returned a non-object response")
-            return response.status, dict(response.headers.items()), payload
+        import time
+
+        last_exc: Exception | None = None
+        for attempt in range(self._max_attempts):
+            try:
+                request = Request(url, headers=dict(headers), method="GET")
+                with urlopen(request, timeout=timeout_seconds) as response:  # noqa: S310
+                    payload = json.loads(response.read().decode("utf-8"))
+                    if not isinstance(payload, dict):
+                        raise ApiFootballError("API-Football returned a non-object response")
+                    return response.status, dict(response.headers.items()), payload
+            except HTTPError as exc:
+                # urllib raises HTTPError (a subclass of OSError) for non-2xx responses.
+                # Permanent 4xx errors (except 429) must not be retried — they will not
+                # resolve on their own and retrying wastes quota.
+                if exc.code not in self._RETRYABLE_STATUSES:
+                    raise ApiFootballError(
+                        f"API-Football request failed with HTTP {exc.code}"
+                    ) from exc
+                last_exc = exc
+                if attempt < self._max_attempts - 1:
+                    delay = self._backoff_base * (2**attempt)
+                    log.warning(
+                        "API-Football HTTP %d (attempt %d/%d); retrying in %.1fs",
+                        exc.code, attempt + 1, self._max_attempts, delay,
+                    )
+                    time.sleep(delay)
+            except OSError as exc:
+                # Network-level error (connection refused, timeout, DNS failure, …).
+                # Always retryable.
+                last_exc = exc
+                if attempt < self._max_attempts - 1:
+                    delay = self._backoff_base * (2**attempt)
+                    log.warning(
+                        "API-Football transport error (attempt %d/%d): %s; retrying in %.1fs",
+                        attempt + 1, self._max_attempts, exc, delay,
+                    )
+                    time.sleep(delay)
+        raise ApiFootballError("API-Football transport failed") from last_exc
 
 
 @dataclass(frozen=True)
