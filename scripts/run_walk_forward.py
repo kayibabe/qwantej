@@ -90,7 +90,10 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
         Season,
         SourceMapping,
     )
-    from backend.services.feature_extraction import extract_fixture_features
+    from backend.services.feature_extraction import (
+        extract_fixture_features,
+        historical_training_hash,
+    )
     from backend.services.features import create_feature_snapshot
     from qwantej.features.engineering import features_to_dict
     from qwantej.markets.devig import devig_multiplicative
@@ -161,7 +164,7 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
         as_of = kickoff - timedelta(hours=2)  # simulate 2h pre-match decision
 
         try:
-            features, _stats_ids, odds_ids = extract_fixture_features(
+            features, _stats_ids, odds_ids, hist_rows = extract_fixture_features(
                 session, fixture, as_of=as_of, n_recent=cfg.n_recent
             )
         except Exception as exc:
@@ -222,12 +225,22 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
             for row in odds_rows.values():
                 if row.id not in source_odds_ids:
                     source_odds_ids.append(row.id)
+        # Build feature dict and embed training-set hash for P1 lineage (P1 fix):
+        # historical fixture IDs used by ELO/Poisson are not FK-tracked in the
+        # feature snapshot schema, so we commit to them via a content hash that
+        # enables independent replay: re-run the same DB query with the same
+        # as_of + competition scope, filter to settled rows, sort by ID, and
+        # compare the SHA-256 digest.
+        feature_dict = features_to_dict(features)
+        feature_dict["_training_fixture_count"] = float(len(hist_rows))
+        feature_dict["_training_fixture_ids_hash"] = historical_training_hash(hist_rows)
+
         create_feature_snapshot(
             session,
             fixture_id=fixture.id,
             feature_version="poisson-elo-features:1.0.0",
             as_of_timestamp=as_of,
-            features=features_to_dict(features),
+            features=feature_dict,
             stats_snapshot_ids=_stats_ids,
             odds_quote_ids=source_odds_ids,
             imputation_policy_version="explicit-fallback-v1",
@@ -238,7 +251,11 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
         outcome_observed_at: datetime | None = None
         if fixture.home_goals is not None and fixture.away_goals is not None:
             outcome = 1 if fixture.home_goals > fixture.away_goals else 0
-            outcome_observed_at = kickoff + timedelta(hours=2)  # approx FT
+            # P2b: outcome_observed_at is an approximation (kickoff + 2 h) used
+            # for backtest eligibility only.  It is not a certified point-in-time
+            # timestamp — in production, use the actual fixture status change time
+            # from the provider (e.g. the stats_snapshot captured after FT status).
+            outcome_observed_at = kickoff + timedelta(hours=2)
 
         obs = BacktestObservation(
             observation_id=str(fixture.id),

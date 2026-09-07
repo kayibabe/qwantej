@@ -10,7 +10,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.models import FeatureSnapshot, Fixture, OddsQuote, StatsSnapshot
+from backend.models import FeatureSnapshot, Fixture, FixtureStatus, OddsQuote, StatsSnapshot
 from qwantej.audit import canonical_hash
 from qwantej.features import FeatureValue, validate_feature_vector
 
@@ -137,7 +137,7 @@ def feature_snapshot_payload(snapshot: FeatureSnapshot) -> dict[str, Any]:
 
 
 def verify_feature_snapshot(session: Session, snapshot: FeatureSnapshot) -> bool:
-    """Verify the stored vector, source observations, and complete snapshot hash."""
+    """Verify the stored vector, source observations, snapshot hash, and training lineage."""
 
     try:
         stats_ids = tuple(uuid.UUID(value) for value in snapshot.stats_snapshot_ids)
@@ -146,12 +146,42 @@ def verify_feature_snapshot(session: Session, snapshot: FeatureSnapshot) -> bool
         odds_rows = _load_rows(session, OddsQuote, odds_ids, "odds quote")
     except (FeatureSnapshotError, TypeError, ValueError):
         return False
-    return (
+
+    if not (
         canonical_hash(snapshot.features) == snapshot.feature_hash
-        and canonical_hash(_source_bundle(stats_rows, odds_rows))
-        == snapshot.source_data_hash
+        and canonical_hash(_source_bundle(stats_rows, odds_rows)) == snapshot.source_data_hash
         and canonical_hash(feature_snapshot_payload(snapshot)) == snapshot.snapshot_hash
-    )
+    ):
+        return False
+
+    # If this snapshot carries an ELO/Poisson training hash, re-derive the
+    # point-in-time training set from the DB and verify that the result data
+    # (id:home_goals:away_goals) still matches the stored digest.
+    stored_training_hash = snapshot.features.get("_training_fixture_ids_hash")
+    if stored_training_hash is not None:
+        fixture = session.get(Fixture, snapshot.fixture_id)
+        if fixture is None:
+            return False
+        as_of_utc = _as_utc(snapshot.as_of_timestamp)
+        training_rows = session.scalars(
+            select(Fixture)
+            .where(
+                Fixture.competition_id == fixture.competition_id,
+                Fixture.status == FixtureStatus.FINISHED,
+                Fixture.kickoff_utc < as_of_utc,
+                Fixture.id != fixture.id,
+            )
+            .order_by(Fixture.kickoff_utc, Fixture.id)
+        ).all()
+        settled = [
+            r for r in training_rows
+            if r.home_goals is not None and r.away_goals is not None
+        ]
+        from backend.services.feature_extraction import historical_training_hash
+        if historical_training_hash(settled) != stored_training_hash:
+            return False
+
+    return True
 
 
 def _unique_ids(values: Sequence[uuid.UUID], name: str) -> tuple[uuid.UUID, ...]:
