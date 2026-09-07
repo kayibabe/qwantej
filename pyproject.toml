@@ -35,6 +35,7 @@ dev = [
     "pytest-cov",
     "ruff",
     "mypy",
+    "httpx",
 ]
 
 [tool.setuptools.packages.find]
