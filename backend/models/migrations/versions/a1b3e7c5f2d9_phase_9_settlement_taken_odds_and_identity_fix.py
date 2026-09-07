@@ -31,7 +31,8 @@ def upgrade() -> None:
 
     # 2. Extend _guard_accumulators_identity to protect all evidence columns.
     #    The original trigger (from e9b4f2a71c3d) only checked 4 columns; the
-    #    remaining columns are also part of the published, immutable ticket record.
+    #    remaining columns (including created_at) are also part of the published,
+    #    immutable ticket record.
     op.execute("""
         CREATE OR REPLACE FUNCTION _guard_accumulators_identity()
         RETURNS trigger LANGUAGE plpgsql AS $$
@@ -46,7 +47,8 @@ def upgrade() -> None:
                 NEW.stressed_joint_probability,
                 NEW.objective_score,
                 NEW.dependence_penalty_applied,
-                NEW.published_at
+                NEW.published_at,
+                NEW.created_at
             ) IS DISTINCT FROM (
                 OLD.id,
                 OLD.product,
@@ -57,7 +59,8 @@ def upgrade() -> None:
                 OLD.stressed_joint_probability,
                 OLD.objective_score,
                 OLD.dependence_penalty_applied,
-                OLD.published_at
+                OLD.published_at,
+                OLD.created_at
             ) THEN
                 RAISE EXCEPTION 'accumulators evidence columns are immutable';
             END IF;
@@ -68,6 +71,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # WARNING: dropping taken_odds permanently destroys any recorded execution prices.
+    # Only downgrade on a dev/test schema where that data loss is acceptable.
+    op.drop_constraint("ck_settlements_taken_odds_gt_1", "settlements", type_="check")
+    op.drop_column("settlements", "taken_odds")
+
     # Revert _guard_accumulators_identity to the original 4-column version.
     op.execute("""
         CREATE OR REPLACE FUNCTION _guard_accumulators_identity()
@@ -81,6 +89,3 @@ def downgrade() -> None:
         END;
         $$
     """)
-
-    op.drop_constraint("ck_settlements_taken_odds_gt_1", "settlements", type_="check")
-    op.drop_column("settlements", "taken_odds")
