@@ -8,6 +8,7 @@ so a prediction's feature set can never accidentally see a later price
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Numeric, String
@@ -28,9 +29,9 @@ class OddsQuote(UUIDPKMixin, CreatedAtMixin, Base):
     bookmaker: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
     market: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
     selection: Mapped[str] = mapped_column(String(40), nullable=False)
-    line: Mapped[float | None] = mapped_column(Numeric(6, 2))  # e.g. 2.5 for O/U 2.5
+    line: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))  # e.g. 2.5 for O/U 2.5
 
-    decimal_odds: Mapped[float] = mapped_column(Numeric(8, 3), nullable=False)
+    decimal_odds: Mapped[Decimal] = mapped_column(Numeric(8, 3), nullable=False)
 
     # The moment this price was observed — the point-in-time-critical field.
     captured_at: Mapped[datetime] = mapped_column(

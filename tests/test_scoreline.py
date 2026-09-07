@@ -25,6 +25,26 @@ def test_rejects_negative_probabilities() -> None:
         ScorelineDistribution(m)
 
 
+@pytest.mark.parametrize("bad", [np.nan, np.inf])
+def test_rejects_non_finite_matrix(bad: float) -> None:
+    # NaN/inf must not slip through the sum/negativity checks (they pass < and >
+    # comparisons silently).
+    m = np.zeros((2, 2))
+    m[0, 0] = 1.0
+    m[1, 1] = bad
+    with pytest.raises(ValueError):
+        ScorelineDistribution(m)
+
+
+def test_distribution_owns_a_read_only_copy() -> None:
+    matrix = np.array([[0.5, 0.0], [0.0, 0.5]])
+    distribution = ScorelineDistribution(matrix)
+    matrix[0, 0] = 1.0
+    assert distribution.correct_score(0, 0) == pytest.approx(0.5)
+    with pytest.raises(ValueError, match="read-only"):
+        distribution.matrix[0, 0] = 1.0
+
+
 class TestSymmetry:
     """Equal expected goals => a symmetric match: P(home) == P(away)."""
 
@@ -58,10 +78,17 @@ class TestDerivationsAreCoherent:
         assert dc.home_or_draw == pytest.approx(mr.home + mr.draw)
         assert dc.draw_or_away == pytest.approx(mr.draw + mr.away)
 
-    def test_whole_number_line_rejected(self) -> None:
+    @pytest.mark.parametrize("line", [2.0, 3, 2.25, 2.75, 1.1, float("nan")])
+    def test_over_under_rejects_non_half_lines(self, line: float) -> None:
         dist = poisson_scoreline(1.5, 1.5)
         with pytest.raises(ValueError):
-            dist.over_under(2.0)
+            dist.over_under(line)
+
+    @pytest.mark.parametrize("line", [1.0, 1.25, 2.75])
+    def test_team_over_rejects_non_half_lines(self, line: float) -> None:
+        dist = poisson_scoreline(1.5, 1.5)
+        with pytest.raises(ValueError):
+            dist.team_over("home", line)
 
     def test_team_over_bad_side_rejected(self) -> None:
         with pytest.raises(ValueError):

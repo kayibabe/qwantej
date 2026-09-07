@@ -6,7 +6,26 @@ Alembic autogenerate and `Base.metadata.create_all()` both rely on it.
 """
 
 from backend.models.audit import AuditActor, AuditEvent, AuditEventType
+from backend.models.bankroll import (
+    BankrollLedgerEntry,
+    LedgerEntryType,
+    RiskState,
+    RiskStateSnapshot,
+)
 from backend.models.base import Base
+from backend.models.calibration import (
+    CalibrationMethod,
+    CalibrationModel,
+    CalibrationSnapshot,
+    CalibrationStatus,
+)
+from backend.models.experiments import (
+    Experiment,
+    ExperimentKind,
+    ExperimentStatus,
+    SelectionCandidate,
+)
+from backend.models.features import FeatureSnapshot
 from backend.models.fixtures import Competition, Fixture, FixtureStatus, Season, Team
 from backend.models.odds import OddsQuote
 from backend.models.predictions import Prediction
@@ -19,6 +38,7 @@ from backend.models.registry import (
     ModelRunStatus,
     ModelStatus,
 )
+from backend.models.reliability import ReliabilitySnapshot, ReliabilityState
 from backend.models.stats import StatsSnapshot, StatsSubjectType
 
 __all__ = [
@@ -34,6 +54,7 @@ __all__ = [
     "OddsQuote",
     "StatsSnapshot",
     "StatsSubjectType",
+    "FeatureSnapshot",
     # Phase 2 — model registry, prediction archive, audit trail
     "ModelRegistry",
     "ModelFamily",
@@ -45,4 +66,22 @@ __all__ = [
     "AuditEvent",
     "AuditActor",
     "AuditEventType",
+    # Phase 4 — calibration registry and monitoring archive
+    "CalibrationModel",
+    "CalibrationMethod",
+    "CalibrationStatus",
+    "CalibrationSnapshot",
+    # Phase 5 — experiment registry and immutable Value Gate decisions
+    "Experiment",
+    "ExperimentKind",
+    "ExperimentStatus",
+    "SelectionCandidate",
+    # Phase 6 — point-in-time reliability matrix
+    "ReliabilitySnapshot",
+    "ReliabilityState",
+    # Phase 7 — append-only bankroll ledger and immutable risk-state snapshots
+    "BankrollLedgerEntry",
+    "LedgerEntryType",
+    "RiskState",
+    "RiskStateSnapshot",
 ]

@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     secret_key: str = "change-me"
 
     api_football_key: str = ""
+    api_football_base_url: str = "https://v3.football.api-sports.io"
+    api_football_timeout_seconds: float = 30.0
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
 

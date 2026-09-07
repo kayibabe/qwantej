@@ -36,6 +36,7 @@ entities, each carrying a mapping confidence and provenance:
 | `model_runs` | Execution metadata, data snapshot, parameters, outputs |
 | `predictions` | Raw/ensemble/calibrated/conservative probabilities by market/selection |
 | `calibration_models` | Calibrator version, segment, training sample and diagnostics |
+| `calibration_snapshots` | Immutable out-of-sample calibration monitoring windows |
 | `reliability_snapshots` | LRS/MRS and posterior uncertainty at a point in time |
 | `selection_candidates` | QSS, Value Gate result and rejection/pass reasons |
 | `accumulators` / `accumulator_legs` | Ticket product, odds, probability, EV, legs and optimiser version |
@@ -58,6 +59,27 @@ entities, each carrying a mapping confidence and provenance:
   `optimiser/risk_policy_version`.
 - Where practical, store input snapshot identifiers/hashes and the code
   commit SHA for full reproduction.
+
+## `feature_snapshots` (immutable point-in-time feature store — Phase 7.5)
+
+`id`, `fixture_id` → `fixtures`, `feature_version`, `as_of_timestamp`, JSON
+`features`, ordered JSON `stats_snapshot_ids` and `odds_quote_ids`,
+`imputation_policy_version`, `source_data_hash`, `feature_hash`,
+`snapshot_hash`, `code_commit` and `created_at`.
+
+The v1 feature-vector contract is a non-empty map of named JSON scalars. A
+missing value is stored explicitly as `null` and the imputation policy is
+always versioned; nested/opaque feature objects and non-finite numbers are
+rejected. The creation service verifies that every referenced source exists,
+belongs to the fixture or one of its teams, and was observable at or before
+`as_of_timestamp`; the cutoff itself must precede kickoff. It hashes both the
+exact source observations and the normalized feature vector, then hashes the
+complete snapshot envelope. `feature-snapshot:<id>` and `snapshot_hash` are the
+canonical `model_runs.data_snapshot_ref` and prediction input lineage pair.
+
+Exact retries return the existing content-addressed row. Any changed source,
+feature, policy, version or code commit produces a new row; database triggers
+forbid UPDATE, DELETE and TRUNCATE so historical inputs cannot be rewritten.
 
 ## Minimum prediction record (Appendix C)
 
@@ -93,7 +115,12 @@ development, challenger, champion, retired),
 `training_window_start`/`training_window_end`, `code_commit`,
 `artefact_hash`, `artefact_uri`, `hyperparameters` (JSON), `description`,
 `promoted_at`, `retired_at`, `created_at`, `updated_at`. **No model is live
-without a registry row** (`MODEL_GOVERNANCE.md`).
+without a registry row** (`MODEL_GOVERNANCE.md`). Since Phase 7.5, the identity
+and lineage fields (family, name, version, training window, code_commit,
+artefact hash/uri, hyperparameters) are frozen by a guard trigger — only the
+lifecycle fields (status, promoted/retired timestamps, description) may change,
+so a prediction's model lineage cannot be rewritten. Rows are never deleted or
+truncated.
 
 ### `model_runs` (mutable: running → succeeded/failed)
 
@@ -102,7 +129,11 @@ training, backtest, inference, evaluation), `status` (enum
 `model_run_status`: running, succeeded, failed), `started_at`,
 `finished_at`, `data_as_of` (point-in-time cutoff), `data_snapshot_ref`,
 `code_commit`, `parameters` (JSON), `metrics` (JSON), `log_uri`,
-`created_at`, `updated_at`.
+`created_at`, `updated_at`. Since Phase 7.5, a guard trigger freezes the run's
+inputs (model_id, kind, started_at, data_as_of, data_snapshot_ref, code_commit,
+parameters) and locks the row entirely once it reaches a terminal status
+(succeeded/failed) — completion may set status/finished_at/metrics/log_uri once,
+after which the run is immutable. Rows are never deleted or truncated.
 
 ### `predictions` (immutable, append-only — framework §13)
 
@@ -110,6 +141,11 @@ Decision-time fields only; a correction is a new row. Post-fixture data
 (`result`, settlement, stake/return/PL, closing odds, CLV, Brier/log-loss
 contributions from Appendix C) lives in the separate `settlements` table so
 it can never leak into the decision record — Appendix C is the union view.
+
+Immutability is **enforced in the database** (migrations `da3a07d4e74e` and
+`c84f2d19a6b1`): a trigger raises on any UPDATE, DELETE or TRUNCATE of
+`predictions`, `audit_events` and `calibration_snapshots`. Calibration-model
+artifact fields are frozen after insertion while lifecycle status remains mutable.
 
 - **Identity/PIT**: `id`, `fixture_id` → `fixtures` (competition/season/team
   ids reached via the fixture, not duplicated), `prediction_timestamp`,
@@ -125,13 +161,101 @@ it can never leak into the decision record — Appendix C is the union view.
   `uncertainty_measure`.
 - **Quality/reliability**: `dqs`, `qss`, `lrs`, `mrs` (0–100),
   `dynamic_states` (JSON).
-- **Version spine**: `model_version_id` → `model_registry`,
+- **Version spine (attribution)**: `model_version_id` → `model_registry`,
   `feature_version`, `calibration_version`, `risk_policy_version`,
-  `optimiser_version`, `code_commit`. Completeness is enforced by
-  `qwantej.audit.reproducibility.check_reproducibility` — a prediction is
-  reproducible only if every spine field is present.
+  `optimiser_version`, `code_commit` — which versions were in force.
+- **Execution/input lineage (replay)**: `model_run_id` → `model_runs` (the
+  concrete run that supplied the parameters), `input_snapshot_ref` (retrievable
+  canonical inputs) and `input_snapshot_hash` (content verification). The
+  database requires the run to belong to `model_version_id`.
+- **Calibration lineage**: `calibration_model_id` → `calibration_models`, plus
+  the denormalized `calibration_version` written into the immutable record.
 - **Linkage/diagnostics**: `accumulator_id` (polymorphic UUID, no FK until
   the accumulators table lands), `reason_codes` (JSON; Appendix D), `created_at`.
+
+### `calibration_models` (versioned lifecycle entity — Phase 4)
+
+`id`, unique `version`, `method` (`platt` or `isotonic`), lifecycle `status`,
+optional `parent_id`, nullable segment dimensions (`market`, `competition`,
+`model_family`), `trained_as_of`, training window, `sample_size`,
+`minimum_sample_size`, serializable `parameters`, validation `diagnostics`,
+`artefact_hash`, `code_commit`, promotion/retirement and row timestamps.
+Database checks enforce the training cutoff and minimum sample contract.
+
+### `calibration_snapshots` (immutable monitoring archive — Phase 4)
+
+`calibration_model_id`, evaluation cutoff/window, `sample_size`, Brier score,
+log loss, ECE, calibration intercept/slope, optional Brier Skill Score,
+reliability-curve bins and `created_at`. Database triggers forbid UPDATE,
+DELETE and TRUNCATE.
+
+### `experiments` (configuration frozen; completed rows immutable — Phase 5)
+
+`id`, unique (`name`, `version`), `kind`, lifecycle `status`, model,
+calibration, Value Gate and conservative-policy versions, `code_commit`,
+`data_snapshot_ref`, comparison `baseline`, deterministic `random_seed`, full
+JSON `configuration`, start/finish timestamps, training/test windows,
+`sample_size`, rejected leakage count, JSON `metrics`, `result_hash` and row
+timestamps. Configuration cannot change after insertion. A successful result
+requires its completion time, sample size, metrics and content hash; after
+completion no field may change. DELETE and TRUNCATE are forbidden.
+
+### `selection_candidates` (immutable Value Gate archive — Phase 5)
+
+`prediction_id` → `predictions`, `evaluated_at`, `policy_version`, `passed`,
+calculated `edge`, `expected_value`, ordered JSON `reason_codes`, complete JSON
+`gate_inputs` and `created_at`. Database triggers forbid UPDATE, DELETE and
+TRUNCATE so later policy changes cannot rewrite why a historical candidate
+passed or failed.
+
+### `reliability_snapshots` (immutable league-market matrix — Phase 6)
+
+`competition_id` → `competitions`, `competition_class`, `market_family`,
+evaluation cutoff and evidence window, `policy_version`, raw/effective sample
+sizes, shrinkage weight, LRS, MRS, segment posterior, posterior standard
+deviation, conservative lower bound, dynamic status, grade, JSON components
+and diagnostics, future-row exclusion count, input snapshot reference/hash,
+`code_commit` and `created_at`. A unique segment/cutoff/policy key prevents
+ambiguous duplicates. Database triggers forbid UPDATE, DELETE and TRUNCATE.
+
+`predictions.reliability_snapshot_id` optionally links a new immutable decision
+to the exact matrix snapshot used. Existing archived predictions remain null
+rather than being rewritten with hindsight.
+
+### `bankroll_ledger_entries` (append-only financial ledger — Phase 7)
+
+`id`, `account`, monotonic per-account `sequence`, `entry_type` (enum
+`ledger_entry_type`: deposit, withdrawal, settlement, adjustment), signed
+`amount` (canonicalised to 4 dp), running `balance_after`, `occurred_at`
+(point-in-time value date), optional `reference`, `reason`, optional
+`idempotency_key` and `created_at`. The current bankroll is the sum of an
+account's amounts up to a cutoff — a derived, reproducible figure, never a
+mutable field. Entries are appended under a per-account lock, in chronological
+order, and `sequence` (unique per account, assigned under that lock) is the
+authoritative tie-breaker for replaying the ledger when timestamps are equal —
+UUID id order is arbitrary. `balance_after` can never go negative (CHECK
+`ck_ledger_balance_nonneg`). A deposit must be positive and a withdrawal
+negative (CHECK `ck_ledger_sign_by_type`); zero amounts are rejected. `(account,
+idempotency_key)` is unique, so a retried event is deduplicated — and a key
+reused with different details is rejected, not silently dropped. Database
+triggers forbid UPDATE, DELETE and TRUNCATE.
+
+### `risk_state_snapshots` (immutable risk-state evaluations — Phase 7)
+
+`id`, `account`, `evaluated_as_of`, `current_bankroll`, `peak_bankroll`,
+`available_bankroll`, `committed_exposure`, `daily_exposure`,
+`drawdown_fraction`, optional `rolling_volatility`, `operating_state` (enum
+`risk_operating_state`: normal, caution, defensive, review), `policy_version`,
+JSON `diagnostics` and `created_at`. Every bankroll/drawdown/state figure is
+**derived** from the ledger as it stood at `evaluated_as_of` (never the future)
+and from the policy, not trusted from the caller. `drawdown_fraction` is measured
+on a cash-flow-adjusted NAV equity curve, so deposits and withdrawals do not
+register as performance. An exposure breach (committed exposure exceeding
+bankroll) or a non-positive bankroll fails closed into REVIEW. Check constraints
+enforce `available_bankroll ≤ current_bankroll`, `available_bankroll ≥ 0`,
+`current_bankroll ≥ 0`, `peak_bankroll ≥ current_bankroll` and a unit-interval
+drawdown. A unique account/cutoff/policy key prevents ambiguous duplicates.
+Database triggers forbid UPDATE, DELETE and TRUNCATE.
 
 ### `audit_events` (immutable, append-only)
 

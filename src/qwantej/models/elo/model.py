@@ -49,6 +49,14 @@ def _logistic(t: float) -> float:
 def _strength(
     home_rating: float, away_rating: float, home_advantage: float, scale: float
 ) -> float:
+    for name, value in (
+        ("home_rating", home_rating),
+        ("away_rating", away_rating),
+        ("home_advantage", home_advantage),
+        ("scale", scale),
+    ):
+        if not math.isfinite(value):
+            raise ValueError(f"{name} must be finite, got {value}")
     if scale <= 0:
         raise ValueError(f"scale must be positive, got {scale}")
     return (home_rating + home_advantage - away_rating) / scale
@@ -100,6 +108,8 @@ def update_ratings(
 ) -> tuple[float, float]:
     """Return updated (home, away) ratings after a settled result. The update
     is zero-sum: the points the home team gains, the away team loses."""
+    if not math.isfinite(k):
+        raise ValueError(f"k must be finite, got {k}")
     if k < 0:
         raise ValueError(f"k must be non-negative, got {k}")
     expected = expected_score(home_rating, away_rating, home_advantage, scale)

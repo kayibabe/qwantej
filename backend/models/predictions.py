@@ -32,6 +32,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Numeric,
     String,
 )
@@ -40,8 +41,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from backend.models.base import Base, CreatedAtMixin, UUIDPKMixin
 
 if TYPE_CHECKING:
+    from backend.models.calibration import CalibrationModel
     from backend.models.fixtures import Fixture
-    from backend.models.registry import ModelRegistry
+    from backend.models.registry import ModelRegistry, ModelRun
+    from backend.models.reliability import ReliabilitySnapshot
 
 
 def _probability_check(column: str) -> CheckConstraint:
@@ -59,6 +62,11 @@ class Prediction(UUIDPKMixin, CreatedAtMixin, Base):
         _probability_check("calibrated_probability"),
         _probability_check("conservative_probability"),
         _probability_check("fair_market_probability"),
+        ForeignKeyConstraint(
+            ["model_run_id", "model_version_id"],
+            ["model_runs.id", "model_runs.model_id"],
+            name="fk_predictions_model_run_model",
+        ),
     )
 
     # --- Identity & point-in-time (framework §13) ---
@@ -106,6 +114,7 @@ class Prediction(UUIDPKMixin, CreatedAtMixin, Base):
     dynamic_states: Mapped[dict | None] = mapped_column(JSON)
 
     # --- Version spine (framework §13; see qwantej.audit.reproducibility) ---
+    # Version identifiers answer "which model/policy versions" (attribution).
     model_version_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("model_registry.id"), index=True
     )
@@ -115,6 +124,20 @@ class Prediction(UUIDPKMixin, CreatedAtMixin, Base):
     optimiser_version: Mapped[str | None] = mapped_column(String(40))
     code_commit: Mapped[str | None] = mapped_column(String(64))
 
+    # --- Execution / input lineage (framework §13, §235: replay readiness) ---
+    # The run identifies the execution; the reference locates canonical inputs
+    # and the hash verifies their content. Phase 5 performs the actual replay.
+    model_run_id: Mapped[uuid.UUID | None] = mapped_column(index=True)
+    input_snapshot_ref: Mapped[str | None] = mapped_column(String(255))
+    input_snapshot_hash: Mapped[str | None] = mapped_column(String(128))
+
+    calibration_model_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("calibration_models.id"), index=True
+    )
+    reliability_snapshot_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("reliability_snapshots.id"), index=True
+    )
+
     # --- Linkage & diagnostics ---
     # Polymorphic linkage to a future accumulators row (that table lands with
     # the accumulator engine); no FK yet, mirroring source_mappings.canonical_id.
@@ -123,4 +146,13 @@ class Prediction(UUIDPKMixin, CreatedAtMixin, Base):
     reason_codes: Mapped[list | None] = mapped_column(JSON)
 
     fixture: Mapped["Fixture"] = relationship()
-    model_version: Mapped["ModelRegistry | None"] = relationship()
+    model_version: Mapped["ModelRegistry | None"] = relationship(
+        foreign_keys=[model_version_id], overlaps="model_run"
+    )
+    model_run: Mapped["ModelRun | None"] = relationship(
+        foreign_keys=[model_run_id, model_version_id], overlaps="model_version"
+    )
+    calibration_model: Mapped["CalibrationModel | None"] = relationship(
+        back_populates="predictions"
+    )
+    reliability_snapshot: Mapped["ReliabilitySnapshot | None"] = relationship()

@@ -1,3 +1,35 @@
-"""Settlement & Performance Engine and League/Market Reliability Engine
-(framework §25-27, §38-44): LRS/MRS with Bayesian shrinkage, settlement,
-KPIs, drift detection, champion-challenger governance."""
+"""Walk-forward evaluation and reliability intelligence (framework Phase 5-6)."""
+
+from qwantej.performance.backtest import (
+    BacktestFold,
+    BacktestObservation,
+    WalkForwardConfig,
+    WalkForwardReport,
+    walk_forward_backtest,
+)
+from qwantej.performance.reliability import (
+    ReliabilityCell,
+    ReliabilityComponents,
+    ReliabilityEstimate,
+    ReliabilityMatrix,
+    ReliabilityObservation,
+    ReliabilityPolicy,
+    ReliabilityStatus,
+    build_reliability_matrix,
+)
+
+__all__ = [
+    "BacktestFold",
+    "BacktestObservation",
+    "WalkForwardConfig",
+    "WalkForwardReport",
+    "walk_forward_backtest",
+    "ReliabilityCell",
+    "ReliabilityComponents",
+    "ReliabilityEstimate",
+    "ReliabilityMatrix",
+    "ReliabilityObservation",
+    "ReliabilityPolicy",
+    "ReliabilityStatus",
+    "build_reliability_matrix",
+]

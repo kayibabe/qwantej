@@ -17,6 +17,8 @@ feature/estimation layer's responsibility (Phase 5), not this module's.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 from scipy.stats import poisson
 
@@ -35,6 +37,11 @@ DEFAULT_RHO = -0.05
 
 
 def _validate_xg(home_xg: float, away_xg: float) -> None:
+    # Finiteness first: NaN/inf pass the <= 0 comparison silently and would
+    # otherwise poison the whole scoreline matrix.
+    for name, value in (("home", home_xg), ("away", away_xg)):
+        if not math.isfinite(value):
+            raise ValueError(f"{name} expected goals must be finite, got {value}")
     if home_xg <= 0 or away_xg <= 0:
         raise ValueError(f"expected goals must be positive, got home={home_xg}, away={away_xg}")
 
@@ -77,6 +84,8 @@ def dixon_coles_scoreline(
     silently clamped.
     """
     _validate_xg(home_xg, away_xg)
+    if not math.isfinite(rho):
+        raise ValueError(f"rho must be finite, got {rho}")
     matrix = _independent_matrix(home_xg, away_xg, max_goals)
 
     tau = {

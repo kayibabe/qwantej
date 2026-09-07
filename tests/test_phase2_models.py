@@ -133,12 +133,21 @@ class TestPrediction:
     def test_stores_immutable_decision_record(
         self, session: Session, fixture: Fixture, model: ModelRegistry
     ) -> None:
+        run = ModelRun(
+            model=model, kind=ModelRunKind.INFERENCE, status=ModelRunStatus.SUCCEEDED,
+            started_at=datetime.now(UTC),
+        )
+        session.add(run)
+        session.flush()
         pred = Prediction(
             **self._base_kwargs(fixture),
             model_probabilities={"poisson": 0.55, "dixon_coles": 0.53},
             ensemble_probability=0.54, calibrated_probability=0.52,
             conservative_probability=0.50, expected_value=-0.03,
-            model_version=model, feature_version="fs-1", calibration_version="cal-1",
+            model_version=model, model_run=run,
+            input_snapshot_ref="snapshots/run/input.json",
+            input_snapshot_hash="sha256:abc",
+            feature_version="fs-1", calibration_version="cal-1",
         )
         session.add(pred)
         session.commit()
@@ -147,6 +156,10 @@ class TestPrediction:
         assert reloaded.conservative_probability == 0.50
         assert reloaded.model_probabilities["poisson"] == 0.55
         assert reloaded.model_version.name == "poisson-baseline"
+        # Execution/input lineage links the prediction to the exact run + inputs.
+        assert reloaded.model_run.kind is ModelRunKind.INFERENCE
+        assert reloaded.input_snapshot_ref == "snapshots/run/input.json"
+        assert reloaded.input_snapshot_hash == "sha256:abc"
         # Immutable table carries no updated_at.
         assert not hasattr(reloaded, "updated_at")
 
