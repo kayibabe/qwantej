@@ -110,11 +110,17 @@ def parse_odds(item: dict[str, Any]) -> tuple[ApiFootballOddsQuote, ...]:
             for value_obj in values:
                 if not isinstance(value_obj, dict):
                     raise ApiFootballPayloadError("bet value must be an object")
-                raw_selection = _text(value_obj, "value")
+                raw_value = value_obj.get("value")
+                if not isinstance(raw_value, str) or not raw_value.strip():
+                    # Live API occasionally returns blank/null selections (e.g.
+                    # suspended markets); skip rather than abort the whole payload.
+                    continue
+                raw_selection = raw_value.strip()
                 selection, line = normalize_selection(raw_selection)
                 odds = _decimal(value_obj.get("odd"), "odd")
                 if odds <= 1:
-                    raise ApiFootballPayloadError("decimal odds must be greater than 1")
+                    # Odds ≤ 1.0 are invalid or suspended-market placeholders; skip.
+                    continue
                 quotes.append(
                     ApiFootballOddsQuote(
                         external_fixture_id=fixture_id,
