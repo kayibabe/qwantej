@@ -103,9 +103,8 @@ def settle(
     # Financial
     gross_ret: float | None = None
     pl: float | None = None
-    odds_for_pl = _taken_odds if _taken_odds is not None else decimal_odds
-    if stake is not None and odds_for_pl is not None:
-        gross_ret = gross_return_for_outcome(stake, odds_for_pl, outcome)
+    if stake is not None and _taken_odds is not None:
+        gross_ret = gross_return_for_outcome(stake, _taken_odds, outcome)
         pl = gross_ret - stake
 
     # CLV — closing_implied − taken_implied so positive = beat the line (§39).
@@ -125,11 +124,11 @@ def settle(
     brier: float | None = None
     ll: float | None = None
     cal_bin: str | None = None
-    if taken_probability is not None:
+    void_or_push = outcome in (SettlementOutcome.VOID, SettlementOutcome.PUSH)
+    if taken_probability is not None and not void_or_push:
         brier = brier_contribution(taken_probability, outcome)
         ll = log_loss_contribution(taken_probability, outcome)
-        if outcome not in (SettlementOutcome.VOID, SettlementOutcome.PUSH):
-            cal_bin = calibration_bin(taken_probability)
+        cal_bin = calibration_bin(taken_probability)
 
     return SettledPrediction(
         subject_type=subject_type,

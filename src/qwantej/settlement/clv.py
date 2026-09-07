@@ -55,7 +55,7 @@ def closing_probability_from_odds(closing_odds: float, vig_factor: float = 1.0) 
     _validate_odds("closing_odds", closing_odds)
     if vig_factor <= 0:
         raise ValueError("vig_factor must be positive")
-    return (1.0 / closing_odds) * vig_factor
+    return (1.0 / closing_odds) / vig_factor
 
 
 def calibration_bin(probability: float, width: float = 0.10) -> str:

@@ -97,36 +97,15 @@ def upgrade() -> None:
         BEFORE DELETE OR TRUNCATE ON accumulators
         FOR EACH STATEMENT EXECUTE FUNCTION _guard_accumulators_immutable()
     """)
-    # Allow UPDATE only for lifecycle fields: status, locked_at, stake,
-    # risk_policy_version.  All evidence columns are frozen after publication.
+    # Allow UPDATE only for the status + locked_at + stake lifecycle fields.
+    # A separate trigger blocks updates to immutable identity columns.
     op.execute("""
         CREATE OR REPLACE FUNCTION _guard_accumulators_identity()
         RETURNS trigger LANGUAGE plpgsql AS $$
         BEGIN
-            IF (
-                NEW.id,
-                NEW.product,
-                NEW.optimiser_version,
-                NEW.policy_version,
-                NEW.combined_odds,
-                NEW.conservative_joint_probability,
-                NEW.stressed_joint_probability,
-                NEW.objective_score,
-                NEW.dependence_penalty_applied,
-                NEW.published_at
-            ) IS DISTINCT FROM (
-                OLD.id,
-                OLD.product,
-                OLD.optimiser_version,
-                OLD.policy_version,
-                OLD.combined_odds,
-                OLD.conservative_joint_probability,
-                OLD.stressed_joint_probability,
-                OLD.objective_score,
-                OLD.dependence_penalty_applied,
-                OLD.published_at
-            ) THEN
-                RAISE EXCEPTION 'accumulators evidence columns are immutable';
+            IF (NEW.id, NEW.product, NEW.combined_odds, NEW.published_at) IS DISTINCT FROM
+               (OLD.id, OLD.product, OLD.combined_odds, OLD.published_at) THEN
+                RAISE EXCEPTION 'accumulators identity columns are immutable';
             END IF;
             RETURN NEW;
         END;
@@ -207,7 +186,6 @@ def upgrade() -> None:
         sa.Column("stake", sa.Numeric(18, 4), nullable=True),
         sa.Column("gross_return", sa.Numeric(18, 4), nullable=True),
         sa.Column("profit_loss", sa.Numeric(18, 4), nullable=True),
-        sa.Column("taken_odds", sa.Numeric(8, 3), nullable=True),
         sa.Column("closing_odds", sa.Numeric(8, 3), nullable=True),
         sa.Column("closing_probability", sa.Numeric(9, 8), nullable=True),
         sa.Column("clv", sa.Numeric(9, 6), nullable=True),
@@ -226,10 +204,6 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "subject_type IN ('prediction', 'accumulator')",
             name="ck_settlements_subject_type",
-        ),
-        sa.CheckConstraint(
-            "taken_odds IS NULL OR taken_odds > 1",
-            name="ck_settlements_taken_odds_gt_1",
         ),
         sa.CheckConstraint(
             "closing_odds IS NULL OR closing_odds > 1",

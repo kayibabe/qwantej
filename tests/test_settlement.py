@@ -66,8 +66,9 @@ class TestClosingProbabilityFromOdds:
         assert closing_probability_from_odds(2.0) == pytest.approx(0.5)
 
     def test_with_vig_factor(self) -> None:
-        # 5% vig: 1/2.0 * 1.05 = 0.525
-        assert closing_probability_from_odds(2.0, vig_factor=1.05) == pytest.approx(0.525)
+        # 5% vig removal: (1/2.0) / 1.05 ≈ 0.4762 — dividing shrinks the implied
+        # probability to strip the bookmaker's overround, yielding a fair-price estimate.
+        assert closing_probability_from_odds(2.0, vig_factor=1.05) == pytest.approx(0.5 / 1.05)
 
     def test_rejects_odds_le_1(self) -> None:
         with pytest.raises(ValueError):
@@ -277,9 +278,10 @@ class TestSettle:
             taken_probability=0.60,
         )
         assert s.calibration_bin is None
-        # Brier and log-loss are still 0.0 (voids don't contribute)
-        assert s.brier_contribution == pytest.approx(0.0)
-        assert s.log_loss_contribution == pytest.approx(0.0)
+        # Brier and log-loss are None for void outcomes — no settled result to score against.
+        # Storing None (rather than 0.0) prevents contaminating AVG aggregations.
+        assert s.brier_contribution is None
+        assert s.log_loss_contribution is None
 
     def test_calibration_bin_none_for_push(self) -> None:
         s = settle(
