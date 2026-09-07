@@ -249,6 +249,28 @@ class TestSettle:
         )
         assert s1.clv == pytest.approx(s2.clv or 0.0)
 
+    def test_both_odds_params_raises(self) -> None:
+        with pytest.raises(ValueError, match="taken_odds or decimal_odds, not both"):
+            settle(
+                subject_type="prediction",
+                subject_id="pred-001",
+                outcome=SettlementOutcome.WIN,
+                settled_at=NOW,
+                taken_odds=2.00,
+                decimal_odds=2.00,
+            )
+
+    def test_decimal_odds_alias_accepted(self) -> None:
+        s = settle(
+            subject_type="prediction",
+            subject_id="pred-001",
+            outcome=SettlementOutcome.WIN,
+            settled_at=NOW,
+            decimal_odds=2.00,
+            stake=10.0,
+        )
+        assert s.gross_return == pytest.approx(20.0)
+
     def test_no_clv_without_taken_odds(self) -> None:
         # taken_probability alone is not enough for CLV; taken_odds is required
         s = settle(

@@ -2,7 +2,11 @@
 
 Adds the taken_odds column that was missing from the initial Phase 9 schema
 and extends the _guard_accumulators_identity trigger to protect all evidence
-columns (not just id/product/combined_odds/published_at).
+columns (not just id/product/combined_odds/published_at), including created_at.
+
+IRREVERSIBLE: downgrade() drops the taken_odds column and permanently destroys
+any execution-price data stored there.  Do not run downgrade() against a
+production or staging schema that holds real settlement records.
 
 Revision ID: a1b3e7c5f2d9
 Revises: e9b4f2a71c3d
@@ -71,8 +75,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # WARNING: dropping taken_odds permanently destroys any recorded execution prices.
-    # Only downgrade on a dev/test schema where that data loss is acceptable.
     op.drop_constraint("ck_settlements_taken_odds_gt_1", "settlements", type_="check")
     op.drop_column("settlements", "taken_odds")
 
