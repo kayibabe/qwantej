@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+
+log = logging.getLogger(__name__)
 
 from backend.core.config import Settings
 
@@ -47,12 +50,15 @@ class ApiPage:
 class ApiFootballClient:
     """GET-only client for fixtures, pre-match odds, and fixture statistics."""
 
+    QUOTA_WARNING_THRESHOLD = 50
+
     def __init__(
         self,
         *,
         api_key: str,
         base_url: str = "https://v3.football.api-sports.io",
         timeout_seconds: float = 30.0,
+        quota_warning_threshold: int = QUOTA_WARNING_THRESHOLD,
         transport: JsonTransport | None = None,
     ) -> None:
         if not api_key.strip():
@@ -64,6 +70,7 @@ class ApiFootballClient:
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
         self._timeout_seconds = timeout_seconds
+        self._quota_warning_threshold = quota_warning_threshold
         self._transport = transport or UrllibJsonTransport()
 
     @classmethod
@@ -90,13 +97,22 @@ class ApiFootballClient:
         self, endpoint: str, parameters: Mapping[str, str | int]
     ) -> tuple[dict[str, Any], ...]:
         page = self._get_page(endpoint, parameters)
+        self._check_quota(page)
         collected = list(page.response)
         while page.current_page < page.total_pages:
             page = self._get_page(
                 endpoint, {**parameters, "page": page.current_page + 1}
             )
+            self._check_quota(page)
             collected.extend(page.response)
         return tuple(collected)
+
+    def _check_quota(self, page: ApiPage) -> None:
+        remaining = page.requests_remaining
+        if remaining is not None and remaining <= self._quota_warning_threshold:
+            log.warning(
+                "API-Football quota low: %d request(s) remaining", remaining
+            )
 
     def _get_page(
         self, endpoint: str, parameters: Mapping[str, str | int]

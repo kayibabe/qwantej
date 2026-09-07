@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, date, datetime, timedelta
 from urllib.parse import parse_qs, urlparse
 
@@ -122,6 +123,31 @@ def test_client_pages_and_keeps_key_out_of_url() -> None:
     assert len(transport.calls) == 2
     assert all("test-secret" not in url for url, _, _ in transport.calls)
     assert all(headers["x-apisports-key"] == "test-secret" for _, headers, _ in transport.calls)
+
+
+def test_client_warns_when_quota_is_low(caplog: pytest.LogCaptureFixture) -> None:
+    transport = FakeTransport({1: _wrapper([{"id": 1}])})
+    transport.pages[1]["paging"] = {"current": 1, "total": 1}
+    # Override remaining to a value at the threshold
+    original_get_json = transport.get_json
+
+    def low_quota_get_json(url, *, headers, timeout_seconds):
+        status, _, payload = original_get_json(url, headers=headers, timeout_seconds=timeout_seconds)
+        return status, {"x-ratelimit-requests-remaining": "10"}, payload
+
+    transport.get_json = low_quota_get_json  # type: ignore[method-assign]
+    client = ApiFootballClient(api_key="key", transport=transport, quota_warning_threshold=50)
+    with caplog.at_level(logging.WARNING, logger="backend.services.api_football_client"):
+        client.fixtures(league=39, season=2026)
+    assert any("quota low" in record.message and "10" in record.message for record in caplog.records)
+
+
+def test_client_no_warning_when_quota_is_healthy(caplog: pytest.LogCaptureFixture) -> None:
+    transport = FakeTransport({1: _wrapper([{"id": 1}])})
+    client = ApiFootballClient(api_key="key", transport=transport, quota_warning_threshold=50)
+    with caplog.at_level(logging.WARNING, logger="backend.services.api_football_client"):
+        client.fixtures(league=39, season=2026)
+    assert not any("quota low" in record.message for record in caplog.records)
 
 
 def test_client_sanitizes_provider_errors() -> None:
