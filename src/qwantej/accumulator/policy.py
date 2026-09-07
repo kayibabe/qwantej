@@ -17,8 +17,8 @@ class AccumulatorPolicy:
     All numeric thresholds are research defaults from ACCUMULATOR_POLICY.md
     and must be validated against backtested data before live deployment.
 
-    stress_haircut: per-leg probability reduction applied to the stressed
-        ticket EV check (e.g. 0.10 → each leg's p is multiplied by 0.90).
+    stress_haircut: ticket-level probability reduction applied to the stressed
+        ticket EV check (e.g. 0.05 → joint_p is multiplied by 0.95 once).
         Conservative proxy — replace with empirically derived values.
 
     max_combinations: combination evaluation budget. When this is reached

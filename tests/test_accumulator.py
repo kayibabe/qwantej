@@ -563,12 +563,14 @@ class TestSearchBudget:
         ]
         pool = low_odds_pool + valid_legs
         result = build_ticket(pool, ProductTier.CORE, CORE_POLICY, as_of=NOW)
-        # The valid combo exists; it must be found (no pool pre-truncation)
+        # The valid combo must be found — regression against the old beam_width=64
+        # pre-truncation that silently dropped valid legs beyond position 63.
         assert result.legs_evaluated == 67
-        # If found, ticket should be in the band
-        if result.ticket is not None:
-            assert result.ticket.combined_odds >= CORE_POLICY.min_combined_odds
-            assert result.ticket.combined_odds <= CORE_POLICY.max_combined_odds
+        assert result.ticket is not None, (
+            f"valid combo must be found; rejection={result.rejection_reason}"
+        )
+        assert result.ticket.combined_odds >= CORE_POLICY.min_combined_odds
+        assert result.ticket.combined_odds <= CORE_POLICY.max_combined_odds
 
 
 # ---------------------------------------------------------------------------
