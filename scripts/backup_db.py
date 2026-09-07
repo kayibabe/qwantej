@@ -66,6 +66,9 @@ def run_backup(
     pg_dump_bin:
         Path to the pg_dump executable.
     """
+    if keep_count < 1:
+        raise ValueError(f"keep_count must be >= 1, got {keep_count}")
+
     backup_dir.mkdir(parents=True, exist_ok=True)
 
     conn = _parse_db_url(database_url)
@@ -111,7 +114,14 @@ def run_backup(
 
 
 def _prune_old_backups(backup_dir: Path, *, keep_count: int) -> None:
-    """Delete oldest ``qwantej_*.sql.gz`` files beyond *keep_count*."""
+    """Delete oldest ``qwantej_*.sql.gz`` files beyond *keep_count*.
+
+    *keep_count* must be >= 1.  Python's ``seq[:-0]`` resolves to ``seq[:0]``
+    (empty), so zero silently keeps everything — we reject it explicitly rather
+    than producing surprising behaviour.
+    """
+    if keep_count < 1:
+        raise ValueError(f"keep_count must be >= 1, got {keep_count}")
     dumps = sorted(backup_dir.glob("qwantej_*.sql.gz"))
     to_delete = dumps[:-keep_count] if len(dumps) > keep_count else []
     for old in to_delete:

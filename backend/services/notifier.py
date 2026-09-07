@@ -58,10 +58,17 @@ class TelegramHttpTransport:
             method="POST",
         )
         with urlopen(request, timeout=timeout_seconds) as resp:  # noqa: S310
-            data = json.loads(resp.read().decode("utf-8"))
+            raw = resp.read()
         # Telegram always returns {"ok": true/false, ...} even on HTTP 200.
-        # A false ok is an API-level error and must be treated as a failure so
-        # the retry loop in send() can act on it.
+        # A false ok is an API-level error.  Raise OSError so the retry loop
+        # in send() handles it consistently with network failures.
+        # json.JSONDecodeError (ValueError) is also converted to OSError so
+        # post_json's only failure mode is OSError — preserving send()'s
+        # never-raises contract (which catches OSError but not ValueError).
+        try:
+            data = json.loads(raw.decode("utf-8"))
+        except ValueError as exc:
+            raise OSError("Telegram returned a non-JSON response") from exc
         if not data.get("ok"):
             description = data.get("description", "unknown error")
             raise OSError(f"Telegram API error: {description}")
@@ -158,13 +165,15 @@ class TelegramNotifier:
         return False
 
     def ping(self) -> bool:
-        """Return True if a getMe call succeeds (health-check use)."""
+        """Return True if getMe returns ok=true (health-check use)."""
         if not self.enabled:
             return False
         url = f"https://api.telegram.org/bot{self._bot_token}/getMe"
         try:
             req = Request(url, method="GET")  # noqa: S310
-            with urlopen(req, timeout=self._timeout) as _resp:  # noqa: S310
-                return True
-        except Exception:
+            with urlopen(req, timeout=self._timeout) as resp:  # noqa: S310
+                raw = resp.read()
+            data = json.loads(raw.decode("utf-8"))
+            return bool(data.get("ok"))
+        except Exception:  # noqa: BLE001
             return False

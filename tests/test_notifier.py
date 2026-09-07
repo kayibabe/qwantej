@@ -213,3 +213,67 @@ def test_telegram_http_transport_ok_on_success():
                             timeout_seconds=5.0)
     finally:
         m.urlopen = original
+
+
+def test_telegram_http_transport_non_json_raises_oserror():
+    """A non-JSON body must raise OSError, not propagate ValueError."""
+    from backend.services.notifier import TelegramHttpTransport
+
+    class _FakeResp:
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def read(self): return b"<html>bad gateway</html>"
+
+    import backend.services.notifier as m
+    original = m.urlopen
+    m.urlopen = lambda req, timeout: _FakeResp()
+    try:
+        transport = TelegramHttpTransport()
+        with pytest.raises(OSError, match="non-JSON"):
+            transport.post_json("https://api.telegram.org/botX/sendMessage",
+                                payload={"chat_id": "1", "text": "hi"},
+                                timeout_seconds=5.0)
+    finally:
+        m.urlopen = original
+
+
+# ---------------------------------------------------------------------------
+# TelegramNotifier.ping — validates ok field
+# ---------------------------------------------------------------------------
+
+def test_ping_returns_true_when_ok():
+    """ping() must return True only when the getMe response has ok=true."""
+    import json as _json
+
+    class _FakeResp:
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def read(self): return _json.dumps({"ok": True, "result": {"id": 1}}).encode()
+
+    import backend.services.notifier as m
+    original = m.urlopen
+    m.urlopen = lambda req, timeout: _FakeResp()
+    try:
+        n = _notifier()
+        assert n.ping() is True
+    finally:
+        m.urlopen = original
+
+
+def test_ping_returns_false_when_ok_false():
+    """ping() must return False when getMe responds with ok=false."""
+    import json as _json
+
+    class _FakeResp:
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def read(self): return _json.dumps({"ok": False, "description": "Unauthorized"}).encode()
+
+    import backend.services.notifier as m
+    original = m.urlopen
+    m.urlopen = lambda req, timeout: _FakeResp()
+    try:
+        n = _notifier()
+        assert n.ping() is False
+    finally:
+        m.urlopen = original
