@@ -180,7 +180,7 @@ def _drift_inputs(
         .limit(limit)
     )
     rows = list(session.scalars(stmt))
-    probs = [float(r.taken_probability) for r in rows]
+    probs = [float(r.taken_probability) for r in rows if r.taken_probability is not None]
     outcomes = [1.0 if r.outcome == OrmSettlementOutcome.WIN else 0.0 for r in rows]
     clv_vals = [float(r.clv) for r in rows if r.clv is not None]
     return probs, outcomes, clv_vals
