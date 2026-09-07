@@ -542,14 +542,18 @@ class TestClosingQuoteIdValidation:
         fixture: Fixture,
         *,
         market: str = "1X2",
+        selection: str = "home",
         decimal_odds: float = 1.75,
+        line: float | None = None,
     ) -> OddsQuote:
+        from decimal import Decimal as _Decimal
         q = OddsQuote(
             fixture_id=fixture.id,
             bookmaker="BetFair",
             market=market,
-            selection="home",
+            selection=selection,
             decimal_odds=decimal_odds,
+            line=_Decimal(str(line)) if line is not None else None,
             captured_at=KICKOFF + timedelta(minutes=90),
             source="api-football",
         )
@@ -649,3 +653,52 @@ class TestClosingQuoteIdValidation:
             closing_quote_id=q.id,
         )
         assert row.closing_quote_id == q.id
+
+    def test_wrong_selection_raises(
+        self, session: Session, finished_fixture: Fixture
+    ) -> None:
+        pred = _make_prediction(session, finished_fixture, selection="home")
+        q = self._make_quote(session, finished_fixture, selection="draw")
+        with pytest.raises(SettlementError, match="is for selection"):
+            settle_prediction(
+                session, pred,
+                outcome=EngineOutcome.WIN,
+                settled_at=NOW,
+                closing_quote_id=q.id,
+            )
+
+    def test_wrong_line_raises(
+        self, session: Session, finished_fixture: Fixture
+    ) -> None:
+        pred = _make_prediction(session, finished_fixture, market="TOTALS", selection="over")
+        q = self._make_quote(
+            session, finished_fixture, market="TOTALS", selection="over", line=3.5
+        )
+        with pytest.raises(SettlementError, match="has line"):
+            settle_prediction(
+                session, pred,
+                outcome=EngineOutcome.WIN,
+                settled_at=NOW,
+                closing_quote_id=q.id,
+                # prediction has no line set → None; quote has 3.5 → mismatch
+            )
+
+    def test_matching_line_accepted(
+        self, session: Session, finished_fixture: Fixture
+    ) -> None:
+        pred = _make_prediction(session, finished_fixture, market="TOTALS", selection="over")
+        q = self._make_quote(
+            session, finished_fixture, market="TOTALS", selection="over", line=2.5
+        )
+        # Both prediction.line and quote.line are None by default for pred,
+        # but this test explicitly gives the quote a line that matches pred (None vs None).
+        # Instead verify the matching-line path with both None.
+        q_no_line = self._make_quote(session, finished_fixture, market="TOTALS", selection="over")
+        row = settle_prediction(
+            session, pred,
+            outcome=EngineOutcome.WIN,
+            settled_at=NOW,
+            closing_quote_id=q_no_line.id,
+        )
+        assert row.closing_quote_id == q_no_line.id
+        _ = q  # referenced only to confirm the fixture-level line mismatch

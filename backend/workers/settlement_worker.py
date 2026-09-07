@@ -242,9 +242,13 @@ def run_settlement(session: Session, *, now: datetime | None = None) -> WorkerRu
                         result_source=_RESULT_SOURCE,
                     )
                 batch.settled += 1
-            except IntegrityError:
-                # Concurrent worker won the race — partial unique index fired.
-                # Treat as an idempotent skip; the savepoint was already rolled back.
+            except IntegrityError as exc:
+                # Only treat uniqueness conflicts as idempotent skips (concurrent
+                # worker won the race against the partial unique index).  FK
+                # violations or NOT NULL failures are re-raised so they surface
+                # as real errors rather than silently vanishing.
+                if "unique" not in str(exc).lower():
+                    raise
                 log.debug(
                     "settlement_worker: prediction %s already settled (concurrent write)",
                     prediction.id,

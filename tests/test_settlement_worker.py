@@ -350,9 +350,34 @@ class TestIntegrityErrorSavepoint:
 
         with patch(
             "backend.workers.settlement_worker.settle_prediction",
-            side_effect=IntegrityError("concurrent write", {}, None),
+            side_effect=IntegrityError(
+                "UNIQUE constraint failed: settlements.subject_type, "
+                "settlements.subject_id",
+                {},
+                None,
+            ),
         ):
             run = run_settlement(session, now=NOW)
 
         assert run.total_errors == 0
         assert sum(b.skipped_already_settled for b in run.batches) == 1
+
+    def test_non_unique_integrity_error_propagates(self, session: Session) -> None:
+        """An IntegrityError that is NOT a uniqueness violation must propagate
+        rather than being silently swallowed as an idempotent skip.
+        """
+        from unittest.mock import patch
+
+        from sqlalchemy.exc import IntegrityError
+
+        f = _make_fixture(session, home_goals=2, away_goals=0)
+        _make_prediction(session, f, selection="home")
+
+        with pytest.raises(IntegrityError, match="NOT NULL"):
+            with patch(
+                "backend.workers.settlement_worker.settle_prediction",
+                side_effect=IntegrityError(
+                    "NOT NULL constraint failed: settlements.outcome", {}, None
+                ),
+            ):
+                run_settlement(session, now=NOW)

@@ -287,6 +287,19 @@ def settle_prediction(
                 f"closing_quote_id {closing_quote_id} is for market "
                 f"{quote.market!r}, not {prediction.market!r}"
             )
+        if quote.selection.lower() != prediction.selection.lower():
+            raise SettlementError(
+                f"closing_quote_id {closing_quote_id} is for selection "
+                f"{quote.selection!r}, not {prediction.selection!r}"
+            )
+        pred_line = (
+            Decimal(str(prediction.line)) if prediction.line is not None else None
+        )
+        if quote.line != pred_line:
+            raise SettlementError(
+                f"closing_quote_id {closing_quote_id} has line "
+                f"{quote.line!r}, not {pred_line!r}"
+            )
         if closing_odds is not None and abs(float(quote.decimal_odds) - closing_odds) > 1e-4:
             raise SettlementError(
                 f"closing_quote_id {closing_quote_id} has decimal_odds "
