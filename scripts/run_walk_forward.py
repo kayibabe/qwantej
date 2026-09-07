@@ -417,11 +417,7 @@ def _record_experiment(
     test_from_utc = datetime.combine(cfg.test_from, datetime.min.time(), tzinfo=UTC)
     test_to_utc = datetime.combine(cfg.test_to, datetime.max.time(), tzinfo=UTC)
 
-    data_snapshot_ref = (
-        "api-football:all-leagues"
-        if cfg.all_leagues
-        else f"api-football:league={cfg.league_id}:season={cfg.season}"
-    )
+    data_snapshot_ref = _data_snapshot_ref(cfg)
     identity = ExperimentIdentity(
         name=cfg.name,
         version="1.0.0",
@@ -468,6 +464,22 @@ def _print_report(report: Any) -> None:
             "  calibrated_ece:         %.4f",
             report.calibrated_calibration.expected_calibration_error,
         )
+
+
+def _data_snapshot_ref(cfg: ExperimentConfig) -> str:
+    """Build the provenance tag stored in the experiment registry row.
+
+    Encodes all flags that affect which observations are built so every
+    experiment row can be reproduced from its stored reference alone.
+    """
+    base = (
+        "api-football:all-leagues"
+        if cfg.all_leagues
+        else f"api-football:league={cfg.league_id}:season={cfg.season}"
+    )
+    if cfg.calibration_only:
+        return base + ":calibration-only"
+    return base
 
 
 def _current_code_commit() -> str:
