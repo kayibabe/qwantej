@@ -262,6 +262,16 @@ def test_ingested_sources_feed_frozen_feature_snapshot(session: Session) -> None
     assert feature.snapshot_ref.startswith("feature-snapshot:")
 
 
+def test_statistics_before_fixture_raises(session: Session) -> None:
+    with pytest.raises(ApiFootballIngestionError, match="must be ingested before its statistics"):
+        ingest_fixture_statistics(
+            session,
+            external_fixture_id="9999",
+            statistics=({"team": {"id": 10}, "statistics": []},),
+            captured_at=NOW,
+        )
+
+
 def test_window_loader_ignores_odds_for_fixtures_outside_window(session: Session) -> None:
     outside_odds = _odds_payload()
     outside_odds["fixture"] = {"id": 9999}
