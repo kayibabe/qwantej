@@ -14,8 +14,7 @@ The worker:
   4. After all fixtures, runs calibration and execution drift detection on the
      most recent settled window and logs warnings when thresholds are exceeded.
      Drift detection is evidence-gathering only — no automated model swap is
-     triggered here (champion-challenger governance is human-reviewed,
-     framework §43).
+     triggered here (champion-challenger governance is human-reviewed, §43).
 
 Session contract: ``run_settlement()`` accepts an open session, flushes
 after each fixture's batch, but does NOT commit.  The caller (``main()`` or
@@ -39,6 +38,8 @@ from backend.models import (
     FixtureStatus,
     Prediction,
     Settlement,
+)
+from backend.models import (
     SettlementOutcome as OrmSettlementOutcome,
 )
 from backend.services.settlement import (
@@ -140,16 +141,26 @@ def _drift_inputs(
     *,
     limit: int = 500,
 ) -> tuple[list[float], list[float], list[float]]:
-    """Collect ``(probabilities, binary_outcomes, clv_values)`` from recent settlements.
+    """Collect ``(probabilities, binary_outcomes, clv_values)`` for drift detection.
 
-    Only WIN/LOSS rows with a recorded taken_probability are included; voids
-    and pushes are excluded because they carry no Brier/calibration signal.
+    Uses the *effective* settlement for each prediction — the one that has
+    not been superseded by a correction.  A row whose ``id`` appears in
+    another row's ``supersedes_id`` has been corrected and is excluded; only
+    the correcting row (with the right outcome) is included.
+
+    Only WIN/LOSS rows with a recorded ``taken_probability`` contribute to
+    calibration metrics; voids and pushes carry no Brier signal.
     """
+    # Rows that have been corrected: their id appears in supersedes_id of another row.
+    superseded_ids = (
+        select(Settlement.supersedes_id)
+        .where(Settlement.supersedes_id.is_not(None))
+    )
     stmt = (
         select(Settlement)
         .where(
             Settlement.subject_type == "prediction",
-            Settlement.supersedes_id.is_(None),
+            Settlement.id.not_in(superseded_ids),
             Settlement.taken_probability.is_not(None),
             Settlement.outcome.in_(
                 [OrmSettlementOutcome.WIN, OrmSettlementOutcome.LOSS]
@@ -209,7 +220,7 @@ def run_settlement(session: Session, *, now: datetime | None = None) -> WorkerRu
                 batch.skipped_no_result += 1
                 continue
 
-            closing_odds, _ = find_closing_odds(
+            closing_odds, _, closing_quote_id = find_closing_odds(
                 session,
                 fixture_id=fixture.id,
                 market=prediction.market,
@@ -225,6 +236,7 @@ def run_settlement(session: Session, *, now: datetime | None = None) -> WorkerRu
                     outcome=outcome,
                     settled_at=now,
                     closing_odds=closing_odds,
+                    closing_quote_id=closing_quote_id,
                     result_source=_RESULT_SOURCE,
                 )
                 batch.settled += 1
@@ -233,6 +245,13 @@ def run_settlement(session: Session, *, now: datetime | None = None) -> WorkerRu
                     batch.skipped_already_settled += 1
                 else:
                     batch.errors.append(f"prediction {prediction.id}: {exc}")
+            except ValueError as exc:
+                # settle_prediction can raise ValueError for malformed probability
+                # or odds fields (e.g. p > 1 stored in error).  Isolate so one
+                # bad prediction does not abort the whole fixture's batch.
+                batch.errors.append(
+                    f"prediction {prediction.id}: invalid field value: {exc}"
+                )
 
         session.flush()
         log.info(

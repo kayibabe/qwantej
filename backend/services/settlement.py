@@ -1,16 +1,16 @@
 """Settlement service: calls the pure engine and persists to the settlements table.
 
 This is the single database-writing entry point for settlement.  The pure
-engine (`qwantej.settlement.engine.settle`) computes all metrics; this
-service enforces idempotency, resolves outcomes from fixture scoreines, and
-writes the ORM row.  `resolve_outcome` and `find_closing_odds` carry no
+engine (``qwantej.settlement.engine.settle``) computes all metrics; this
+service enforces idempotency, resolves outcomes from fixture scorelines, and
+writes the ORM row.  ``resolve_outcome`` and ``find_closing_odds`` carry no
 side-effects and are tested independently of the write path.
 """
 
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -21,6 +21,8 @@ from backend.models import (
     OddsQuote,
     Prediction,
     Settlement,
+)
+from backend.models import (
     SettlementOutcome as OrmSettlementOutcome,
 )
 from qwantej.settlement.engine import settle as _settle_engine
@@ -47,12 +49,20 @@ def resolve_outcome(
     Returns VOID when home_goals or away_goals is None (result not yet
     recorded).  Raises SettlementError for unknown markets or selections.
 
-    Supported markets:
-      ``1X2``           — selections ``home`` / ``draw`` / ``away``
-      ``DOUBLE_CHANCE`` — selections ``home_draw`` (1X) / ``draw_away`` (X2) /
-                          ``home_away`` (12)
-      ``BTTS``          — selections ``yes`` / ``no``
-      ``TOTALS``        — selections ``over`` / ``under``; ``line`` required
+    Supported markets and their canonical selection labels (as stored by
+    the ingestion layer):
+
+    ``1X2``
+        ``home`` / ``draw`` / ``away``
+
+    ``DOUBLE_CHANCE``
+        ``1X`` (home-or-draw) / ``X2`` (draw-or-away) / ``12`` (home-or-away)
+
+    ``BTTS``
+        ``yes`` / ``no``
+
+    ``TOTALS``
+        ``over`` / ``under``; *line* required (e.g. 2.5)
     """
     home = fixture.home_goals
     away = fixture.away_goals
@@ -74,14 +84,18 @@ def resolve_outcome(
         return EngineOutcome.WIN if sel == result else EngineOutcome.LOSS
 
     if market_key == "DOUBLE_CHANCE":
-        if sel == "home_draw":
-            won = home >= away
-        elif sel == "draw_away":
-            won = home <= away
-        elif sel == "home_away":
-            won = home != away
+        # Canonical ingestion values: "1X", "X2", "12"
+        if sel == "1x":
+            won = home >= away          # home or draw
+        elif sel == "x2":
+            won = home <= away          # draw or away
+        elif sel == "12":
+            won = home != away          # home or away (no draw)
         else:
-            raise SettlementError(f"Unknown DOUBLE_CHANCE selection: {selection!r}")
+            raise SettlementError(
+                f"Unknown DOUBLE_CHANCE selection: {selection!r}. "
+                "Expected '1X', 'X2', or '12'."
+            )
         return EngineOutcome.WIN if won else EngineOutcome.LOSS
 
     if market_key == "BTTS":
@@ -110,6 +124,11 @@ def resolve_outcome(
 # Closing-odds lookup
 # ---------------------------------------------------------------------------
 
+# Upper bound after kickoff: quotes this late are unlikely to represent
+# the real closing line (match is over and in-play markets have closed).
+_CLOSING_WINDOW_HOURS = 5
+
+
 def find_closing_odds(
     session: Session,
     *,
@@ -118,15 +137,24 @@ def find_closing_odds(
     selection: str,
     line: float | None,
     after: datetime,
-) -> tuple[float | None, str | None]:
-    """Return ``(decimal_odds, bookmaker)`` for the last quote recorded after *after*.
+) -> tuple[float | None, str | None, uuid.UUID | None]:
+    """Return ``(decimal_odds, bookmaker, quote_id)`` for the last quote in the
+    closing window.
 
-    Pass ``after=fixture.kickoff_utc`` so that only post-kickoff quotes are
-    treated as closing odds; pre-match quotes are decision-time data and must
-    not leak into the settlement record (framework §13).
+    The closing window is ``(after, after + _CLOSING_WINDOW_HOURS]``.  Pass
+    ``after=fixture.kickoff_utc`` so that only post-kickoff quotes qualify
+    as closing odds; pre-match prices are decision-time data and must not
+    leak into settlement fields (framework §13).  Quotes arriving more than
+    ``_CLOSING_WINDOW_HOURS`` after kickoff are excluded — the match is
+    almost certainly over by then and any remaining quotes represent stale
+    in-play markets.
 
-    Returns ``(None, None)`` when no qualifying quote exists.
+    The ``ORDER BY captured_at DESC, id DESC`` tie-breaker makes selection
+    deterministic when two quotes share the same timestamp.
+
+    Returns ``(None, None, None)`` when no qualifying quote exists.
     """
+    before = after + timedelta(hours=_CLOSING_WINDOW_HOURS)
     stmt = (
         select(OddsQuote)
         .where(
@@ -134,16 +162,17 @@ def find_closing_odds(
             OddsQuote.market == market,
             OddsQuote.selection == selection,
             OddsQuote.captured_at > after,
+            OddsQuote.captured_at <= before,
         )
-        .order_by(OddsQuote.captured_at.desc())
+        .order_by(OddsQuote.captured_at.desc(), OddsQuote.id.desc())
         .limit(1)
     )
     if line is not None:
         stmt = stmt.where(OddsQuote.line == Decimal(str(line)))
     quote = session.scalar(stmt)
     if quote is None:
-        return None, None
-    return float(quote.decimal_odds), quote.bookmaker
+        return None, None, None
+    return float(quote.decimal_odds), quote.bookmaker, quote.id
 
 
 # ---------------------------------------------------------------------------
@@ -160,7 +189,14 @@ def is_already_settled(
 
     Correction rows carry a non-NULL ``supersedes_id``; the original
     settlement has ``supersedes_id IS NULL``.  The idempotency guard only
-    blocks duplicate originals so corrections can always be appended.
+    blocks duplicate originals — corrections can always be appended.
+
+    This check is advisory only: the database partial unique index
+    ``uq_settlements_active_subject`` (added in migration b2d4f6a8c1e3)
+    provides the race-safe enforcement.  Both guards are needed: the
+    application check gives a descriptive error; the DB index prevents
+    the silent duplicate that would occur if two workers pass the
+    read-then-insert race window simultaneously.
     """
     stmt = (
         select(Settlement.id)
@@ -197,6 +233,7 @@ def settle_prediction(
     outcome: EngineOutcome,
     settled_at: datetime,
     closing_odds: float | None = None,
+    closing_quote_id: uuid.UUID | None = None,
     result_source: str = "api-football",
     reason_codes: list[str] | None = None,
     supersedes_id: uuid.UUID | None = None,
@@ -205,24 +242,34 @@ def settle_prediction(
 
     Idempotency: raises :exc:`SettlementError` when a non-correction settlement
     already exists and *supersedes_id* is not supplied.  A correction row must
-    explicitly name the row it supersedes so the audit trail is unambiguous.
+    explicitly name the row it supersedes.
+
+    Correction lineage: when *supersedes_id* is given it must refer to an
+    existing Settlement whose ``subject_id`` matches *prediction.id*.  This
+    prevents a correction from being accidentally attached to the wrong subject.
 
     Individual predictions are paper-tracked (``stake=None``); financial P/L
-    lives on the :class:`~backend.models.settlements.Accumulator` ticket, not
-    the individual leg.  CLV is computed whenever *closing_odds* is supplied
-    and *prediction* carries ``executable_odds``.
+    lives on the :class:`~backend.models.settlements.Accumulator` ticket.
+    CLV is computed when *closing_odds* is given and the prediction carries
+    ``executable_odds``.
 
     The caller is responsible for committing the session.
     """
-    if supersedes_id is None and is_already_settled(
-        session,
-        subject_type="prediction",
-        subject_id=prediction.id,
-    ):
-        raise SettlementError(
-            f"Prediction {prediction.id} is already settled; "
-            "supply supersedes_id to record a correction"
-        )
+    if supersedes_id is None:
+        if is_already_settled(session, subject_type="prediction", subject_id=prediction.id):
+            raise SettlementError(
+                f"Prediction {prediction.id} is already settled; "
+                "supply supersedes_id to record a correction"
+            )
+    else:
+        original = session.get(Settlement, supersedes_id)
+        if original is None:
+            raise SettlementError(f"supersedes_id {supersedes_id} does not exist")
+        if original.subject_id != prediction.id:
+            raise SettlementError(
+                f"supersedes_id {supersedes_id} belongs to prediction "
+                f"{original.subject_id}, not {prediction.id}"
+            )
 
     taken_p = (
         float(prediction.conservative_probability)
@@ -267,6 +314,7 @@ def settle_prediction(
         calibration_bin=sp.calibration_bin,
         reason_codes=sp.reason_codes,
         supersedes_id=supersedes_id,
+        closing_quote_id=closing_quote_id,
     )
     session.add(row)
     return row

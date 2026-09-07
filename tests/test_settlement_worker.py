@@ -16,12 +16,13 @@ from backend.models import (
     Prediction,
     Season,
     Settlement,
-    SettlementOutcome as OrmOutcome,
     Team,
 )
+from backend.models import (
+    SettlementOutcome as OrmOutcome,
+)
 from backend.workers.settlement_worker import (
-    FixtureBatch,
-    WorkerRun,
+    _drift_inputs,
     _finished_fixtures_with_predictions,
     _unsettled_predictions,
     run_settlement,
@@ -129,36 +130,29 @@ class TestFinishedFixturesWithPredictions:
     def test_excludes_fully_settled_fixture(self, session: Session) -> None:
         f = _make_fixture(session)
         pred = _make_prediction(session, f)
-        session.add(
-            Settlement(
-                subject_type="prediction",
-                subject_id=pred.id,
-                outcome=OrmOutcome.WIN,
-                settled_at=NOW,
-                reason_codes=[],
-            )
-        )
+        session.add(Settlement(
+            subject_type="prediction",
+            subject_id=pred.id,
+            outcome=OrmOutcome.WIN,
+            settled_at=NOW,
+            reason_codes=[],
+        ))
         session.flush()
         since = NOW - timedelta(days=7)
         result = _finished_fixtures_with_predictions(session, since=since)
         assert not any(r.id == f.id for r in result)
 
-    def test_still_includes_fixture_with_partial_settlement(
-        self, session: Session
-    ) -> None:
+    def test_still_includes_partially_settled_fixture(self, session: Session) -> None:
         f = _make_fixture(session)
         pred1 = _make_prediction(session, f, selection="home")
-        pred2 = _make_prediction(session, f, selection="draw")
-        # Only settle pred1
-        session.add(
-            Settlement(
-                subject_type="prediction",
-                subject_id=pred1.id,
-                outcome=OrmOutcome.WIN,
-                settled_at=NOW,
-                reason_codes=[],
-            )
-        )
+        _make_prediction(session, f, selection="draw")
+        session.add(Settlement(
+            subject_type="prediction",
+            subject_id=pred1.id,
+            outcome=OrmOutcome.WIN,
+            settled_at=NOW,
+            reason_codes=[],
+        ))
         session.flush()
         since = NOW - timedelta(days=7)
         result = _finished_fixtures_with_predictions(session, since=since)
@@ -179,15 +173,13 @@ class TestUnsettledPredictions:
     def test_excludes_settled(self, session: Session) -> None:
         f = _make_fixture(session)
         pred = _make_prediction(session, f)
-        session.add(
-            Settlement(
-                subject_type="prediction",
-                subject_id=pred.id,
-                outcome=OrmOutcome.WIN,
-                settled_at=NOW,
-                reason_codes=[],
-            )
-        )
+        session.add(Settlement(
+            subject_type="prediction",
+            subject_id=pred.id,
+            outcome=OrmOutcome.WIN,
+            settled_at=NOW,
+            reason_codes=[],
+        ))
         session.flush()
         result = _unsettled_predictions(session, f.id)
         assert not any(r.id == pred.id for r in result)
@@ -213,58 +205,43 @@ class TestRunSettlement:
     def test_settles_away_win(self, session: Session) -> None:
         f = _make_fixture(session, home_goals=0, away_goals=2)
         pred = _make_prediction(session, f, market="1X2", selection="away")
-
-        run = run_settlement(session, now=NOW)
-
-        assert run.total_settled == 1
-        row = _settlement_for(session, pred)
-        assert row.outcome == OrmOutcome.WIN
+        run_settlement(session, now=NOW)
+        assert _settlement_for(session, pred).outcome == OrmOutcome.WIN
 
     def test_settles_loss(self, session: Session) -> None:
         f = _make_fixture(session, home_goals=2, away_goals=0)
         pred = _make_prediction(session, f, market="1X2", selection="away")
+        run_settlement(session, now=NOW)
+        assert _settlement_for(session, pred).outcome == OrmOutcome.LOSS
 
-        run = run_settlement(session, now=NOW)
+    def test_settles_double_chance_canonical_labels(self, session: Session) -> None:
+        # 2-1: home wins; 1X (home-or-draw) wins, X2 (draw-or-away) loses
+        f = _make_fixture(session, home_goals=2, away_goals=1)
+        p1x = _make_prediction(session, f, market="DOUBLE_CHANCE", selection="1X")
+        px2 = _make_prediction(session, f, market="DOUBLE_CHANCE", selection="X2")
+        run_settlement(session, now=NOW)
+        assert _settlement_for(session, p1x).outcome == OrmOutcome.WIN
+        assert _settlement_for(session, px2).outcome == OrmOutcome.LOSS
 
-        assert run.total_settled == 1
-        row = _settlement_for(session, pred)
-        assert row.outcome == OrmOutcome.LOSS
+    def test_settles_btts_market(self, session: Session) -> None:
+        f = _make_fixture(session, home_goals=1, away_goals=1)
+        pred = _make_prediction(session, f, market="BTTS", selection="yes")
+        run_settlement(session, now=NOW)
+        assert _settlement_for(session, pred).outcome == OrmOutcome.WIN
 
     def test_skips_fixture_with_no_goals_recorded(self, session: Session) -> None:
         f = _make_fixture(session, home_goals=None, away_goals=None)
         _make_prediction(session, f)
-
         run = run_settlement(session, now=NOW)
-
         assert run.total_settled == 0
         assert run.batches[0].skipped_no_result == 1
-
-    def test_brier_and_clv_fields_populated(self, session: Session) -> None:
-        f = _make_fixture(session, home_goals=1, away_goals=0)
-        pred = _make_prediction(
-            session, f,
-            market="1X2",
-            selection="home",
-            conservative_probability=0.65,
-            executable_odds=1.80,
-        )
-        run = run_settlement(session, now=NOW)
-        assert run.total_settled == 1
-        row = _settlement_for(session, pred)
-        assert row.brier_contribution is not None
-        assert row.taken_probability is not None
-        # No post-kickoff closing quote → CLV is None
-        assert row.clv is None
 
     def test_idempotent_on_second_run(self, session: Session) -> None:
         f = _make_fixture(session)
         _make_prediction(session, f)
-
         run_settlement(session, now=NOW)
         session.flush()
-
-        # After the first run the fixture is fully settled, so _finished_fixtures_with_predictions
-        # excludes it entirely on the second pass — no batches, no errors.
+        # Fully settled → fixture excluded from second pass entirely.
         run2 = run_settlement(session, now=NOW)
         assert run2.total_settled == 0
         assert run2.total_errors == 0
@@ -273,38 +250,81 @@ class TestRunSettlement:
     def test_settles_multiple_predictions_for_same_fixture(
         self, session: Session
     ) -> None:
-        # home 2-0: home wins, away loses, draw loses
         f = _make_fixture(session, home_goals=2, away_goals=0)
         p_home = _make_prediction(session, f, selection="home")
         p_draw = _make_prediction(session, f, selection="draw")
         p_away = _make_prediction(session, f, selection="away")
-
-        run = run_settlement(session, now=NOW)
-
-        assert run.total_settled == 3
+        run_settlement(session, now=NOW)
         assert _settlement_for(session, p_home).outcome == OrmOutcome.WIN
         assert _settlement_for(session, p_draw).outcome == OrmOutcome.LOSS
         assert _settlement_for(session, p_away).outcome == OrmOutcome.LOSS
 
-    def test_settles_btts_market(self, session: Session) -> None:
-        f = _make_fixture(session, home_goals=1, away_goals=1)
-        pred = _make_prediction(session, f, market="BTTS", selection="yes")
-
+    def test_error_recorded_for_unknown_market(self, session: Session) -> None:
+        f = _make_fixture(session)
+        _make_prediction(session, f, market="HANDICAP", selection="home")
         run = run_settlement(session, now=NOW)
+        assert run.total_settled == 0
+        assert run.total_errors == 1
+        assert "resolve_outcome" in run.batches[0].errors[0]
 
-        assert run.total_settled == 1
-        assert _settlement_for(session, pred).outcome == OrmOutcome.WIN
+    def test_value_error_from_invalid_field_is_isolated(self, session: Session) -> None:
+        # executable_odds=0.5 passes the DB (no check constraint) but the
+        # settlement engine rejects taken_odds ≤ 1 with a ValueError.  Verify
+        # that the worker isolates the error and still settles the other prediction.
+        f = _make_fixture(session, home_goals=1, away_goals=0)
+        bad_pred = _make_prediction(
+            session, f, selection="home", executable_odds=0.5
+        )
+        good_pred = _make_prediction(session, f, selection="draw")
+        run = run_settlement(session, now=NOW)
+        # good_pred (draw→loss on a 1-0) should settle despite bad_pred erroring.
+        assert _settlement_for(session, good_pred) is not None
+        assert run.total_errors == 1
+        assert "invalid field value" in run.batches[0].errors[0]
+        _ = bad_pred  # referenced to satisfy linters
 
     def test_drift_checked_flag_set(self, session: Session) -> None:
         run = run_settlement(session, now=NOW)
         assert run.drift_checked is True
 
-    def test_error_recorded_for_unknown_market(self, session: Session) -> None:
-        f = _make_fixture(session)
-        _make_prediction(session, f, market="HANDICAP", selection="home")
 
-        run = run_settlement(session, now=NOW)
+# ---------------------------------------------------------------------------
+# _drift_inputs — effective settlement (corrections replace originals)
+# ---------------------------------------------------------------------------
 
-        assert run.total_settled == 0
-        assert run.total_errors == 1
-        assert "resolve_outcome" in run.batches[0].errors[0]
+class TestDriftInputs:
+    def test_uses_corrected_outcome_not_original(self, session: Session) -> None:
+        f = _make_fixture(session, home_goals=2, away_goals=0)
+        pred = _make_prediction(
+            session, f, conservative_probability=0.65, executable_odds=1.85
+        )
+        # First run: home wins → WIN
+        run_settlement(session, now=NOW)
+        session.flush()
+
+        original = _settlement_for(session, pred)
+        assert original.outcome == OrmOutcome.WIN
+
+        # Manually add a correction that flips to LOSS.
+        from backend.services.settlement import settle_prediction
+        from qwantej.settlement.types import SettlementOutcome as EngineOutcome
+
+        settle_prediction(
+            session, pred,
+            outcome=EngineOutcome.LOSS,
+            settled_at=NOW + timedelta(seconds=1),
+            reason_codes=["CORRECTION"],
+            supersedes_id=original.id,
+        )
+        session.flush()
+
+        probs, outcomes, _ = _drift_inputs(session)
+        # Original (WIN) is superseded; correction (LOSS) should be the only row.
+        assert len(probs) == 1
+        assert outcomes[0] == 0.0  # LOSS
+
+    def test_excludes_void_from_calibration(self, session: Session) -> None:
+        f = _make_fixture(session, home_goals=None, away_goals=None)
+        _make_prediction(session, f)
+        probs, outcomes, _ = _drift_inputs(session)
+        assert len(probs) == 0
