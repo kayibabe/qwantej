@@ -43,7 +43,7 @@ def list_predictions(
 
     rows = list(
         db.scalars(
-            stmt.order_by(Prediction.prediction_timestamp.desc())
+            stmt.order_by(Prediction.prediction_timestamp.desc(), Prediction.id.desc())
             .offset(offset)
             .limit(limit)
         )

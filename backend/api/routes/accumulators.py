@@ -40,7 +40,7 @@ def list_accumulators(
     rows = list(
         db.scalars(
             base_stmt.options(selectinload(Accumulator.legs))
-            .order_by(Accumulator.published_at.desc())
+            .order_by(Accumulator.published_at.desc(), Accumulator.id.desc())
             .offset(offset)
             .limit(limit)
         )
