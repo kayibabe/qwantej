@@ -319,3 +319,29 @@ def test_window_loader_ignores_odds_for_fixtures_outside_window(session: Session
     assert summary.fixtures_created == 1
     assert summary.odds_quotes_created == 2
     assert session.query(OddsQuote).count() == 2
+
+
+def test_window_loader_can_skip_odds_without_calling_provider(session: Session) -> None:
+    class StubClient:
+        def fixtures(self, **parameters):
+            return (_fixture_payload(),)
+
+        def odds(self, **parameters):
+            raise AssertionError("odds should not be fetched when disabled")
+
+        def fixture_statistics(self, fixture_id):
+            raise AssertionError("statistics should not be fetched")
+
+    summary = ingest_walk_forward_window(
+        session,
+        StubClient(),  # type: ignore[arg-type]
+        league_id=39,
+        season=2026,
+        start_date=date(2026, 9, 6),
+        end_date=date(2026, 9, 6),
+        captured_at=NOW,
+        include_odds=False,
+    )
+    assert summary.fixtures_created == 1
+    assert summary.odds_quotes_created == 0
+    assert session.query(OddsQuote).count() == 0
