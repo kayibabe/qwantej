@@ -62,38 +62,3 @@ copy .env.example .env
 The `qwantej` package (`src/qwantej/`) has no FastAPI/Postgres dependency and
 can be tested with just the base `dependencies` group — `pip install -e .`
 — if you're only working on modelling/calibration logic.
-
-## AI task router
-
-The primary interface is the installable `@qwantej` participant in VS Code
-Chat. It compares read-only technical proposals from Claude Code and Codex and
-does not let either agent implement a change.
-
-After installing `tools/vscode-qwantej-router/qwantej-ai-router.vsix`, open VS
-Code Chat and enter:
-
-```text
-@qwantej /smart Describe the task here
-```
-
-Use `/deep` for major work, `/critical` for modelling or betting logic, and
-`/doctor` to check the two CLIs. The participant remains selected after each
-response, so follow-up tasks stay in the same router conversation.
-
-The terminal interface remains available as a fallback. Run the diagnostic:
-
-```powershell
-python tools/ai_router.py doctor
-```
-
-When both CLIs are available, use **Terminal > Run Task** and select
-`Qwantej: Smart AI Task`, or run:
-
-```powershell
-python tools/ai_router.py route "Describe the task here" --mode smart
-```
-
-Tasks involving odds, calibration, models, backtesting, or bankroll logic are
-automatically escalated to critical mode. Proposal decisions are written to
-`.ai/router_logs/`; implementation remains a separate, serial handoff so only
-one agent can edit the working tree at a time.
