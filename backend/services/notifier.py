@@ -57,8 +57,14 @@ class TelegramHttpTransport:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urlopen(request, timeout=timeout_seconds) as _resp:  # noqa: S310
-            pass
+        with urlopen(request, timeout=timeout_seconds) as resp:  # noqa: S310
+            data = json.loads(resp.read().decode("utf-8"))
+        # Telegram always returns {"ok": true/false, ...} even on HTTP 200.
+        # A false ok is an API-level error and must be treated as a failure so
+        # the retry loop in send() can act on it.
+        if not data.get("ok"):
+            description = data.get("description", "unknown error")
+            raise OSError(f"Telegram API error: {description}")
 
 
 class TelegramNotifier:

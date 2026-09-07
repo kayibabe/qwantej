@@ -7,6 +7,7 @@ import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -49,22 +50,29 @@ class UrllibJsonTransport:
             try:
                 request = Request(url, headers=dict(headers), method="GET")
                 with urlopen(request, timeout=timeout_seconds) as response:  # noqa: S310
-                    status: int = response.status
-                    resp_headers = dict(response.headers.items())
                     payload = json.loads(response.read().decode("utf-8"))
                     if not isinstance(payload, dict):
                         raise ApiFootballError("API-Football returned a non-object response")
-                    if status in self._RETRYABLE_STATUSES:
-                        if attempt < self._max_attempts - 1:
-                            delay = self._backoff_base * (2**attempt)
-                            log.warning(
-                                "API-Football HTTP %d (attempt %d/%d); retrying in %.1fs",
-                                status, attempt + 1, self._max_attempts, delay,
-                            )
-                            time.sleep(delay)
-                            continue
-                    return status, resp_headers, payload
+                    return response.status, dict(response.headers.items()), payload
+            except HTTPError as exc:
+                # urllib raises HTTPError (a subclass of OSError) for non-2xx responses.
+                # Permanent 4xx errors (except 429) must not be retried — they will not
+                # resolve on their own and retrying wastes quota.
+                if exc.code not in self._RETRYABLE_STATUSES:
+                    raise ApiFootballError(
+                        f"API-Football request failed with HTTP {exc.code}"
+                    ) from exc
+                last_exc = exc
+                if attempt < self._max_attempts - 1:
+                    delay = self._backoff_base * (2**attempt)
+                    log.warning(
+                        "API-Football HTTP %d (attempt %d/%d); retrying in %.1fs",
+                        exc.code, attempt + 1, self._max_attempts, delay,
+                    )
+                    time.sleep(delay)
             except OSError as exc:
+                # Network-level error (connection refused, timeout, DNS failure, …).
+                # Always retryable.
                 last_exc = exc
                 if attempt < self._max_attempts - 1:
                     delay = self._backoff_base * (2**attempt)

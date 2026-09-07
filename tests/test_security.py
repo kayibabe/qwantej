@@ -117,3 +117,29 @@ def test_data_routes_open_when_no_key_configured(open_client):
     resp = open_client.get("/predictions")
     # Not 401 — may fail for DB reasons but auth is bypassed.
     assert resp.status_code != 401
+
+
+# ---------------------------------------------------------------------------
+# Production environment with no API_KEY set — fail closed
+# ---------------------------------------------------------------------------
+
+def test_production_without_api_key_fails_closed():
+    """Empty API_KEY in production returns 500, not a silent bypass."""
+    get_settings.cache_clear()
+
+    import backend.core.config as cfg
+    import backend.core.security as sec
+
+    original_get = cfg.get_settings
+    cfg.get_settings = lambda: Settings(api_key="", environment="production")  # type: ignore[assignment]
+    sec.get_settings = cfg.get_settings  # type: ignore[assignment]
+
+    app = create_app()
+    client = TestClient(app, raise_server_exceptions=False)
+
+    resp = client.get("/predictions")
+    assert resp.status_code == 500
+
+    cfg.get_settings = original_get
+    sec.get_settings = original_get  # type: ignore[assignment]
+    get_settings.cache_clear()

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from backend.services.notifier import TelegramNotifier
 from qwantej.notifications.types import (
     Notification,
@@ -159,3 +161,55 @@ def test_send_returns_false_after_all_retries_exhausted():
     finally:
         m.time.sleep = original
     assert result is False
+
+
+# ---------------------------------------------------------------------------
+# TelegramHttpTransport — Telegram ok field
+# ---------------------------------------------------------------------------
+
+def test_telegram_http_transport_raises_on_ok_false():
+    """HTTP 200 with ok=false must raise OSError so the retry loop acts on it."""
+    import json as _json
+
+    from backend.services.notifier import TelegramHttpTransport
+
+    class _FakeResp:
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def read(self): return _json.dumps({"ok": False, "description": "Bad Token"}).encode()
+
+    import backend.services.notifier as m
+    original = m.urlopen
+    m.urlopen = lambda req, timeout: _FakeResp()
+    try:
+        transport = TelegramHttpTransport()
+        with pytest.raises(OSError, match="Bad Token"):
+            transport.post_json("https://api.telegram.org/botX/sendMessage",
+                                payload={"chat_id": "1", "text": "hi"},
+                                timeout_seconds=5.0)
+    finally:
+        m.urlopen = original
+
+
+def test_telegram_http_transport_ok_on_success():
+    """HTTP 200 with ok=true must not raise."""
+    import json as _json
+
+    from backend.services.notifier import TelegramHttpTransport
+
+    class _FakeResp:
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def read(self): return _json.dumps({"ok": True, "result": {}}).encode()
+
+    import backend.services.notifier as m
+    original = m.urlopen
+    m.urlopen = lambda req, timeout: _FakeResp()
+    try:
+        transport = TelegramHttpTransport()
+        # Must not raise
+        transport.post_json("https://api.telegram.org/botX/sendMessage",
+                            payload={"chat_id": "1", "text": "hi"},
+                            timeout_seconds=5.0)
+    finally:
+        m.urlopen = original

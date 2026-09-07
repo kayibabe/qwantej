@@ -93,6 +93,51 @@ def test_transport_raises_after_all_retries_exhausted(monkeypatch):
     assert fake.call_count[0] == 3
 
 
+def test_permanent_4xx_not_retried(monkeypatch):
+    """An HTTP 404 must raise ApiFootballError immediately — no retry."""
+    from urllib.error import HTTPError
+
+    import backend.services.api_football_client as m
+
+    call_count = [0]
+
+    def _urlopen(req, timeout):
+        call_count[0] += 1
+        raise HTTPError(req.full_url, 404, "Not Found", {}, None)
+
+    monkeypatch.setattr(m, "urlopen", _urlopen)
+    monkeypatch.setattr("time.sleep", lambda _: None)
+
+    transport = UrllibJsonTransport(max_attempts=3, backoff_base=0.0)
+    with pytest.raises(ApiFootballError, match="HTTP 404"):
+        transport.get_json("https://x.com", headers={}, timeout_seconds=1.0)
+
+    assert call_count[0] == 1  # must not retry
+
+
+def test_429_is_retried(monkeypatch):
+    """HTTP 429 (rate limit) is in the retryable set and must be retried."""
+    from urllib.error import HTTPError
+
+    import backend.services.api_football_client as m
+
+    attempt = [0]
+
+    def _urlopen(req, timeout):
+        attempt[0] += 1
+        if attempt[0] < 3:
+            raise HTTPError(req.full_url, 429, "Too Many Requests", {}, None)
+        return _FakeResponse()
+
+    monkeypatch.setattr(m, "urlopen", _urlopen)
+    monkeypatch.setattr("time.sleep", lambda _: None)
+
+    transport = UrllibJsonTransport(max_attempts=3, backoff_base=0.0)
+    status, _, _ = transport.get_json("https://x.com", headers={}, timeout_seconds=1.0)
+    assert status == 200
+    assert attempt[0] == 3
+
+
 # ---------------------------------------------------------------------------
 # Notification types — basic smoke test
 # ---------------------------------------------------------------------------
