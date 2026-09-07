@@ -135,7 +135,9 @@ class TestBrierContribution:
 class TestLogLossContribution:
     def test_perfect_win(self) -> None:
         # p=1-ε, outcome=win → near 0
-        assert log_loss_contribution(1.0 - 1e-10, SettlementOutcome.WIN) == pytest.approx(0.0, abs=1e-8)
+        assert log_loss_contribution(1.0 - 1e-10, SettlementOutcome.WIN) == pytest.approx(
+            0.0, abs=1e-8
+        )
 
     def test_void_returns_zero(self) -> None:
         assert log_loss_contribution(0.6, SettlementOutcome.VOID) == pytest.approx(0.0)
@@ -147,7 +149,10 @@ class TestLogLossContribution:
 
     def test_lower_for_correct_prediction(self) -> None:
         # Correct high-confidence prediction has lower log-loss
-        assert log_loss_contribution(0.9, SettlementOutcome.WIN) < log_loss_contribution(0.5, SettlementOutcome.WIN)
+        assert (
+            log_loss_contribution(0.9, SettlementOutcome.WIN)
+            < log_loss_contribution(0.5, SettlementOutcome.WIN)
+        )
 
 
 # ---------------------------------------------------------------------------

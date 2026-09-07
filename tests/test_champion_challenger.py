@@ -128,8 +128,12 @@ class TestEvaluateChallengerEligible:
         assert result.blocking_reasons == []
 
     def test_eligible_summary_contains_versions(self) -> None:
-        champ = _metrics("champion-v1", brier_score=0.240, roi=0.03, max_drawdown=0.10, mean_clv=0.02)
-        chal = _metrics("challenger-v2", brier_score=0.230, roi=0.04, max_drawdown=0.10, mean_clv=0.03)
+        champ = _metrics(
+            "champion-v1", brier_score=0.240, roi=0.03, max_drawdown=0.10, mean_clv=0.02
+        )
+        chal = _metrics(
+            "challenger-v2", brier_score=0.230, roi=0.04, max_drawdown=0.10, mean_clv=0.03
+        )
         result = evaluate_challenger(champ, chal, CRITERIA)
         assert "champion-v1" in result.evidence_summary
         assert "challenger-v2" in result.evidence_summary

@@ -226,7 +226,7 @@ def upgrade() -> None:
         CREATE OR REPLACE FUNCTION _guard_settlements_immutable()
         RETURNS trigger LANGUAGE plpgsql AS $$
         BEGIN
-            RAISE EXCEPTION 'settlements rows are append-only; create a new row with supersedes_id for corrections';
+            RAISE EXCEPTION 'settlements are append-only; use supersedes_id for corrections';
         END;
         $$
     """)
@@ -239,7 +239,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Drop triggers and functions first.
-    for tbl, trg, fn in [
+    for tbl, trg, _fn in [
         ("settlements", "trg_settlements_no_mutate", "_guard_settlements_immutable"),
         ("accumulator_legs", "trg_acca_legs_no_mutate", "_guard_acca_legs_immutable"),
         ("accumulators", "trg_accumulators_freeze_identity", "_guard_accumulators_identity"),
