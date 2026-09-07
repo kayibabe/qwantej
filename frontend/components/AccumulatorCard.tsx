@@ -24,19 +24,20 @@ function fmt(v: number | null | undefined, decimals = 2) {
 }
 
 export default function AccumulatorCard({ acc }: { acc: AccumulatorOut }) {
-  const productStyle = PRODUCT_STYLE[acc.product] ?? "border-[var(--border)] text-[var(--text-secondary)]"
+  const product = acc.product.toUpperCase()
+  const productStyle = PRODUCT_STYLE[product] ?? "border-[var(--border)] text-[var(--text-secondary)]"
   const statusStyle = STATUS_STYLE[acc.status] ?? "bg-[var(--bg-raised)] text-[var(--text-secondary)]"
 
   return (
     <article
       className={`rounded-lg border-l-4 ${productStyle.split(" ")[0]} bg-[var(--bg-surface)] border border-[var(--border)] border-l-0 overflow-hidden`}
-      style={{ borderLeftWidth: "4px", borderLeftStyle: "solid", borderLeftColor: acc.product === "CORE" ? "var(--core)" : acc.product === "GROWTH" ? "var(--growth)" : "var(--alpha)" }}
+      style={{ borderLeftWidth: "4px", borderLeftStyle: "solid", borderLeftColor: product === "CORE" ? "var(--core)" : product === "GROWTH" ? "var(--growth)" : "var(--alpha)" }}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border)]">
         <div className="flex items-center gap-3">
           <span className={`text-xs font-bold uppercase tracking-widest ${productStyle.split(" ")[1]}`}>
-            {acc.product} ACCA
+            {product} ACCA
           </span>
           <span className="text-[var(--text-muted)] text-xs">·</span>
           <span className="text-lg font-bold font-mono text-[var(--text-primary)]">

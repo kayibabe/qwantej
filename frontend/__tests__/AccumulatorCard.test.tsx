@@ -4,7 +4,7 @@ import type { AccumulatorOut } from "@/lib/types"
 
 const BASE: AccumulatorOut = {
   id: "aaaaaaaa-0000-0000-0000-000000000001",
-  product: "CORE",
+  product: "Core",
   status: "pending",
   combined_odds: 4.12,
   conservative_joint_probability: 0.318,
@@ -79,7 +79,7 @@ describe("AccumulatorCard", () => {
   })
 
   it("renders GROWTH product with correct label", () => {
-    const growth = { ...BASE, product: "GROWTH", combined_odds: 7.5 }
+    const growth = { ...BASE, product: "Growth", combined_odds: 7.5 }
     render(<AccumulatorCard acc={growth} />)
     expect(screen.getByText(/GROWTH ACCA/i)).toBeInTheDocument()
   })
