@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { Suspense } from "react"
 import { fetchPredictions } from "@/lib/api"
+import { fmtDate } from "@/lib/format"
 import type { PredictionOut } from "@/lib/types"
 import Pagination from "@/components/Pagination"
 
@@ -17,7 +18,7 @@ function PredictionRow({ p }: { p: PredictionOut }) {
   return (
     <tr className="border-b border-[var(--border)] hover:bg-[var(--bg-raised)] transition-colors">
       <td className="px-4 py-2 text-xs text-[var(--text-muted)] font-mono">
-        {new Date(p.prediction_timestamp).toLocaleDateString()}
+        {fmtDate(p.prediction_timestamp)}
       </td>
       <td className="px-4 py-2 text-sm font-medium">{p.market}</td>
       <td className="px-4 py-2 text-sm">{p.selection}</td>

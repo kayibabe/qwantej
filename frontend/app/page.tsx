@@ -75,7 +75,11 @@ export default async function DashboardPage() {
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
           Recent accumulators
         </h2>
-        {!accPage || accPage.items.length === 0 ? (
+        {accPage === null ? (
+          <p className="text-sm text-[var(--loss)]">
+            Could not reach the API — is the backend running?
+          </p>
+        ) : accPage.items.length === 0 ? (
           <p className="text-sm text-[var(--text-muted)]">No accumulators yet.</p>
         ) : (
           <div className="flex flex-col gap-4">

@@ -1,4 +1,5 @@
 import type { AccumulatorOut } from "@/lib/types"
+import { CURRENCY_SYMBOL, fmtDatetime } from "@/lib/format"
 
 const PRODUCT_STYLE: Record<string, string> = {
   CORE: "border-[var(--core)] text-[var(--core)]",
@@ -56,7 +57,7 @@ export default function AccumulatorCard({ acc }: { acc: AccumulatorOut }) {
           { label: "Cons. prob.", value: pct(acc.conservative_joint_probability) },
           { label: "Stressed prob.", value: pct(acc.stressed_joint_probability) },
           { label: "Objective score", value: fmt(acc.objective_score) },
-          { label: "Stake", value: acc.stake !== null ? `£${fmt(acc.stake)}` : "—" },
+          { label: "Stake", value: acc.stake !== null ? `${CURRENCY_SYMBOL}${fmt(acc.stake)}` : "—" },
         ].map(({ label, value }) => (
           <div key={label} className="px-4 py-2">
             <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">{label}</p>
@@ -91,8 +92,8 @@ export default function AccumulatorCard({ acc }: { acc: AccumulatorOut }) {
 
       {/* Footer */}
       <div className="px-5 py-2 text-[10px] text-[var(--text-muted)] flex gap-4">
-        <span>Published {new Date(acc.published_at).toLocaleString()}</span>
-        {acc.locked_at && <span>Locked {new Date(acc.locked_at).toLocaleString()}</span>}
+        <span>Published {fmtDatetime(acc.published_at)}</span>
+        {acc.locked_at && <span>Locked {fmtDatetime(acc.locked_at)}</span>}
         {acc.risk_policy_version && <span>Risk v{acc.risk_policy_version}</span>}
       </div>
     </article>
