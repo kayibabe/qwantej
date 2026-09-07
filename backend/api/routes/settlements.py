@@ -8,11 +8,12 @@ from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
 from backend.api.deps import DbDep
+from backend.core.security import RequireApiKey
 from backend.models import Settlement
 from backend.models import SettlementOutcome as OrmOutcome
 from backend.schemas.settlements import SettlementOut, SettlementPage, SettlementSummary
 
-router = APIRouter(prefix="/settlements", tags=["settlements"])
+router = APIRouter(prefix="/settlements", tags=["settlements"], dependencies=[RequireApiKey])
 
 _MAX_LIMIT = 200
 

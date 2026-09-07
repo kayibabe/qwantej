@@ -10,10 +10,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from backend.api.deps import DbDep
+from backend.core.security import RequireApiKey
 from backend.models import Accumulator
 from backend.schemas.accumulators import AccumulatorOut, AccumulatorPage
 
-router = APIRouter(prefix="/accumulators", tags=["accumulators"])
+router = APIRouter(prefix="/accumulators", tags=["accumulators"], dependencies=[RequireApiKey])
 
 _MAX_LIMIT = 100
 

@@ -49,6 +49,7 @@ from backend.services.settlement import (
     resolve_outcome,
     settle_prediction,
 )
+from qwantej.notifications.types import Notification, NotificationEvent, NotificationLevel
 from qwantej.performance.drift import detect_calibration_drift, detect_execution_drift
 from qwantej.settlement.types import SettlementOutcome as EngineOutcome
 
@@ -336,11 +337,45 @@ def run_settlement(session: Session, *, now: datetime | None = None) -> WorkerRu
     return run
 
 
+def _notify_run(run: WorkerRun) -> None:
+    """Send a Telegram summary of the settlement run if notifications are configured."""
+    try:
+        from backend.core.config import get_settings
+        from backend.services.notifier import TelegramNotifier
+
+        notifier = TelegramNotifier.from_settings(get_settings())
+        if not notifier.enabled:
+            return
+
+        level = NotificationLevel.ERROR if run.total_errors else NotificationLevel.INFO
+        body = (
+            f"Settled: {run.total_settled} | "
+            f"Fixtures: {len(run.batches)} | "
+            f"Errors: {run.total_errors}"
+        )
+        notifier.send(
+            Notification(
+                event=NotificationEvent.SETTLEMENT_BATCH_DONE,
+                title="Settlement batch complete",
+                body=body,
+                level=level,
+            )
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("settlement_worker: notification failed: %s", exc)
+
+
 def main() -> None:
     """Entry point for scheduled invocation."""
-    logging.basicConfig(level=logging.INFO)
+    from backend.core.config import get_settings
+    from backend.core.logging import configure_logging
+
+    settings = get_settings()
+    configure_logging(log_level=settings.log_level, log_format=settings.log_format)
+
     with session_scope() as session:
-        run_settlement(session)
+        run = run_settlement(session)
+    _notify_run(run)
 
 
 if __name__ == "__main__":

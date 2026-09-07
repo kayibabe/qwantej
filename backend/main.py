@@ -9,15 +9,20 @@ or in tests via ``from backend.main import app``.
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+import uuid
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.routes import accumulators, health, predictions, settlements
 from backend.core.config import get_settings
+from backend.core.logging import configure_logging
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
+
+    configure_logging(log_level=settings.log_level, log_format=settings.log_format)
 
     application = FastAPI(
         title="Qwantej API",
@@ -37,6 +42,15 @@ def create_app() -> FastAPI:
         allow_methods=["GET"],
         allow_headers=["*"],
     )
+
+    @application.middleware("http")
+    async def request_id_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
+        """Attach a unique request ID to every inbound request."""
+        request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        request.state.request_id = request_id
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
 
     application.include_router(health.router)
     application.include_router(predictions.router)
