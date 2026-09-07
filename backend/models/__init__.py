@@ -39,6 +39,13 @@ from backend.models.registry import (
     ModelStatus,
 )
 from backend.models.reliability import ReliabilitySnapshot, ReliabilityState
+from backend.models.settlements import (
+    Accumulator,
+    AccumulatorLeg,
+    Settlement,
+    SettlementOutcome,
+    TicketStatus,
+)
 from backend.models.stats import StatsSnapshot, StatsSubjectType
 
 __all__ = [
@@ -84,4 +91,10 @@ __all__ = [
     "LedgerEntryType",
     "RiskState",
     "RiskStateSnapshot",
+    # Phase 9 — settlement engine, accumulator archive
+    "Accumulator",
+    "AccumulatorLeg",
+    "Settlement",
+    "SettlementOutcome",
+    "TicketStatus",
 ]
