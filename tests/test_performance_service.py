@@ -212,6 +212,25 @@ class TestQueryPerformanceObservations:
         assert obs[0].stake == pytest.approx(10.0)
         assert obs[0].profit_loss == pytest.approx(9.0)
 
+    def test_taken_probability_populated(self, session: Session) -> None:
+        f = _make_fixture(session)
+        p = _make_prediction(session, f)
+        _make_settlement(session, p)  # _make_settlement always stores taken_probability=0.55
+        obs = query_performance_observations(session)
+        assert obs[0].taken_probability == pytest.approx(0.55)
+
+    def test_ordering_is_deterministic_same_timestamp(self, session: Session) -> None:
+        # Both settlements share the same settled_at; order must be stable by id.
+        f = _make_fixture(session)
+        p1 = _make_prediction(session, f, market="1X2")
+        p2 = _make_prediction(session, f, market="BTTS")
+        _make_settlement(session, p1, outcome=SettlementOutcome.WIN, settled_at=NOW)
+        _make_settlement(session, p2, outcome=SettlementOutcome.LOSS, settled_at=NOW)
+        obs1 = query_performance_observations(session)
+        obs2 = query_performance_observations(session)
+        # Order must be identical across two calls
+        assert [o.market for o in obs1] == [o.market for o in obs2]
+
 
 # ---------------------------------------------------------------------------
 # performance_report

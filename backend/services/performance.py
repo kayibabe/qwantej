@@ -38,7 +38,6 @@ from qwantej.performance.kpi import (
     segment_kpis,
 )
 
-
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -59,6 +58,9 @@ def _build_observation(
 ) -> PerformanceObservation:
     return PerformanceObservation(
         outcome=_OUTCOME_MAP[row.outcome],
+        taken_probability=(
+            float(row.taken_probability) if row.taken_probability is not None else None
+        ),
         taken_odds=float(row.taken_odds) if row.taken_odds is not None else None,
         stake=float(row.stake) if row.stake is not None else None,
         profit_loss=float(row.profit_loss) if row.profit_loss is not None else None,
@@ -87,7 +89,7 @@ def query_performance_observations(
     subject_type: str = "prediction",
     since: datetime | None = None,
     market: str | None = None,
-    limit: int = 2000,
+    limit: int | None = None,
 ) -> list[PerformanceObservation]:
     """Return settled observations as domain objects, ordered by ``settled_at``.
 
@@ -96,7 +98,8 @@ def query_performance_observations(
         subject_type: "prediction" (default) or "accumulator".
         since: if given, only include settlements on or after this timestamp.
         market: if given, restrict to predictions for this market.
-        limit: maximum rows to return (default 2000).
+        limit: maximum rows; None (default) returns all rows so that aggregate
+            KPI reports are never silently truncated.
 
     Superseded rows (original settlements that have been corrected) are
     excluded; only the effective (latest) settlement per subject is returned.
@@ -138,7 +141,9 @@ def query_performance_observations(
             stmt = stmt.where(Settlement.settled_at >= since)
         if market is not None:
             stmt = stmt.where(Prediction.market == market)
-        stmt = stmt.order_by(Settlement.settled_at).limit(limit)
+        stmt = stmt.order_by(Settlement.settled_at, Settlement.id)
+        if limit is not None:
+            stmt = stmt.limit(limit)
 
         rows = session.execute(stmt).all()
         return [
@@ -158,9 +163,10 @@ def query_performance_observations(
             Settlement.subject_type == subject_type,
             Settlement.id.not_in(superseded_ids_subq),
         )
-        .order_by(Settlement.settled_at)
-        .limit(limit)
+        .order_by(Settlement.settled_at, Settlement.id)
     )
+    if limit is not None:
+        stmt_acca = stmt_acca.limit(limit)
     if since is not None:
         stmt_acca = stmt_acca.where(Settlement.settled_at >= since)
 
@@ -180,7 +186,7 @@ def performance_report(
     subject_type: str = "prediction",
     since: datetime | None = None,
     market: str | None = None,
-    limit: int = 2000,
+    limit: int | None = None,
 ) -> KPIReport:
     """Compute overall KPIs for settled predictions.
 
@@ -202,7 +208,7 @@ def performance_by_segment(
     by: str,
     subject_type: str = "prediction",
     since: datetime | None = None,
-    limit: int = 2000,
+    limit: int | None = None,
 ) -> dict[str, KPIReport]:
     """Compute KPIs segmented by market, league, or model_version.
 
@@ -211,7 +217,7 @@ def performance_by_segment(
         by: one of ``"market"``, ``"league"``, or ``"model_version"``.
         subject_type: "prediction" or "accumulator".
         since: restrict to settlements on or after this timestamp.
-        limit: maximum raw rows before segmentation.
+        limit: maximum raw rows before segmentation; None (default) = all rows.
 
     Returns a dict of segment → :class:`~qwantej.performance.kpi.KPIReport`.
     """

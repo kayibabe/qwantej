@@ -13,7 +13,6 @@ from qwantej.performance.kpi import (
     segment_kpis,
 )
 
-
 # ---------------------------------------------------------------------------
 # PerformanceObservation validation
 # ---------------------------------------------------------------------------
@@ -59,6 +58,18 @@ class TestPerformanceObservationValidation:
         with pytest.raises(ValueError, match="clv"):
             PerformanceObservation(outcome="win", clv=math.inf)
 
+    def test_rejects_taken_probability_out_of_range(self) -> None:
+        with pytest.raises(ValueError, match="taken_probability"):
+            PerformanceObservation(outcome="win", taken_probability=1.5)
+
+    def test_rejects_zero_taken_probability(self) -> None:
+        with pytest.raises(ValueError, match="taken_probability"):
+            PerformanceObservation(outcome="win", taken_probability=0.0)
+
+    def test_accepts_taken_probability_unity(self) -> None:
+        obs = PerformanceObservation(outcome="win", taken_probability=1.0)
+        assert obs.taken_probability == pytest.approx(1.0)
+
 
 # ---------------------------------------------------------------------------
 # compute_kpis — counts
@@ -67,6 +78,7 @@ class TestPerformanceObservationValidation:
 def _obs(
     outcome: str,
     taken_odds: float | None = 2.0,
+    taken_probability: float | None = None,
     brier: float | None = None,
     log_loss: float | None = None,
     clv: float | None = None,
@@ -79,6 +91,7 @@ def _obs(
     return PerformanceObservation(
         outcome=outcome,
         taken_odds=taken_odds,
+        taken_probability=taken_probability,
         brier_contribution=brier,
         log_loss_contribution=log_loss,
         clv=clv,
@@ -320,3 +333,136 @@ class TestSegmentKpis:
         result = segment_kpis(obs, by="market")
         for report in result.values():
             assert isinstance(report, KPIReport)
+
+
+# ---------------------------------------------------------------------------
+# compute_kpis — average_odds and break_even_hit_rate
+# ---------------------------------------------------------------------------
+
+class TestComputeKpisOdds:
+    def test_average_odds_computed(self) -> None:
+        obs = [_obs("win", taken_odds=2.0), _obs("loss", taken_odds=3.0)]
+        r = compute_kpis(obs)
+        assert r.average_odds == pytest.approx(2.5)
+
+    def test_average_odds_none_when_no_odds(self) -> None:
+        obs = [_obs("win", taken_odds=None), _obs("loss", taken_odds=None)]
+        r = compute_kpis(obs)
+        assert r.average_odds is None
+
+    def test_break_even_hit_rate(self) -> None:
+        # At 2.0 odds break-even = 0.5; at 4.0 = 0.25; mean = 0.375
+        obs = [_obs("win", taken_odds=2.0), _obs("loss", taken_odds=4.0)]
+        r = compute_kpis(obs)
+        assert r.break_even_hit_rate == pytest.approx(0.375)
+
+    def test_average_odds_excludes_void(self) -> None:
+        # void rows are excluded from odds aggregation
+        obs = [_obs("win", taken_odds=2.0), _obs("void", taken_odds=3.0)]
+        r = compute_kpis(obs)
+        assert r.average_odds == pytest.approx(2.0)
+
+
+# ---------------------------------------------------------------------------
+# compute_kpis — calibration (ECE, slope, intercept, BSS)
+# ---------------------------------------------------------------------------
+
+class TestComputeKpisCalibration:
+    def _perfect_calibrated(self) -> list[PerformanceObservation]:
+        """Perfectly calibrated 50% predictions: always 0.5 taken_probability."""
+        return [
+            _obs("win",  taken_probability=0.5, brier=0.25),
+            _obs("loss", taken_probability=0.5, brier=0.25),
+            _obs("win",  taken_probability=0.5, brier=0.25),
+            _obs("loss", taken_probability=0.5, brier=0.25),
+        ]
+
+    def test_calibration_fields_populated_with_probabilities(self) -> None:
+        obs = self._perfect_calibrated()
+        r = compute_kpis(obs)
+        assert r.ece is not None
+        assert r.calibration_slope is not None
+        assert r.calibration_intercept is not None
+
+    def test_calibration_none_without_probabilities(self) -> None:
+        obs = [_obs("win", brier=0.16), _obs("loss", brier=0.16)]
+        r = compute_kpis(obs)
+        assert r.ece is None
+        assert r.calibration_slope is None
+        assert r.calibration_intercept is None
+
+    def test_brier_skill_score_computed(self) -> None:
+        # Perfect hit rate 0.5, brier=0.25 → reference_brier=0.25, BSS=0
+        obs = [
+            _obs("win",  brier=0.25, taken_probability=0.5),
+            _obs("loss", brier=0.25, taken_probability=0.5),
+        ]
+        r = compute_kpis(obs)
+        assert r.brier_score == pytest.approx(0.25)
+        assert r.hit_rate == pytest.approx(0.5)
+        assert r.brier_skill_score == pytest.approx(0.0, abs=1e-9)
+
+    def test_brier_skill_score_none_without_brier(self) -> None:
+        obs = [_obs("win"), _obs("loss")]
+        r = compute_kpis(obs)
+        assert r.brier_skill_score is None
+
+    def test_brier_skill_score_positive_when_better_than_naive(self) -> None:
+        # Excellent model: brier=0.04, hit_rate=0.8 → ref=0.16, BSS=0.75
+        obs = [
+            _obs("win",  brier=0.04, taken_probability=0.8),
+            _obs("win",  brier=0.04, taken_probability=0.8),
+            _obs("win",  brier=0.04, taken_probability=0.8),
+            _obs("win",  brier=0.04, taken_probability=0.8),
+            _obs("loss", brier=0.36, taken_probability=0.8),
+        ]
+        r = compute_kpis(obs)
+        assert r.hit_rate == pytest.approx(0.8)
+        assert r.brier_score == pytest.approx((0.04 * 4 + 0.36) / 5)
+        assert r.brier_skill_score is not None
+        assert r.brier_skill_score > 0
+
+
+# ---------------------------------------------------------------------------
+# compute_kpis — volatility
+# ---------------------------------------------------------------------------
+
+class TestComputeKpisVolatility:
+    def test_volatility_none_when_single_observation(self) -> None:
+        obs = [_obs("win", taken_odds=2.0)]
+        r = compute_kpis(obs)
+        assert r.volatility is None
+
+    def test_volatility_zero_when_all_same_pl(self) -> None:
+        obs = [
+            _obs("win", stake=10.0, profit_loss=9.0),
+            _obs("win", stake=10.0, profit_loss=9.0),
+            _obs("win", stake=10.0, profit_loss=9.0),
+        ]
+        r = compute_kpis(obs)
+        assert r.volatility == pytest.approx(0.0, abs=1e-9)
+
+    def test_volatility_positive_for_mixed_results(self) -> None:
+        obs = [
+            _obs("win",  taken_odds=2.0),
+            _obs("loss", taken_odds=None),
+            _obs("win",  taken_odds=3.0),
+            _obs("loss", taken_odds=None),
+        ]
+        r = compute_kpis(obs)
+        assert r.volatility is not None
+        assert r.volatility > 0
+
+    def test_volatility_none_when_empty(self) -> None:
+        r = compute_kpis([])
+        assert r.volatility is None
+
+    def test_volatility_uses_real_pl_when_staked(self) -> None:
+        obs = [
+            _obs("win",  stake=10.0, profit_loss=90.0),
+            _obs("loss", stake=10.0, profit_loss=-10.0),
+        ]
+        r = compute_kpis(obs)
+        assert r.volatility is not None
+        # sample std of [90, -10]: mean=40, deviations=[50, -50], var=5000/1=5000
+        assert r.volatility == pytest.approx(50.0 * math.sqrt(2.0), rel=1e-6)
