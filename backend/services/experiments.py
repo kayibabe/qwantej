@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from backend.models import Experiment, ExperimentKind, ExperimentStatus
 from qwantej.performance import WalkForwardConfig, WalkForwardReport
+from qwantej.performance.calibration_backtest import CalibrationOnlyConfig, CalibrationOnlyReport
 
 
 @dataclass(frozen=True)
@@ -110,6 +111,79 @@ def complete_walk_forward_experiment(
     experiment.finished_at = finished_at
     experiment.sample_size = report.sample_size
     experiment.leakage_rows_rejected = report.leakage_rows_rejected
+    experiment.metrics = metrics
+    experiment.result_hash = f"sha256:{hashlib.sha256(canonical.encode()).hexdigest()}"
+    session.flush()
+
+
+def start_research_experiment(
+    session: Session,
+    *,
+    identity: ExperimentIdentity,
+    config: CalibrationOnlyConfig,
+    started_at: datetime,
+) -> Experiment:
+    """Insert and flush an immutable record for a non-PIT-certified research run.
+
+    Fills ``value_policy_version`` and ``conservative_policy_version`` with the
+    sentinel ``"not-applicable"`` (no market baseline), ``baseline`` with
+    ``"retrospective-research"``, and ``random_seed`` with 0 (no bootstrap).
+    ``configuration`` always carries ``pit_certified=False`` and
+    ``research_mode=True`` so the record is self-describing.
+    """
+    if started_at.tzinfo is None or started_at.utcoffset() is None:
+        raise ValueError("started_at must be timezone-aware")
+    configuration = config.as_dict()
+    experiment = Experiment(
+        name=identity.name,
+        version=identity.version,
+        kind=ExperimentKind.WALK_FORWARD_BACKTEST,
+        status=ExperimentStatus.RUNNING,
+        model_version=config.model_version,
+        calibration_version=identity.calibration_version,
+        value_policy_version="not-applicable",
+        conservative_policy_version="not-applicable",
+        code_commit=identity.code_commit,
+        data_snapshot_ref=identity.data_snapshot_ref,
+        baseline="retrospective-research",
+        random_seed=0,
+        configuration=configuration,
+        started_at=started_at,
+        training_window_start=identity.training_window_start,
+        training_window_end=identity.training_window_end,
+        test_window_start=identity.test_window_start,
+        test_window_end=identity.test_window_end,
+    )
+    session.add(experiment)
+    session.flush()
+    return experiment
+
+
+def complete_research_experiment(
+    session: Session,
+    experiment: Experiment,
+    report: CalibrationOnlyReport,
+    *,
+    finished_at: datetime,
+) -> None:
+    """Finalize a running research experiment with calibration-only metrics.
+
+    Stores ``temporal_order_rejections`` in ``leakage_rows_rejected`` so the
+    column is populated, but the semantic is weaker: temporal ordering within
+    the supplied dataset was checked, not historical data availability.
+    """
+    if experiment.status is not ExperimentStatus.RUNNING:
+        raise ValueError("only a running experiment can be completed")
+    if finished_at.tzinfo is None or finished_at.utcoffset() is None:
+        raise ValueError("finished_at must be timezone-aware")
+    if finished_at < experiment.started_at:
+        raise ValueError("finished_at cannot precede started_at")
+    metrics = _jsonable(report)
+    canonical = json.dumps(metrics, sort_keys=True, separators=(",", ":"))
+    experiment.status = ExperimentStatus.SUCCEEDED
+    experiment.finished_at = finished_at
+    experiment.sample_size = report.sample_size
+    experiment.leakage_rows_rejected = report.temporal_order_rejections
     experiment.metrics = metrics
     experiment.result_hash = f"sha256:{hashlib.sha256(canonical.encode()).hexdigest()}"
     session.flush()
