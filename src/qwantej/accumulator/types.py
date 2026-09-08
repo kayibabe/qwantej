@@ -56,27 +56,28 @@ class QualifiedSelection:
             raise ValueError("decimal_odds must be a Decimal")
         if not self.decimal_odds.is_finite() or self.decimal_odds <= 1:
             raise ValueError("decimal_odds must be a finite Decimal > 1")
-        for name, value in (
+        # Use distinct loop variables per block so mypy can infer each type correctly.
+        for prob_name, prob_val in (
             ("calibrated_probability", self.calibrated_probability),
             ("conservative_probability", self.conservative_probability),
         ):
-            if not math.isfinite(value) or not 0 < value <= 1:
-                raise ValueError(f"{name} must be finite and in (0, 1]")
-        for name, value in (
+            if not math.isfinite(prob_val) or not 0 < prob_val <= 1:
+                raise ValueError(f"{prob_name} must be finite and in (0, 1]")
+        for score_name, score_val in (
             ("edge", self.edge),
             ("qss", self.qss),
             ("dqs", self.dqs),
             ("reliability", self.reliability),
         ):
-            if not math.isfinite(value):
-                raise ValueError(f"{name} must be a finite number")
-        for name, value in (
+            if not math.isfinite(score_val):
+                raise ValueError(f"{score_name} must be a finite number")
+        for band_name, band_val in (
             ("qss", self.qss),
             ("dqs", self.dqs),
             ("reliability", self.reliability),
         ):
-            if not 0 <= value <= 100:
-                raise ValueError(f"{name} must be in [0, 100]")
+            if not 0 <= band_val <= 100:
+                raise ValueError(f"{band_name} must be in [0, 100]")
         if self.quote_timestamp.tzinfo is None or self.quote_timestamp.utcoffset() is None:
             raise ValueError("quote_timestamp must be timezone-aware")
 

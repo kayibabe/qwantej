@@ -21,6 +21,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from datetime import datetime
+from typing import cast
 
 from qwantej.accumulator.optimiser import AccumulatorResult, build_ticket
 from qwantej.accumulator.policy import AccumulatorPolicy
@@ -171,7 +172,7 @@ def _manifest_hash(candidates: list[QualifiedSelection], as_of: datetime) -> str
             }
             for c in candidates
         ),
-        key=lambda d: d["prediction_id"],
+        key=lambda d: cast(str, d["prediction_id"]),
     )
     payload = json.dumps({"as_of": as_of.isoformat(), "candidates": entries}, sort_keys=True)
     return hashlib.sha256(payload.encode()).hexdigest()
