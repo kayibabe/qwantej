@@ -112,6 +112,7 @@ class WalkForwardConfig:
     allow_research_reliability_exception: bool = True
     value_policy: ValueGatePolicy = ValueGatePolicy()
     conservative_policy: ConservativePolicy = ConservativePolicy()
+    observation_manifest: tuple[dict[str, object], ...] = ()
 
     def __post_init__(self) -> None:
         if not self.version.strip() or not self.model_version.strip():

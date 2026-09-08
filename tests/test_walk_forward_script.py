@@ -41,6 +41,8 @@ from scripts.run_walk_forward import (  # noqa: E402
     _build_backtest_observations,
     _data_snapshot_ref,
     _eligible_walk_forward_row,
+    _observation_manifest,
+    _observation_manifest_hash,
 )
 
 # ---------------------------------------------------------------------------
@@ -403,3 +405,19 @@ class TestAllLeaguesScoping:
         ref = _data_snapshot_ref(_cfg(league_id=140, season=2025))
         assert "league=140" in ref
         assert "season=2025" in ref
+
+    def test_observation_manifest_keeps_all_evaluator_inputs(self):
+        observation = _obs()
+        manifest = _observation_manifest([observation])
+        assert manifest[0]["model_probabilities"] == [0.55, 0.25, 0.20]
+        assert manifest[0]["probability_change"] == 0.0
+        assert manifest[0]["drift_score"] == 0.0
+
+    def test_observation_manifest_hash_changes_with_model_inputs(self):
+        from dataclasses import replace
+
+        first = _observation_manifest_hash([_obs()])
+        second = _observation_manifest_hash(
+            [replace(_obs(), model_probabilities=(0.60, 0.20, 0.20))]
+        )
+        assert first != second

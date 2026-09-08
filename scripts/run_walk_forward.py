@@ -23,7 +23,7 @@ import hashlib
 import json
 import logging
 import sys
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -377,7 +377,8 @@ def _run_backtest(
     )
 
     report = walk_forward_backtest(observations, config=wf_config)
-    return report, wf_config
+    manifest = tuple(_observation_manifest(observations))
+    return report, replace(wf_config, observation_manifest=manifest)
 
 
 def _eligible_walk_forward_row(observation: Any) -> bool:
@@ -482,32 +483,25 @@ def _data_snapshot_ref(cfg: ExperimentConfig) -> str:
     return ":".join(parts)
 
 
+def _observation_manifest(observations: list[Any]) -> list[dict[str, object]]:
+    """Return every decision-critical field supplied to the backtest."""
+
+    manifest = []
+    for observation in sorted(observations, key=lambda item: item.observation_id):
+        row = asdict(observation)
+        for key, value in row.items():
+            if isinstance(value, datetime):
+                row[key] = value.isoformat()
+            elif isinstance(value, tuple):
+                row[key] = list(value)
+        manifest.append(row)
+    return manifest
+
+
 def _observation_manifest_hash(observations: list[Any]) -> str:
     """Hash the exact observation rows supplied to the backtest."""
 
-    manifest = [
-        {
-            "observation_id": observation.observation_id,
-            "decision_as_of": observation.decision_as_of.isoformat(),
-            "feature_as_of": observation.feature_as_of.isoformat(),
-            "outcome_observed_at": (
-                observation.outcome_observed_at.isoformat()
-                if observation.outcome_observed_at is not None
-                else None
-            ),
-            "model_version": observation.model_version,
-            "raw_probability": observation.raw_probability,
-            "outcome": observation.outcome,
-            "fair_market_probability": observation.fair_market_probability,
-            "executable_odds": observation.executable_odds,
-            "quote_timestamp": (
-                observation.quote_timestamp.isoformat()
-                if observation.quote_timestamp is not None
-                else None
-            ),
-        }
-        for observation in sorted(observations, key=lambda item: item.observation_id)
-    ]
+    manifest = _observation_manifest(observations)
     canonical = json.dumps(manifest, sort_keys=True, separators=(",", ":"))
     return f"sha256:{hashlib.sha256(canonical.encode()).hexdigest()}"
 
@@ -570,6 +564,12 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    if not args.skip_ingest:
+        log.error(
+            "Refusing current-state ingestion for a point-in-time walk-forward; "
+            "use --skip-ingest with an existing historical snapshot archive"
+        )
+        sys.exit(2)
     cfg = ExperimentConfig(
         league_id=args.league,
         season=args.season,
@@ -586,7 +586,6 @@ def main() -> None:
 
     from backend.core.config import get_settings
     from backend.core.db import make_engine, session_scope
-    from backend.services.api_football_client import ApiFootballClient
 
     settings = get_settings()
     if not settings.database_url.startswith("postgresql"):
@@ -597,19 +596,9 @@ def main() -> None:
 
     started_at = datetime.now(UTC)
 
-    # Phase 1: ingestion (committed independently)
-    if not args.skip_ingest:
-        if not settings.api_football_key.strip():
-            log.error("API_FOOTBALL_KEY is not set")
-            sys.exit(1)
-        client = ApiFootballClient.from_settings(settings)
-        with session_scope(engine) as session:
-            _ingest_season(client, session, cfg)
-            if cfg.dry_run:
-                session.rollback()
-                log.info("Dry-run: ingestion changes rolled back")
-
-    # Phase 2: feature extraction + backtest + record experiment
+    # Feature extraction + backtest + record experiment.  A walk-forward run
+    # consumes an existing archive of provider snapshots; it must not create
+    # current-time captures and then mistake them for historical availability.
     with session_scope(engine) as session:
         observations = _build_backtest_observations(session, cfg)
         cfg.observation_manifest_hash = _observation_manifest_hash(observations)
