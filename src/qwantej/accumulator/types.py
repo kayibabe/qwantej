@@ -11,6 +11,88 @@ from enum import StrEnum
 from qwantej.bankroll.state import ProductTier
 
 
+@dataclass(frozen=True)
+class QualifiedSelection:
+    """A prediction that passed the value gate and is ready for accumulator consideration.
+
+    Carries full model/data lineage so every downstream decision is traceable.
+    `quote_timestamp` drives price-freshness checks inside the leg gate.
+    """
+
+    prediction_id: str
+    fixture_id: str
+    league_id: str
+    market_family: str
+    selection: str
+    calibrated_probability: float
+    conservative_probability: float
+    decimal_odds: Decimal
+    edge: float
+    qss: float
+    dqs: float
+    reliability: float
+    quote_timestamp: datetime
+    model_version: str
+    calibration_version: str
+    feature_version: str
+    code_commit: str
+    input_snapshot_hash: str | None = None
+
+    def __post_init__(self) -> None:
+        for field_name, value in (
+            ("prediction_id", self.prediction_id),
+            ("fixture_id", self.fixture_id),
+            ("league_id", self.league_id),
+            ("market_family", self.market_family),
+            ("selection", self.selection),
+            ("model_version", self.model_version),
+            ("calibration_version", self.calibration_version),
+            ("feature_version", self.feature_version),
+            ("code_commit", self.code_commit),
+        ):
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"{field_name} must be a non-blank string")
+        if not isinstance(self.decimal_odds, Decimal):
+            raise ValueError("decimal_odds must be a Decimal")
+        if not self.decimal_odds.is_finite() or self.decimal_odds <= 1:
+            raise ValueError("decimal_odds must be a finite Decimal > 1")
+        for name, value in (
+            ("calibrated_probability", self.calibrated_probability),
+            ("conservative_probability", self.conservative_probability),
+        ):
+            if not math.isfinite(value) or not 0 < value <= 1:
+                raise ValueError(f"{name} must be finite and in (0, 1]")
+        for name, value in (
+            ("edge", self.edge),
+            ("qss", self.qss),
+            ("dqs", self.dqs),
+            ("reliability", self.reliability),
+        ):
+            if not math.isfinite(value):
+                raise ValueError(f"{name} must be a finite number")
+        for name, value in (("qss", self.qss), ("dqs", self.dqs), ("reliability", self.reliability)):
+            if not 0 <= value <= 100:
+                raise ValueError(f"{name} must be in [0, 100]")
+        if self.quote_timestamp.tzinfo is None or self.quote_timestamp.utcoffset() is None:
+            raise ValueError("quote_timestamp must be timezone-aware")
+
+    def to_leg(self) -> "AccumulatorLeg":
+        """Return an AccumulatorLeg for the optimiser, using quote_timestamp as captured_at."""
+        return AccumulatorLeg(
+            fixture_id=self.fixture_id,
+            league_id=self.league_id,
+            market_family=self.market_family,
+            selection=self.selection,
+            decimal_odds=self.decimal_odds,
+            conservative_probability=self.conservative_probability,
+            edge=self.edge,
+            qss=self.qss,
+            dqs=self.dqs,
+            reliability=self.reliability,
+            captured_at=self.quote_timestamp,
+        )
+
+
 class AccumulatorRejectionReason(StrEnum):
     INSUFFICIENT_QUALIFIED_LEGS = "INSUFFICIENT_QUALIFIED_LEGS"
     NO_VALID_COMBINATION = "NO_VALID_COMBINATION"
