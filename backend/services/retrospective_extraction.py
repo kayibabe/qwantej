@@ -76,6 +76,12 @@ def extract_retrospective_features(
     ``kickoff_utc`` strictly before *fixture.kickoff_utc*.  No snapshot
     timestamp check is performed.
 
+    Prior seasons within the same competition are included intentionally:
+    the ELO rating chain is continuous across seasons and early-season
+    predictions benefit from all available competition history.  Restricting
+    to the current season would produce artificially uncertain ELO estimates.
+    No snapshot timestamp check is performed.
+
     Returns ``(MatchFeatures, historical_results)`` where ``historical_results``
     is the ordered list of results fed to the feature computation — pass it to
     ``retrospective_fixture_hash()`` to build a provenance fingerprint.
@@ -160,12 +166,13 @@ def retrospective_fixture_hash(results: list[RetrospectiveResult]) -> str:
 def retrospective_dataset_hash(observations: list) -> str:
     """SHA-256 content hash of the complete observation dataset.
 
-    Covers observation_id (= target fixture id), decision_as_of, outcome,
-    raw_probability, and model_probabilities for every evaluation row.
-    A change to any target fixture's outcome or feature inputs produces a
+    Hashes every field that affects row rejection or calibrator training:
+    observation_id, decision_as_of, feature_as_of, outcome_observed_at,
+    outcome, raw_probability, model_probabilities, and model_version.
+    A change to any of these — including the timestamps that determine
+    temporal-order rejection and calibrator eligibility — produces a
     different fingerprint.  Use this as the primary ``data_snapshot_ref``
-    in research experiment records so the full evaluation set is content-
-    addressed, not just the historical training inputs.
+    in research experiment records.
     """
     import json as _json
 
@@ -173,9 +180,12 @@ def retrospective_dataset_hash(observations: list) -> str:
         {
             "id": obs.observation_id,
             "decision_as_of": obs.decision_as_of.isoformat(),
+            "feature_as_of": obs.feature_as_of.isoformat(),
+            "outcome_observed_at": obs.outcome_observed_at.isoformat(),
             "outcome": obs.outcome,
             "raw_probability": obs.raw_probability,
             "model_probabilities": list(obs.model_probabilities),
+            "model_version": obs.model_version,
         }
         for obs in sorted(observations, key=lambda o: o.observation_id)
     ]

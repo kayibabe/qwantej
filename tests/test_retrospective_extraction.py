@@ -398,6 +398,51 @@ class TestRetrospectiveDatasetHash:
         h2 = retrospective_dataset_hash([])
         assert h1 == h2
 
+    def test_changed_feature_as_of_changes_hash(self) -> None:
+        obs_a = self._make_obs(0)
+        from qwantej.performance.calibration_backtest import CalibrationObservationRow
+
+        obs_b = CalibrationObservationRow(
+            observation_id=obs_a.observation_id,
+            decision_as_of=obs_a.decision_as_of,
+            feature_as_of=obs_a.feature_as_of - timedelta(hours=1),  # shifted
+            outcome_observed_at=obs_a.outcome_observed_at,
+            model_version=obs_a.model_version,
+            raw_probability=obs_a.raw_probability,
+            outcome=obs_a.outcome,
+        )
+        assert retrospective_dataset_hash([obs_a]) != retrospective_dataset_hash([obs_b])
+
+    def test_changed_outcome_observed_at_changes_hash(self) -> None:
+        obs_a = self._make_obs(1)
+        from qwantej.performance.calibration_backtest import CalibrationObservationRow
+
+        obs_b = CalibrationObservationRow(
+            observation_id=obs_a.observation_id,
+            decision_as_of=obs_a.decision_as_of,
+            feature_as_of=obs_a.feature_as_of,
+            outcome_observed_at=obs_a.outcome_observed_at + timedelta(hours=6),  # shifted
+            model_version=obs_a.model_version,
+            raw_probability=obs_a.raw_probability,
+            outcome=obs_a.outcome,
+        )
+        assert retrospective_dataset_hash([obs_a]) != retrospective_dataset_hash([obs_b])
+
+    def test_changed_model_version_changes_hash(self) -> None:
+        obs_a = self._make_obs(2)
+        from qwantej.performance.calibration_backtest import CalibrationObservationRow
+
+        obs_b = CalibrationObservationRow(
+            observation_id=obs_a.observation_id,
+            decision_as_of=obs_a.decision_as_of,
+            feature_as_of=obs_a.feature_as_of,
+            outcome_observed_at=obs_a.outcome_observed_at,
+            model_version="other-model:2.0",  # different
+            raw_probability=obs_a.raw_probability,
+            outcome=obs_a.outcome,
+        )
+        assert retrospective_dataset_hash([obs_a]) != retrospective_dataset_hash([obs_b])
+
 
 class TestRetrospectiveFeatures:
     def test_historical_count_matches_qualified_fixtures(self, session: Session) -> None:

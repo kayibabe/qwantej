@@ -157,6 +157,34 @@ touching anything under model/ensemble/calibration/forecast code.
   because it measurably improves calibration/Brier score on held-out data,
   not because it seems intuitively useful.
 
+### Retrospective research evaluator
+
+`scripts/run_retrospective_eval.py` and `backend/services/retrospective_extraction.py`
+implement a **non-PIT-certified** calibration evaluator for research use only.
+
+Key design decisions that must be preserved:
+
+- **Not PIT-certified.** Features are derived from canonical mutable fixture
+  rows (`Fixture.home_goals`, `Fixture.away_goals`, etc.), not from immutable
+  provider snapshots whose `as_of_timestamp` precedes the simulated decision
+  cutoff.  A zero `temporal_order_rejections` count does not imply historical
+  availability — it only means ordering constraints within the supplied
+  observation set are internally consistent.
+- **Cross-season history is intentional.** The extractor queries all finished
+  fixtures in the same competition regardless of season.  ELO ratings are
+  a continuous chain across seasons; restricting to the current season
+  would produce artificially uncertain ratings for early-season fixtures.
+- **`leakage_rows_rejected` is always 0** for research runs.
+  The weaker `temporal_order_rejections` count is stored only in the metrics
+  JSON so it is queryable without polluting the PIT-leakage column semantic.
+- **Provenance hashes**: every research experiment record embeds a
+  `data_snapshot_ref` containing two SHA-256 digests — one over the full
+  observation set (all fields that affect rejection or calibrator training),
+  one over the historical training fixture inputs.  A change to any mutable
+  fixture column changes the hash and flags the record as derived from
+  different data.  The hash is an integrity identifier, not a restorable
+  snapshot; canonical mutable state cannot be reconstructed from it alone.
+
 ## 5. Multi-Agent Collaboration
 
 Qwantej is built with two coding agents — Claude Code and Codex — used in

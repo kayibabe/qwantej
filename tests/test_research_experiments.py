@@ -25,7 +25,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from backend.models import Base, ExperimentStatus
+from backend.models import Base, Experiment, ExperimentStatus
 from backend.services.experiments import (
     ExperimentIdentity,
     complete_research_experiment,
@@ -131,6 +131,14 @@ def _build_report(n: int = 60):
 
 
 class TestStartResearchExperiment:
+    def test_data_snapshot_ref_stored_verbatim(self, session: Session) -> None:
+        """The persistence layer must not alter the caller-supplied snapshot ref."""
+        identity = _identity()
+        experiment = start_research_experiment(
+            session, identity=identity, config=_config(), started_at=BASE
+        )
+        assert experiment.data_snapshot_ref == identity.data_snapshot_ref
+
     def test_sentinel_value_policy(self, session: Session) -> None:
         identity = _identity()
         experiment = start_research_experiment(
@@ -293,3 +301,25 @@ class TestCompleteResearchExperiment:
         )
         # Same report → same hash regardless of experiment name
         assert exp_a.result_hash == exp_b.result_hash
+
+    def test_round_trip_enum_and_json_survive_db_cycle(self, session: Session) -> None:
+        """Expire the identity-map entry and reload from SQLite to verify that
+        JSON blobs and enum strings survive a full ORM round-trip."""
+        report, cfg = _build_report(60)
+        experiment = start_research_experiment(
+            session, identity=_identity("round-trip"), config=cfg, started_at=BASE
+        )
+        complete_research_experiment(
+            session, experiment, report, finished_at=BASE + timedelta(hours=1)
+        )
+        session.flush()
+        exp_id = experiment.id
+        # Evict from the identity map so the next access hits the DB
+        session.expire(experiment)
+        reloaded = session.get(Experiment, exp_id)
+        assert reloaded.status is ExperimentStatus.SUCCEEDED
+        assert reloaded.leakage_rows_rejected == 0
+        assert reloaded.result_hash.startswith("sha256:")
+        assert reloaded.configuration["pit_certified"] is False
+        assert reloaded.configuration["research_mode"] is True
+        assert "temporal_order_rejections" in reloaded.metrics
