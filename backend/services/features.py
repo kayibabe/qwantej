@@ -154,11 +154,39 @@ def verify_feature_snapshot(session: Session, snapshot: FeatureSnapshot) -> bool
     ):
         return False
 
-    # If this snapshot carries an ELO/Poisson training hash, re-derive the
-    # point-in-time training set from the DB and verify that the result data
-    # (id:home_goals:away_goals) still matches the stored digest.
-    stored_training_hash = snapshot.features.get("_training_fixture_ids_hash")
+    # Walk-forward snapshots use immutable provider result observations.  Keep
+    # the older mutable-Fixture verification path for snapshots created before
+    # the result-snapshot lineage was introduced.
+    stored_training_hash = snapshot.features.get("_training_result_snapshot_hash")
     if stored_training_hash is not None:
+        from backend.services.feature_extraction import (
+            fixture_result_as_of,
+            historical_training_hash,
+        )
+
+        fixture = session.get(Fixture, snapshot.fixture_id)
+        if fixture is None:
+            return False
+        as_of_utc = _as_utc(snapshot.as_of_timestamp)
+        training_rows = session.scalars(
+            select(Fixture)
+            .where(
+                Fixture.competition_id == fixture.competition_id,
+                Fixture.kickoff_utc < as_of_utc,
+                Fixture.id != fixture.id,
+            )
+            .order_by(Fixture.kickoff_utc, Fixture.id)
+        ).all()
+        settled = [
+            result
+            for row in training_rows
+            if (result := fixture_result_as_of(session, row, as_of=as_of_utc)) is not None
+        ]
+        if historical_training_hash(settled) != stored_training_hash:
+            return False
+
+    stored_legacy_hash = snapshot.features.get("_training_fixture_ids_hash")
+    if stored_legacy_hash is not None:
         fixture = session.get(Fixture, snapshot.fixture_id)
         if fixture is None:
             return False
@@ -173,12 +201,12 @@ def verify_feature_snapshot(session: Session, snapshot: FeatureSnapshot) -> bool
             )
             .order_by(Fixture.kickoff_utc, Fixture.id)
         ).all()
-        settled = [
+        legacy_settled = [
             r for r in training_rows
             if r.home_goals is not None and r.away_goals is not None
         ]
         from backend.services.feature_extraction import historical_training_hash
-        if historical_training_hash(settled) != stored_training_hash:
+        if historical_training_hash(legacy_settled) != stored_legacy_hash:
             return False
 
     return True

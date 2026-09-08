@@ -26,11 +26,19 @@ from backend.models import (  # noqa: E402
     Fixture,
     FixtureStatus,
     Season,
+    StatsSnapshot,
+    StatsSubjectType,
     Team,
+)
+from backend.services.feature_extraction import (  # noqa: E402
+    extract_fixture_features,
+    fixture_result_as_of,
+    fixture_result_observed_after_kickoff,
 )
 from qwantej.performance.backtest import BacktestObservation  # noqa: E402
 from scripts.run_walk_forward import (  # noqa: E402
     ExperimentConfig,
+    _build_backtest_observations,
     _data_snapshot_ref,
     _eligible_walk_forward_row,
 )
@@ -88,19 +96,19 @@ def _obs(*, decision_offset_days: int = 0, has_odds: bool = True) -> BacktestObs
 class TestDataSnapshotRef:
     def test_single_league_standard(self):
         ref = _data_snapshot_ref(_cfg(league_id=39, season=2026))
-        assert ref == "api-football:league=39:season=2026"
+        assert ref == "api-football:league=39:season=2026:n_recent=30"
 
     def test_single_league_calibration_only(self):
         ref = _data_snapshot_ref(_cfg(league_id=39, season=2026, calibration_only=True))
-        assert ref == "api-football:league=39:season=2026:calibration-only"
+        assert ref == "api-football:league=39:season=2026:n_recent=30:calibration-only"
 
     def test_all_leagues_standard(self):
         ref = _data_snapshot_ref(_cfg(all_leagues=True))
-        assert ref == "api-football:all-leagues"
+        assert ref == "api-football:all-leagues:n_recent=30"
 
     def test_all_leagues_calibration_only(self):
         ref = _data_snapshot_ref(_cfg(all_leagues=True, calibration_only=True))
-        assert ref == "api-football:all-leagues:calibration-only"
+        assert ref == "api-football:all-leagues:n_recent=30:calibration-only"
 
     def test_calibration_only_flag_makes_refs_distinct(self):
         standard = _data_snapshot_ref(_cfg())
@@ -208,6 +216,41 @@ def _seed_finished_fixture(session: Session, *, kickoff: datetime) -> Fixture:
     return fixture
 
 
+def _add_fixture_result_snapshot(
+    session: Session,
+    fixture: Fixture,
+    *,
+    captured_at: datetime,
+    home_goals: int,
+    away_goals: int,
+) -> StatsSnapshot:
+    record = {
+        "fixture": {
+            "id": str(fixture.id),
+            "timestamp": int(fixture.kickoff_utc.timestamp()),
+            "date": fixture.kickoff_utc.isoformat(),
+            "status": {"short": "FT"},
+            "venue": {"name": "Test Ground"},
+        },
+        "league": {"id": 39, "name": "Test League", "country": "Test", "season": 2026},
+        "teams": {
+            "home": {"id": str(fixture.home_team_id), "name": "Home FC"},
+            "away": {"id": str(fixture.away_team_id), "name": "Away FC"},
+        },
+        "goals": {"home": home_goals, "away": away_goals},
+    }
+    snapshot = StatsSnapshot(
+        subject_type=StatsSubjectType.FIXTURE,
+        fixture_id=fixture.id,
+        as_of_timestamp=captured_at,
+        payload={"endpoint": "fixtures", "record": record},
+        source="api-football:fixtures",
+    )
+    session.add(snapshot)
+    session.flush()
+    return snapshot
+
+
 class TestCalibrationOnlyObservationInclusion:
     """Observations without odds are kept only in --calibration-only mode."""
 
@@ -232,6 +275,107 @@ class TestCalibrationOnlyObservationInclusion:
             odds_ids = ["some-id"]
             should_skip = not odds_ids and not cfg.calibration_only
             assert not should_skip
+
+
+class TestPointInTimeResultSources:
+    def test_result_comes_from_immutable_snapshot_not_mutable_fixture(self, mem_session):
+        kickoff = datetime(2026, 9, 6, 12, tzinfo=UTC)
+        fixture = _seed_finished_fixture(mem_session, kickoff=kickoff)
+        fixture.home_goals = 9
+        fixture.away_goals = 9
+        observed_at = kickoff + timedelta(hours=2)
+        _add_fixture_result_snapshot(
+            mem_session,
+            fixture,
+            captured_at=observed_at,
+            home_goals=0,
+            away_goals=1,
+        )
+
+        assert fixture_result_observed_after_kickoff(mem_session, fixture).home_goals == 0
+        result = fixture_result_as_of(
+            mem_session,
+            fixture,
+            as_of=observed_at + timedelta(minutes=1),
+        )
+        assert result is not None
+        assert (result.home_goals, result.away_goals) == (0, 1)
+        assert result.observed_at == observed_at
+
+    def test_feature_history_uses_only_results_observed_by_cutoff(self, mem_session):
+        target_kickoff = datetime(2026, 9, 6, 12, tzinfo=UTC)
+        target = _seed_finished_fixture(mem_session, kickoff=target_kickoff)
+        historical = Fixture(
+            competition=target.competition,
+            season=target.season,
+            home_team=target.home_team,
+            away_team=target.away_team,
+            kickoff_utc=datetime(2026, 9, 5, 12, tzinfo=UTC),
+            status=FixtureStatus.FINISHED,
+            home_goals=9,
+            away_goals=9,
+        )
+        mem_session.add(historical)
+        mem_session.flush()
+        _add_fixture_result_snapshot(
+            mem_session,
+            historical,
+            captured_at=datetime(2026, 9, 5, 14, tzinfo=UTC),
+            home_goals=1,
+            away_goals=0,
+        )
+
+        _, _, _, history = extract_fixture_features(
+            mem_session,
+            target,
+            as_of=target_kickoff - timedelta(hours=2),
+            n_recent=30,
+        )
+        assert [(row.home_goals, row.away_goals) for row in history] == [(1, 0)]
+
+
+class TestBuildBacktestObservationBranches:
+    def test_all_leagues_calibration_only_uses_pit_result_and_no_odds(self, mem_session):
+        target_kickoff = datetime(2026, 9, 6, 12, tzinfo=UTC)
+        target = _seed_finished_fixture(mem_session, kickoff=target_kickoff)
+        for index in range(3):
+            historical = Fixture(
+                competition=target.competition,
+                season=target.season,
+                home_team=target.home_team,
+                away_team=target.away_team,
+                kickoff_utc=datetime(2026, 8, 1 + index, 12, tzinfo=UTC),
+                status=FixtureStatus.FINISHED,
+                home_goals=8,
+                away_goals=8,
+            )
+            mem_session.add(historical)
+            mem_session.flush()
+            _add_fixture_result_snapshot(
+                mem_session,
+                historical,
+                captured_at=historical.kickoff_utc + timedelta(hours=2),
+                home_goals=index + 1,
+                away_goals=index,
+            )
+        _add_fixture_result_snapshot(
+            mem_session,
+            target,
+            captured_at=target_kickoff + timedelta(hours=2),
+            home_goals=0,
+            away_goals=1,
+        )
+
+        calibration_cfg = _cfg(calibration_only=True, all_leagues=True)
+        observations = _build_backtest_observations(mem_session, calibration_cfg)
+        assert len(observations) == 1
+        assert observations[0].observation_id == str(target.id)
+        assert observations[0].outcome == 0
+        assert observations[0].outcome_observed_at == target_kickoff + timedelta(hours=2)
+        assert observations[0].fair_market_probability is None
+
+        standard_cfg = _cfg(calibration_only=False, all_leagues=True)
+        assert _build_backtest_observations(mem_session, standard_cfg) == []
 
 
 # ---------------------------------------------------------------------------

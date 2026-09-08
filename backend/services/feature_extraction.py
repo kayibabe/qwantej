@@ -11,17 +11,33 @@ from __future__ import annotations
 import hashlib
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.models import Fixture, FixtureStatus, OddsQuote, StatsSnapshot
+from backend.models import Fixture, OddsQuote, StatsSnapshot
 from qwantej.features.engineering import (
     HistoricalResult,
     MatchFeatures,
     compute_match_features,
 )
+
+FIXTURE_SNAPSHOT_SOURCE = "api-football:fixtures"
+
+
+@dataclass(frozen=True)
+class HistoricalFixtureResult:
+    """A fixture result proven by an immutable provider snapshot."""
+
+    fixture_id: uuid.UUID
+    home_team_id: uuid.UUID
+    away_team_id: uuid.UUID
+    kickoff_utc: datetime
+    home_goals: int
+    away_goals: int
+    observed_at: datetime
 
 
 class FeatureExtractionError(ValueError):
@@ -39,14 +55,15 @@ def extract_fixture_features(
     initial_elo: float = 1500.0,
     league_home_avg_fallback: float = 1.5,
     league_away_avg_fallback: float = 1.2,
-) -> tuple[MatchFeatures, list[uuid.UUID], list[uuid.UUID], list[Fixture]]:
+) -> tuple[MatchFeatures, list[uuid.UUID], list[uuid.UUID], list[HistoricalFixtureResult]]:
     """Extract features for *fixture* from the DB, using only data before *as_of*.
 
     Returns ``(MatchFeatures, stats_snapshot_ids, odds_quote_ids, historical_rows_settled)``.
     ``stats_snapshot_ids`` and ``odds_quote_ids`` are the odds/stats source rows used;
-    ``historical_rows_settled`` are the settled Fixture ORM rows whose results were fed
-    to the ELO and Poisson computation — pass them to ``historical_training_hash()``
-    to embed a content-addressed digest in the feature snapshot.
+    ``historical_rows_settled`` are immutable provider-backed result records
+    whose results were fed to the ELO and Poisson computation — pass them to
+    ``historical_training_hash()`` to embed a content-addressed digest in the
+    feature snapshot.
 
     Raises FeatureExtractionError if the feature point-in-time contract is
     violated (e.g. as_of is not before kickoff).
@@ -61,30 +78,35 @@ def extract_fixture_features(
             f"({kickoff.isoformat()})"
         )
 
-    # Load all finished fixtures in the same competition before as_of.
-    # The competition scope prevents cross-league data leakage (different leagues
-    # have different goal distributions and strength pools).
-    historical_rows = session.scalars(
+    # Load fixtures in the same competition before as_of.  The competition
+    # scope prevents cross-league data leakage (different leagues have
+    # different goal distributions and strength pools).  Do not use the
+    # mutable Fixture.status/goals columns here: only immutable provider
+    # snapshots captured by as_of may supply a historical result.
+    historical_fixtures = session.scalars(
         select(Fixture)
         .where(
             Fixture.competition_id == fixture.competition_id,
-            Fixture.status == FixtureStatus.FINISHED,
             Fixture.kickoff_utc < as_of_utc,
             Fixture.id != fixture.id,
         )
         .order_by(Fixture.kickoff_utc, Fixture.id)
     ).all()
 
+    historical_rows_settled = [
+        result
+        for row in historical_fixtures
+        if (result := fixture_result_as_of(session, row, as_of=as_of_utc)) is not None
+    ]
     historical = [
         HistoricalResult(
             home_team_id=str(row.home_team_id),
             away_team_id=str(row.away_team_id),
-            home_goals=row.home_goals or 0,
-            away_goals=row.away_goals or 0,
-            kickoff_utc=_as_utc(row.kickoff_utc),
+            home_goals=row.home_goals,
+            away_goals=row.away_goals,
+            kickoff_utc=row.kickoff_utc,
         )
-        for row in historical_rows
-        if row.home_goals is not None and row.away_goals is not None
+        for row in historical_rows_settled
     ]
 
     features = compute_match_features(
@@ -102,31 +124,105 @@ def extract_fixture_features(
     # Record source ids for lineage
     stats_ids = _fixture_stats_ids(session, fixture.id, as_of_utc)
     odds_ids = _fixture_odds_ids(session, fixture.id, as_of_utc)
-    # Settled rows actually fed into ELO/Poisson (home_goals/away_goals not None).
-    # Returned as ORM objects so callers can pass them directly to
-    # historical_training_hash(), which covers both IDs and result data.
-    historical_rows_settled = [
-        row for row in historical_rows
-        if row.home_goals is not None and row.away_goals is not None
-    ]
-
     return features, stats_ids, odds_ids, historical_rows_settled
 
 
-def historical_training_hash(fixture_rows: Sequence[Fixture]) -> str:
-    """SHA-256 hex digest of the settled training fixtures, covering result data.
+def historical_training_hash(fixture_rows: Sequence[object]) -> str:
+    """SHA-256 hex digest of training results, including observation time.
 
-    Each entry is ``<id>:<home_goals>:<away_goals>`` so any change to a
-    result (not just the set of fixture IDs) changes the digest.  Include this
-    as ``_training_fixture_ids_hash`` in the feature snapshot; verification
-    re-queries the same point-in-time training set and recomputes the digest.
+    For point-in-time results each entry includes the immutable snapshot
+    capture time.  The legacy ``Fixture`` shape remains supported for existing
+    feature snapshots that predate snapshot-backed result lineage.
     """
     entries = sorted(
-        f"{row.id}:{row.home_goals or 0}:{row.away_goals or 0}"
+        _training_hash_entry(row)
         for row in fixture_rows
     )
     payload = "\n".join(entries).encode()
     return hashlib.sha256(payload).hexdigest()
+
+
+def fixture_result_as_of(
+    session: Session, fixture: Fixture, *, as_of: datetime
+) -> HistoricalFixtureResult | None:
+    """Return the latest certified result known by *as_of*, if any."""
+
+    _require_aware(as_of, "as_of")
+    as_of_utc = as_of.astimezone(UTC)
+    kickoff = _as_utc(fixture.kickoff_utc)
+    rows = session.scalars(
+        select(StatsSnapshot)
+        .where(
+            StatsSnapshot.fixture_id == fixture.id,
+            StatsSnapshot.source == FIXTURE_SNAPSHOT_SOURCE,
+            StatsSnapshot.as_of_timestamp <= as_of_utc,
+        )
+        .order_by(StatsSnapshot.as_of_timestamp.desc(), StatsSnapshot.id.desc())
+    ).all()
+    for snapshot in rows:
+        result = _snapshot_result(snapshot, fixture)
+        if result is not None and result.observed_at > kickoff:
+            return result
+    return None
+
+
+def fixture_result_observed_after_kickoff(
+    session: Session, fixture: Fixture
+) -> HistoricalFixtureResult | None:
+    """Return the first certified final result observed after kickoff."""
+
+    kickoff = _as_utc(fixture.kickoff_utc)
+    rows = session.scalars(
+        select(StatsSnapshot)
+        .where(
+            StatsSnapshot.fixture_id == fixture.id,
+            StatsSnapshot.source == FIXTURE_SNAPSHOT_SOURCE,
+            StatsSnapshot.as_of_timestamp > kickoff,
+        )
+        .order_by(StatsSnapshot.as_of_timestamp, StatsSnapshot.id)
+    ).all()
+    for snapshot in rows:
+        result = _snapshot_result(snapshot, fixture)
+        if result is not None:
+            return result
+    return None
+
+
+def _snapshot_result(snapshot: StatsSnapshot, fixture: Fixture) -> HistoricalFixtureResult | None:
+    from qwantej.fixtures import parse_fixture
+
+    payload = snapshot.payload
+    record = payload.get("record") if isinstance(payload, dict) else None
+    if not isinstance(record, dict):
+        return None
+    try:
+        parsed = parse_fixture(record)
+    except (TypeError, ValueError):
+        return None
+    if parsed.status != "finished" or parsed.home_goals is None or parsed.away_goals is None:
+        return None
+    return HistoricalFixtureResult(
+        fixture_id=fixture.id,
+        home_team_id=fixture.home_team_id,
+        away_team_id=fixture.away_team_id,
+        kickoff_utc=_as_utc(fixture.kickoff_utc),
+        home_goals=parsed.home_goals,
+        away_goals=parsed.away_goals,
+        observed_at=_as_utc(snapshot.as_of_timestamp),
+    )
+
+
+def _training_hash_entry(row: object) -> str:
+    row_id = getattr(row, "fixture_id", getattr(row, "id", None))
+    home_goals = getattr(row, "home_goals", None)
+    away_goals = getattr(row, "away_goals", None)
+    observed_at = getattr(row, "observed_at", None)
+    if observed_at is None:
+        return f"{row_id}:{home_goals or 0}:{away_goals or 0}"
+    return (
+        f"{row_id}:{home_goals}:{away_goals}:"
+        f"{_as_utc(observed_at).isoformat()}"
+    )
 
 
 def _fixture_stats_ids(

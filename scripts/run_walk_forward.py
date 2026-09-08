@@ -19,6 +19,8 @@ calibration is trained on the train window only (framework section 41).
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import logging
 import sys
 from dataclasses import dataclass
@@ -53,6 +55,7 @@ class ExperimentConfig:
     name: str
     calibration_only: bool = False
     all_leagues: bool = False
+    observation_manifest_hash: str | None = None
 
 
 def _ingest_season(client: Any, session: Any, cfg: ExperimentConfig) -> None:
@@ -84,9 +87,10 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
 
     from sqlalchemy import and_, or_, select
 
-    from backend.models import Fixture, FixtureStatus
+    from backend.models import Fixture
     from backend.services.feature_extraction import (
         extract_fixture_features,
+        fixture_result_observed_after_kickoff,
         historical_training_hash,
     )
     from backend.services.features import create_feature_snapshot
@@ -105,7 +109,6 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
         finished_fixtures = session.scalars(
             select(Fixture)
             .where(
-                Fixture.status == FixtureStatus.FINISHED,
                 or_(
                     and_(
                         Fixture.kickoff_utc >= train_from_utc,
@@ -116,8 +119,6 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
                         Fixture.kickoff_utc <= test_to_utc,
                     ),
                 ),
-                Fixture.home_goals.is_not(None),
-                Fixture.away_goals.is_not(None),
             )
             .order_by(Fixture.kickoff_utc)
         ).all()
@@ -153,7 +154,6 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
             .where(
                 Fixture.competition_id == competition_id,
                 Fixture.season_id == season_id,
-                Fixture.status == FixtureStatus.FINISHED,
                 or_(
                     and_(
                         Fixture.kickoff_utc >= train_from_utc,
@@ -164,13 +164,11 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
                         Fixture.kickoff_utc <= test_to_utc,
                     ),
                 ),
-                Fixture.home_goals.is_not(None),
-                Fixture.away_goals.is_not(None),
             )
             .order_by(Fixture.kickoff_utc)
         ).all()
 
-    log.info("Found %d finished fixtures in train+test window", len(finished_fixtures))
+    log.info("Found %d fixtures in train+test window", len(finished_fixtures))
     observations: list[BacktestObservation] = []
     skipped = 0
     code_commit = _current_code_commit()
@@ -180,6 +178,14 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
         if kickoff.tzinfo is None:
             kickoff = kickoff.replace(tzinfo=UTC)
         as_of = kickoff - timedelta(hours=2)  # simulate 2h pre-match decision
+
+        # The mutable canonical fixture row is not a point-in-time result
+        # source. Require an immutable provider snapshot observed after
+        # kickoff, and carry its actual capture time into the evaluator.
+        observed_result = fixture_result_observed_after_kickoff(session, fixture)
+        if observed_result is None:
+            skipped += 1
+            continue
 
         try:
             features, _stats_ids, odds_ids, hist_rows = extract_fixture_features(
@@ -244,15 +250,13 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
             for row in odds_rows.values():
                 if row.id not in source_odds_ids:
                     source_odds_ids.append(row.id)
-        # Build feature dict and embed training-set hash for P1 lineage (P1 fix):
-        # historical fixture IDs used by ELO/Poisson are not FK-tracked in the
-        # feature snapshot schema, so we commit to them via a content hash that
-        # enables independent replay: re-run the same DB query with the same
-        # as_of + competition scope, filter to settled rows, sort by ID, and
-        # compare the SHA-256 digest.
+        # Build feature dict and embed the immutable result-observation hash.
+        # Training results are not FK-tracked in the feature snapshot schema,
+        # so this content hash is the replay contract for the exact PIT source
+        # rows and capture times used by ELO/Poisson.
         feature_dict = features_to_dict(features)
         feature_dict["_training_fixture_count"] = float(len(hist_rows))
-        feature_dict["_training_fixture_ids_hash"] = historical_training_hash(hist_rows)
+        feature_dict["_training_result_snapshot_hash"] = historical_training_hash(hist_rows)
 
         if _stats_ids or source_odds_ids:
             create_feature_snapshot(
@@ -267,15 +271,8 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
                 code_commit=code_commit,
             )
 
-        outcome: int | None = None
-        outcome_observed_at: datetime | None = None
-        if fixture.home_goals is not None and fixture.away_goals is not None:
-            outcome = 1 if fixture.home_goals > fixture.away_goals else 0
-            # P2b: outcome_observed_at is an approximation (kickoff + 2 h) used
-            # for backtest eligibility only.  It is not a certified point-in-time
-            # timestamp — in production, use the actual fixture status change time
-            # from the provider (e.g. the stats_snapshot captured after FT status).
-            outcome_observed_at = kickoff + timedelta(hours=2)
+        outcome = int(observed_result.home_goals > observed_result.away_goals)
+        outcome_observed_at = observed_result.observed_at
 
         obs = BacktestObservation(
             observation_id=str(fixture.id),
@@ -477,9 +474,42 @@ def _data_snapshot_ref(cfg: ExperimentConfig) -> str:
         if cfg.all_leagues
         else f"api-football:league={cfg.league_id}:season={cfg.season}"
     )
+    parts = [base, f"n_recent={cfg.n_recent}"]
     if cfg.calibration_only:
-        return base + ":calibration-only"
-    return base
+        parts.append("calibration-only")
+    if cfg.observation_manifest_hash:
+        parts.append(f"manifest={cfg.observation_manifest_hash}")
+    return ":".join(parts)
+
+
+def _observation_manifest_hash(observations: list[Any]) -> str:
+    """Hash the exact observation rows supplied to the backtest."""
+
+    manifest = [
+        {
+            "observation_id": observation.observation_id,
+            "decision_as_of": observation.decision_as_of.isoformat(),
+            "feature_as_of": observation.feature_as_of.isoformat(),
+            "outcome_observed_at": (
+                observation.outcome_observed_at.isoformat()
+                if observation.outcome_observed_at is not None
+                else None
+            ),
+            "model_version": observation.model_version,
+            "raw_probability": observation.raw_probability,
+            "outcome": observation.outcome,
+            "fair_market_probability": observation.fair_market_probability,
+            "executable_odds": observation.executable_odds,
+            "quote_timestamp": (
+                observation.quote_timestamp.isoformat()
+                if observation.quote_timestamp is not None
+                else None
+            ),
+        }
+        for observation in sorted(observations, key=lambda item: item.observation_id)
+    ]
+    canonical = json.dumps(manifest, sort_keys=True, separators=(",", ":"))
+    return f"sha256:{hashlib.sha256(canonical.encode()).hexdigest()}"
 
 
 def _current_code_commit() -> str:
@@ -582,6 +612,7 @@ def main() -> None:
     # Phase 2: feature extraction + backtest + record experiment
     with session_scope(engine) as session:
         observations = _build_backtest_observations(session, cfg)
+        cfg.observation_manifest_hash = _observation_manifest_hash(observations)
         if not observations:
             log.warning("No observations built - cannot run backtest")
             sys.exit(0)
