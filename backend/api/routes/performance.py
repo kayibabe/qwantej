@@ -46,6 +46,11 @@ def get_performance_report(
             status_code=422,
             detail=f"subject_type must be one of {sorted(_VALID_SUBJECT_TYPES)}",
         )
+    if market is not None and subject_type != "prediction":
+        raise HTTPException(
+            status_code=422,
+            detail="market filter is only supported for subject_type=prediction",
+        )
 
     report = performance_report(
         db,

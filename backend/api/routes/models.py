@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 
 from backend.api.deps import DbDep
 from backend.core.security import RequireApiKey
-from backend.models.registry import ModelRegistry, ModelRun, ModelStatus
+from backend.models.registry import ModelFamily, ModelRegistry, ModelRun, ModelRunKind, ModelStatus
 from backend.schemas.models import (
     ModelRegistryDetailOut,
     ModelRegistryOut,
@@ -49,7 +49,14 @@ def list_models(
                 detail=f"status must be one of {valid}",
             ) from None
     if family is not None:
-        stmt = stmt.where(ModelRegistry.family == family)
+        try:
+            stmt = stmt.where(ModelRegistry.family == ModelFamily(family))
+        except ValueError:
+            valid = [f.value for f in ModelFamily]
+            raise HTTPException(
+                status_code=422,
+                detail=f"family must be one of {valid}",
+            ) from None
 
     total: int = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     rows = list(
@@ -72,11 +79,21 @@ def get_model(
     model_id: uuid.UUID,
     db: DbDep,
 ) -> ModelRegistryDetailOut:
-    """Return a single model registry entry with its complete run history."""
+    """Return a single model registry entry with its complete run history.
+
+    Runs are ordered newest-first (``started_at DESC, id DESC``).
+    """
     row = db.get(ModelRegistry, model_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Model not found")
-    return ModelRegistryDetailOut.model_validate(row)
+    # Sort the lazy-loaded relationship so serialization is deterministic.
+    sorted_runs = sorted(
+        row.runs,
+        key=lambda r: (r.started_at, r.id),
+        reverse=True,
+    )
+    data = ModelRegistryDetailOut.model_validate(row)
+    return data.model_copy(update={"runs": [ModelRunOut.model_validate(r) for r in sorted_runs]})
 
 
 @router.get("/{model_id}/runs", response_model=ModelRunPage)
@@ -97,7 +114,14 @@ def list_model_runs(
 
     stmt = select(ModelRun).where(ModelRun.model_id == model_id)
     if kind is not None:
-        stmt = stmt.where(ModelRun.kind == kind)
+        try:
+            stmt = stmt.where(ModelRun.kind == ModelRunKind(kind))
+        except ValueError:
+            valid = [k.value for k in ModelRunKind]
+            raise HTTPException(
+                status_code=422,
+                detail=f"kind must be one of {valid}",
+            ) from None
 
     total: int = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     rows = list(

@@ -150,6 +150,10 @@ class TestPerformanceReport:
         r = client.get("/performance/report?subject_type=unknown")
         assert r.status_code == 422
 
+    def test_market_with_accumulator_422(self, client: TestClient) -> None:
+        r = client.get("/performance/report?subject_type=accumulator&market=1X2")
+        assert r.status_code == 422
+
     def test_empty_db_returns_zero_counts(self) -> None:
         engine = create_engine(
             "sqlite:///:memory:",
