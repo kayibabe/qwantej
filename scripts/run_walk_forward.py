@@ -564,12 +564,6 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    if not args.skip_ingest:
-        log.error(
-            "Refusing current-state ingestion for a point-in-time walk-forward; "
-            "use --skip-ingest with an existing historical snapshot archive"
-        )
-        sys.exit(2)
     cfg = ExperimentConfig(
         league_id=args.league,
         season=args.season,
@@ -593,6 +587,27 @@ def main() -> None:
         sys.exit(1)
 
     engine = make_engine(settings.database_url)
+
+    if not args.skip_ingest:
+        from backend.services.api_football_client import ApiFootballClient
+
+        if not settings.api_football_key:
+            log.error(
+                "API_FOOTBALL_KEY is not set in .env — set it or use --skip-ingest"
+            )
+            sys.exit(1)
+        log.warning(
+            "Ingesting with captured_at=now; odds will NOT have pre-kickoff PIT "
+            "validity for historical fixtures. Add --calibration-only unless you "
+            "have a live-ingested snapshot archive. Use --skip-ingest to skip."
+        )
+        client = ApiFootballClient(
+            api_key=settings.api_football_key,
+            base_url=settings.api_football_base_url,
+            timeout_seconds=settings.api_football_timeout_seconds,
+        )
+        with session_scope(engine) as ingest_session:
+            _ingest_season(client, ingest_session, cfg)
 
     started_at = datetime.now(UTC)
 
