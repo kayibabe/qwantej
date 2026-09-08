@@ -34,6 +34,7 @@ ALPHA_POLICY = AccumulatorPolicy.default_for(ProductTier.ALPHA)
 
 def _leg(
     *,
+    prediction_id: str = "pred-default",
     fixture_id: str = "f1",
     league_id: str = "PL",
     market_family: str = "TOTALS",
@@ -47,6 +48,7 @@ def _leg(
     captured_at: datetime = NOW - timedelta(minutes=30),
 ) -> AccumulatorLeg:
     return AccumulatorLeg(
+        prediction_id=prediction_id,
         fixture_id=fixture_id,
         league_id=league_id,
         market_family=market_family,
@@ -64,6 +66,7 @@ def _leg(
 def _legs_pool(n: int, *, start_fixture: int = 1, odds: str = "1.70") -> list[AccumulatorLeg]:
     return [
         _leg(
+            prediction_id=f"pred-{start_fixture + i}",
             fixture_id=f"f{start_fixture + i}",
             league_id=f"L{i % 3}",
             market_family="TOTALS",
@@ -101,6 +104,7 @@ class TestAccumulatorLegValidation:
     def test_decimal_odds_nan_raises(self) -> None:
         with pytest.raises(ValueError, match="decimal_odds"):
             AccumulatorLeg(
+                prediction_id="pred-1",
                 fixture_id="f1", league_id="PL", market_family="TOTALS",
                 selection="Over 2.5", decimal_odds=Decimal("NaN"),
                 conservative_probability=0.6, edge=0.1,

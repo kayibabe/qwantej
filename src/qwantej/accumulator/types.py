@@ -131,6 +131,7 @@ class AccumulatorLeg:
 
     def __post_init__(self) -> None:
         for field, value in (
+            ("prediction_id", self.prediction_id),
             ("fixture_id", self.fixture_id),
             ("league_id", self.league_id),
             ("market_family", self.market_family),

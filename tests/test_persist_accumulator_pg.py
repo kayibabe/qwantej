@@ -31,14 +31,14 @@ from backend.models import (
     Team,
 )
 from backend.services.accumulator import (
-    AccumulatorPersistError,
+    AccumulatorPersistError,  # alias for AccumulatorPersistenceError
     persist_accumulator_decision,
 )
 from qwantej.accumulator import (
     QualifiedSelection,
     build_accumulator_decision,
 )
-from qwantej.bankroll.state import OperatingState, ProductTier
+from qwantej.bankroll.state import OperatingState
 
 NOW = datetime(2026, 9, 8, 12, tzinfo=UTC)
 
@@ -169,10 +169,9 @@ def test_select_for_update_blocks_concurrent_writer(pg_engine) -> None:
         committed_daily_exposure=0.0,
     )
 
-    # Sanity check: CORE must find a ticket, otherwise the test is vacuous.
-    core_pd = next(pd for pd in decision.products if pd.product is ProductTier.CORE)
-    if core_pd.result.ticket is None:
-        pytest.skip("CORE ticket not found — pool not qualifying for this test run")
+    # Sanity check: at least one product must find a ticket, otherwise the test is vacuous.
+    if not any(pd.result.ticket is not None for pd in decision.products):
+        pytest.skip("no ticket found in any product — pool not qualifying for this test run")
 
     t1_locks_held = threading.Event()
     t2_error: list[Exception] = []
@@ -182,12 +181,7 @@ def test_select_for_update_blocks_concurrent_writer(pg_engine) -> None:
     def thread1_persist_and_hold() -> None:
         with Session(pg_engine) as s:
             with s.begin():
-                persist_accumulator_decision(
-                    s,
-                    decision=decision,
-                    product=ProductTier.CORE,
-                    candidates=candidates,
-                )
+                persist_accumulator_decision(s, decision, published_at=NOW)
                 # Flush happened inside persist_accumulator_decision.
                 # The FOR UPDATE locks are now held by this open transaction.
                 t1_locks_held.set()
@@ -202,12 +196,7 @@ def test_select_for_update_blocks_concurrent_writer(pg_engine) -> None:
         # until Thread 1 commits, then unblock and see accumulator_id != None.
         try:
             with Session(pg_engine) as s:
-                persist_accumulator_decision(
-                    s,
-                    decision=decision,
-                    product=ProductTier.CORE,
-                    candidates=candidates,
-                )
+                persist_accumulator_decision(s, decision, published_at=NOW)
                 s.commit()
                 t2_success.append(True)
         except AccumulatorPersistError as exc:
