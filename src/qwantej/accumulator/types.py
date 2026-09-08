@@ -84,6 +84,7 @@ class QualifiedSelection:
     def to_leg(self) -> AccumulatorLeg:
         """Return an AccumulatorLeg for the optimiser, using quote_timestamp as captured_at."""
         return AccumulatorLeg(
+            prediction_id=self.prediction_id,
             fixture_id=self.fixture_id,
             league_id=self.league_id,
             market_family=self.market_family,
@@ -108,6 +109,7 @@ class AccumulatorRejectionReason(StrEnum):
 class AccumulatorLeg:
     """A single selection that has already passed the value gate."""
 
+    prediction_id: str
     fixture_id: str
     league_id: str
     market_family: str
@@ -122,6 +124,7 @@ class AccumulatorLeg:
 
     def __post_init__(self) -> None:
         for field, value in (
+            ("prediction_id", self.prediction_id),
             ("fixture_id", self.fixture_id),
             ("league_id", self.league_id),
             ("market_family", self.market_family),
