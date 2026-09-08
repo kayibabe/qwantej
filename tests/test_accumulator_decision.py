@@ -389,7 +389,10 @@ class TestWalkForwardAccumulatorBacktest:
         assert report.leakage_rows_rejected == 1
 
     def test_outcome_leakage_withholds_credit(self) -> None:
-        # outcome_observed_at <= as_of means result was known at decision time
+        # outcome_observed_at <= as_of: result was already known at decision time.
+        # The engine still runs (decision is recorded), but the round must not
+        # contribute to tickets_found — otherwise hit_rate would be 0% instead
+        # of None, making the backtest misleadingly pessimistic.
         rnd = BacktestRound(
             as_of=NOW,
             candidates=_good_pool(6),
@@ -399,8 +402,10 @@ class TestWalkForwardAccumulatorBacktest:
         report = walk_forward_accumulator_backtest([rnd])
         assert report.leakage_rows_rejected >= 1
         core = report.product_stats[ProductTier.CORE]
-        # Ticket may be found, but no win should be credited
+        # Excluded round must not appear in the hit-rate denominator
+        assert core.tickets_found == 0
         assert core.tickets_won == 0
+        assert core.hit_rate is None
         assert core.flat_stake_units == 0
 
     def test_decisions_recorded_per_round(self) -> None:

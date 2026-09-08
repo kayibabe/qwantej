@@ -188,26 +188,30 @@ def walk_forward_accumulator_backtest(
                 continue
 
             ticket = pd.result.ticket
+            combined_odds_float = float(ticket.combined_odds)
+
+            # Outcome accounting only for rounds where the result was not yet
+            # known at as_of.  tickets_found is the denominator for hit_rate,
+            # so leakage-excluded rounds must not enter it — they would suppress
+            # hit_rate toward zero with no matching tickets_won.
+            if not outcome_valid:
+                continue
+
             s.tickets_found += 1
 
-            # Outcome: ticket wins iff every leg's fixture_id maps to 1.
-            # Withheld (not credited) when the outcome was already known at as_of.
-            ticket_won = outcome_valid and all(
+            ticket_won = all(
                 rnd.outcome.get(leg.fixture_id, 0) == 1
                 for leg in ticket.legs
             )
             if ticket_won:
                 s.tickets_won += 1
 
-            combined_odds_float = float(ticket.combined_odds)
-
-            # Flat-stake baseline: 1 unit per ticket found, at combined odds.
-            if outcome_valid:
-                s.flat_stake_units += 1.0
-                s.flat_stake_return += combined_odds_float if ticket_won else 0.0
+            # Flat-stake baseline: 1 unit per valid ticket, at combined odds.
+            s.flat_stake_units += 1.0
+            s.flat_stake_return += combined_odds_float if ticket_won else 0.0
 
             # Kelly stake tracking
-            if outcome_valid and pd.stake_decision is not None and pd.stake_decision.approved:
+            if pd.stake_decision is not None and pd.stake_decision.approved:
                 stake = pd.stake_decision.recommended_stake
                 s.tickets_with_stake += 1
                 s.total_stake += stake
