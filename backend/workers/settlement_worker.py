@@ -43,6 +43,7 @@ from backend.models import (
 from backend.models import (
     SettlementOutcome as OrmSettlementOutcome,
 )
+from backend.services.performance import performance_report
 from backend.services.settlement import (
     SettlementError,
     find_closing_odds,
@@ -329,6 +330,22 @@ def run_settlement(session: Session, *, now: datetime | None = None) -> WorkerRu
             log.debug("settlement_worker: execution drift check skipped: %s", exc)
 
     run.drift_checked = True
+
+    # KPI snapshot logged after each run so trends are visible in structured logs.
+    try:
+        kpis = performance_report(session)
+        log.info(
+            "settlement_worker: KPI snapshot — "
+            "n=%d hit_rate=%s brier=%s roi=%s mean_clv=%s",
+            kpis.n_settled,
+            f"{kpis.hit_rate:.4f}" if kpis.hit_rate is not None else "n/a",
+            f"{kpis.brier_score:.4f}" if kpis.brier_score is not None else "n/a",
+            f"{kpis.roi:.4f}" if kpis.roi is not None else "n/a",
+            f"{kpis.mean_clv:.4f}" if kpis.mean_clv is not None else "n/a",
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("settlement_worker: KPI snapshot failed: %s", exc)
+
     log.info(
         "settlement_worker: run complete — settled=%d errors=%d",
         run.total_settled,
