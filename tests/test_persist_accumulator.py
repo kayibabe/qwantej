@@ -3,11 +3,10 @@
 Covers:
 - Happy path: ticket persisted, Accumulator + legs inserted, predictions back-linked.
 - No-ticket case: returns None.
-- Conflict guard: second call with already-claimed predictions raises
-  AccumulatorPersistError.  This is the race-condition regression test — it
-  confirms that the SELECT FOR UPDATE + accumulator_id-not-None guard prevents a
-  second concurrent write from silently overwriting the first accumulator's
-  back-link.
+- Paper-only gate: raises ValueError when decision.paper_only is False.
+- Conflict guard: second sequential call with already-claimed predictions raises
+  AccumulatorPersistError (application-level guard).
+  The PostgreSQL-backed truly-concurrent test is in test_persist_accumulator_pg.py.
 """
 
 from __future__ import annotations
@@ -34,7 +33,6 @@ from backend.services.accumulator import (
     persist_accumulator_decision,
 )
 from qwantej.accumulator import (
-    AccumulatorPolicy,
     QualifiedSelection,
     build_accumulator_decision,
 )
@@ -269,18 +267,14 @@ class TestPersistAccumulatorDecisionNoTicket:
 
 class TestConcurrentPersistConflict:
     def test_second_persist_raises_accumulator_persist_error(self, engine) -> None:
-        """Two sessions both try to persist the same predictions; only one succeeds.
+        """Application-level conflict guard: second session raises, not overwrites.
 
-        This is the serialised-sequential simulation of the concurrent race:
-        - Session 1 persists and commits → predictions are back-linked.
-        - Session 2 starts fresh, reads the same predictions, finds
-          accumulator_id != None, and must raise AccumulatorPersistError rather
-          than silently overwriting the first ticket.
-
-        In PostgreSQL the SELECT FOR UPDATE in session 2 would block until
-        session 1 commits, then see the committed state.  In SQLite
-        (single-writer) the sessions are implicitly serialised, so the
-        application-level guard is the effective protection.
+        This is a *sequential* (not concurrent) test of the accumulator_id-not-None
+        guard.  It would pass even without SELECT FOR UPDATE because session 1
+        commits before session 2 starts.  Its value is confirming that the guard
+        correctly raises AccumulatorPersistError rather than silently overwriting
+        the back-link.  The database-level SELECT FOR UPDATE locking that blocks a
+        truly concurrent second writer is tested in test_persist_accumulator_pg.py.
         """
         # --- Session 1: seed data, persist, commit ---
         with Session(engine) as s1:
@@ -312,7 +306,7 @@ class TestConcurrentPersistConflict:
         """
         with Session(engine) as s1:
             decision, candidates = _decision_and_candidates(s1, count=6)
-            accum_core = persist_accumulator_decision(
+            persist_accumulator_decision(
                 s1, decision=decision, product=ProductTier.CORE, candidates=candidates
             )
             s1.commit()
@@ -340,3 +334,31 @@ class TestConcurrentPersistConflict:
                 s2, decision=decision, product=ProductTier.GROWTH, candidates=candidates
             )
             assert accum_growth is not None
+
+
+# ---------------------------------------------------------------------------
+# Paper-only safety gate
+# ---------------------------------------------------------------------------
+
+
+class TestPaperOnlyGate:
+    def test_live_decision_is_rejected(self, session: Session) -> None:
+        """persist_accumulator_decision must refuse a non-paper decision.
+
+        AccumulatorDecision.paper_only is always True in Phase 8.  This test
+        guards against a manually constructed or future non-paper decision
+        bypassing the gate before the release process is complete.
+        """
+        import dataclasses
+
+        decision, candidates = _decision_and_candidates(session)
+        # Force paper_only=False — normally impossible via build_accumulator_decision
+        live_decision = dataclasses.replace(decision, paper_only=False)
+
+        with pytest.raises(ValueError, match="paper_only"):
+            persist_accumulator_decision(
+                session,
+                decision=live_decision,
+                product=ProductTier.CORE,
+                candidates=candidates,
+            )

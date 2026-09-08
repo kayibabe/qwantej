@@ -3,13 +3,17 @@
 `persist_accumulator_decision` is the single write path from an
 `AccumulatorDecision` into the database.  It:
 
-1.  Inserts one ``Accumulator`` row for the requested product tier.
-2.  Inserts one ``AccumulatorLeg`` row per ticket leg.
-3.  Back-links each ``Prediction.accumulator_id`` so the prediction
-    archive knows which accumulator it ended up in.
+1.  Enforces the Phase 8 paper-only safety gate (raises if the decision is
+    not flagged paper_only).
+2.  Acquires a ``SELECT … FOR UPDATE`` lock on every ``Prediction`` row that
+    is a leg of the ticket before reading ``accumulator_id``.
+3.  Inserts one ``Accumulator`` row for the requested product tier.
+4.  Inserts one ``AccumulatorLeg`` row per ticket leg.
+5.  Back-links each ``Prediction.accumulator_id`` so the prediction archive
+    knows which accumulator it ended up in.
 
-The race condition closed here
-------------------------------
+Race condition closed here
+--------------------------
 Two concurrent callers can both read ``prediction.accumulator_id = None``
 and both try to claim the same predictions.  Without a guard the second
 write silently overwrites the first accumulator's back-link.
@@ -22,6 +26,14 @@ commits, then observes ``accumulator_id != None`` and raises
 SQLite does not enforce ``FOR UPDATE`` (single-writer model), so the
 application-level guard is the only protection there — sufficient for
 development and test, where concurrent writers are not expected.
+
+Prediction-identity fix
+-----------------------
+Indexing candidates by ``fixture_id`` is unsafe when a fixture has more than
+one prediction (different markets).  ``AccumulatorLeg.prediction_id`` carries
+the exact prediction UUID from ``QualifiedSelection.to_leg()``; the service
+uses that field directly and cross-validates against the locked row's
+``fixture_id`` to catch any ID confusion early.
 """
 
 from __future__ import annotations
@@ -69,29 +81,41 @@ def persist_accumulator_decision(
     Parameters
     ----------
     session:
-        An open SQLAlchemy ``Session``.  Must not be in a closed or rolled-back
-        state.
+        An open SQLAlchemy ``Session``.  Must not be in a closed or
+        rolled-back state.
     decision:
-        The full ``AccumulatorDecision`` returned by ``build_accumulator_decision``.
+        The full ``AccumulatorDecision`` returned by
+        ``build_accumulator_decision``.  Must have ``paper_only=True``.
     product:
         Which product tier's ticket to persist (CORE / GROWTH / ALPHA).
     candidates:
         The ``QualifiedSelection`` pool passed to ``build_accumulator_decision``.
-        Used to recover the database ``Prediction`` UUID for each ticket leg
-        (the optimiser's in-memory ``AccumulatorLeg`` carries only a string
-        ``fixture_id``).
+        Each candidate's ``prediction_id`` must match the ``prediction_id``
+        carried on the corresponding ``AccumulatorLeg`` (set automatically by
+        ``QualifiedSelection.to_leg()``).
     optimiser_version:
         Version string stamped on the ``Accumulator`` row.  Defaults to the
         module-level ``OPTIMISER_VERSION`` constant.
 
     Raises
     ------
+    ValueError
+        If ``decision.paper_only`` is not ``True`` — live publication is gated
+        behind an explicit release decision (DEVELOPMENT.md §4).
     AccumulatorPersistError
         If any prediction leg already has a non-NULL ``accumulator_id``.
     ValueError
-        If a ticket leg's ``fixture_id`` is absent from *candidates*, or if a
-        ``Prediction`` row referenced by *candidates* is missing from the DB.
+        If a ticket leg's ``prediction_id`` is blank (leg not built from a
+        ``QualifiedSelection``), absent from *candidates*, missing from the
+        DB, or whose DB ``fixture_id`` does not match the leg's ``fixture_id``.
     """
+    # --- Phase 8 release gate ---
+    if not decision.paper_only:
+        raise ValueError(
+            "decision.paper_only must be True; live publication requires an "
+            "explicit release decision (see DEVELOPMENT.md §4)"
+        )
+
     product_decision = next(
         (pd for pd in decision.products if pd.product is product), None
     )
@@ -100,16 +124,12 @@ def persist_accumulator_decision(
 
     ticket = product_decision.result.ticket
 
-    # Index candidates by fixture_id so we can look up prediction_id for each leg.
-    # The optimiser guarantees at most one leg per fixture, so the map is 1-to-1.
-    qs_by_fixture: dict[str, QualifiedSelection] = {c.fixture_id: c for c in candidates}
-    missing_fixtures = [
-        leg.fixture_id for leg in ticket.legs if leg.fixture_id not in qs_by_fixture
-    ]
-    if missing_fixtures:
-        raise ValueError(
-            f"Ticket legs reference fixture_ids not found in candidates: {missing_fixtures!r}"
-        )
+    # Index candidates by prediction_id.  Each prediction_id is unique across
+    # the pool, so this map is 1-to-1 — unlike fixture_id, which could be
+    # shared by multiple predictions (one per market) on the same match.
+    qs_by_pred_id: dict[str, QualifiedSelection] = {
+        c.prediction_id: c for c in candidates
+    }
 
     # --- Acquire row locks before any write (race-condition guard) ---
     #
@@ -120,7 +140,18 @@ def persist_accumulator_decision(
     # second session reads the committed accumulator_id and raises below.
     locked_predictions: list[Prediction] = []
     for leg in ticket.legs:
-        pred_uuid = uuid.UUID(qs_by_fixture[leg.fixture_id].prediction_id)
+        if not leg.prediction_id:
+            raise ValueError(
+                f"AccumulatorLeg for fixture {leg.fixture_id!r} has no "
+                "prediction_id; legs must be built from QualifiedSelection.to_leg()"
+            )
+        qs = qs_by_pred_id.get(leg.prediction_id)
+        if qs is None:
+            raise ValueError(
+                f"Ticket leg prediction_id {leg.prediction_id!r} not found "
+                "in candidates"
+            )
+        pred_uuid = uuid.UUID(leg.prediction_id)
         pred = session.execute(
             select(Prediction)
             .where(Prediction.id == pred_uuid)
@@ -128,7 +159,14 @@ def persist_accumulator_decision(
         ).scalar_one_or_none()
         if pred is None:
             raise ValueError(
-                f"Prediction {pred_uuid} (fixture {leg.fixture_id!r}) not found in database"
+                f"Prediction {pred_uuid} (fixture {leg.fixture_id!r}) "
+                "not found in database"
+            )
+        # Cross-validate: the locked Prediction's fixture must match the leg.
+        if str(pred.fixture_id) != leg.fixture_id:
+            raise ValueError(
+                f"Prediction {pred_uuid}: DB fixture_id {pred.fixture_id!r} "
+                f"does not match leg fixture_id {leg.fixture_id!r}"
             )
         if pred.accumulator_id is not None:
             raise AccumulatorPersistError(
@@ -166,7 +204,9 @@ def persist_accumulator_decision(
     session.flush()  # populate accum.id before inserting legs
 
     # --- Insert AccumulatorLeg rows and back-link each Prediction ---
-    for leg_index, (leg, pred) in enumerate(zip(ticket.legs, locked_predictions)):
+    for leg_index, (leg, pred) in enumerate(
+        zip(ticket.legs, locked_predictions, strict=True)
+    ):
         session.add(
             AccumulatorLegModel(
                 accumulator_id=accum.id,

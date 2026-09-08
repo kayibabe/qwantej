@@ -95,6 +95,7 @@ class QualifiedSelection:
             dqs=self.dqs,
             reliability=self.reliability,
             captured_at=self.quote_timestamp,
+            prediction_id=self.prediction_id,
         )
 
 
@@ -106,7 +107,14 @@ class AccumulatorRejectionReason(StrEnum):
 
 @dataclass(frozen=True)
 class AccumulatorLeg:
-    """A single selection that has already passed the value gate."""
+    """A single selection that has already passed the value gate.
+
+    ``prediction_id`` is non-blank when the leg was built from a
+    ``QualifiedSelection`` (via ``to_leg()``).  It is empty string when legs
+    are constructed directly in tests or by other callers that do not track
+    a database prediction ID.  The persistence service requires a non-blank
+    value and will raise ``ValueError`` otherwise.
+    """
 
     fixture_id: str
     league_id: str
@@ -119,6 +127,7 @@ class AccumulatorLeg:
     dqs: float
     reliability: float
     captured_at: datetime
+    prediction_id: str = ""
 
     def __post_init__(self) -> None:
         for field, value in (
