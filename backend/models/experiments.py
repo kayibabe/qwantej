@@ -35,6 +35,7 @@ class ExperimentKind(enum.StrEnum):
     WALK_FORWARD_BACKTEST = "walk_forward_backtest"
     CHAMPION_CHALLENGER = "champion_challenger"
     DRIFT_CHECK = "drift_check"
+    ACCUMULATOR_OPTIMISATION = "accumulator_optimisation"
 
 
 class Experiment(UUIDPKMixin, TimestampMixin, Base):

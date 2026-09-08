@@ -20,6 +20,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     CheckConstraint,
     DateTime,
     Enum,
@@ -89,6 +90,11 @@ class Accumulator(UUIDPKMixin, CreatedAtMixin, Base):
         default=TicketStatus.PENDING,
         index=True,
     )
+    # Phase 8 orchestration columns
+    input_manifest_hash: Mapped[str | None] = mapped_column(String(128), index=True)
+    risk_state: Mapped[str | None] = mapped_column(String(20))
+    decision_cutoff: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    paper_only: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     legs: Mapped[list["AccumulatorLeg"]] = relationship(back_populates="accumulator")
 
