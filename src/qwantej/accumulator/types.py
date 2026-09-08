@@ -70,13 +70,17 @@ class QualifiedSelection:
         ):
             if not math.isfinite(value):
                 raise ValueError(f"{name} must be a finite number")
-        for name, value in (("qss", self.qss), ("dqs", self.dqs), ("reliability", self.reliability)):
+        for name, value in (
+            ("qss", self.qss),
+            ("dqs", self.dqs),
+            ("reliability", self.reliability),
+        ):
             if not 0 <= value <= 100:
                 raise ValueError(f"{name} must be in [0, 100]")
         if self.quote_timestamp.tzinfo is None or self.quote_timestamp.utcoffset() is None:
             raise ValueError("quote_timestamp must be timezone-aware")
 
-    def to_leg(self) -> "AccumulatorLeg":
+    def to_leg(self) -> AccumulatorLeg:
         """Return an AccumulatorLeg for the optimiser, using quote_timestamp as captured_at."""
         return AccumulatorLeg(
             fixture_id=self.fixture_id,

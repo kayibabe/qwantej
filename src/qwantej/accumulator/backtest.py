@@ -5,13 +5,21 @@ computes hit-rate, ROI, and per-product drawdown — without any live data or
 real money.  Uses the same build_accumulator_decision path as production so
 the backtest covers the full engine stack, not a simplified proxy.
 
-All inputs must satisfy the no-leakage rule: `as_of` for each round must be
-strictly before the outcome timestamps of all legs in that round.
+Leakage rules enforced unconditionally:
+1. Any candidate whose `quote_timestamp` is strictly after `as_of` is rejected
+   from that round (price-freshness leakage).
+2. Any round whose `outcome_observed_at` is at or before `as_of` is skipped
+   for outcome evaluation — the result was known at decision time (outcome
+   leakage).  The engine still runs so the ticket choice is recorded; only the
+   win/loss credit is withheld.
+Both classes of violation are counted in `leakage_rows_rejected`.
 
 Output:
-- AccumulatorBacktestReport with per-product statistics and a bookmaker
-  baseline comparison (flat-stake on every ticket, bookmaker edge assumed
-  to be the margin embedded in the published odds).
+- `AccumulatorBacktestReport` with per-product statistics and a flat-stake
+  baseline (1 unit on every selected ticket, at the ticket's combined odds).
+  The flat-stake baseline isolates ticket selection quality from staking
+  decisions; a real de-vigged market baseline requires closing-odds data and
+  will be added once outcome settlement is wired.
 """
 
 from __future__ import annotations
@@ -38,9 +46,12 @@ from qwantej.bankroll.state import (
 class BacktestRound:
     """One decision point in the walk-forward backtest.
 
-    `outcome` maps prediction_id → 1 (leg won) or 0 (leg lost / push).
-    A ticket wins iff every leg's prediction_id is in `outcome` with value 1.
-    `outcome_observed_at` is used for leakage validation only.
+    `outcome` maps fixture_id → 1 (leg won) or 0 (leg lost / push).
+    A ticket wins iff every leg's fixture_id is in `outcome` with value 1.
+
+    `outcome_observed_at` must be strictly after `as_of`; rounds where
+    the outcome was already known at decision time are counted as leakage
+    and excluded from win/loss statistics (the engine still runs).
     """
 
     as_of: datetime
@@ -60,12 +71,13 @@ class AccumulatorProductStats:
     tickets_found: int = 0
     tickets_won: int = 0
     tickets_with_stake: int = 0
-    leakage_violations: int = 0
     total_stake: float = 0.0
     total_return: float = 0.0
-    # Bookmaker baseline: flat-stake 1 unit on every ticket found
-    bookmaker_baseline_stake: float = 0.0
-    bookmaker_baseline_return: float = 0.0
+    # Flat-stake baseline: 1 unit on every selected ticket at combined odds.
+    # Isolates ticket-selection quality independently of the Kelly staking
+    # decision.  Not a de-vigged market baseline — see module docstring.
+    flat_stake_units: float = 0.0
+    flat_stake_return: float = 0.0
     peak_bankroll: float = 0.0
     trough_bankroll: float = 0.0
     max_drawdown: float = 0.0
@@ -84,12 +96,10 @@ class AccumulatorProductStats:
         return (self.total_return - self.total_stake) / self.total_stake
 
     @property
-    def bookmaker_baseline_roi(self) -> float | None:
-        if self.bookmaker_baseline_stake == 0:
+    def flat_stake_roi(self) -> float | None:
+        if self.flat_stake_units == 0:
             return None
-        return (
-            self.bookmaker_baseline_return - self.bookmaker_baseline_stake
-        ) / self.bookmaker_baseline_stake
+        return (self.flat_stake_return - self.flat_stake_units) / self.flat_stake_units
 
 
 @dataclass(frozen=True)
@@ -110,7 +120,7 @@ class AccumulatorBacktestReport:
                     "tickets_found": s.tickets_found,
                     "hit_rate": s.hit_rate,
                     "roi": s.roi,
-                    "bookmaker_baseline_roi": s.bookmaker_baseline_roi,
+                    "flat_stake_roi": s.flat_stake_roi,
                     "max_drawdown": s.max_drawdown,
                 }
                 for product, s in self.product_stats.items()
@@ -126,12 +136,15 @@ def walk_forward_accumulator_backtest(
 ) -> AccumulatorBacktestReport:
     """Run the accumulator engine over *rounds* and return a backtest report.
 
-    Rounds are processed in as_of order.  For each round, the engine runs
-    build_accumulator_decision (the same path as production), then checks
-    whether the resulting ticket won against the provided outcomes.
+    Rounds are processed in as_of order.  For each round the engine runs
+    build_accumulator_decision (the same path as production).
 
-    Leakage check: any candidate whose quote_timestamp is strictly after
-    as_of is rejected from that round (counted in leakage_rows_rejected).
+    Leakage guard (price): candidates with quote_timestamp > as_of are dropped
+    before the engine runs; each such candidate increments leakage_rows_rejected.
+
+    Leakage guard (outcome): if outcome_observed_at <= as_of the outcome was
+    already known at decision time; win/loss credit is withheld for that round
+    and leakage_rows_rejected is incremented once per affected round.
     """
     rounds_sorted = sorted(rounds, key=lambda r: r.as_of)
 
@@ -142,13 +155,18 @@ def walk_forward_accumulator_backtest(
     leakage_rows_rejected = 0
 
     for rnd in rounds_sorted:
-        # Leakage guard: drop candidates whose price was captured after as_of
+        # Leakage guard 1: candidate price freshness
         clean_candidates = []
         for c in rnd.candidates:
             if c.quote_timestamp > rnd.as_of:
                 leakage_rows_rejected += 1
             else:
                 clean_candidates.append(c)
+
+        # Leakage guard 2: outcome observability
+        outcome_valid = rnd.outcome_observed_at > rnd.as_of
+        if not outcome_valid:
+            leakage_rows_rejected += 1
 
         decision = build_accumulator_decision(
             clean_candidates,
@@ -172,8 +190,9 @@ def walk_forward_accumulator_backtest(
             ticket = pd.result.ticket
             s.tickets_found += 1
 
-            # Outcome: ticket wins iff every leg's prediction_id maps to 1
-            ticket_won = all(
+            # Outcome: ticket wins iff every leg's fixture_id maps to 1.
+            # Withheld (not credited) when the outcome was already known at as_of.
+            ticket_won = outcome_valid and all(
                 rnd.outcome.get(leg.fixture_id, 0) == 1
                 for leg in ticket.legs
             )
@@ -182,12 +201,13 @@ def walk_forward_accumulator_backtest(
 
             combined_odds_float = float(ticket.combined_odds)
 
-            # Bookmaker baseline: flat 1-unit stake
-            s.bookmaker_baseline_stake += 1.0
-            s.bookmaker_baseline_return += combined_odds_float if ticket_won else 0.0
+            # Flat-stake baseline: 1 unit per ticket found, at combined odds.
+            if outcome_valid:
+                s.flat_stake_units += 1.0
+                s.flat_stake_return += combined_odds_float if ticket_won else 0.0
 
             # Kelly stake tracking
-            if pd.stake_decision is not None and pd.stake_decision.approved:
+            if outcome_valid and pd.stake_decision is not None and pd.stake_decision.approved:
                 stake = pd.stake_decision.recommended_stake
                 s.tickets_with_stake += 1
                 s.total_stake += stake

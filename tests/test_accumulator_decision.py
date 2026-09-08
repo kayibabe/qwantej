@@ -9,13 +9,11 @@ from decimal import Decimal
 import pytest
 
 from qwantej.accumulator import (
-    AccumulatorDecision,
     AccumulatorPolicy,
     QualifiedSelection,
     build_accumulator_decision,
 )
 from qwantej.accumulator.backtest import (
-    AccumulatorBacktestReport,
     BacktestRound,
     walk_forward_accumulator_backtest,
 )
@@ -370,8 +368,8 @@ class TestWalkForwardAccumulatorBacktest:
             assert core.tickets_won == 0
             assert core.hit_rate == 0.0
 
-    def test_leakage_candidates_excluded(self) -> None:
-        # A candidate with quote_timestamp > as_of is leakage
+    def test_leakage_price_candidates_excluded(self) -> None:
+        # A candidate with quote_timestamp > as_of is price-freshness leakage
         rnd = BacktestRound(
             as_of=NOW,
             candidates=[
@@ -390,6 +388,21 @@ class TestWalkForwardAccumulatorBacktest:
         report = walk_forward_accumulator_backtest([rnd])
         assert report.leakage_rows_rejected == 1
 
+    def test_outcome_leakage_withholds_credit(self) -> None:
+        # outcome_observed_at <= as_of means result was known at decision time
+        rnd = BacktestRound(
+            as_of=NOW,
+            candidates=_good_pool(6),
+            outcome={f"f{i}": 1 for i in range(6)},
+            outcome_observed_at=NOW,  # exactly at as_of — leakage
+        )
+        report = walk_forward_accumulator_backtest([rnd])
+        assert report.leakage_rows_rejected >= 1
+        core = report.product_stats[ProductTier.CORE]
+        # Ticket may be found, but no win should be credited
+        assert core.tickets_won == 0
+        assert core.flat_stake_units == 0
+
     def test_decisions_recorded_per_round(self) -> None:
         rounds = [_backtest_round(i) for i in range(4)]
         report = walk_forward_accumulator_backtest(rounds)
@@ -401,6 +414,25 @@ class TestWalkForwardAccumulatorBacktest:
         report = walk_forward_accumulator_backtest(rounds)
         # Should not raise
         json.dumps(report.summary)
+
+    def test_summary_contains_flat_stake_roi(self) -> None:
+        rounds = [_backtest_round(i) for i in range(3)]
+        report = walk_forward_accumulator_backtest(rounds)
+        for stats in report.summary["products"].values():
+            assert "flat_stake_roi" in stats
+            assert "bookmaker_baseline_roi" not in stats
+
+    def test_outcome_keyed_by_fixture_id(self) -> None:
+        # Outcome dict uses fixture_id (NOT prediction_id).
+        # If it were keyed by prediction_id the lookup would always miss
+        # and no ticket would ever win.
+        rounds = [_backtest_round(i, all_win=True) for i in range(5)]
+        report = walk_forward_accumulator_backtest(rounds)
+        core = report.product_stats[ProductTier.CORE]
+        if core.tickets_found > 0:
+            assert core.hit_rate == 1.0, (
+                "outcome lookup must use fixture_id; prediction_id keying would yield hit_rate=0"
+            )
 
     def test_empty_rounds_produces_empty_report(self) -> None:
         report = walk_forward_accumulator_backtest([])

@@ -25,13 +25,13 @@ from datetime import datetime
 from qwantej.accumulator.optimiser import AccumulatorResult, build_ticket
 from qwantej.accumulator.policy import AccumulatorPolicy
 from qwantej.accumulator.types import QualifiedSelection
+from qwantej.bankroll.staking import StakeCandidate, StakeDecision, recommend_stake
 from qwantej.bankroll.state import (
     DEFAULT_RISK_POLICY,
     OperatingState,
     ProductTier,
     RiskPolicy,
 )
-from qwantej.bankroll.staking import StakeCandidate, StakeDecision, recommend_stake
 
 _PRODUCTS = (ProductTier.CORE, ProductTier.GROWTH, ProductTier.ALPHA)
 
@@ -155,6 +155,7 @@ def _manifest_hash(candidates: list[QualifiedSelection], as_of: datetime) -> str
                 "league_id": c.league_id,
                 "market_family": c.market_family,
                 "selection": c.selection,
+                "calibrated_probability": c.calibrated_probability,
                 "conservative_probability": c.conservative_probability,
                 "decimal_odds": str(c.decimal_odds),
                 "edge": c.edge,
