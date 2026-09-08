@@ -158,9 +158,12 @@ def compute_kpis(observations: Sequence[PerformanceObservation]) -> KPIReport:
     Metrics with insufficient data are None.
     """
     n_wins = n_losses = n_voids = n_pushes = 0
-    brier_sum = brier_n = 0.0
-    log_sum = log_n = 0.0
-    clv_sum = clv_n = 0
+    brier_sum: float = 0.0
+    brier_n = 0
+    log_sum: float = 0.0
+    log_n = 0
+    clv_sum: float = 0.0
+    clv_n = 0
     stake_sum: float | None = None
     pl_sum: float | None = None
     unit_pl: list[float] = []   # ordered unit P/L for drawdown/volatility
