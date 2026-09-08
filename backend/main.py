@@ -14,7 +14,15 @@ import uuid
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.api.routes import accumulators, health, predictions, settlements
+from backend.api.routes import (
+    accumulators,
+    audit,
+    health,
+    models,
+    performance,
+    predictions,
+    settlements,
+)
 from backend.core.config import get_settings
 from backend.core.logging import configure_logging, request_id_ctx
 
@@ -65,6 +73,9 @@ def create_app() -> FastAPI:
     application.include_router(predictions.router)
     application.include_router(settlements.router)
     application.include_router(accumulators.router)
+    application.include_router(performance.router)
+    application.include_router(models.router)
+    application.include_router(audit.router)
 
     return application
 
