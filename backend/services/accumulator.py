@@ -110,7 +110,7 @@ def persist_accumulator_decision(
         DB, or whose DB ``fixture_id`` does not match the leg's ``fixture_id``.
     """
     # --- Phase 8 release gate ---
-    if not decision.paper_only:
+    if decision.paper_only is not True:
         raise ValueError(
             "decision.paper_only must be True; live publication requires an "
             "explicit release decision (see DEVELOPMENT.md §4)"

@@ -36,6 +36,7 @@ from qwantej.accumulator import (
     QualifiedSelection,
     build_accumulator_decision,
 )
+from qwantej.accumulator.decision import AccumulatorDecision
 from qwantej.bankroll.state import OperatingState, ProductTier
 
 NOW = datetime(2026, 9, 8, 12, tzinfo=UTC)
@@ -145,7 +146,7 @@ def _make_qs(fixture: Fixture, prediction: Prediction, *, index: int) -> Qualifi
 def _decision_and_candidates(
     session: Session,
     count: int = 6,
-) -> tuple[object, list[QualifiedSelection]]:
+) -> tuple[AccumulatorDecision, list[QualifiedSelection]]:
     """Seed *count* predictions and build a full AccumulatorDecision."""
     pairs = _seed_predictions(session, count)
     candidates = [_make_qs(f, p, index=i) for i, (f, p) in enumerate(pairs)]
@@ -359,6 +360,29 @@ class TestPaperOnlyGate:
             persist_accumulator_decision(
                 session,
                 decision=live_decision,
+                product=ProductTier.CORE,
+                candidates=candidates,
+            )
+
+    @pytest.mark.parametrize("truthy_non_bool", [1, "true", 1.0, [True]])
+    def test_truthy_non_boolean_paper_only_is_rejected(
+        self, session: Session, truthy_non_bool: object
+    ) -> None:
+        """Gate must use `is True`, not truthiness — truthy non-booleans must be rejected.
+
+        A value like 1, "true", or 1.0 passes `if not x` but is not the literal
+        True that the Phase 8 gate requires.  This test ensures the strict identity
+        check (`is not True`) rejects those values.
+        """
+        import dataclasses
+
+        decision, candidates = _decision_and_candidates(session)
+        patched = dataclasses.replace(decision, paper_only=truthy_non_bool)  # type: ignore[arg-type,type-var]
+
+        with pytest.raises(ValueError, match="paper_only"):
+            persist_accumulator_decision(
+                session,
+                decision=patched,
                 product=ProductTier.CORE,
                 candidates=candidates,
             )

@@ -107,6 +107,7 @@ class AccumulatorLeg(UUIDPKMixin, CreatedAtMixin, Base):
         UniqueConstraint(
             "accumulator_id", "prediction_id", name="uq_acca_leg_accumulator_prediction"
         ),
+        UniqueConstraint("prediction_id", name="uq_acca_leg_prediction"),
         CheckConstraint("decimal_odds > 1", name="ck_acca_leg_odds_gt_1"),
         CheckConstraint(
             "conservative_probability > 0 AND conservative_probability <= 1",
