@@ -83,6 +83,7 @@ def _seed_fixtures_and_predictions(
     *,
     n: int = 3,
     kickoff: datetime = KICKOFF,
+    market: str | None = None,
 ) -> list[tuple[Fixture, Prediction]]:
     """Seed *n* distinct Fixtures, each with one Prediction."""
     comp = Competition(name="EPL")
@@ -108,7 +109,7 @@ def _seed_fixtures_and_predictions(
             fixture_id=fixture.id,
             prediction_timestamp=NOW - timedelta(hours=1),
             decision_as_of=NOW - timedelta(hours=1),
-            market=f"MKT{i}",
+            market=market if market is not None else f"MKT{i}",
             selection=f"sel{i}",
             conservative_probability=0.60,
             executable_odds=1.70,
@@ -129,16 +130,19 @@ def _seed_fixture_and_predictions(session, *, n: int = 3, kickoff: datetime = KI
 
 def _make_domain_leg(
     *,
+    prediction_id: str,
     fixture_id: str,
     league_id: str = "PL",
     market_family: str = "TOTALS",
+    selection: str = "Over 2.5",
     decimal_odds: str = "1.70",
 ) -> DomainLeg:
     return DomainLeg(
+        prediction_id=prediction_id,
         fixture_id=fixture_id,
         league_id=league_id,
         market_family=market_family,
-        selection="Over 2.5",
+        selection=selection,
         decimal_odds=Decimal(decimal_odds),
         conservative_probability=0.60,
         edge=0.11,
@@ -233,32 +237,30 @@ def _stub_decision(
 # ---------------------------------------------------------------------------
 
 
-def _build_legs_and_mapping(
+def _build_legs(
     pairs: list[tuple[Fixture, Prediction]],
-) -> tuple[tuple[DomainLeg, ...], dict[str, uuid.UUID]]:
-    """Return (legs, fixture_to_prediction) for a list of (fixture, prediction) pairs."""
-    legs = tuple(
+) -> tuple[DomainLeg, ...]:
+    """Return domain legs for a list of (fixture, prediction) pairs."""
+    return tuple(
         _make_domain_leg(
+            prediction_id=str(pred.id),
             fixture_id=str(fix.id),
             league_id=f"L{i}",
             market_family=f"MKT{i}",
         )
-        for i, (fix, _) in enumerate(pairs)
+        for i, (fix, pred) in enumerate(pairs)
     )
-    fixture_to_prediction = {str(fix.id): pred.id for fix, pred in pairs}
-    return legs, fixture_to_prediction
 
 
 class TestPersistHappyPath:
     def test_writes_accumulator_row_for_ticket(self, session) -> None:
         pairs = _seed_fixtures_and_predictions(session, n=3)
-        legs, fixture_to_prediction = _build_legs_and_mapping(pairs)
+        legs = _build_legs(pairs)
         ticket = _make_ticket(legs)
         decision = _stub_decision(core_ticket=ticket)
 
         result = persist_accumulator_decision(
             session, decision,
-            fixture_to_prediction=fixture_to_prediction,
             published_at=PUBLISHED_AT,
         )
 
@@ -273,13 +275,12 @@ class TestPersistHappyPath:
 
     def test_writes_one_leg_per_ticket_leg(self, session) -> None:
         pairs = _seed_fixtures_and_predictions(session, n=3)
-        legs, fixture_to_prediction = _build_legs_and_mapping(pairs)
+        legs = _build_legs(pairs)
         ticket = _make_ticket(legs)
         decision = _stub_decision(core_ticket=ticket)
 
         result = persist_accumulator_decision(
             session, decision,
-            fixture_to_prediction=fixture_to_prediction,
             published_at=PUBLISHED_AT,
         )
 
@@ -298,13 +299,12 @@ class TestPersistHappyPath:
 
     def test_links_prediction_accumulator_id(self, session) -> None:
         pairs = _seed_fixtures_and_predictions(session, n=3)
-        legs, fixture_to_prediction = _build_legs_and_mapping(pairs)
+        legs = _build_legs(pairs)
         ticket = _make_ticket(legs)
         decision = _stub_decision(core_ticket=ticket)
 
         result = persist_accumulator_decision(
             session, decision,
-            fixture_to_prediction=fixture_to_prediction,
             published_at=PUBLISHED_AT,
         )
 
@@ -319,7 +319,6 @@ class TestPersistHappyPath:
         decision = _stub_decision(core_ticket=None)
         result = persist_accumulator_decision(
             session, decision,
-            fixture_to_prediction={},
             published_at=PUBLISHED_AT,
         )
         assert result.accumulators == []
@@ -328,13 +327,12 @@ class TestPersistHappyPath:
 
     def test_combined_odds_stored_correctly(self, session) -> None:
         pairs = _seed_fixtures_and_predictions(session, n=3)
-        legs, fixture_to_prediction = _build_legs_and_mapping(pairs)
+        legs = _build_legs(pairs)
         ticket = _make_ticket(legs)
         decision = _stub_decision(core_ticket=ticket)
 
         result = persist_accumulator_decision(
             session, decision,
-            fixture_to_prediction=fixture_to_prediction,
             published_at=PUBLISHED_AT,
         )
 
@@ -351,57 +349,50 @@ class TestPersistHappyPath:
 class TestPersistValidation:
     def test_non_paper_raises(self, session) -> None:
         pairs = _seed_fixtures_and_predictions(session, n=3)
-        legs, fixture_to_prediction = _build_legs_and_mapping(pairs)
+        legs = _build_legs(pairs)
         ticket = _make_ticket(legs)
         decision = _stub_decision(core_ticket=ticket, paper_only=False)
         with pytest.raises(AccumulatorPersistenceError, match="paper_only"):
             persist_accumulator_decision(
                 session, decision,
-                fixture_to_prediction=fixture_to_prediction,
                 published_at=PUBLISHED_AT,
             )
 
     def test_naive_published_at_raises(self, session) -> None:
         pairs = _seed_fixtures_and_predictions(session, n=3)
-        legs, fixture_to_prediction = _build_legs_and_mapping(pairs)
+        legs = _build_legs(pairs)
         ticket = _make_ticket(legs)
         decision = _stub_decision(core_ticket=ticket)
         with pytest.raises(AccumulatorPersistenceError, match="timezone-aware"):
             persist_accumulator_decision(
                 session, decision,
-                fixture_to_prediction=fixture_to_prediction,
                 published_at=datetime(2026, 9, 8, 12),  # naive
             )
 
-    def test_missing_fixture_to_prediction_entry_raises(self, session) -> None:
-        pairs = _seed_fixtures_and_predictions(session, n=3)
-        legs, _ = _build_legs_and_mapping(pairs)
-        ticket = _make_ticket(legs)
-        decision = _stub_decision(core_ticket=ticket)
-        with pytest.raises(AccumulatorPersistenceError, match="fixture_to_prediction missing"):
-            persist_accumulator_decision(
-                session, decision,
-                fixture_to_prediction={},  # empty — every fixture_id is missing
-                published_at=PUBLISHED_AT,
-            )
-
     def test_nonexistent_prediction_raises(self, session) -> None:
+        """Legs whose prediction_id does not exist in the database must be rejected."""
         pairs = _seed_fixtures_and_predictions(session, n=3)
-        legs, fixture_to_prediction = _build_legs_and_mapping(pairs)
-        ticket = _make_ticket(legs)
+        # Build legs with phantom prediction UUIDs that don't exist in the DB.
+        phantom_legs = tuple(
+            _make_domain_leg(
+                prediction_id=str(uuid.uuid4()),
+                fixture_id=str(fix.id),
+                league_id=f"L{i}",
+                market_family=f"MKT{i}",
+            )
+            for i, (fix, _) in enumerate(pairs)
+        )
+        ticket = _make_ticket(phantom_legs)
         decision = _stub_decision(core_ticket=ticket)
-        # Replace all predictions with phantom UUIDs
-        phantom_mapping = {fid: uuid.uuid4() for fid in fixture_to_prediction}
         with pytest.raises(AccumulatorPersistenceError, match="does not exist"):
             persist_accumulator_decision(
                 session, decision,
-                fixture_to_prediction=phantom_mapping,
                 published_at=PUBLISHED_AT,
             )
 
     def test_already_linked_prediction_raises(self, session) -> None:
         pairs = _seed_fixtures_and_predictions(session, n=3)
-        legs, fixture_to_prediction = _build_legs_and_mapping(pairs)
+        legs = _build_legs(pairs)
         # Pre-link the first prediction to another accumulator
         pairs[0][1].accumulator_id = uuid.uuid4()
         session.flush()
@@ -411,20 +402,26 @@ class TestPersistValidation:
         with pytest.raises(AccumulatorPersistenceError, match="already belongs"):
             persist_accumulator_decision(
                 session, decision,
-                fixture_to_prediction=fixture_to_prediction,
                 published_at=PUBLISHED_AT,
             )
 
     def test_nothing_written_when_validation_fails(self, session) -> None:
         pairs = _seed_fixtures_and_predictions(session, n=3)
-        legs, _ = _build_legs_and_mapping(pairs)
-        ticket = _make_ticket(legs)
+        phantom_legs = tuple(
+            _make_domain_leg(
+                prediction_id=str(uuid.uuid4()),  # phantom — does not exist
+                fixture_id=str(fix.id),
+                league_id=f"L{i}",
+                market_family=f"MKT{i}",
+            )
+            for i, (fix, _) in enumerate(pairs)
+        )
+        ticket = _make_ticket(phantom_legs)
         decision = _stub_decision(core_ticket=ticket)
 
         with pytest.raises(AccumulatorPersistenceError):
             persist_accumulator_decision(
                 session, decision,
-                fixture_to_prediction={},  # missing entry
                 published_at=PUBLISHED_AT,
             )
 
@@ -434,7 +431,7 @@ class TestPersistValidation:
     def test_cross_product_shared_prediction_raises(self, session) -> None:
         """Two product tickets sharing a leg would overwrite prediction.accumulator_id."""
         pairs = _seed_fixtures_and_predictions(session, n=3)
-        legs, fixture_to_prediction = _build_legs_and_mapping(pairs)
+        legs = _build_legs(pairs)
         # Build a CORE ticket and a GROWTH ticket that share the same legs.
         core_ticket = _make_ticket(legs)
         growth_ticket = AccumulatorTicket(
@@ -471,39 +468,129 @@ class TestPersistValidation:
         with pytest.raises(AccumulatorPersistenceError, match="claimed by both"):
             persist_accumulator_decision(
                 session, decision,
-                fixture_to_prediction=fixture_to_prediction,
                 published_at=PUBLISHED_AT,
             )
 
         assert session.query(Accumulator).count() == 0
         assert session.query(AccumulatorLeg).count() == 0
 
-    def test_swapped_fixture_prediction_mapping_raises(self, session) -> None:
-        """Mapping that points a fixture_id to a prediction on a *different* fixture."""
+    def test_prediction_id_pointing_to_wrong_fixture_raises(self, session) -> None:
+        """A leg whose prediction_id belongs to a *different* fixture must be rejected."""
         pairs = _seed_fixtures_and_predictions(session, n=3)
-        legs, correct_mapping = _build_legs_and_mapping(pairs)
-        ticket = _make_ticket(legs)
+        # Swap: leg for fixture 0 carries prediction from fixture 1, and vice versa.
+        swapped_legs = (
+            _make_domain_leg(
+                prediction_id=str(pairs[1][1].id),  # prediction belongs to fixture 1
+                fixture_id=str(pairs[0][0].id),      # but leg says fixture 0
+                league_id="L0",
+                market_family="MKT0",
+            ),
+            _make_domain_leg(
+                prediction_id=str(pairs[0][1].id),  # prediction belongs to fixture 0
+                fixture_id=str(pairs[1][0].id),      # but leg says fixture 1
+                league_id="L1",
+                market_family="MKT1",
+            ),
+            _make_domain_leg(
+                prediction_id=str(pairs[2][1].id),
+                fixture_id=str(pairs[2][0].id),
+                league_id="L2",
+                market_family="MKT2",
+            ),
+        )
+        ticket = _make_ticket(swapped_legs)
         decision = _stub_decision(core_ticket=ticket)
-
-        # Swap: fixture 0 → prediction 1, fixture 1 → prediction 0, fixture 2 stays
-        fix0_id = str(pairs[0][0].id)
-        fix1_id = str(pairs[1][0].id)
-        fix2_id = str(pairs[2][0].id)
-        swapped_mapping = {
-            fix0_id: pairs[1][1].id,  # wrong fixture
-            fix1_id: pairs[0][1].id,  # wrong fixture
-            fix2_id: pairs[2][1].id,
-        }
 
         with pytest.raises(AccumulatorPersistenceError, match="belongs to fixture"):
             persist_accumulator_decision(
                 session, decision,
-                fixture_to_prediction=swapped_mapping,
                 published_at=PUBLISHED_AT,
             )
 
         assert session.query(Accumulator).count() == 0
         assert session.query(AccumulatorLeg).count() == 0
+
+    def test_same_fixture_different_market_uses_correct_prediction(self, session) -> None:
+        """Regression: a TOTALS leg must persist with its own prediction_id, not the
+        1X2 prediction_id that happens to share the same fixture."""
+        comp = Competition(name="EPL")
+        ssn = Season(competition=comp, label="2026/27")
+        home = Team(name="Home FC")
+        away = Team(name="Away FC")
+        fix = Fixture(
+            competition=comp, season=ssn, home_team=home, away_team=away,
+            kickoff_utc=KICKOFF, status=FixtureStatus.SCHEDULED,
+        )
+        session.add_all([comp, ssn, home, away, fix])
+        session.flush()
+
+        # Two predictions for the same fixture — different markets.
+        pred_1x2 = Prediction(
+            fixture_id=fix.id,
+            prediction_timestamp=NOW - timedelta(hours=1),
+            decision_as_of=NOW - timedelta(hours=1),
+            market="1X2",
+            selection="Home",
+            conservative_probability=0.55,
+            executable_odds=1.80,
+        )
+        pred_totals = Prediction(
+            fixture_id=fix.id,
+            prediction_timestamp=NOW - timedelta(hours=1),
+            decision_as_of=NOW - timedelta(hours=1),
+            market="TOTALS",
+            selection="Over 2.5",
+            conservative_probability=0.60,
+            executable_odds=1.70,
+        )
+        # Seed two more fixtures to satisfy the minimum-leg requirement.
+        other_pairs = _seed_fixtures_and_predictions(session, n=2)
+        session.add_all([pred_1x2, pred_totals])
+        session.flush()
+
+        # The TOTALS leg carries pred_totals.id — NOT pred_1x2.id.
+        totals_leg = _make_domain_leg(
+            prediction_id=str(pred_totals.id),
+            fixture_id=str(fix.id),
+            market_family="TOTALS",
+            selection="Over 2.5",
+            league_id="PL",
+        )
+        other_legs = tuple(
+            _make_domain_leg(
+                prediction_id=str(pred.id),
+                fixture_id=str(fixture.id),
+                league_id=f"L{i}",
+                market_family=f"MKT{i}",
+            )
+            for i, (fixture, pred) in enumerate(other_pairs)
+        )
+        ticket = _make_ticket((totals_leg, *other_legs))
+        decision = _stub_decision(core_ticket=ticket)
+
+        result = persist_accumulator_decision(
+            session, decision,
+            published_at=PUBLISHED_AT,
+        )
+
+        acc = result.accumulators[0]
+        db_legs = (
+            session.query(AccumulatorLeg)
+            .filter(AccumulatorLeg.accumulator_id == acc.id)
+            .all()
+        )
+        totals_db_leg = next(
+            (leg for leg in db_legs if leg.market_family == "TOTALS"), None
+        )
+        assert totals_db_leg is not None
+        # Must have used the TOTALS prediction, not the 1X2 one.
+        assert totals_db_leg.prediction_id == pred_totals.id
+        assert totals_db_leg.prediction_id != pred_1x2.id
+        # The TOTALS prediction must be linked back; the 1X2 prediction must not be.
+        session.expire(pred_totals)
+        session.expire(pred_1x2)
+        assert session.get(Prediction, pred_totals.id).accumulator_id == acc.id
+        assert session.get(Prediction, pred_1x2.id).accumulator_id is None
 
 
 # ---------------------------------------------------------------------------
@@ -568,13 +655,9 @@ class TestPersistFromRealDecision:
             available_bankroll=1000.0,
             committed_daily_exposure=0.0,
         )
-        fixture_to_prediction = {
-            str(fix.id): pred.id for fix, pred in fixtures_and_predictions
-        }
 
         result = persist_accumulator_decision(
             session, decision,
-            fixture_to_prediction=fixture_to_prediction,
             published_at=PUBLISHED_AT,
         )
 

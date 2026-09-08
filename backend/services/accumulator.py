@@ -49,7 +49,6 @@ def persist_accumulator_decision(
     session: Session,
     decision: AccumulatorDecision,
     *,
-    fixture_to_prediction: dict[str, uuid.UUID],
     published_at: datetime,
 ) -> PersistedAccumulatorDecision:
     """Validate and persist all tickets found in *decision*.
@@ -61,14 +60,10 @@ def persist_accumulator_decision(
     decision:
         The AccumulatorDecision returned by build_accumulator_decision.
         Must have paper_only=True (Phase 8 invariant).
-    fixture_to_prediction:
-        Maps each fixture_id (str, as carried by AccumulatorLeg) to the
-        prediction UUID that qualified it.  Must cover every fixture_id
-        that appears in any ticket leg.
     published_at:
         Timezone-aware timestamp to record as the publication time.
     """
-    problems = _validate(decision, fixture_to_prediction, published_at, session)
+    problems = _validate(decision, published_at, session)
     if problems:
         raise AccumulatorPersistenceError(problems)
 
@@ -108,7 +103,7 @@ def persist_accumulator_decision(
         session.flush()  # populate accumulator.id before writing legs
 
         for leg_index, leg in enumerate(ticket.legs):
-            prediction_id = fixture_to_prediction[leg.fixture_id]
+            prediction_id = uuid.UUID(leg.prediction_id)
             fixture_uuid = uuid.UUID(leg.fixture_id)
             session.add(
                 AccumulatorLeg(
@@ -145,7 +140,6 @@ def persist_accumulator_decision(
 
 def _validate(
     decision: AccumulatorDecision,
-    fixture_to_prediction: dict[str, uuid.UUID],
     published_at: datetime,
     session: Session,
 ) -> list[str]:
@@ -160,19 +154,19 @@ def _validate(
     if decision.as_of.tzinfo is None or decision.as_of.utcoffset() is None:
         problems.append("decision.as_of must be timezone-aware")
 
-    # Collect every (prediction_id, product) pair across all tickets up front so
-    # we can detect cross-product conflicts before writing anything.  A prediction
-    # that appears in two products' tickets would have its accumulator_id overwritten
-    # by the second write, making the first ticket's leg point at the wrong owner.
+    # Collect every prediction_id across all tickets up front so we can detect
+    # cross-product conflicts before writing anything.
     seen: dict[uuid.UUID, str] = {}  # prediction_id → first product that claimed it
 
     for pd in decision.products:
         if pd.result.ticket is None:
             continue
         for leg in pd.result.ticket.legs:
-            if leg.fixture_id not in fixture_to_prediction:
+            try:
+                prediction_id = uuid.UUID(leg.prediction_id)
+            except ValueError:
                 problems.append(
-                    f"fixture_to_prediction missing entry for fixture_id={leg.fixture_id!r} "
+                    f"leg.prediction_id={leg.prediction_id!r} is not a valid UUID "
                     f"(product={pd.product.value})"
                 )
                 continue
@@ -183,7 +177,6 @@ def _validate(
                     f"fixture_id={leg.fixture_id!r} is not a valid UUID"
                 )
                 continue
-            prediction_id = fixture_to_prediction[leg.fixture_id]
 
             # Cross-product duplicate: same prediction claimed by two tickets.
             if prediction_id in seen:
@@ -202,12 +195,12 @@ def _validate(
                     f"(fixture_id={leg.fixture_id!r})"
                 )
                 continue
-            # Fixture identity: the mapping must point to a prediction on the right fixture.
+            # Fixture identity: the leg's prediction_id must belong to the leg's fixture.
             if prediction.fixture_id != fixture_uuid:
                 problems.append(
                     f"prediction {prediction_id} belongs to fixture "
                     f"{prediction.fixture_id} but leg fixture_id={leg.fixture_id!r} "
-                    "(swapped or incorrect fixture_to_prediction mapping)"
+                    "(prediction_id does not match the leg's fixture)"
                 )
                 continue
             if prediction.accumulator_id is not None:
