@@ -160,6 +160,12 @@ def _validate(
     if decision.as_of.tzinfo is None or decision.as_of.utcoffset() is None:
         problems.append("decision.as_of must be timezone-aware")
 
+    # Collect every (prediction_id, product) pair across all tickets up front so
+    # we can detect cross-product conflicts before writing anything.  A prediction
+    # that appears in two products' tickets would have its accumulator_id overwritten
+    # by the second write, making the first ticket's leg point at the wrong owner.
+    seen: dict[uuid.UUID, str] = {}  # prediction_id → first product that claimed it
+
     for pd in decision.products:
         if pd.result.ticket is None:
             continue
@@ -171,20 +177,40 @@ def _validate(
                 )
                 continue
             try:
-                uuid.UUID(leg.fixture_id)
+                fixture_uuid = uuid.UUID(leg.fixture_id)
             except ValueError:
                 problems.append(
                     f"fixture_id={leg.fixture_id!r} is not a valid UUID"
                 )
                 continue
             prediction_id = fixture_to_prediction[leg.fixture_id]
+
+            # Cross-product duplicate: same prediction claimed by two tickets.
+            if prediction_id in seen:
+                problems.append(
+                    f"prediction {prediction_id} is claimed by both "
+                    f"product={seen[prediction_id]!r} and product={pd.product.value!r}; "
+                    "a prediction can only belong to one accumulator"
+                )
+                continue
+            seen[prediction_id] = pd.product.value
+
             prediction = session.get(Prediction, prediction_id)
             if prediction is None:
                 problems.append(
                     f"prediction {prediction_id} does not exist in the database "
                     f"(fixture_id={leg.fixture_id!r})"
                 )
-            elif prediction.accumulator_id is not None:
+                continue
+            # Fixture identity: the mapping must point to a prediction on the right fixture.
+            if prediction.fixture_id != fixture_uuid:
+                problems.append(
+                    f"prediction {prediction_id} belongs to fixture "
+                    f"{prediction.fixture_id} but leg fixture_id={leg.fixture_id!r} "
+                    "(swapped or incorrect fixture_to_prediction mapping)"
+                )
+                continue
+            if prediction.accumulator_id is not None:
                 problems.append(
                     f"prediction {prediction_id} already belongs to accumulator "
                     f"{prediction.accumulator_id}"

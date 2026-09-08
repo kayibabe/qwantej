@@ -431,6 +431,80 @@ class TestPersistValidation:
         assert session.query(Accumulator).count() == 0
         assert session.query(AccumulatorLeg).count() == 0
 
+    def test_cross_product_shared_prediction_raises(self, session) -> None:
+        """Two product tickets sharing a leg would overwrite prediction.accumulator_id."""
+        pairs = _seed_fixtures_and_predictions(session, n=3)
+        legs, fixture_to_prediction = _build_legs_and_mapping(pairs)
+        # Build a CORE ticket and a GROWTH ticket that share the same legs.
+        core_ticket = _make_ticket(legs)
+        growth_ticket = AccumulatorTicket(
+            legs=legs,
+            product=ProductTier.GROWTH,
+            combined_odds=core_ticket.combined_odds,
+            conservative_joint_probability=core_ticket.conservative_joint_probability,
+            stressed_joint_probability=core_ticket.stressed_joint_probability,
+            objective_score=core_ticket.objective_score,
+            dependence_penalty_applied=core_ticket.dependence_penalty_applied,
+        )
+
+        # Craft a decision with both CORE and GROWTH tickets on the same legs.
+        products = []
+        for product in ProductTier:
+            if product is ProductTier.CORE:
+                result = _make_result_with_ticket(core_ticket, product)
+            elif product is ProductTier.GROWTH:
+                result = _make_result_with_ticket(growth_ticket, product)
+            else:
+                result = _make_result_no_ticket(product)
+            products.append(
+                AccumulatorProductDecision(product=product, result=result, stake_decision=None)
+            )
+        decision = AccumulatorDecision(
+            as_of=NOW,
+            operating_state=OperatingState.NORMAL,
+            candidate_count=3,
+            input_manifest_hash="b" * 64,
+            products=tuple(products),
+            paper_only=True,
+        )
+
+        with pytest.raises(AccumulatorPersistenceError, match="claimed by both"):
+            persist_accumulator_decision(
+                session, decision,
+                fixture_to_prediction=fixture_to_prediction,
+                published_at=PUBLISHED_AT,
+            )
+
+        assert session.query(Accumulator).count() == 0
+        assert session.query(AccumulatorLeg).count() == 0
+
+    def test_swapped_fixture_prediction_mapping_raises(self, session) -> None:
+        """Mapping that points a fixture_id to a prediction on a *different* fixture."""
+        pairs = _seed_fixtures_and_predictions(session, n=3)
+        legs, correct_mapping = _build_legs_and_mapping(pairs)
+        ticket = _make_ticket(legs)
+        decision = _stub_decision(core_ticket=ticket)
+
+        # Swap: fixture 0 → prediction 1, fixture 1 → prediction 0, fixture 2 stays
+        fix0_id = str(pairs[0][0].id)
+        fix1_id = str(pairs[1][0].id)
+        fix2_id = str(pairs[2][0].id)
+        swapped_mapping = {
+            fix0_id: pairs[1][1].id,  # wrong fixture
+            fix1_id: pairs[0][1].id,  # wrong fixture
+            fix2_id: pairs[2][1].id,
+        }
+
+        with pytest.raises(AccumulatorPersistenceError, match="belongs to fixture"):
+            persist_accumulator_decision(
+                session, decision,
+                fixture_to_prediction=swapped_mapping,
+                published_at=PUBLISHED_AT,
+            )
+
+        assert session.query(Accumulator).count() == 0
+        assert session.query(AccumulatorLeg).count() == 0
+
 
 # ---------------------------------------------------------------------------
 # Integration: using build_accumulator_decision output directly
