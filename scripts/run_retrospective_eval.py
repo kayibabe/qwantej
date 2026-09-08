@@ -215,14 +215,29 @@ def _run_calibration_backtest(observations, args):
     train_rows = [o for o in observations if o.decision_as_of < test_from_utc]
     test_rows = [o for o in observations if o.decision_as_of >= test_from_utc]
 
-    min_train = max(2, len(train_rows))
-    if len(train_rows) < 2:
+    if not train_rows:
         raise ValueError(
-            f"only {len(train_rows)} training observations; "
-            "increase --train-from/--train-to range or use more fixtures"
+            "no training observations; increase --train-from/--train-to range"
         )
     if not test_rows:
         raise ValueError("no test observations; check --test-from/--test-to range")
+
+    # Count only training rows whose outcome was observable by the first test
+    # fold cutoff.  Late train-to fixtures have synthetic outcome_observed_at
+    # = kickoff + 2h; if that falls after test_from_utc the walk-forward
+    # evaluator correctly excludes them from the first fold, so sizing on the
+    # raw train count would over-promise available training samples and produce
+    # zero folds.
+    available_at_first_fold = [
+        o for o in train_rows if o.outcome_observed_at <= test_from_utc
+    ]
+    if len(available_at_first_fold) < 2:
+        raise ValueError(
+            f"only {len(available_at_first_fold)} training observations have outcomes "
+            f"observable by {test_from_utc.date()}; widen the training window or "
+            "move --test-from later"
+        )
+    min_train = max(2, len(available_at_first_fold))
 
     config = CalibrationOnlyConfig(
         version="retrospective-eval:1.0.0",
@@ -234,13 +249,18 @@ def _run_calibration_backtest(observations, args):
     return calibration_only_walk_forward(observations, config), config
 
 
-def _record_experiment(session, report, config, all_training_results, args, started_at) -> None:
+def _record_experiment(
+    session, report, config, observations, all_training_results, args, started_at
+) -> None:
     from backend.services.experiments import (
         ExperimentIdentity,
         complete_research_experiment,
         start_research_experiment,
     )
-    from backend.services.retrospective_extraction import retrospective_fixture_hash
+    from backend.services.retrospective_extraction import (
+        retrospective_dataset_hash,
+        retrospective_fixture_hash,
+    )
 
     try:
         import subprocess
@@ -250,10 +270,13 @@ def _record_experiment(session, report, config, all_training_results, args, star
     except Exception:
         code_commit = "unknown"
 
-    fixture_hash = retrospective_fixture_hash(all_training_results)
+    # Primary fingerprint covers the full evaluation set (target fixtures,
+    # outcomes, features).  Secondary covers historical training inputs.
+    dataset_hash = retrospective_dataset_hash(observations)
+    training_hash = retrospective_fixture_hash(all_training_results)
     data_snapshot_ref = (
         f"retrospective:league={args.league}:season={args.season}"
-        f":n_recent={args.n_recent}:{fixture_hash[:16]}"
+        f":n_recent={args.n_recent}:{dataset_hash}:{training_hash}"
     )
     train_from_utc = datetime.combine(
         date.fromisoformat(args.train_from), datetime.min.time(), tzinfo=UTC
@@ -378,7 +401,7 @@ def main() -> None:
 
         if not args.dry_run:
             _record_experiment(
-                session, report, config, all_training_results, args, started_at
+                session, report, config, observations, all_training_results, args, started_at
             )
         else:
             session.rollback()

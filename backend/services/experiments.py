@@ -168,9 +168,11 @@ def complete_research_experiment(
 ) -> None:
     """Finalize a running research experiment with calibration-only metrics.
 
-    Stores ``temporal_order_rejections`` in ``leakage_rows_rejected`` so the
-    column is populated, but the semantic is weaker: temporal ordering within
-    the supplied dataset was checked, not historical data availability.
+    ``leakage_rows_rejected`` is set to 0 — the canonical column tracks true
+    PIT leakage, which cannot be measured in a non-PIT-certified run.  The
+    weaker ``temporal_order_rejections`` count is preserved inside
+    ``report.metrics`` (serialised with every other report field) so it
+    is queryable without polluting the PIT-leakage semantic.
     """
     if experiment.status is not ExperimentStatus.RUNNING:
         raise ValueError("only a running experiment can be completed")
@@ -183,7 +185,7 @@ def complete_research_experiment(
     experiment.status = ExperimentStatus.SUCCEEDED
     experiment.finished_at = finished_at
     experiment.sample_size = report.sample_size
-    experiment.leakage_rows_rejected = report.temporal_order_rejections
+    experiment.leakage_rows_rejected = 0
     experiment.metrics = metrics
     experiment.result_hash = f"sha256:{hashlib.sha256(canonical.encode()).hexdigest()}"
     session.flush()

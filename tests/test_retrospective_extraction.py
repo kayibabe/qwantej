@@ -23,6 +23,7 @@ from backend.models import Base, Competition, Fixture, FixtureStatus, Season, Te
 from backend.services.retrospective_extraction import (
     RetrospectiveResult,
     extract_retrospective_features,
+    retrospective_dataset_hash,
     retrospective_fixture_hash,
 )
 
@@ -190,6 +191,30 @@ class TestRetrospectiveExclusions:
         _, hist = extract_retrospective_features(session, target)
         assert len(hist) == 0
 
+    def test_non_finished_with_goals_excluded(self, session: Session) -> None:
+        """A fixture with non-null goals but status != FINISHED must not enter history."""
+        comp = _competition(session)
+        s = _season(session, comp)
+        home = _team(session, "Status Home")
+        away = _team(session, "Status Away")
+
+        # Goals populated but fixture is only live — must be excluded
+        _fixture(
+            session, comp, s, home, away,
+            KICKOFF_BASE - timedelta(days=1),
+            status=FixtureStatus.LIVE,
+            home_goals=2,
+            away_goals=1,
+        )
+        target = _fixture(
+            session, comp, s, home, away,
+            KICKOFF_BASE,
+            home_goals=0, away_goals=0,
+        )
+
+        _, hist = extract_retrospective_features(session, target)
+        assert len(hist) == 0, "Non-FINISHED fixture with goals leaked into training history"
+
     def test_null_goals_fixture_excluded(self, session: Session) -> None:
         comp = _competition(session)
         s = _season(session, comp)
@@ -288,6 +313,29 @@ class TestRetrospectiveHash:
 
         assert hash_before != hash_after
 
+    def test_fixture_hash_includes_team_ids(self) -> None:
+        """Changing team IDs in the result changes the fixture hash."""
+        team_a = uuid.uuid4()
+        team_b = uuid.uuid4()
+        team_c = uuid.uuid4()
+        r1 = RetrospectiveResult(
+            fixture_id=uuid.uuid4(),
+            home_team_id=team_a,
+            away_team_id=team_b,
+            kickoff_utc=KICKOFF_BASE,
+            home_goals=1,
+            away_goals=0,
+        )
+        r2 = RetrospectiveResult(
+            fixture_id=r1.fixture_id,
+            home_team_id=team_c,  # different team
+            away_team_id=team_b,
+            kickoff_utc=KICKOFF_BASE,
+            home_goals=1,
+            away_goals=0,
+        )
+        assert retrospective_fixture_hash([r1]) != retrospective_fixture_hash([r2])
+
     def test_hash_starts_with_sha256(self) -> None:
         results = [
             RetrospectiveResult(
@@ -305,6 +353,49 @@ class TestRetrospectiveHash:
     def test_empty_results_produces_stable_hash(self) -> None:
         h1 = retrospective_fixture_hash([])
         h2 = retrospective_fixture_hash([])
+        assert h1 == h2
+
+
+class TestRetrospectiveDatasetHash:
+    """Tests for the observation-level dataset hash (covers target fixtures)."""
+
+    def _make_obs(self, idx: int, outcome: int = 1):
+        from datetime import timedelta
+
+        from qwantej.performance.calibration_backtest import CalibrationObservationRow
+
+        base = KICKOFF_BASE + timedelta(days=idx)
+        return CalibrationObservationRow(
+            observation_id=f"obs-{idx:04d}",
+            decision_as_of=base - timedelta(hours=2),
+            feature_as_of=base - timedelta(hours=2),
+            outcome_observed_at=base + timedelta(hours=2),
+            model_version="m:1.0",
+            raw_probability=0.6,
+            outcome=outcome,
+        )
+
+    def test_hash_starts_with_sha256_prefix(self) -> None:
+        h = retrospective_dataset_hash([self._make_obs(0)])
+        assert h.startswith("sha256:")
+
+    def test_full_digest_stored(self) -> None:
+        h = retrospective_dataset_hash([self._make_obs(0)])
+        # sha256: + 64 hex chars
+        assert len(h) == len("sha256:") + 64
+
+    def test_different_outcome_produces_different_hash(self) -> None:
+        h_win = retrospective_dataset_hash([self._make_obs(0, outcome=1)])
+        h_loss = retrospective_dataset_hash([self._make_obs(0, outcome=0)])
+        assert h_win != h_loss
+
+    def test_deterministic(self) -> None:
+        obs = [self._make_obs(i) for i in range(5)]
+        assert retrospective_dataset_hash(obs) == retrospective_dataset_hash(obs)
+
+    def test_empty_list_stable(self) -> None:
+        h1 = retrospective_dataset_hash([])
+        h2 = retrospective_dataset_hash([])
         assert h1 == h2
 
 

@@ -14,8 +14,12 @@ Isolation rules enforced by this extractor:
   - Same competition only (cross-league strength pools differ).
   - ``kickoff_utc`` strictly before the target fixture's kickoff.
   - The target fixture itself excluded.
-  - ``home_goals`` and ``away_goals`` both non-null (finished result).
+  - ``status == FINISHED`` and both ``home_goals``/``away_goals`` non-null.
   - Ordered ascending by kickoff_utc then fixture.id (deterministic replay).
+
+Naive timestamps returned by SQLite sessions (which do not store tz info) are
+treated as UTC rather than raising.  Postgres sessions return tz-aware values
+and are converted normally.
 """
 
 from __future__ import annotations
@@ -27,7 +31,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.models import Fixture
+from backend.models import Fixture, FixtureStatus
 from qwantej.features.engineering import (
     HistoricalResult,
     MatchFeatures,
@@ -76,8 +80,7 @@ def extract_retrospective_features(
     is the ordered list of results fed to the feature computation — pass it to
     ``retrospective_fixture_hash()`` to build a provenance fingerprint.
 
-    Raises RetrospectiveExtractionError if home/away team ids are identical or
-    if ``fixture.kickoff_utc`` is not timezone-aware.
+    Raises RetrospectiveExtractionError if home/away team ids are identical.
     """
     kickoff = _as_utc(fixture.kickoff_utc)
 
@@ -87,6 +90,7 @@ def extract_retrospective_features(
             Fixture.competition_id == fixture.competition_id,
             Fixture.kickoff_utc < kickoff,
             Fixture.id != fixture.id,
+            Fixture.status == FixtureStatus.FINISHED,
             Fixture.home_goals.is_not(None),
             Fixture.away_goals.is_not(None),
         )
@@ -95,6 +99,8 @@ def extract_retrospective_features(
 
     settled: list[RetrospectiveResult] = []
     for row in prior_rows:
+        if row.status is not FixtureStatus.FINISHED:
+            continue
         if row.home_goals is None or row.away_goals is None:
             continue
         settled.append(
@@ -135,21 +141,51 @@ def extract_retrospective_features(
 
 
 def retrospective_fixture_hash(results: list[RetrospectiveResult]) -> str:
-    """Deterministic SHA-256 content hash of retrospective fixture inputs.
+    """Deterministic SHA-256 content hash of historical training fixture inputs.
 
-    Encodes fixture id, goals, and kickoff for each training observation so
-    any change to the canonical mutable rows produces a different fingerprint.
-    Used as the ``data_snapshot_ref`` suffix in research experiment records.
+    Encodes fixture id, home/away team ids, goals, and kickoff for each
+    training observation.  Including team ids means a changed team mapping
+    also invalidates the fingerprint.  A change to the canonical mutable
+    goals columns produces a different hash.
     """
     entries = sorted(
-        f"{r.fixture_id}:{r.home_goals}:{r.away_goals}:{_as_utc(r.kickoff_utc).isoformat()}"
+        f"{r.fixture_id}:{r.home_team_id}:{r.away_team_id}"
+        f":{r.home_goals}:{r.away_goals}:{_as_utc(r.kickoff_utc).isoformat()}"
         for r in results
     )
     payload = "\n".join(entries).encode()
     return f"sha256:{hashlib.sha256(payload).hexdigest()}"
 
 
+def retrospective_dataset_hash(observations: list) -> str:
+    """SHA-256 content hash of the complete observation dataset.
+
+    Covers observation_id (= target fixture id), decision_as_of, outcome,
+    raw_probability, and model_probabilities for every evaluation row.
+    A change to any target fixture's outcome or feature inputs produces a
+    different fingerprint.  Use this as the primary ``data_snapshot_ref``
+    in research experiment records so the full evaluation set is content-
+    addressed, not just the historical training inputs.
+    """
+    import json as _json
+
+    entries = [
+        {
+            "id": obs.observation_id,
+            "decision_as_of": obs.decision_as_of.isoformat(),
+            "outcome": obs.outcome,
+            "raw_probability": obs.raw_probability,
+            "model_probabilities": list(obs.model_probabilities),
+        }
+        for obs in sorted(observations, key=lambda o: o.observation_id)
+    ]
+    canonical = _json.dumps(entries, sort_keys=True, separators=(",", ":"))
+    return f"sha256:{hashlib.sha256(canonical.encode()).hexdigest()}"
+
+
 def _as_utc(value: datetime) -> datetime:
+    """Convert to UTC.  Naive datetimes (e.g. from SQLite sessions) are
+    assumed to already be UTC and are tagged rather than converted."""
     if value.tzinfo is None or value.utcoffset() is None:
         return value.replace(tzinfo=UTC)
     return value.astimezone(UTC)

@@ -224,6 +224,50 @@ class TestReportInvariants:
             assert 0 <= fold.calibrated_brier <= 1
 
 
+# --- Training-size boundary ---------------------------------------------------
+
+
+class TestTrainingBoundary:
+    def test_observations_with_late_outcomes_do_not_produce_folds(self) -> None:
+        """Training rows whose outcome_observed_at falls after the first test
+        decision cutoff are correctly excluded from the first fold.  The
+        evaluator must not silently collapse to zero folds when this happens.
+        """
+        # 30 train rows, all with outcome_observed_at two days after decision
+        # (simulating a 48h settlement window instead of 3h).
+        train = [
+            CalibrationObservationRow(
+                observation_id=f"late-{i:04d}",
+                decision_as_of=BASE + timedelta(days=i),
+                feature_as_of=BASE + timedelta(days=i) - timedelta(hours=2),
+                # Outcome available 48h after decision — well after test_cutoff
+                # for the last ~2 days of training
+                outcome_observed_at=BASE + timedelta(days=i) + timedelta(hours=48),
+                model_version=MODEL_VERSION,
+                raw_probability=0.35 + (i % 4) * 0.1,
+                outcome=i % 2,
+            )
+            for i in range(30)
+        ]
+        test_obs = [
+            _obs(100 + i, decision_offset_days=30 + i) for i in range(5)
+        ]
+        all_obs = train + test_obs
+
+        # With minimum_training_size=5 the evaluator must find some folds;
+        # the late-train observations that have outcomes after test_cutoff
+        # are excluded by the walk-forward but earlier ones are still available.
+        cfg = CalibrationOnlyConfig(
+            version=CONFIG_VERSION,
+            model_version=MODEL_VERSION,
+            calibration_method=CalibrationMethod.ISOTONIC,
+            minimum_training_size=5,
+            test_window_size=3,
+        )
+        report = calibration_only_walk_forward(all_obs, cfg)
+        assert len(report.folds) >= 1
+
+
 # --- CalibrationObservationRow validation ------------------------------------
 
 
