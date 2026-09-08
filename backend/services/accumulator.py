@@ -9,9 +9,18 @@ Design rules (mirror predictions.py):
   for a product land atomically (within the caller's transaction) or none do.
 - Paper-only gate — Phase 8 enforces paper_only=True on every decision; this
   service refuses to persist a non-paper record until that gate is lifted.
+  The check uses ``is True`` (strict identity) so truthy non-booleans such
+  as ``1`` or ``"true"`` are also rejected.
 - One accumulator_id per prediction — a prediction cannot belong to two live
   accumulators; a second attempt raises AccumulatorPersistenceError rather
   than silently overwriting.
+- SELECT FOR UPDATE — every Prediction row that is a ticket leg is locked for
+  the duration of the caller's transaction before its accumulator_id is read.
+  PostgreSQL serialises concurrent callers; the second session blocks until
+  the first commits, then observes accumulator_id != None and raises
+  AccumulatorPersistenceError rather than overwriting the back-link.
+  SQLite does not enforce FOR UPDATE (single-writer model); the
+  application-level check is the only protection there.
 - Caller owns the Session — flush is called after each product's batch so the
   caller can inspect the rows or roll back; the caller is responsible for
   commit/rollback.
@@ -23,6 +32,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.models import Accumulator, AccumulatorLeg, Prediction, TicketStatus
@@ -35,6 +45,11 @@ class AccumulatorPersistenceError(ValueError):
     def __init__(self, problems: list[str]) -> None:
         self.problems = problems
         super().__init__("cannot persist accumulator decision: " + "; ".join(problems))
+
+
+# Alias used by the PostgreSQL concurrent test and any callers that import the
+# shorter name.  Both names refer to the same exception class.
+AccumulatorPersistError = AccumulatorPersistenceError
 
 
 @dataclass(frozen=True)
@@ -120,7 +135,9 @@ def persist_accumulator_decision(
                     qss=leg.qss,
                 )
             )
-            # Link the prediction back to this accumulator.
+            # The Prediction is already in the session identity map — it was
+            # loaded and locked by _validate() above.  No second DB round-trip;
+            # the row lock is still held by this transaction.
             prediction = session.get(Prediction, prediction_id)
             if prediction is not None:
                 prediction.accumulator_id = accumulator.id
@@ -145,7 +162,7 @@ def _validate(
 ) -> list[str]:
     problems: list[str] = []
 
-    if not decision.paper_only:
+    if decision.paper_only is not True:
         problems.append(
             "paper_only must be True; live accumulator persistence is not yet enabled"
         )
@@ -188,7 +205,16 @@ def _validate(
                 continue
             seen[prediction_id] = pd.product.value
 
-            prediction = session.get(Prediction, prediction_id)
+            # Acquire a row lock before reading accumulator_id.  PostgreSQL
+            # serialises concurrent callers on the same prediction; the second
+            # session blocks here until the first commits, then reads the
+            # committed accumulator_id and fails the check below.
+            prediction = session.execute(
+                select(Prediction)
+                .where(Prediction.id == prediction_id)
+                .with_for_update()
+            ).scalar_one_or_none()
+
             if prediction is None:
                 problems.append(
                     f"prediction {prediction_id} does not exist in the database "

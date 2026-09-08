@@ -11,6 +11,7 @@ operation is wrapped in a SAVEPOINT (`begin_nested`) so the raised error does
 not abort the surrounding transaction.
 """
 
+import uuid
 from datetime import UTC, datetime
 
 import pytest
@@ -164,6 +165,22 @@ class TestPredictionsImmutable:
         pred = _new_prediction(session)
         _assert_blocked(
             session, "DELETE FROM predictions WHERE id = :id", {"id": str(pred.id)}
+        )
+
+    def test_accumulator_id_can_be_linked_once(self, session: Session) -> None:
+        """Setting accumulator_id NULL → UUID is the one permitted UPDATE on predictions."""
+        pred = _new_prediction(session)
+        acca_id = uuid.uuid4()
+        # First write: NULL → UUID must succeed.
+        session.execute(
+            text("UPDATE predictions SET accumulator_id = :acca_id WHERE id = :id"),
+            {"acca_id": acca_id, "id": str(pred.id)},
+        )
+        # Second write: UUID → different UUID must still be blocked.
+        _assert_blocked(
+            session,
+            "UPDATE predictions SET accumulator_id = :acca_id WHERE id = :id",
+            {"acca_id": str(uuid.uuid4()), "id": str(pred.id)},
         )
 
 
