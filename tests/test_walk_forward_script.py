@@ -39,10 +39,12 @@ from qwantej.performance.backtest import BacktestObservation  # noqa: E402
 from scripts.run_walk_forward import (  # noqa: E402
     ExperimentConfig,
     _build_backtest_observations,
+    _calibration_eligible,
     _data_snapshot_ref,
     _eligible_walk_forward_row,
     _observation_manifest,
     _observation_manifest_hash,
+    _run_calibration_only_backtest,
 )
 
 # ---------------------------------------------------------------------------
@@ -421,3 +423,162 @@ class TestAllLeaguesScoping:
             [replace(_obs(), model_probabilities=(0.60, 0.20, 0.20))]
         )
         assert first != second
+
+
+# ---------------------------------------------------------------------------
+# _calibration_eligible
+# ---------------------------------------------------------------------------
+
+
+class TestCalibrationEligible:
+    def test_settled_row_with_odds_is_eligible(self):
+        assert _calibration_eligible(_obs(has_odds=True))
+
+    def test_settled_row_without_odds_is_eligible(self):
+        assert _calibration_eligible(_obs(has_odds=False))
+
+    def test_row_without_outcome_is_not_eligible(self):
+        from dataclasses import replace
+        obs = replace(_obs(), outcome=None, outcome_observed_at=None)
+        assert not _calibration_eligible(obs)
+
+    def test_row_with_outcome_before_decision_is_not_eligible(self):
+        from dataclasses import replace
+        decision = datetime(2026, 9, 1, 12, tzinfo=UTC)
+        obs = replace(
+            _obs(),
+            decision_as_of=decision,
+            outcome_observed_at=decision,  # not strictly after
+        )
+        assert not _calibration_eligible(obs)
+
+
+# ---------------------------------------------------------------------------
+# Late-outcome training sizing (P1 regression)
+# ---------------------------------------------------------------------------
+
+_TEST_FROM_UTC = datetime(_TEST_FROM.year, _TEST_FROM.month, _TEST_FROM.day, tzinfo=UTC)
+
+
+def _late_settling_obs(
+    *,
+    decision_days_before_test: int,
+    settlement_hours_after_decision: int = 48,
+    has_odds: bool = False,
+) -> BacktestObservation:
+    """Observation decided before test_from but settled potentially after it."""
+    decision = _TEST_FROM_UTC - timedelta(days=decision_days_before_test)
+    return BacktestObservation(
+        observation_id=f"late-{decision_days_before_test}",
+        decision_as_of=decision,
+        feature_as_of=decision - timedelta(hours=2),
+        outcome_observed_at=decision + timedelta(hours=settlement_hours_after_decision),
+        model_version="poisson+elo-ensemble:1.0.0",
+        raw_probability=0.35 + (decision_days_before_test % 4) * 0.1,  # vary across rows
+        outcome=decision_days_before_test % 2,  # alternate 0/1 across rows
+        fair_market_probability=0.50 if has_odds else None,
+        executable_odds=2.10 if has_odds else None,
+        quote_timestamp=(decision - timedelta(minutes=30)) if has_odds else None,
+        model_probabilities=(0.55, 0.25, 0.20),
+    )
+
+
+class TestCalibrationOnlySizing:
+    """_run_calibration_only_backtest must not fail when late outcomes arrive
+    after the test window opens — the P1 regression from Codex round 3."""
+
+    def _make_cfg(self) -> ExperimentConfig:
+        return _cfg(calibration_only=True)
+
+    def test_all_settled_training_rows_runs_successfully(self):
+        """Baseline: all training outcomes arrive well before test_from."""
+        # 5 training rows settled 3h after decision (before test_from)
+        train = [
+            _late_settling_obs(decision_days_before_test=d, settlement_hours_after_decision=3)
+            for d in range(5, 0, -1)
+        ]
+        # 3 test rows decided on/after test_from, settled 3h later
+        test_obs = [
+            BacktestObservation(
+                observation_id=f"test-{i}",
+                decision_as_of=_TEST_FROM_UTC + timedelta(days=i),
+                feature_as_of=_TEST_FROM_UTC + timedelta(days=i) - timedelta(hours=2),
+                outcome_observed_at=_TEST_FROM_UTC + timedelta(days=i, hours=3),
+                model_version="poisson+elo-ensemble:1.0.0",
+                raw_probability=0.50,
+                outcome=i % 2,
+                fair_market_probability=None,
+                executable_odds=None,
+                quote_timestamp=None,
+                model_probabilities=(0.50, 0.25, 0.25),
+            )
+            for i in range(3)
+        ]
+        report, config = _run_calibration_only_backtest(train + test_obs, self._make_cfg())
+        assert report.sample_size >= 1
+        assert report.pit_certified is False
+
+    def test_late_settling_training_rows_do_not_cause_valueerror(self):
+        """Training outcomes arriving 3 days after decision (spanning test_from) must
+        not cause ValueError.  Old code: minimum_training_size=len(eligible_train)
+        required all outcomes settled by first fold cutoff → ValueError.
+        Fixed code: minimum_training_size=len(settled_train) uses only rows
+        with outcome_observed_at <= test_from_utc."""
+        # 10 training rows, all decided 1-10 days before test_from
+        # but with 72-hour settlement — the last 3 settle AFTER test_from
+        train = [
+            _late_settling_obs(
+                decision_days_before_test=d,
+                settlement_hours_after_decision=72,
+            )
+            for d in range(10, 0, -1)
+        ]
+        # 3 test rows decided on/after test_from, settled quickly
+        test_obs = [
+            BacktestObservation(
+                observation_id=f"test-late-{i}",
+                decision_as_of=_TEST_FROM_UTC + timedelta(days=i),
+                feature_as_of=_TEST_FROM_UTC + timedelta(days=i) - timedelta(hours=2),
+                outcome_observed_at=_TEST_FROM_UTC + timedelta(days=i, hours=3),
+                model_version="poisson+elo-ensemble:1.0.0",
+                raw_probability=0.50,
+                outcome=i % 2,
+                fair_market_probability=None,
+                executable_odds=None,
+                quote_timestamp=None,
+                model_probabilities=(0.50, 0.25, 0.25),
+            )
+            for i in range(3)
+        ]
+        # Must not raise ValueError even though 3 training outcomes arrive after test_from
+        report, config = _run_calibration_only_backtest(train + test_obs, self._make_cfg())
+        assert report.pit_certified is False
+
+    def test_calibration_dispatch_routes_through_research_path(self):
+        """_run_backtest with calibration_only=True returns CalibrationOnlyConfig."""
+        from qwantej.performance.calibration_backtest import CalibrationOnlyConfig
+        from scripts.run_walk_forward import _run_backtest
+
+        train = [
+            _late_settling_obs(decision_days_before_test=d, settlement_hours_after_decision=3)
+            for d in range(5, 0, -1)
+        ]
+        test_obs = [
+            BacktestObservation(
+                observation_id=f"dispatch-test-{i}",
+                decision_as_of=_TEST_FROM_UTC + timedelta(days=i),
+                feature_as_of=_TEST_FROM_UTC + timedelta(days=i) - timedelta(hours=2),
+                outcome_observed_at=_TEST_FROM_UTC + timedelta(days=i, hours=3),
+                model_version="poisson+elo-ensemble:1.0.0",
+                raw_probability=0.50,
+                outcome=i % 2,
+                fair_market_probability=None,
+                executable_odds=None,
+                quote_timestamp=None,
+                model_probabilities=(0.50, 0.25, 0.25),
+            )
+            for i in range(3)
+        ]
+        report, config = _run_backtest(train + test_obs, _cfg(calibration_only=True))
+        assert isinstance(config, CalibrationOnlyConfig)
+        assert config.as_dict()["pit_certified"] is False

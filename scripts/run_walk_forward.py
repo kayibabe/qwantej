@@ -409,6 +409,20 @@ def _run_calibration_only_backtest(
     if not eligible_test:
         raise ValueError("no eligible calibration test rows in the requested test window")
 
+    # Count only training rows whose outcome was already settled at test start.
+    # The evaluator's per-fold filter requires outcome_observed_at <= training_as_of;
+    # using len(eligible_train) would require every outcome to be settled at the
+    # first fold's cutoff, causing ValueError when late results arrive days after kickoff.
+    settled_train = [
+        o for o in eligible_train
+        if o.outcome_observed_at is not None and o.outcome_observed_at <= test_from_utc
+    ]
+    if len(settled_train) < 1:
+        raise ValueError(
+            f"no eligible calibration training rows with outcome settled by {test_from_utc}; "
+            "try widening the training window"
+        )
+
     calib_rows = [
         CalibrationObservationRow(
             observation_id=obs.observation_id,
@@ -426,7 +440,7 @@ def _run_calibration_only_backtest(
         version="calibration-only:1.0.0",
         model_version="poisson+elo-ensemble:1.0.0",
         calibration_method=CalibrationMethod.ISOTONIC,
-        minimum_training_size=max(2, len(eligible_train)),
+        minimum_training_size=max(2, len(settled_train)),
         test_window_size=max(1, len(eligible_test)),
     )
     report = calibration_only_walk_forward(calib_rows, calib_config)
