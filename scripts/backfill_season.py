@@ -5,13 +5,18 @@ results and odds into the local database. Fixtures already in the database
 are left intact (idempotent). Use this to seed the database before running
 ``scripts/run_walk_forward.py --skip-ingest``.
 
-Each chunk's ``captured_at`` is set to noon UTC on the last day of that
-chunk, NOT the wall-clock time of the API call. This makes re-runs
-idempotent (same chunk → same timestamp → ``_append_stats_snapshot``
-deduplicates) and clearly marks the snapshots as historical rather than
-live. The timestamps are still NOT the original pre-kickoff capture times,
-so use ``--calibration-only`` in ``run_walk_forward.py`` when using
-backfilled odds; a full walk-forward requires live snapshots ingested by
+Each chunk's ``captured_at`` is set to midnight UTC on the day *after* the
+chunk's end date (i.e. ``chunk_end + 1 day, 00:00 UTC``), NOT the
+wall-clock time of the API call. Choosing the next-day midnight guarantees
+that even fixtures which kicked off late on the chunk's last day (e.g.
+23:45 UTC) receive a snapshot whose ``as_of_timestamp`` is strictly after
+their kickoff — the constraint that ``fixture_result_observed_after_kickoff``
+requires.  Re-runs are idempotent: the same chunk always produces the same
+timestamp, so ``_append_stats_snapshot`` deduplicates identical rows.
+
+The timestamps are still NOT the original pre-kickoff capture times, so
+use ``--calibration-only`` in ``run_walk_forward.py`` when using backfilled
+odds; a full walk-forward requires live snapshots ingested by
 ``ingestion_worker`` before each match kicks off.
 
 Usage:
@@ -108,10 +113,14 @@ def backfill_season(
     )
 
     for i, (chunk_start, chunk_end) in enumerate(chunks, 1):
-        # Deterministic timestamp: noon UTC on the last day of the chunk.
-        # Using a fixed representative time (not wall-clock) makes re-runs
-        # idempotent and clearly marks these as historical captures.
-        captured_at = datetime.combine(chunk_end, dt_time(12, 0), tzinfo=UTC)
+        # Deterministic timestamp: midnight UTC on the day after chunk_end.
+        # Choosing next-day midnight ensures the snapshot's as_of_timestamp
+        # is strictly after every fixture's kickoff in the chunk — including
+        # late-evening kickoffs on the final day — satisfying the constraint
+        # that fixture_result_observed_after_kickoff requires.
+        captured_at = datetime.combine(
+            chunk_end + timedelta(days=1), dt_time(0, 0), tzinfo=UTC
+        )
         log.info("  chunk %d/%d: %s → %s", i, len(chunks), chunk_start, chunk_end)
         summary = ingest_walk_forward_window(
             session,
@@ -213,8 +222,8 @@ def main() -> None:
         log.info("Odds ingestion disabled (--no-odds)")
     else:
         log.warning(
-            "Odds captured_at will be noon UTC on each chunk's end date, NOT the "
-            "original pre-kickoff timestamp. Use --calibration-only in "
+            "Odds captured_at will be midnight UTC on the day after each chunk's end "
+            "date, NOT the original pre-kickoff timestamp. Use --calibration-only in "
             "run_walk_forward.py with this data, or add --no-odds to skip odds."
         )
 

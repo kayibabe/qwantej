@@ -178,6 +178,18 @@ class TestDateChunks:
         assert from_d == date(2024, 8, 1)
         assert to_d == date(2025, 6, 30)
 
+    def test_chunk_days_zero_raises(self) -> None:
+        with pytest.raises(ValueError, match="chunk_days must be >= 1"):
+            date_chunks(date(2024, 8, 1), date(2024, 8, 31), chunk_days=0)
+
+    def test_chunk_days_negative_raises(self) -> None:
+        with pytest.raises(ValueError, match="chunk_days must be >= 1"):
+            date_chunks(date(2024, 8, 1), date(2024, 8, 31), chunk_days=-5)
+
+    def test_from_after_to_returns_empty(self) -> None:
+        chunks = date_chunks(date(2024, 9, 1), date(2024, 8, 31), chunk_days=30)
+        assert chunks == []
+
 
 # ---------------------------------------------------------------------------
 # Postgres integration tests
@@ -225,12 +237,13 @@ class TestBackfillSeasonPg:
             chunk_days=31,
             include_odds=False,
         )
-        s1 = backfill_season(client, session, **kwargs)
-        assert s1.fixtures_created >= 1
-        s2 = backfill_season(client, session, **kwargs)
+        first_run = backfill_season(client, session, **kwargs)
+        assert first_run.fixtures_created >= 1
+        second_run = backfill_season(client, session, **kwargs)
         # All rows already exist — ingestion silently skips duplicates
-        assert s2.fixtures_created == 0
-        assert s2.fixtures_updated == 0
+        assert second_run.fixtures_created == 0
+        assert second_run.fixtures_updated == 0
+        assert second_run.fixture_snapshots_created == 0
 
     def test_odds_created_when_enabled(self, session: Session) -> None:
         client = _make_client()
