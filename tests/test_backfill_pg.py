@@ -226,6 +226,7 @@ class TestBackfillSeasonPg:
             include_odds=False,
         )
         s1 = backfill_season(client, session, **kwargs)
+        assert s1.fixtures_created >= 1
         s2 = backfill_season(client, session, **kwargs)
         # All rows already exist — ingestion silently skips duplicates
         assert s2.fixtures_created == 0

@@ -339,17 +339,17 @@ def _run_backtest(
     from qwantej.value import ValueGatePolicy
 
     test_from_utc = datetime.combine(cfg.test_from, datetime.min.time(), tzinfo=UTC)
-    # Eligible rows for sizing: must have a valid market baseline (odds).
-    # In calibration-only mode, rows without odds still enter the walk-forward
-    # and contribute to calibration training, but the min/test sizing uses only
-    # observations with a market baseline so the evaluation window is well-defined.
+    # In calibration-only mode, odds are not required for sizing: any finished
+    # fixture with an outcome qualifies. Rows without a market baseline will
+    # still be excluded from value-gate metrics at report time.
+    eligibility_fn = _calibration_eligible if cfg.calibration_only else _eligible_walk_forward_row
     eligible_train = [
         o for o in observations
-        if o.decision_as_of < test_from_utc and _eligible_walk_forward_row(o)
+        if o.decision_as_of < test_from_utc and eligibility_fn(o)
     ]
     eligible_test = [
         o for o in observations
-        if o.decision_as_of >= test_from_utc and _eligible_walk_forward_row(o)
+        if o.decision_as_of >= test_from_utc and eligibility_fn(o)
     ]
 
     min_train = 1 if cfg.calibration_only else 10
@@ -393,6 +393,20 @@ def _eligible_walk_forward_row(observation: Any) -> bool:
         and observation.executable_odds is not None
         and observation.quote_timestamp is not None
         and observation.quote_timestamp <= observation.decision_as_of
+    )
+
+
+def _calibration_eligible(observation: Any) -> bool:
+    """Relaxed eligibility for --calibration-only: outcome required, odds not.
+
+    Rows without a market baseline still contribute to calibration training;
+    they will carry fair_market_probability=None and be skipped by the
+    value-gate evaluator at report time.
+    """
+    return (
+        observation.outcome is not None
+        and observation.outcome_observed_at is not None
+        and observation.outcome_observed_at > observation.decision_as_of
     )
 
 

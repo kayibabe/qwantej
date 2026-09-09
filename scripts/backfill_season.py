@@ -5,12 +5,14 @@ results and odds into the local database. Fixtures already in the database
 are left intact (idempotent). Use this to seed the database before running
 ``scripts/run_walk_forward.py --skip-ingest``.
 
-Note: odds ingested by this script carry ``captured_at = <now>`` (the time
-of the API call), not the original pre-kickoff capture time. This means they
-are NOT point-in-time valid for a strict walk-forward market baseline. Use
-``--calibration-only`` in ``run_walk_forward.py`` when using backfilled data;
-a full walk-forward requires odds ingested by the live ``ingestion_worker``
-before each match kicks off.
+Each chunk's ``captured_at`` is set to noon UTC on the last day of that
+chunk, NOT the wall-clock time of the API call. This makes re-runs
+idempotent (same chunk → same timestamp → ``_append_stats_snapshot``
+deduplicates) and clearly marks the snapshots as historical rather than
+live. The timestamps are still NOT the original pre-kickoff capture times,
+so use ``--calibration-only`` in ``run_walk_forward.py`` when using
+backfilled odds; a full walk-forward requires live snapshots ingested by
+``ingestion_worker`` before each match kicks off.
 
 Usage:
     python scripts/backfill_season.py \\
@@ -28,6 +30,7 @@ import logging
 import sys
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
+from datetime import time as dt_time
 from pathlib import Path
 from typing import Any
 
@@ -62,6 +65,8 @@ def season_date_range(season: int) -> tuple[date, date]:
 
 def date_chunks(from_date: date, to_date: date, chunk_days: int) -> list[tuple[date, date]]:
     """Split [from_date, to_date] into non-overlapping windows of at most chunk_days."""
+    if chunk_days <= 0:
+        raise ValueError(f"chunk_days must be >= 1, got {chunk_days}")
     chunks: list[tuple[date, date]] = []
     cursor = from_date
     while cursor <= to_date:
@@ -103,7 +108,10 @@ def backfill_season(
     )
 
     for i, (chunk_start, chunk_end) in enumerate(chunks, 1):
-        captured_at = datetime.now(UTC)
+        # Deterministic timestamp: noon UTC on the last day of the chunk.
+        # Using a fixed representative time (not wall-clock) makes re-runs
+        # idempotent and clearly marks these as historical captures.
+        captured_at = datetime.combine(chunk_end, dt_time(12, 0), tzinfo=UTC)
         log.info("  chunk %d/%d: %s → %s", i, len(chunks), chunk_start, chunk_end)
         summary = ingest_walk_forward_window(
             session,
@@ -173,6 +181,10 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+class _DryRun(Exception):
+    """Raised inside session_scope to trigger its rollback path during --dry-run."""
+
+
 def main() -> None:
     args = parse_args()
 
@@ -201,9 +213,9 @@ def main() -> None:
         log.info("Odds ingestion disabled (--no-odds)")
     else:
         log.warning(
-            "Odds will be stored with captured_at=now, NOT the original pre-kickoff "
-            "timestamp. Use --calibration-only in run_walk_forward.py with this data, "
-            "or add --no-odds to skip odds entirely."
+            "Odds captured_at will be noon UTC on each chunk's end date, NOT the "
+            "original pre-kickoff timestamp. Use --calibration-only in "
+            "run_walk_forward.py with this data, or add --no-odds to skip odds."
         )
 
     client = ApiFootballClient(
@@ -213,23 +225,23 @@ def main() -> None:
     )
     engine = make_engine(settings.database_url)
 
-    with session_scope(engine) as session:
-        summary = backfill_season(
-            client,
-            session,
-            league_id=args.league,
-            season=args.season,
-            from_date=from_date,
-            to_date=to_date,
-            chunk_days=args.chunk_days,
-            include_odds=not args.no_odds,
-            include_fixture_statistics=args.with_statistics,
-        )
-
-        if args.dry_run:
-            session.rollback()
-            log.info("Dry-run: no rows committed")
-        else:
+    summary: BackfillSummary | None = None
+    try:
+        with session_scope(engine) as session:
+            summary = backfill_season(
+                client,
+                session,
+                league_id=args.league,
+                season=args.season,
+                from_date=from_date,
+                to_date=to_date,
+                chunk_days=args.chunk_days,
+                include_odds=not args.no_odds,
+                include_fixture_statistics=args.with_statistics,
+            )
+            if args.dry_run:
+                # Raise inside session_scope so its except-branch calls rollback.
+                raise _DryRun()
             log.info(
                 "Backfill complete: %d chunk(s) | fixtures +%d/~%d | "
                 "snapshots=%d | odds +%d",
@@ -239,6 +251,8 @@ def main() -> None:
                 summary.fixture_snapshots_created,
                 summary.odds_quotes_created,
             )
+    except _DryRun:
+        log.info("Dry-run: no rows committed")
 
 
 if __name__ == "__main__":
