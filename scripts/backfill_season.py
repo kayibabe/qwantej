@@ -222,9 +222,11 @@ def main() -> None:
         log.info("Odds ingestion disabled (--no-odds)")
     else:
         log.warning(
-            "Odds captured_at will be midnight UTC on the day after each chunk's end "
-            "date, NOT the original pre-kickoff timestamp. Use --calibration-only in "
-            "run_walk_forward.py with this data, or add --no-odds to skip odds."
+            "Fixture snapshots receive a synthetic midnight-UTC timestamp (the day "
+            "after each chunk's end date). Odds quotes retain the provider's own "
+            "timestamp from the API response ('update' field) — these are also NOT "
+            "pre-kickoff PIT-valid for backfilled seasons. Use --calibration-only in "
+            "run_walk_forward.py with this data, or add --no-odds to skip odds entirely."
         )
 
     client = ApiFootballClient(
