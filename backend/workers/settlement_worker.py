@@ -44,6 +44,7 @@ from backend.models import (
     SettlementOutcome as OrmSettlementOutcome,
 )
 from backend.services.performance import performance_report
+from backend.services.reliability import rebuild_reliability_snapshots
 from backend.services.settlement import (
     SettlementError,
     find_closing_odds,
@@ -330,6 +331,35 @@ def run_settlement(session: Session, *, now: datetime | None = None) -> WorkerRu
             log.debug("settlement_worker: execution drift check skipped: %s", exc)
 
     run.drift_checked = True
+
+    # Rebuild reliability snapshots so the next signal pipeline run uses
+    # up-to-date lrs/mrs scores.  Only trigger when new settlements landed;
+    # no-op otherwise to avoid writing redundant snapshot rows.
+    if run.total_settled > 0:
+        import subprocess
+        try:
+            code_commit = subprocess.check_output(
+                ["git", "rev-parse", "--short", "HEAD"],
+                text=True,
+                stderr=subprocess.DEVNULL,
+            ).strip()
+        except Exception:
+            code_commit = "unknown"
+        try:
+            n_snaps = rebuild_reliability_snapshots(
+                session, as_of=now, code_commit=code_commit
+            )
+            if n_snaps:
+                log.info(
+                    "settlement_worker: reliability rebuilt — %d snapshot(s) written",
+                    n_snaps,
+                )
+            else:
+                log.info(
+                    "settlement_worker: reliability rebuild skipped — no qualifying observations"
+                )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("settlement_worker: reliability rebuild failed: %s", exc)
 
     # KPI snapshot logged after each run so trends are visible in structured logs.
     try:
