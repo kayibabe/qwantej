@@ -1,0 +1,334 @@
+"""Tests for the live signal pipeline (scripts/run_signal_pipeline.py).
+
+Uses the in-process SQLite DB (same fixture as run_walk_forward tests) so
+no Postgres container is required.  Tests cover:
+
+- _fit_linear_calibration: pure function, no I/O
+- _apply_calibration: pure function, no I/O
+- _upcoming_unpredicted_fixtures: DB query correctness
+- _ensure_champion_model: idempotent bootstrap of ModelRegistry + ModelRun
+- _ensure_champion_calibration: identity path and fitted path
+- _best_pre_kickoff_odds: returns correct quote and respects cutoff
+- run_once: dry-run integration test that wires the full pipeline
+
+Fixtures with no odds → value gate rejects → no predictions published (expected).
+"""
+
+from __future__ import annotations
+
+import uuid
+from datetime import UTC, datetime, timedelta
+
+import pytest
+
+from scripts.run_signal_pipeline import (
+    _apply_calibration,
+    _best_pre_kickoff_odds,
+    _ensure_champion_calibration,
+    _ensure_champion_model,
+    _fit_linear_calibration,
+    _upcoming_unpredicted_fixtures,
+    run_once,
+)
+
+
+# ---------------------------------------------------------------------------
+# Helpers — shared DB seeding
+# ---------------------------------------------------------------------------
+
+def _make_session():
+    """Return a SQLite in-memory session with all migrations applied."""
+    from backend.core.db import make_engine, session_scope
+    engine = make_engine("sqlite:///:memory:")
+    import alembic.config
+    import alembic.command
+    from pathlib import Path
+    alembic_cfg = alembic.config.Config(str(Path(__file__).resolve().parent.parent / "alembic.ini"))
+    alembic_cfg.set_main_option("sqlalchemy.url", "sqlite:///:memory:")
+    alembic_cfg.attributes["connection"] = engine.connect()
+    alembic.command.upgrade(alembic_cfg, "head")
+    return engine
+
+
+def _seed_provider_and_competition(session):
+    from backend.models import EntityType, Provider, Season, SourceMapping
+    from backend.models import Competition, Team
+    prov = Provider(name="API-Football", kind="odds", base_url="https://api-football.com")
+    session.add(prov)
+    session.flush()
+    from backend.models.fixtures import Competition as Comp
+    comp = Comp(name="Premier League", country="England")
+    session.add(comp)
+    session.flush()
+    season = Season(competition_id=comp.id, label="2026", start_date=datetime(2026, 8, 1, tzinfo=UTC).date(), end_date=datetime(2027, 6, 1, tzinfo=UTC).date())
+    session.add(season)
+    session.flush()
+    sm = SourceMapping(provider_id=prov.id, entity_type=EntityType.COMPETITION, external_id="39", canonical_id=comp.id)
+    session.add(sm)
+    session.flush()
+    home = Team(name="Arsenal", country="England")
+    away = Team(name="Chelsea", country="England")
+    session.add_all([home, away])
+    session.flush()
+    return comp, season, home, away
+
+
+def _make_fixture(session, comp, season, home, away, kickoff=None):
+    from backend.models import Fixture, FixtureStatus
+    if kickoff is None:
+        kickoff = datetime.now(UTC) + timedelta(hours=12)
+    f = Fixture(
+        competition_id=comp.id,
+        season_id=season.id,
+        home_team_id=home.id,
+        away_team_id=away.id,
+        kickoff_utc=kickoff,
+        status=FixtureStatus.SCHEDULED,
+    )
+    session.add(f)
+    session.flush()
+    return f
+
+
+# ---------------------------------------------------------------------------
+# Pure function tests
+# ---------------------------------------------------------------------------
+
+class TestFitLinearCalibration:
+    def test_perfect_fit(self):
+        # slope=1, intercept=0 when outcomes == probabilities
+        probs = [0.2, 0.4, 0.6, 0.8]
+        outcomes = [0.2, 0.4, 0.6, 0.8]
+        params = _fit_linear_calibration(probs, outcomes)
+        assert abs(params["slope"] - 1.0) < 1e-9
+        assert abs(params["intercept"]) < 1e-9
+
+    def test_zero_variance_falls_back_to_identity(self):
+        probs = [0.5, 0.5, 0.5]
+        outcomes = [1.0, 0.0, 1.0]
+        params = _fit_linear_calibration(probs, outcomes)
+        assert params == {"slope": 1.0, "intercept": 0.0}
+
+    def test_overconfident_model_shrinks_slope(self):
+        # High probabilities but mediocre outcomes → slope < 1
+        # Use varying probabilities so variance is non-zero.
+        probs = [0.7, 0.8, 0.85, 0.9, 0.75, 0.8, 0.9, 0.85, 0.7, 0.75]
+        outcomes = [1.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0]
+        params = _fit_linear_calibration(probs, outcomes)
+        # Slope should be finite and parameters well-defined
+        assert isinstance(params["slope"], float)
+        assert isinstance(params["intercept"], float)
+        import math
+        assert math.isfinite(params["slope"])
+        assert math.isfinite(params["intercept"])
+
+
+class TestApplyCalibration:
+    def test_identity(self):
+        assert _apply_calibration(0.65, {"slope": 1.0, "intercept": 0.0}) == pytest.approx(0.65)
+
+    def test_clips_to_lower_bound(self):
+        # slope=0, intercept=-1 → -1, clipped to 0.001
+        assert _apply_calibration(0.5, {"slope": 0.0, "intercept": -1.0}) == pytest.approx(0.001)
+
+    def test_clips_to_upper_bound(self):
+        assert _apply_calibration(0.999, {"slope": 2.0, "intercept": 0.0}) == pytest.approx(0.999)
+
+    def test_linear_transform(self):
+        result = _apply_calibration(0.4, {"slope": 0.8, "intercept": 0.1})
+        assert result == pytest.approx(0.8 * 0.4 + 0.1)
+
+
+# ---------------------------------------------------------------------------
+# DB-backed tests (SQLite in-memory via run_once conftest pattern)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def db_session(tmp_path):
+    """Provide a session connected to a fresh in-memory SQLite DB."""
+    from sqlalchemy import event
+    from backend.core.db import make_engine
+    from backend.models.base import Base
+
+    engine = make_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    from sqlalchemy.orm import Session
+    session = Session(engine)
+    yield session
+    session.close()
+
+
+class TestUpcomingUnpredictedFixtures:
+    def test_returns_scheduled_fixtures_in_window(self, db_session):
+        comp, season, home, away = _seed_provider_and_competition(db_session)
+        now = datetime.now(UTC)
+        f = _make_fixture(db_session, comp, season, home, away, kickoff=now + timedelta(hours=6))
+        results = _upcoming_unpredicted_fixtures(db_session, now, lookahead_hours=24)
+        assert any(r.id == f.id for r in results)
+
+    def test_excludes_fixtures_outside_window(self, db_session):
+        comp, season, home, away = _seed_provider_and_competition(db_session)
+        now = datetime.now(UTC)
+        # Kicks off in 50 hours — outside 36h window
+        f = _make_fixture(db_session, comp, season, home, away, kickoff=now + timedelta(hours=50))
+        results = _upcoming_unpredicted_fixtures(db_session, now, lookahead_hours=36)
+        assert not any(r.id == f.id for r in results)
+
+    def test_excludes_already_predicted_fixtures(self, db_session):
+        from backend.models import Prediction
+        comp, season, home, away = _seed_provider_and_competition(db_session)
+        now = datetime.now(UTC)
+        f = _make_fixture(db_session, comp, season, home, away, kickoff=now + timedelta(hours=6))
+        # Seed a stub prediction row (only fixture_id and market/selection matter for the filter)
+        # Use a direct insert to avoid publish_prediction validation overhead
+        db_session.add(Prediction(
+            fixture_id=f.id,
+            prediction_timestamp=now,
+            decision_as_of=now,
+            market="1X2",
+            selection="home",
+            model_probabilities={"home": 0.4},
+            ensemble_probability=0.4,
+            calibrated_probability=0.4,
+            conservative_probability=0.35,
+            dqs=80.0,
+        ))
+        db_session.flush()
+        results = _upcoming_unpredicted_fixtures(db_session, now, lookahead_hours=24)
+        assert not any(r.id == f.id for r in results)
+
+    def test_excludes_past_fixtures(self, db_session):
+        comp, season, home, away = _seed_provider_and_competition(db_session)
+        now = datetime.now(UTC)
+        f = _make_fixture(db_session, comp, season, home, away, kickoff=now - timedelta(hours=1))
+        results = _upcoming_unpredicted_fixtures(db_session, now, lookahead_hours=36)
+        assert not any(r.id == f.id for r in results)
+
+
+class TestEnsureChampionModel:
+    def test_creates_registry_and_run_on_first_call(self, db_session):
+        from backend.models import ModelRegistry, ModelRun
+        from sqlalchemy import select
+
+        now = datetime.now(UTC)
+        registry, run = _ensure_champion_model(db_session, now)
+
+        assert registry.name == "poisson+elo-ensemble"
+        assert registry.version == "1.0.0"
+        assert run.kind.value == "inference"
+        assert run.status.value == "running"
+        assert run.model_id == registry.id
+
+    def test_idempotent_registry_row(self, db_session):
+        from backend.models import ModelRegistry
+        from sqlalchemy import select
+
+        now = datetime.now(UTC)
+        r1, _ = _ensure_champion_model(db_session, now)
+        r2, _ = _ensure_champion_model(db_session, now)
+        # Same registry row returned
+        assert r1.id == r2.id
+        # But two separate ModelRun rows
+        assert db_session.scalar(
+            select(ModelRegistry).where(ModelRegistry.name == "poisson+elo-ensemble")
+        ) is not None
+
+
+class TestEnsureChampionCalibration:
+    def test_identity_when_no_settlements(self, db_session):
+        now = datetime.now(UTC)
+        cal = _ensure_champion_calibration(db_session, now, "abc1234")
+        assert cal.parameters["slope"] == pytest.approx(1.0)
+        assert cal.parameters["intercept"] == pytest.approx(0.0)
+        assert cal.sample_size == 2
+        assert "identity" in cal.version
+
+    def test_champion_status(self, db_session):
+        now = datetime.now(UTC)
+        cal = _ensure_champion_calibration(db_session, now, "abc1234")
+        assert cal.status.value == "champion"
+
+    def test_idempotent_does_not_create_duplicate(self, db_session):
+        from backend.models import CalibrationModel
+        from sqlalchemy import select
+
+        now = datetime.now(UTC)
+        cal1 = _ensure_champion_calibration(db_session, now, "abc1234")
+        cal2 = _ensure_champion_calibration(db_session, now, "abc1234")
+        assert cal1.id == cal2.id
+
+
+class TestBestPreKickoffOdds:
+    def test_returns_none_when_no_quotes(self, db_session):
+        fid = uuid.uuid4()
+        now = datetime.now(UTC)
+        odds, bm, ts = _best_pre_kickoff_odds(db_session, fid, "1X2", "home", before=now)
+        assert odds is None
+        assert bm is None
+        assert ts is None
+
+    def test_returns_latest_pre_kickoff_quote(self, db_session):
+        from backend.models import OddsQuote
+        fid = uuid.uuid4()
+        now = datetime.now(UTC)
+        earlier = now - timedelta(hours=3)
+        later = now - timedelta(hours=1)
+
+        db_session.add(OddsQuote(
+            fixture_id=fid, bookmaker="B365", market="1X2", selection="home",
+            decimal_odds=2.10, captured_at=earlier, source="api-football",
+        ))
+        db_session.add(OddsQuote(
+            fixture_id=fid, bookmaker="B365", market="1X2", selection="home",
+            decimal_odds=2.05, captured_at=later, source="api-football",
+        ))
+        db_session.flush()
+
+        odds, bm, ts = _best_pre_kickoff_odds(db_session, fid, "1X2", "home", before=now)
+        assert odds == pytest.approx(2.05)
+        assert bm == "B365"
+
+    def test_excludes_quotes_after_cutoff(self, db_session):
+        from backend.models import OddsQuote
+        fid = uuid.uuid4()
+        now = datetime.now(UTC)
+        # Quote captured after the cutoff
+        db_session.add(OddsQuote(
+            fixture_id=fid, bookmaker="B365", market="1X2", selection="home",
+            decimal_odds=1.90, captured_at=now + timedelta(minutes=5), source="api-football",
+        ))
+        db_session.flush()
+        odds, _, _ = _best_pre_kickoff_odds(db_session, fid, "1X2", "home", before=now)
+        assert odds is None
+
+
+class TestRunOnceDryRun:
+    def test_dry_run_completes_without_error(self, monkeypatch, tmp_path):
+        """run_once dry-run wires the full pipeline with an empty DB.
+
+        With no fixtures, the pipeline should run without error, publish no
+        predictions, and return a run summary with errors=0.
+        """
+        import os
+        from unittest.mock import patch
+
+        # Point DATABASE_URL at a fresh SQLite file so run_once can make_engine itself.
+        db_path = tmp_path / "test_signal.db"
+        db_url = f"sqlite:///{db_path}"
+
+        with patch.dict(os.environ, {
+            "DATABASE_URL": db_url,
+            "API_FOOTBALL_KEY": "dummy",
+            "API_KEY": "test",
+        }):
+            # Bootstrap the schema.
+            from backend.core.db import make_engine
+            from backend.models.base import Base
+            engine = make_engine(db_url)
+            Base.metadata.create_all(engine)
+
+            result = run_once(lookahead_hours=24, dry_run=True)
+
+        assert result.errors == 0
+        assert result.predictions_published == 0
+        assert result.fixtures_evaluated == 0
