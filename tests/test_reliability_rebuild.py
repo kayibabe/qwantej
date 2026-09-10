@@ -70,8 +70,9 @@ def _prediction(
     session: Session,
     fixture: Fixture,
     *,
-    calibrated_probability: float = 0.62,
+    calibrated_probability: float | None = 0.62,
     market: str = "1X2",
+    executable_odds: float = 1.80,
 ) -> Prediction:
     pred = Prediction(
         fixture_id=fixture.id,
@@ -81,6 +82,7 @@ def _prediction(
         selection="home",
         calibrated_probability=calibrated_probability,
         conservative_probability=0.58,
+        executable_odds=executable_odds,
     )
     session.add(pred)
     session.flush()
@@ -92,7 +94,7 @@ def _settlement(
     prediction: Prediction,
     *,
     outcome: SettlementOutcome = SettlementOutcome.WIN,
-    taken_probability: float = 0.50,
+    taken_odds: float = 1.80,
     clv: float | None = 0.05,
     supersedes_id: uuid.UUID | None = None,
     settled_at: datetime = SETTLED,
@@ -102,7 +104,7 @@ def _settlement(
         subject_id=prediction.id,
         outcome=outcome,
         settled_at=settled_at,
-        taken_probability=taken_probability,
+        taken_odds=taken_odds,
         clv=clv,
         supersedes_id=supersedes_id,
     )
@@ -121,7 +123,7 @@ class TestQueryReliabilityObservations:
         comp = _competition(session)
         fix = _fixture(session, comp)
         pred = _prediction(session, fix, calibrated_probability=0.62)
-        _settlement(session, pred, outcome=SettlementOutcome.WIN, taken_probability=0.50)
+        _settlement(session, pred, outcome=SettlementOutcome.WIN, taken_odds=2.10)
 
         obs, comp_map = query_reliability_observations(session, as_of=NOW)
         assert len(obs) == 1
@@ -132,16 +134,29 @@ class TestQueryReliabilityObservations:
         assert o.competition_class == "tier-1"
         assert o.outcome == 1
         assert o.predicted_probability == pytest.approx(0.62)
-        # profit for win at taken_probability=0.50 → 1/0.5 - 1 = 1.0
-        assert o.profit_units == pytest.approx(1.0)
+        # profit for win at decimal odds 2.10 → 2.10 - 1 = 1.10
+        assert o.profit_units == pytest.approx(1.10)
         assert o.closing_line_value == pytest.approx(0.05)
         assert comp_map == {"Premier League": comp.id}
+
+    def test_profit_uses_taken_odds_not_taken_probability(self, session):
+        # Regression: taken_probability is the model's probability, not decimal odds.
+        # At taken_odds=2.00, profit=1.00; 1/taken_probability would give a
+        # very different value when calibrated_probability=0.40.
+        comp = _competition(session)
+        fix = _fixture(session, comp)
+        pred = _prediction(session, fix, calibrated_probability=0.40)
+        _settlement(session, pred, outcome=SettlementOutcome.WIN, taken_odds=2.00)
+
+        obs, _ = query_reliability_observations(session, as_of=NOW)
+        # Correct: decimal_odds - 1 = 2.00 - 1 = 1.00
+        assert obs[0].profit_units == pytest.approx(1.00)
 
     def test_loss_produces_observation(self, session):
         comp = _competition(session)
         fix = _fixture(session, comp)
         pred = _prediction(session, fix)
-        _settlement(session, pred, outcome=SettlementOutcome.LOSS, taken_probability=0.45)
+        _settlement(session, pred, outcome=SettlementOutcome.LOSS, taken_odds=1.90)
 
         obs, _ = query_reliability_observations(session, as_of=NOW)
         assert len(obs) == 1
@@ -153,7 +168,25 @@ class TestQueryReliabilityObservations:
         comp = _competition(session)
         fix = _fixture(session, comp)
         pred = _prediction(session, fix)
-        _settlement(session, pred, outcome=SettlementOutcome.VOID, taken_probability=0.50)
+        _settlement(session, pred, outcome=SettlementOutcome.VOID)
+
+        obs, _ = query_reliability_observations(session, as_of=NOW)
+        assert obs == []
+
+    def test_settlement_without_taken_odds_excluded(self, session):
+        # Settlements with no taken_odds cannot contribute to ROI calculation.
+        comp = _competition(session)
+        fix = _fixture(session, comp)
+        pred = _prediction(session, fix)
+        s = Settlement(
+            subject_type="prediction",
+            subject_id=pred.id,
+            outcome=SettlementOutcome.WIN,
+            settled_at=SETTLED,
+            taken_odds=None,
+        )
+        session.add(s)
+        session.flush()
 
         obs, _ = query_reliability_observations(session, as_of=NOW)
         assert obs == []
@@ -163,8 +196,8 @@ class TestQueryReliabilityObservations:
         fix = _fixture(session, comp)
         pred = _prediction(session, fix)
         original = _settlement(session, pred, outcome=SettlementOutcome.LOSS)
-        # Correction row supersedes the original
-        correction = _settlement(
+        # Correction row supersedes the original; original must not appear.
+        _settlement(
             session,
             pred,
             outcome=SettlementOutcome.WIN,
@@ -173,7 +206,6 @@ class TestQueryReliabilityObservations:
         )
 
         obs, _ = query_reliability_observations(session, as_of=NOW)
-        # Only the correction (WIN) should appear, not the superseded LOSS
         assert len(obs) == 1
         assert obs[0].outcome == 1
         assert obs[0].observation_id == str(pred.id)
@@ -191,7 +223,6 @@ class TestQueryReliabilityObservations:
         comp = _competition(session)
         fix = _fixture(session, comp)
         pred = _prediction(session, fix, calibrated_probability=None)
-        # Override the calibrated_probability to None after flush
         pred.calibrated_probability = None
         session.flush()
         _settlement(session, pred, outcome=SettlementOutcome.WIN)
@@ -232,7 +263,6 @@ class TestRebuildReliabilitySnapshots:
     def test_rebuilds_snapshot_from_settled_predictions(self, session):
         comp = _competition(session)
         fix = _fixture(session, comp)
-        # Seed 5 wins and 5 losses to exceed minimum_qualified_effective_sample
         for i in range(10):
             pred = _prediction(session, fix, calibrated_probability=0.55 + i * 0.01)
             outcome = SettlementOutcome.WIN if i % 2 == 0 else SettlementOutcome.LOSS
@@ -252,6 +282,30 @@ class TestRebuildReliabilitySnapshots:
             assert snap.input_snapshot_ref == "settlement-worker-rebuild"
             assert len(snap.input_snapshot_hash) == 64
 
+    def test_snapshot_hash_changes_when_odds_change(self, session):
+        # Regression: hash must cover behavior-affecting fields, not just IDs.
+        # Use two different as_of timestamps so each rebuild writes a distinct row
+        # (unique constraint is on competition_id, market_family, evaluated_as_of,
+        # policy_version — different evaluated_as_of avoids the conflict).
+        comp = _competition(session)
+        fix = _fixture(session, comp)
+        pred = _prediction(session, fix, calibrated_probability=0.60)
+        _settlement(session, pred, outcome=SettlementOutcome.WIN, taken_odds=2.00)
+        rebuild_reliability_snapshots(session, as_of=NOW, code_commit="abc1234")
+        first_hash = session.query(ReliabilitySnapshot).first().input_snapshot_hash
+
+        # Change the odds on the settlement row — same IDs, different data.
+        s = session.query(Settlement).first()
+        s.taken_odds = 3.50
+        session.flush()
+        now2 = NOW + timedelta(seconds=1)
+        rebuild_reliability_snapshots(session, as_of=now2, code_commit="abc1234")
+        second_hash = session.query(ReliabilitySnapshot).order_by(
+            ReliabilitySnapshot.created_at.desc()
+        ).first().input_snapshot_hash
+
+        assert first_hash != second_hash
+
     def test_snapshot_evaluated_as_of_matches_as_of(self, session):
         comp = _competition(session)
         fix = _fixture(session, comp)
@@ -263,5 +317,33 @@ class TestRebuildReliabilitySnapshots:
         rebuild_reliability_snapshots(session, as_of=NOW, code_commit="abc1234")
         snap = session.query(ReliabilitySnapshot).first()
         assert snap is not None
-        # evaluated_as_of is stored as naive UTC in SQLite
         assert snap.evaluated_as_of.replace(tzinfo=UTC) == NOW
+
+
+class TestWorkerTriggersRebuild:
+    """Verify that run_settlement() invokes rebuild_reliability_snapshots."""
+
+    def test_run_settlement_writes_reliability_snapshot(self, session):
+        from backend.workers.settlement_worker import run_settlement
+
+        comp = _competition(session)
+        fix = _fixture(session, comp)
+        _prediction(session, fix, calibrated_probability=0.65, executable_odds=1.80)
+        session.flush()
+
+        run = run_settlement(session, now=NOW)
+
+        assert run.total_settled == 1
+        snaps = session.query(ReliabilitySnapshot).all()
+        assert len(snaps) > 0, "reliability snapshot must be written after settlement"
+        assert snaps[0].input_snapshot_ref == "settlement-worker-rebuild"
+
+    def test_run_settlement_no_new_settlements_skips_rebuild(self, session):
+        # No finished fixtures → total_settled stays 0 → no snapshot written.
+        from backend.workers.settlement_worker import run_settlement
+
+        run = run_settlement(session, now=NOW)
+
+        assert run.total_settled == 0
+        snaps = session.query(ReliabilitySnapshot).all()
+        assert snaps == []

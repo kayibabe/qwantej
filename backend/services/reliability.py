@@ -185,14 +185,14 @@ def query_reliability_observations(
     )
 
     stmt = (
-        select(Settlement, Prediction, Fixture, Competition)
+        select(Settlement, Prediction, Competition)
         .join(Prediction, Prediction.id == Settlement.subject_id)
         .join(Fixture, Fixture.id == Prediction.fixture_id)
         .join(Competition, Competition.id == Fixture.competition_id)
         .where(
             Settlement.subject_type == "prediction",
             Settlement.outcome.in_([SettlementOutcome.WIN, SettlementOutcome.LOSS]),
-            Settlement.taken_probability.is_not(None),
+            Settlement.taken_odds.is_not(None),
             Settlement.id.not_in(superseded_ids),
             Settlement.settled_at <= as_of,
             Prediction.calibrated_probability.is_not(None),
@@ -202,13 +202,13 @@ def query_reliability_observations(
     observations: list[ReliabilityObservation] = []
     competition_id_map: dict[str, uuid.UUID] = {}
 
-    for settlement, prediction, fixture, competition in session.execute(stmt):
+    for settlement, prediction, competition in session.execute(stmt):
         competition_class = f"tier-{competition.tier}" if competition.tier else "tier-1"
         competition_id_map[competition.name] = competition.id
 
         is_win = settlement.outcome == SettlementOutcome.WIN
-        taken_p = float(settlement.taken_probability)
-        profit_units = (1.0 / taken_p - 1.0) if is_win else -1.0
+        taken_odds = float(settlement.taken_odds)
+        profit_units = (taken_odds - 1.0) if is_win else -1.0
 
         decision_as_of = _ensure_aware(prediction.decision_as_of)
         settled_at = _ensure_aware(settlement.settled_at)
@@ -255,8 +255,12 @@ def rebuild_reliability_snapshots(
     if not observations:
         return 0
 
-    sorted_ids = sorted(obs.observation_id for obs in observations)
-    snapshot_hash = hashlib.sha256("|".join(sorted_ids).encode()).hexdigest()
+    fingerprints = sorted(
+        f"{obs.observation_id}:{obs.predicted_probability:.8f}:{obs.outcome}"
+        f":{obs.profit_units:.6f}:{obs.closing_line_value}"
+        for obs in observations
+    )
+    snapshot_hash = hashlib.sha256("|".join(fingerprints).encode()).hexdigest()
     window_start = min(obs.decision_as_of for obs in observations)
 
     matrix = build_reliability_matrix(observations, evaluated_as_of=as_of)
