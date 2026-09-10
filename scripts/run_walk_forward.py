@@ -613,25 +613,69 @@ def _observation_manifest_hash(observations: list[Any]) -> str:
 
 
 def _verify_snapshot_certification(session: Any, observations: list[Any]) -> bool:
-    """Return True only when every snapshot_ref resolves to a DB-verified snapshot.
+    """Return True only when every snapshot_ref resolves to a DB-verified snapshot
+    that is consistent with the observation it backs.
 
-    Queries each referenced FeatureSnapshot by primary key and calls
-    verify_feature_snapshot() on it.  Any missing row or hash mismatch causes
-    immediate False — this is the persistence-boundary check that backs the
-    pit_certified flag before it is written to the experiment registry.
+    For each observation, three relationships are checked beyond hash integrity:
+
+    1. Fixture identity — snapshot.fixture_id must equal observation.observation_id
+       (which is str(fixture.id) in this pipeline).  A valid snapshot from a
+       different fixture must not certify an unrelated observation.
+    2. Decision-time bound — snapshot.as_of_timestamp must be <= decision_as_of.
+       A snapshot captured after the decision would invalidate PIT provenance.
+    3. Feature-time consistency — snapshot.as_of_timestamp must equal feature_as_of.
+       In this pipeline both are set to the same pre-kickoff cutoff; a mismatch
+       indicates the observation and snapshot are from different evaluation points.
     """
+    import uuid as _uuid_mod
+
     from backend.models.features import FeatureSnapshot
     from backend.services.features import verify_feature_snapshot
 
     for obs in observations:
         if obs.snapshot_ref is None:
             return False
-        snap_uuid = obs.snapshot_ref[len("feature-snapshot:"):]
+        snap_uuid = _uuid_mod.UUID(obs.snapshot_ref[len("feature-snapshot:"):])
         snap = session.get(FeatureSnapshot, snap_uuid)
         if snap is None or not verify_feature_snapshot(session, snap):
-            log.warning("Snapshot verification failed for ref=%s", obs.snapshot_ref)
+            log.warning("Snapshot hash verification failed for ref=%s", obs.snapshot_ref)
+            return False
+        # 1. Identity: snapshot must belong to this observation's fixture.
+        if str(snap.fixture_id) != obs.observation_id:
+            log.warning(
+                "Snapshot fixture_id=%s does not match observation_id=%s",
+                snap.fixture_id,
+                obs.observation_id,
+            )
+            return False
+        snap_as_of = _to_utc(snap.as_of_timestamp)
+        decision = _to_utc(obs.decision_as_of)
+        feature_as_of = _to_utc(obs.feature_as_of)
+        # 2. PIT bound: snapshot must not post-date the decision.
+        if snap_as_of > decision:
+            log.warning(
+                "Snapshot as_of=%s exceeds decision_as_of=%s",
+                snap_as_of,
+                decision,
+            )
+            return False
+        # 3. Feature-time consistency: snapshot and observation must share
+        #    the same evaluation cutoff.
+        if snap_as_of != feature_as_of:
+            log.warning(
+                "Snapshot as_of=%s does not match feature_as_of=%s",
+                snap_as_of,
+                feature_as_of,
+            )
             return False
     return True
+
+
+def _to_utc(dt: datetime) -> datetime:
+    """Normalise a datetime to UTC, treating naive datetimes as UTC."""
+    if dt.tzinfo is None or dt.utcoffset() is None:
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 def _current_code_commit() -> str:

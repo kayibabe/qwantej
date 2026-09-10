@@ -45,6 +45,7 @@ from scripts.run_walk_forward import (  # noqa: E402
     _observation_manifest,
     _observation_manifest_hash,
     _run_calibration_only_backtest,
+    _verify_snapshot_certification,
 )
 
 # ---------------------------------------------------------------------------
@@ -663,3 +664,163 @@ class TestCalibrationOnlySizing:
         ]
         with pytest.raises(ValueError, match="calibration requires at least 2"):
             _run_calibration_only_backtest(single_train + test_obs, self._make_cfg())
+
+
+# ---------------------------------------------------------------------------
+# _verify_snapshot_certification — identity and time-bound regression tests
+# ---------------------------------------------------------------------------
+
+_DECISION = datetime(2026, 9, 6, 10, tzinfo=UTC)   # 2 h before kickoff
+_KICKOFF  = datetime(2026, 9, 6, 12, tzinfo=UTC)
+
+
+def _seed_two_fixtures(session: Session) -> tuple[Fixture, Fixture]:
+    """Two distinct fixtures in the same competition for cross-fixture tests."""
+    comp = Competition(name="Cross-Fixture League")
+    season = Season(competition=comp, label="2026")
+    h1, a1 = Team(name="H1"), Team(name="A1")
+    h2, a2 = Team(name="H2"), Team(name="A2")
+    session.add_all([comp, season, h1, a1, h2, a2])
+    session.flush()
+    f1 = Fixture(
+        competition=comp, season=season,
+        home_team=h1, away_team=a1,
+        kickoff_utc=_KICKOFF, status=FixtureStatus.SCHEDULED,
+    )
+    f2 = Fixture(
+        competition=comp, season=season,
+        home_team=h2, away_team=a2,
+        kickoff_utc=_KICKOFF + timedelta(hours=3), status=FixtureStatus.SCHEDULED,
+    )
+    session.add_all([f1, f2])
+    session.flush()
+    return f1, f2
+
+
+def _make_fixture_snapshot(
+    session: Session,
+    fixture: Fixture,
+    *,
+    as_of: datetime,
+) -> object:
+    """Create a minimal FeatureSnapshot directly on the given fixture."""
+    from backend.services.features import create_feature_snapshot
+
+    stats = StatsSnapshot(
+        subject_type=StatsSubjectType.FIXTURE,
+        fixture_id=fixture.id,
+        as_of_timestamp=as_of - timedelta(minutes=1),
+        payload={"pre_match": True},
+        source="api-football:prematch",
+    )
+    session.add(stats)
+    session.flush()
+    return create_feature_snapshot(
+        session,
+        fixture_id=fixture.id,
+        feature_version="test-v1",
+        as_of_timestamp=as_of,
+        features={"x": 1.0},
+        stats_snapshot_ids=[stats.id],
+        imputation_policy_version="none-v1",
+        code_commit="test",
+    )
+
+
+def _obs_for(fixture: Fixture, *, decision: datetime, snapshot_ref: str) -> BacktestObservation:
+    return BacktestObservation(
+        observation_id=str(fixture.id),
+        decision_as_of=decision,
+        feature_as_of=decision,
+        outcome_observed_at=decision + timedelta(hours=3),
+        model_version="poisson+elo-ensemble:1.0.0",
+        raw_probability=0.55,
+        outcome=1,
+        fair_market_probability=None,
+        executable_odds=None,
+        quote_timestamp=None,
+        snapshot_ref=snapshot_ref,
+    )
+
+
+class TestVerifySnapshotCertificationIdentity:
+    """A valid snapshot from a different fixture must not certify an observation."""
+
+    def test_mismatched_fixture_fails_verification(self):
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        with Session(engine) as session:
+            f1, f2 = _seed_two_fixtures(session)
+            # Snapshot belongs to f1; observation is for f2.
+            snap = _make_fixture_snapshot(session, f1, as_of=_DECISION)
+            obs = _obs_for(f2, decision=_DECISION, snapshot_ref=snap.snapshot_ref)
+            assert not _verify_snapshot_certification(session, [obs])
+
+    def test_correct_fixture_passes_verification(self):
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        with Session(engine) as session:
+            f1, _ = _seed_two_fixtures(session)
+            snap = _make_fixture_snapshot(session, f1, as_of=_DECISION)
+            obs = _obs_for(f1, decision=_DECISION, snapshot_ref=snap.snapshot_ref)
+            assert _verify_snapshot_certification(session, [obs])
+
+
+class TestVerifySnapshotCertificationTimeBounds:
+    """A snapshot captured after the decision time must not certify the observation."""
+
+    def test_post_decision_snapshot_fails_verification(self):
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        with Session(engine) as session:
+            f1, _ = _seed_two_fixtures(session)
+            # Snapshot as_of is 30 min AFTER the simulated decision.
+            late_as_of = _DECISION + timedelta(minutes=30)
+            snap = _make_fixture_snapshot(session, f1, as_of=late_as_of)
+            # Observation's decision and feature_as_of are DECISION, not late_as_of.
+            obs = BacktestObservation(
+                observation_id=str(f1.id),
+                decision_as_of=_DECISION,
+                feature_as_of=_DECISION,
+                outcome_observed_at=_DECISION + timedelta(hours=3),
+                model_version="poisson+elo-ensemble:1.0.0",
+                raw_probability=0.55,
+                outcome=1,
+                fair_market_probability=None,
+                executable_odds=None,
+                quote_timestamp=None,
+                snapshot_ref=snap.snapshot_ref,
+            )
+            assert not _verify_snapshot_certification(session, [obs])
+
+    def test_pre_decision_snapshot_with_matching_feature_as_of_passes(self):
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        with Session(engine) as session:
+            f1, _ = _seed_two_fixtures(session)
+            snap = _make_fixture_snapshot(session, f1, as_of=_DECISION)
+            obs = _obs_for(f1, decision=_DECISION, snapshot_ref=snap.snapshot_ref)
+            assert _verify_snapshot_certification(session, [obs])
+
+    def test_feature_as_of_mismatch_fails_verification(self):
+        """feature_as_of disagrees with the snapshot's as_of_timestamp."""
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        with Session(engine) as session:
+            f1, _ = _seed_two_fixtures(session)
+            snap = _make_fixture_snapshot(session, f1, as_of=_DECISION)
+            earlier_feature_as_of = _DECISION - timedelta(hours=1)
+            obs = BacktestObservation(
+                observation_id=str(f1.id),
+                decision_as_of=_DECISION,
+                feature_as_of=earlier_feature_as_of,  # disagrees with snap.as_of
+                outcome_observed_at=_DECISION + timedelta(hours=3),
+                model_version="poisson+elo-ensemble:1.0.0",
+                raw_probability=0.55,
+                outcome=1,
+                fair_market_probability=None,
+                executable_odds=None,
+                quote_timestamp=None,
+                snapshot_ref=snap.snapshot_ref,
+            )
+            assert not _verify_snapshot_certification(session, [obs])
