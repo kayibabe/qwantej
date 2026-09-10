@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 class CalibrationMethod(enum.StrEnum):
     PLATT = "platt"
     ISOTONIC = "isotonic"
+    LINEAR_OLS = "linear_ols"
 
 
 class CalibrationStatus(enum.StrEnum):
