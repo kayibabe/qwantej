@@ -27,6 +27,7 @@ import logging
 import sys
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 repo_root = Path(__file__).resolve().parent.parent
 if str(repo_root) not in sys.path:
@@ -70,7 +71,7 @@ def _ingest_season(client, session, args) -> None:
     )
 
 
-def _build_observations(session, args) -> list:
+def _build_observations(session: Any, args: Any) -> tuple[list[Any], list[Any]]:
     from sqlalchemy import and_, or_, select
 
     from backend.models import EntityType, Fixture, FixtureStatus, Provider, Season, SourceMapping
@@ -100,7 +101,7 @@ def _build_observations(session, args) -> list:
     )
     if provider_id is None:
         log.warning("No API-Football provider row — has any data been ingested?")
-        return []
+        return [], []
 
     competition_id = session.scalar(
         select(SourceMapping.canonical_id).where(
@@ -111,7 +112,7 @@ def _build_observations(session, args) -> list:
     )
     if competition_id is None:
         log.warning("No competition mapping for league=%d", args.league)
-        return []
+        return [], []
 
     season_id = session.scalar(
         select(Season.id).where(
@@ -121,7 +122,7 @@ def _build_observations(session, args) -> list:
     )
     if season_id is None:
         log.warning("No season row for league=%d season=%d", args.league, args.season)
-        return []
+        return [], []
 
     finished = session.scalars(
         select(Fixture)
