@@ -318,18 +318,21 @@ class TestProcessFixtureSuccessPath:
         now = datetime.now(UTC)
         f = _make_fixture(db_session, comp, season, home, away, kickoff=now + timedelta(hours=6))
 
-        # Seed pre-kickoff odds (1 hour old — within max_quote_age of 2h).
+        # Seed full 1X2 market (1 hour old) so _devigged_fair_prob can run devig().
         from backend.models import OddsQuote
-        odds_quote = OddsQuote(
-            fixture_id=f.id,
-            bookmaker="B365",
-            market="1X2",
-            selection="home",
-            decimal_odds=1.80,
-            captured_at=now - timedelta(hours=1),
-            source="api-football",
-        )
-        db_session.add(odds_quote)
+        odds_rows = []
+        for sel, dec in [("home", 1.80), ("draw", 3.50), ("away", 4.50)]:
+            q = OddsQuote(
+                fixture_id=f.id,
+                bookmaker="B365",
+                market="1X2",
+                selection=sel,
+                decimal_odds=dec,
+                captured_at=now - timedelta(hours=1),
+                source="api-football",
+            )
+            db_session.add(q)
+            odds_rows.append(q)
         db_session.flush()
 
         # Bootstrap lineage rows; use actual code_commit so it matches registry.
@@ -356,10 +359,11 @@ class TestProcessFixtureSuccessPath:
             league_away_avg=1.2,
         )
 
-        # Return the real odds quote id so create_feature_snapshot has a source row.
+        # Return all odds quote ids so create_feature_snapshot has source rows.
+        all_odds_ids = [q.id for q in odds_rows]
         monkeypatch.setattr(
             "backend.services.feature_extraction.extract_fixture_features",
-            lambda *a, **kw: (fake_features, [], [odds_quote.id], []),
+            lambda *a, **kw: (fake_features, [], all_odds_ids, []),
         )
 
         from qwantej.value.gate import ValueGatePolicy

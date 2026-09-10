@@ -71,6 +71,12 @@ _CALIBRATION_MIN_SAMPLES = 30
 _LOOKAHEAD_HOURS_DEFAULT = 36
 _PRE_KICKOFF_WINDOW_HOURS = 2  # decision cutoff before kickoff
 
+# Research-only gate: set True (Phase 9) when the reliability engine produces
+# per-fixture reliability scores; until then, paper-mode runs bypass the
+# RELIABILITY_LOW check so the pipeline can publish paper predictions.
+# Never set this False while live (real-money) staking is enabled.
+_RELIABILITY_GATE_LIVE = False
+
 
 # ---------------------------------------------------------------------------
 # Run summary
@@ -250,7 +256,7 @@ def _ensure_champion_calibration(session: Any, now: datetime, commit: str) -> An
         params = _fit_linear_calibration(probs, outcomes)
         sample_size = len(probs)
         min_sample = _CALIBRATION_MIN_SAMPLES
-        method = CalibrationMethod.PLATT
+        method = CalibrationMethod.LINEAR_OLS
         window_start = min(r.settled_at for r in rows)
         window_end = max(r.settled_at for r in rows)
         version_tag = "linear-fitted"
@@ -259,7 +265,7 @@ def _ensure_champion_calibration(session: Any, now: datetime, commit: str) -> An
         params = {"slope": 1.0, "intercept": 0.0}
         sample_size = 2
         min_sample = 2
-        method = CalibrationMethod.PLATT
+        method = CalibrationMethod.LINEAR_OLS
         window_start = now - timedelta(days=1)
         window_end = now
         version_tag = "identity"
@@ -371,6 +377,44 @@ def _best_pre_kickoff_odds(
     if captured.tzinfo is None:
         captured = captured.replace(tzinfo=UTC)
     return float(quote.decimal_odds), quote.bookmaker, captured
+
+
+def _devigged_fair_prob(
+    session: Any,
+    fixture_id: uuid.UUID,
+    market: str,
+    target_selection: str,
+    selections: list[str],
+    *,
+    before: datetime,
+) -> tuple[float | None, float | None, str | None, datetime | None]:
+    """Return (decimal_odds, fair_probability, bookmaker, captured_at) for target_selection.
+
+    Fetches all ``selections`` for the market and applies proportional de-vigging
+    to remove bookmaker margin.  Falls back to raw implied (1/odds) when the
+    market is incomplete (draw or away leg missing).
+    """
+    from qwantej.markets.devig import devig
+
+    quotes = {
+        sel: _best_pre_kickoff_odds(session, fixture_id, market, sel, before=before)
+        for sel in selections
+    }
+    target_data = quotes[target_selection]
+    decimal_odds, bookmaker, quote_ts = target_data
+    if decimal_odds is None:
+        return None, None, None, None
+
+    all_odds = [quotes[sel][0] for sel in selections]
+    if all(o is not None for o in all_odds):
+        result = devig(all_odds)  # type: ignore[arg-type]
+        target_idx = selections.index(target_selection)
+        fair_prob = result.fair[target_idx]
+    else:
+        # Incomplete market: raw implied overestimates fair probability (conservative).
+        fair_prob = 1.0 / decimal_odds
+
+    return decimal_odds, fair_prob, bookmaker, quote_ts
 
 
 # ---------------------------------------------------------------------------
@@ -500,9 +544,10 @@ def _process_fixture(
     # P_cons = shrink towards 0.50 by 0.05 (conservative uncertainty margin).
     p_cons = max(0.001, cal_prob - 0.05)
 
-    # 5. Odds lookup.
-    decimal_odds, bookmaker, quote_ts = _best_pre_kickoff_odds(
-        session, fixture.id, _MARKET, _SELECTION, before=as_of
+    # 5. Odds lookup with full-market de-vigging (proportional method).
+    _1x2_selections = ["home", "draw", "away"]
+    decimal_odds, fair_prob, bookmaker, quote_ts = _devigged_fair_prob(
+        session, fixture.id, _MARKET, _SELECTION, _1x2_selections, before=as_of
     )
 
     # 6. DQS.
@@ -517,10 +562,6 @@ def _process_fixture(
         gate_passed = False
         log.debug("signal_pipeline: fixture %s — no odds, skipping gate", fixture.id)
     else:
-        # Raw implied probability for this single leg (1 / decimal odds).
-        # Full de-vigging requires all legs of the market; we use the raw
-        # implied prob as a conservative fair-price floor here.
-        fair_prob = 1.0 / decimal_odds
         edge = p_cons - fair_prob
         # edge_pp stored in percentage points; expected_value = P_cons × odds - 1.
         edge_pp_val = edge * 100.0
@@ -539,9 +580,9 @@ def _process_fixture(
             market_reliability=None,
             probability_change=0.0,
             model_disagreement=abs(float(poisson_result.home) - float(elo_result.home)),
-            # Reliability scoring is not yet wired for live fixtures; exempt
-            # from that gate until Phase 9 integrates the reliability engine.
-            research_reliability_exception=True,
+            # Phase 9 will wire the reliability engine; until then this is
+            # paper-only output and _RELIABILITY_GATE_LIVE guards the live path.
+            research_reliability_exception=not _RELIABILITY_GATE_LIVE,
         )
         gate_result = evaluate_value_gate(candidate, value_policy)
         gate_passed = gate_result.passed
@@ -635,7 +676,8 @@ def _run_accumulator_phase(
         fixture = fixtures_by_id.get(str(pred.fixture_id))
         league_id = str(fixture.competition_id) if fixture else "unknown"
         market_family = _MARKET
-        edge = float(pred.edge_pp) if pred.edge_pp is not None else 0.0
+        # edge_pp is stored in percentage points; QualifiedSelection.edge is fractional.
+        edge = float(pred.edge_pp) / 100.0 if pred.edge_pp is not None else 0.0
         qss = float(pred.qss) if pred.qss is not None else 70.0
         dqs = float(pred.dqs) if pred.dqs is not None else 70.0
 
