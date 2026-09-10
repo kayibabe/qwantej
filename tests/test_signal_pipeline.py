@@ -24,6 +24,7 @@ import pytest
 from scripts.run_signal_pipeline import (
     _apply_calibration,
     _best_pre_kickoff_odds,
+    _devigged_fair_prob,
     _ensure_champion_calibration,
     _ensure_champion_model,
     _fit_linear_calibration,
@@ -305,6 +306,128 @@ class TestBestPreKickoffOdds:
         db_session.flush()
         odds, _, _ = _best_pre_kickoff_odds(db_session, fid, "1X2", "home", before=now)
         assert odds is None
+
+
+class TestDeviggedFairProb:
+    """Regression tests for coherent-market enforcement in _devigged_fair_prob."""
+
+    _SELS = ["home", "draw", "away"]
+    _ODDS = {"home": 1.80, "draw": 3.50, "away": 4.50}
+
+    def _add_quote(self, db_session, fid, sel, bookmaker="B365", ts=None, dec=None):
+        from backend.models import OddsQuote
+        if ts is None:
+            ts = datetime.now(UTC) - timedelta(minutes=30)
+        if dec is None:
+            dec = self._ODDS[sel]
+        q = OddsQuote(
+            fixture_id=fid, bookmaker=bookmaker, market="1X2", selection=sel,
+            decimal_odds=dec, captured_at=ts, source="api-football",
+        )
+        db_session.add(q)
+        return q
+
+    def test_returns_none_when_draw_leg_missing(self, db_session):
+        fid = uuid.uuid4()
+        now = datetime.now(UTC)
+        self._add_quote(db_session, fid, "home")
+        self._add_quote(db_session, fid, "away")
+        db_session.flush()
+        assert _devigged_fair_prob(
+            db_session, fid, "1X2", "home", self._SELS, before=now
+        ) == (None, None, None, None)
+
+    def test_returns_none_when_mixed_bookmakers(self, db_session):
+        """No single bookmaker covers all three legs → no coherent snapshot."""
+        fid = uuid.uuid4()
+        now = datetime.now(UTC)
+        ts = now - timedelta(minutes=30)
+        self._add_quote(db_session, fid, "home", bookmaker="B365", ts=ts)
+        self._add_quote(db_session, fid, "draw", bookmaker="Betfair", ts=ts)
+        self._add_quote(db_session, fid, "away", bookmaker="Betfair", ts=ts)
+        db_session.flush()
+        assert _devigged_fair_prob(
+            db_session, fid, "1X2", "home", self._SELS, before=now
+        ) == (None, None, None, None)
+
+    def test_returns_none_when_leg_timestamps_too_spread(self, db_session):
+        """All legs from same bookmaker but draw is > 1 h older than home."""
+        fid = uuid.uuid4()
+        now = datetime.now(UTC)
+        self._add_quote(db_session, fid, "home", ts=now - timedelta(minutes=20))
+        self._add_quote(db_session, fid, "draw", ts=now - timedelta(hours=2))
+        self._add_quote(db_session, fid, "away", ts=now - timedelta(minutes=20))
+        db_session.flush()
+        assert _devigged_fair_prob(
+            db_session, fid, "1X2", "home", self._SELS, before=now
+        ) == (None, None, None, None)
+
+    def test_devigged_prob_below_raw_implied(self, db_session):
+        """Fair probability after devig must be strictly lower than 1/odds (margin removed)."""
+        fid = uuid.uuid4()
+        now = datetime.now(UTC)
+        ts = now - timedelta(minutes=30)
+        for sel in self._SELS:
+            self._add_quote(db_session, fid, sel, ts=ts)
+        db_session.flush()
+        odds, fair_prob, bm, oldest_ts = _devigged_fair_prob(
+            db_session, fid, "1X2", "home", self._SELS, before=now
+        )
+        assert odds == pytest.approx(1.80)
+        assert bm == "B365"
+        assert fair_prob is not None
+        assert fair_prob < 1.0 / 1.80  # devig removes margin → fair < raw implied
+
+    def test_fair_probs_sum_to_one(self, db_session):
+        """Proportional devig must produce fair probabilities that sum to 1."""
+        fid = uuid.uuid4()
+        now = datetime.now(UTC)
+        ts = now - timedelta(minutes=30)
+        for sel in self._SELS:
+            self._add_quote(db_session, fid, sel, ts=ts)
+        db_session.flush()
+        probs = [
+            _devigged_fair_prob(db_session, fid, "1X2", sel, self._SELS, before=now)[1]
+            for sel in self._SELS
+        ]
+        assert all(p is not None for p in probs)
+        assert sum(probs) == pytest.approx(1.0)  # type: ignore[arg-type]
+
+    def test_oldest_timestamp_returned_for_freshness(self, db_session):
+        """oldest_captured_at must be the oldest leg so the value gate covers the full market."""
+        fid = uuid.uuid4()
+        now = datetime.now(UTC)
+        home_ts = now - timedelta(minutes=20)
+        stale_ts = now - timedelta(minutes=55)  # oldest, but still within 1 h spread
+        self._add_quote(db_session, fid, "home", ts=home_ts)
+        self._add_quote(db_session, fid, "draw", ts=stale_ts)
+        self._add_quote(db_session, fid, "away", ts=home_ts)
+        db_session.flush()
+        _, _, _, oldest_ts = _devigged_fair_prob(
+            db_session, fid, "1X2", "home", self._SELS, before=now
+        )
+        assert oldest_ts is not None
+        # oldest_ts must track the stalest leg (draw, ~55 min ago), not home (~20 min ago).
+        assert abs((oldest_ts - stale_ts).total_seconds()) < 2
+
+    def test_selects_freshest_coherent_bookmaker(self, db_session):
+        """When multiple bookmakers have coherent snapshots, pick the one with the
+        freshest target-selection quote."""
+        fid = uuid.uuid4()
+        now = datetime.now(UTC)
+        old_ts = now - timedelta(minutes=50)
+        fresh_ts = now - timedelta(minutes=10)
+        # B365: coherent but stale
+        for sel in self._SELS:
+            self._add_quote(db_session, fid, sel, bookmaker="B365", ts=old_ts)
+        # Betfair: coherent and fresher
+        for sel in self._SELS:
+            self._add_quote(db_session, fid, sel, bookmaker="Betfair", ts=fresh_ts)
+        db_session.flush()
+        _, _, bm, _ = _devigged_fair_prob(
+            db_session, fid, "1X2", "home", self._SELS, before=now
+        )
+        assert bm == "Betfair"
 
 
 class TestProcessFixtureSuccessPath:

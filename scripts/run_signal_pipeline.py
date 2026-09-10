@@ -379,6 +379,9 @@ def _best_pre_kickoff_odds(
     return float(quote.decimal_odds), quote.bookmaker, captured
 
 
+_MAX_LEG_SPREAD = timedelta(hours=1)
+
+
 def _devigged_fair_prob(
     session: Any,
     fixture_id: uuid.UUID,
@@ -388,38 +391,85 @@ def _devigged_fair_prob(
     *,
     before: datetime,
 ) -> tuple[float | None, float | None, str | None, datetime | None]:
-    """Return (decimal_odds, fair_probability, bookmaker, captured_at) for target_selection.
+    """Return (decimal_odds, fair_probability, bookmaker, oldest_captured_at).
 
-    Fetches all ``selections`` for the market and applies proportional de-vigging
-    (framework §20) to remove bookmaker margin.  Returns (None, None, None, None)
-    when any leg of the market is missing: an incomplete market cannot be
-    de-vigged and raw implied probability must not be used as a fair probability.
+    Finds a *coherent* market snapshot: all legs must share the same bookmaker
+    and have capture timestamps within _MAX_LEG_SPREAD of each other so that
+    de-vigging is applied to a real market, not a synthetic mix.
+
+    ``oldest_captured_at`` is the oldest quote timestamp in the snapshot so
+    the value gate's freshness check covers the complete market, not only the
+    target leg.
+
+    Returns (None, None, None, None) when no coherent snapshot exists; the
+    caller must treat this the same as having no odds.
     """
+    from collections import defaultdict
+
+    from sqlalchemy import select
+
+    from backend.models import OddsQuote
     from qwantej.markets.devig import devig
 
-    quotes = {
-        sel: _best_pre_kickoff_odds(session, fixture_id, market, sel, before=before)
-        for sel in selections
-    }
-    target_data = quotes[target_selection]
-    decimal_odds, bookmaker, quote_ts = target_data
-    if decimal_odds is None:
-        return None, None, None, None
+    rows = list(session.scalars(
+        select(OddsQuote)
+        .where(
+            OddsQuote.fixture_id == fixture_id,
+            OddsQuote.market == market,
+            OddsQuote.selection.in_(selections),
+            OddsQuote.captured_at < before,
+        )
+        .order_by(OddsQuote.captured_at.desc())
+    ))
 
-    all_odds = [quotes[sel][0] for sel in selections]
-    if not all(o is not None for o in all_odds):
-        # Incomplete market: cannot de-vig.  Reject rather than fall back to
-        # raw implied, which carries bookmaker margin and is not a fair price.
+    # For each bookmaker, keep only the latest quote per selection.
+    latest: dict[str, dict[str, Any]] = defaultdict(dict)
+    for row in rows:
+        bm = row.bookmaker
+        sel = row.selection
+        if sel not in latest[bm]:
+            latest[bm][sel] = row
+
+    # Find the best coherent snapshot across bookmakers.
+    # Criteria: all selections present, timestamps within _MAX_LEG_SPREAD.
+    # Tie-break: freshest target-selection quote.
+    best_target_ts: datetime | None = None
+    best_bookmaker: str | None = None
+    best_sel_map: dict[str, Any] | None = None
+    best_oldest_ts: datetime | None = None
+
+    for bm, sel_map in latest.items():
+        if not all(sel in sel_map for sel in selections):
+            continue
+        timestamps = []
+        for sel in selections:
+            ts = sel_map[sel].captured_at
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=UTC)
+            timestamps.append(ts)
+        if max(timestamps) - min(timestamps) > _MAX_LEG_SPREAD:
+            continue
+        target_ts = timestamps[selections.index(target_selection)]
+        oldest_ts = min(timestamps)
+        if best_target_ts is None or target_ts > best_target_ts:
+            best_target_ts = target_ts
+            best_bookmaker = bm
+            best_sel_map = sel_map
+            best_oldest_ts = oldest_ts
+
+    if best_sel_map is None:
         log.debug(
-            "signal_pipeline: fixture %s — incomplete 1X2 market, skipping",
-            fixture_id,
+            "signal_pipeline: fixture %s — no coherent %s snapshot (bookmakers seen: %s)",
+            fixture_id, market, sorted(latest.keys()) or "none",
         )
         return None, None, None, None
 
-    result = devig(all_odds)  # type: ignore[arg-type]
+    all_odds = [float(best_sel_map[sel].decimal_odds) for sel in selections]
+    result = devig(all_odds)
     target_idx = selections.index(target_selection)
     fair_prob = result.fair[target_idx]
-    return decimal_odds, fair_prob, bookmaker, quote_ts
+    decimal_odds = float(best_sel_map[target_selection].decimal_odds)
+    return decimal_odds, fair_prob, best_bookmaker, best_oldest_ts
 
 
 # ---------------------------------------------------------------------------
