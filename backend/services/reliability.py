@@ -4,13 +4,27 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Mapping
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.models import ReliabilitySnapshot, ReliabilityState
 from qwantej.performance import ReliabilityMatrix
+
+_DEFAULT_POLICY_VERSION = "reliability-v1"
+
+
+@dataclass(frozen=True)
+class ReliabilityLookupResult:
+    """Reliability scores and identity for one (competition, market_family) cell."""
+
+    snapshot_id: uuid.UUID
+    league_reliability: float   # 0-100
+    market_reliability: float   # 0-100
+    segment_reliability: float  # 0-100
+    status: str                 # "qualified" | "watch" | "restricted" | "blacklisted"
 
 
 def archive_reliability_matrix(
@@ -81,3 +95,54 @@ def archive_reliability_matrix(
         rows.append(row)
     session.flush()
     return tuple(rows)
+
+
+def current_reliability_for_fixture(
+    session: Session,
+    competition_id: uuid.UUID,
+    market_family: str,
+    *,
+    as_of: datetime,
+    policy_version: str = _DEFAULT_POLICY_VERSION,
+) -> ReliabilityLookupResult | None:
+    """Return the most recent qualifying reliability snapshot for a fixture.
+
+    A snapshot qualifies when:
+    - It matches (competition_id, market_family, policy_version).
+    - Its evaluated_as_of does not exceed as_of (no look-ahead).
+    - Its created_at does not exceed as_of (no backdated snapshots for past decisions).
+
+    The query sorts by evaluated_as_of DESC then created_at DESC so that the most
+    recent valid snapshot wins, and ties across policy batches are deterministic.
+
+    Returns None when no qualifying row exists — the signal pipeline treats this
+    as fail-closed (reliability gate emits RELIABILITY_LOW).
+    """
+    if as_of.tzinfo is None or as_of.utcoffset() is None:
+        raise ValueError("as_of must be timezone-aware")
+
+    stmt = (
+        select(ReliabilitySnapshot)
+        .where(
+            ReliabilitySnapshot.competition_id == competition_id,
+            ReliabilitySnapshot.market_family == market_family,
+            ReliabilitySnapshot.policy_version == policy_version,
+            ReliabilitySnapshot.evaluated_as_of <= as_of,
+            ReliabilitySnapshot.created_at <= as_of,
+        )
+        .order_by(
+            ReliabilitySnapshot.evaluated_as_of.desc(),
+            ReliabilitySnapshot.created_at.desc(),
+        )
+        .limit(1)
+    )
+    snap = session.scalars(stmt).first()
+    if snap is None:
+        return None
+    return ReliabilityLookupResult(
+        snapshot_id=snap.id,
+        league_reliability=float(snap.league_reliability),
+        market_reliability=float(snap.market_reliability),
+        segment_reliability=float(snap.segment_reliability),
+        status=snap.status.value,
+    )

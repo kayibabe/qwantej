@@ -70,12 +70,12 @@ _FEATURE_VERSION = "feature-engineering-v1"
 _CALIBRATION_MIN_SAMPLES = 30
 _LOOKAHEAD_HOURS_DEFAULT = 36
 _PRE_KICKOFF_WINDOW_HOURS = 2  # decision cutoff before kickoff
+_RELIABILITY_POLICY_VERSION = "reliability-v1"  # must match archived snapshots
 
-# Research-only gate: set True (Phase 9) when the reliability engine produces
-# per-fixture reliability scores; until then, paper-mode runs bypass the
-# RELIABILITY_LOW check so the pipeline can publish paper predictions.
-# Never set this False while live (real-money) staking is enabled.
-_RELIABILITY_GATE_LIVE = False
+# Reliability gate: True = enforce per-fixture reliability scores from the DB;
+# False = bypass (research paper-only mode only, never in live staking).
+# Phase 9 wires the reliability engine, so this is now True.
+_RELIABILITY_GATE_LIVE = True
 
 
 # ---------------------------------------------------------------------------
@@ -92,6 +92,13 @@ class PipelineRun:
     feature_errors: int = 0
     accumulators: list[str] = field(default_factory=list)  # "CORE", "GROWTH", "ALPHA"
     errors: int = 0
+
+
+@dataclass
+class _ProcessResult:
+    """Bundles a published prediction with its reliability score for the accumulator."""
+    prediction: Any
+    segment_reliability: float  # 0-100; taken from the matching ReliabilitySnapshot
 
 
 # ---------------------------------------------------------------------------
@@ -508,10 +515,11 @@ def _process_fixture(
     calibration_model: Any,
     value_policy: Any,
     commit: str,
-) -> Any | None:
+) -> _ProcessResult | None:
     """Extract features, run models, apply calibration, evaluate gate, publish.
 
-    Returns the published Prediction ORM row on success, None otherwise.
+    Returns a _ProcessResult on success (prediction + reliability score), None
+    when the fixture is skipped or the value gate rejects it.
     """
     from backend.services.feature_extraction import (
         FeatureExtractionError,
@@ -523,6 +531,10 @@ def _process_fixture(
         PredictionLineage,
         PredictionPublicationError,
         publish_prediction,
+    )
+    from backend.services.reliability import (
+        ReliabilityLookupResult,
+        current_reliability_for_fixture,
     )
     from qwantej.models.elo.model import result_probabilities as elo_probs
     from qwantej.models.poisson.model import poisson_scoreline
@@ -608,12 +620,30 @@ def _process_fixture(
     # 6. DQS.
     dqs = _compute_dqs(features)
 
-    # 7. Value Gate.
-    if decimal_odds is None or quote_ts is None:
-        fair_prob = None
+    # 7. Reliability lookup (fail-closed: None → gate rejects RELIABILITY_LOW).
+    rel_result: ReliabilityLookupResult | None = current_reliability_for_fixture(
+        session,
+        fixture.competition_id,
+        _MARKET,
+        as_of=as_of,
+        policy_version=_RELIABILITY_POLICY_VERSION,
+    )
+    log.debug(
+        "signal_pipeline: fixture %s reliability league=%.1f market=%.1f status=%s",
+        fixture.id,
+        rel_result.league_reliability if rel_result is not None else float("nan"),
+        rel_result.market_reliability if rel_result is not None else float("nan"),
+        rel_result.status if rel_result is not None else None,
+    )
+
+    # 8. Value Gate.
+    # fair_prob is None iff the devigged-probability snapshot is unavailable;
+    # guarding on it alongside decimal_odds keeps the type-checker satisfied.
+    if decimal_odds is None or fair_prob is None or quote_ts is None:
         executable_odds = None
         edge = 0.0
         ev = 0.0
+        edge_pp_val = 0.0
         gate_passed = False
         log.debug("signal_pipeline: fixture %s — no odds, skipping gate", fixture.id)
     else:
@@ -631,13 +661,12 @@ def _process_fixture(
             executable_odds=decimal_odds,
             quote_timestamp=quote_ts,
             data_quality_score=dqs,
-            league_reliability=None,
-            market_reliability=None,
+            league_reliability=rel_result.league_reliability if rel_result is not None else None,
+            market_reliability=rel_result.market_reliability if rel_result is not None else None,
+            league_reliability_status=rel_result.status if rel_result is not None else None,
+            market_reliability_status=rel_result.status if rel_result is not None else None,
             probability_change=0.0,
             model_disagreement=abs(float(poisson_result.home) - float(elo_result.home)),
-            # Phase 9 will wire the reliability engine; until then this is
-            # paper-only output and _RELIABILITY_GATE_LIVE guards the live path.
-            research_reliability_exception=not _RELIABILITY_GATE_LIVE,
         )
         gate_result = evaluate_value_gate(candidate, value_policy)
         gate_passed = gate_result.passed
@@ -653,7 +682,10 @@ def _process_fixture(
     if not gate_passed:
         return None
 
-    # 8. Publish prediction.
+    # Gate passed → rel_result is not None (None → RELIABILITY_LOW rejection above).
+    assert rel_result is not None, "gate passed but rel_result is None — logic error"
+
+    # 9. Publish prediction.
     record = MinimumPredictionRecord(
         fixture_id=fixture.id,
         prediction_timestamp=as_of,
@@ -665,33 +697,40 @@ def _process_fixture(
         calibrated_probability=cal_prob,
         conservative_probability=p_cons,
         dqs=dqs,
+        lrs=rel_result.league_reliability,
+        mrs=rel_result.market_reliability,
         bookmaker=bookmaker,
         executable_odds=executable_odds,
         quote_timestamp=quote_ts,
         fair_market_probability=fair_prob,
-        edge_pp=edge_pp_val if decimal_odds is not None else None,
-        expected_value=ev if decimal_odds is not None else None,
+        edge_pp=edge_pp_val if executable_odds is not None else None,
+        expected_value=ev if executable_odds is not None else None,
         qss=max(0.0, min(100.0, dqs)),
     )
     lineage = PredictionLineage(
         model_version_id=model_registry.id,
         model_run_id=fixture_run.id,
         calibration_model_id=calibration_model.id,
+        reliability_snapshot_id=rel_result.snapshot_id,
         feature_version=_FEATURE_VERSION,
         calibration_version=calibration_model.version,
         code_commit=commit,
         input_snapshot_ref=snap.snapshot_ref,
         input_snapshot_hash=snap.snapshot_hash,
     )
+
     try:
         prediction = publish_prediction(session, record=record, lineage=lineage)
         log.info(
             "signal_pipeline: published prediction %s for fixture %s "
-            "(p_cons=%.3f odds=%.2f edge=+%.3f)",
+            "(p_cons=%.3f odds=%.2f edge=+%.3f seg_rel=%.1f)",
             prediction.id, fixture.id, p_cons,
-            executable_odds or 0.0, edge,
+            executable_odds or 0.0, edge, rel_result.segment_reliability,
         )
-        return prediction
+        return _ProcessResult(
+            prediction=prediction,
+            segment_reliability=rel_result.segment_reliability,
+        )
     except PredictionPublicationError as exc:
         log.warning("signal_pipeline: publish failed for fixture %s: %s", fixture.id, exc)
         return None
@@ -703,7 +742,7 @@ def _process_fixture(
 
 def _run_accumulator_phase(
     session: Any,
-    predictions: list[Any],
+    results: list[_ProcessResult],
     fixtures_by_id: dict,
     *,
     now: datetime,
@@ -718,7 +757,7 @@ def _run_accumulator_phase(
     from qwantej.accumulator.types import QualifiedSelection
     from qwantej.bankroll.state import DEFAULT_RISK_POLICY, OperatingState
 
-    if not predictions:
+    if not results:
         log.info("signal_pipeline: no qualified predictions — skipping accumulator phase")
         return None
 
@@ -727,7 +766,8 @@ def _run_accumulator_phase(
     available = bankroll  # no daily exposure tracking yet
 
     qualified: list[QualifiedSelection] = []
-    for pred in predictions:
+    for process_result in results:
+        pred = process_result.prediction
         fixture = fixtures_by_id.get(str(pred.fixture_id))
         league_id = str(fixture.competition_id) if fixture else "unknown"
         market_family = _MARKET
@@ -751,7 +791,7 @@ def _run_accumulator_phase(
                 edge=edge,
                 qss=qss,
                 dqs=dqs,
-                reliability=70.0,  # no reliability snapshot yet
+                reliability=process_result.segment_reliability,
                 quote_timestamp=pred.quote_timestamp or now,
                 model_version=f"{_MODEL_NAME}:{_MODEL_VERSION}",
                 calibration_version=calibration_model.version,
@@ -865,7 +905,7 @@ def run_once(
     run = PipelineRun(started_at=now)
     value_policy = ValueGatePolicy()
 
-    predictions_published: list[Any] = []
+    process_results: list[_ProcessResult] = []
     fixtures_by_id: dict[str, Any] = {}
     decision = None
 
@@ -896,17 +936,17 @@ def run_once(
                     commit=commit,
                 )
                 if result is not None:
-                    predictions_published.append(result)
+                    process_results.append(result)
                     run.predictions_published += 1
                     run.features_extracted += 1
                 else:
                     run.value_gate_rejected += 1
 
             # Accumulator phase.
-            if predictions_published:
+            if process_results:
                 decision = _run_accumulator_phase(
                     session,
-                    predictions_published,
+                    process_results,
                     fixtures_by_id,
                     now=now,
                     model_registry=model_registry,
