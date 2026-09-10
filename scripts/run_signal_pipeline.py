@@ -391,8 +391,9 @@ def _devigged_fair_prob(
     """Return (decimal_odds, fair_probability, bookmaker, captured_at) for target_selection.
 
     Fetches all ``selections`` for the market and applies proportional de-vigging
-    to remove bookmaker margin.  Falls back to raw implied (1/odds) when the
-    market is incomplete (draw or away leg missing).
+    (framework §20) to remove bookmaker margin.  Returns (None, None, None, None)
+    when any leg of the market is missing: an incomplete market cannot be
+    de-vigged and raw implied probability must not be used as a fair probability.
     """
     from qwantej.markets.devig import devig
 
@@ -406,14 +407,18 @@ def _devigged_fair_prob(
         return None, None, None, None
 
     all_odds = [quotes[sel][0] for sel in selections]
-    if all(o is not None for o in all_odds):
-        result = devig(all_odds)  # type: ignore[arg-type]
-        target_idx = selections.index(target_selection)
-        fair_prob = result.fair[target_idx]
-    else:
-        # Incomplete market: raw implied overestimates fair probability (conservative).
-        fair_prob = 1.0 / decimal_odds
+    if not all(o is not None for o in all_odds):
+        # Incomplete market: cannot de-vig.  Reject rather than fall back to
+        # raw implied, which carries bookmaker margin and is not a fair price.
+        log.debug(
+            "signal_pipeline: fixture %s — incomplete 1X2 market, skipping",
+            fixture_id,
+        )
+        return None, None, None, None
 
+    result = devig(all_odds)  # type: ignore[arg-type]
+    target_idx = selections.index(target_selection)
+    fair_prob = result.fair[target_idx]
     return decimal_odds, fair_prob, bookmaker, quote_ts
 
 
