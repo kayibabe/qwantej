@@ -126,7 +126,7 @@ export default async function ModelsPage({
       <div>
         <h1 className="text-xl font-semibold text-[var(--text-primary)]">Models</h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          Model registry — champion, challenger, shadow and retired versions
+          Model registry — champion, challenger, development and retired versions
         </p>
       </div>
 
