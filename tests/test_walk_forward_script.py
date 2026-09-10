@@ -582,3 +582,27 @@ class TestCalibrationOnlySizing:
         report, config = _run_backtest(train + test_obs, _cfg(calibration_only=True))
         assert isinstance(config, CalibrationOnlyConfig)
         assert config.as_dict()["pit_certified"] is False
+
+    def test_single_settled_training_row_raises_clear_error(self):
+        """Exactly one settled training row must raise ValueError before entering
+        calibration fitting, not inside isotonic fitting with a cryptic error."""
+        single_train = [
+            _late_settling_obs(decision_days_before_test=1, settlement_hours_after_decision=3)
+        ]
+        test_obs = [
+            BacktestObservation(
+                observation_id="one-settled-test-0",
+                decision_as_of=_TEST_FROM_UTC,
+                feature_as_of=_TEST_FROM_UTC - timedelta(hours=2),
+                outcome_observed_at=_TEST_FROM_UTC + timedelta(hours=3),
+                model_version="poisson+elo-ensemble:1.0.0",
+                raw_probability=0.50,
+                outcome=0,
+                fair_market_probability=None,
+                executable_odds=None,
+                quote_timestamp=None,
+                model_probabilities=(0.50, 0.25, 0.25),
+            )
+        ]
+        with pytest.raises(ValueError, match="calibration requires at least 2"):
+            _run_calibration_only_backtest(single_train + test_obs, self._make_cfg())

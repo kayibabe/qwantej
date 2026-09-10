@@ -417,10 +417,10 @@ def _run_calibration_only_backtest(
         o for o in eligible_train
         if o.outcome_observed_at is not None and o.outcome_observed_at <= test_from_utc
     ]
-    if len(settled_train) < 1:
+    if len(settled_train) < 2:
         raise ValueError(
-            f"no eligible calibration training rows with outcome settled by {test_from_utc}; "
-            "try widening the training window"
+            f"only {len(settled_train)} calibration training row(s) with outcome settled by "
+            f"{test_from_utc}; calibration requires at least 2 — try widening the training window"
         )
 
     calib_rows = [
