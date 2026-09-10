@@ -329,7 +329,14 @@ def _best_1x2_odds(
 def _run_backtest(
     observations: list[Any], cfg: ExperimentConfig
 ) -> Any:
-    """Run one fixed train-window/test-window walk-forward fold."""
+    """Dispatch to the PIT-certified walk-forward or the retrospective calibration evaluator.
+
+    Returns a 2-tuple ``(report, config)`` whose concrete types depend on the path:
+    - Standard:           ``(WalkForwardReport, WalkForwardConfig)``
+    - Calibration-only:  ``(CalibrationOnlyReport, CalibrationOnlyConfig)``
+    """
+    if cfg.calibration_only:
+        return _run_calibration_only_backtest(observations, cfg)
 
     from qwantej.calibration import CalibrationMethod, ConservativePolicy
     from qwantej.performance.backtest import (
@@ -339,10 +346,6 @@ def _run_backtest(
     from qwantej.value import ValueGatePolicy
 
     test_from_utc = datetime.combine(cfg.test_from, datetime.min.time(), tzinfo=UTC)
-    # Eligible rows for sizing: must have a valid market baseline (odds).
-    # In calibration-only mode, rows without odds still enter the walk-forward
-    # and contribute to calibration training, but the min/test sizing uses only
-    # observations with a market baseline so the evaluation window is well-defined.
     eligible_train = [
         o for o in observations
         if o.decision_as_of < test_from_utc and _eligible_walk_forward_row(o)
@@ -352,22 +355,17 @@ def _run_backtest(
         if o.decision_as_of >= test_from_utc and _eligible_walk_forward_row(o)
     ]
 
-    min_train = 1 if cfg.calibration_only else 10
-    if len(eligible_train) < min_train:
+    if len(eligible_train) < 10:
         raise ValueError(
-            f"only {len(eligible_train)} eligible training rows; "
-            f"at least {min_train} are required"
+            f"only {len(eligible_train)} eligible training rows; at least 10 are required"
         )
     if not eligible_test:
         raise ValueError("no eligible test rows in the requested test window")
 
-    calibration_method = CalibrationMethod.ISOTONIC
-    # Use eligible counts for the walk-forward window sizing, capped at
-    # reasonable values so a small calibration-only run doesn't create degenerate folds.
     wf_config = WalkForwardConfig(
         version="walk-forward:1.0.0",
         model_version="poisson+elo-ensemble:1.0.0",
-        calibration_method=calibration_method,
+        calibration_method=CalibrationMethod.ISOTONIC,
         minimum_training_size=max(2, len(eligible_train)),
         test_window_size=max(1, len(eligible_test)),
         bootstrap_samples=500,
@@ -379,6 +377,74 @@ def _run_backtest(
     report = walk_forward_backtest(observations, config=wf_config)
     manifest = tuple(_observation_manifest(observations))
     return report, replace(wf_config, observation_manifest=manifest)
+
+
+def _run_calibration_only_backtest(
+    observations: list[Any], cfg: ExperimentConfig
+) -> Any:
+    """Retrospective calibration evaluator — NOT PIT-certified.
+
+    Routes through ``calibration_only_walk_forward`` so the result is stored
+    under the research experiment path (start_research_experiment /
+    complete_research_experiment) with ``pit_certified=False`` in the registry.
+    """
+    from qwantej.calibration import CalibrationMethod
+    from qwantej.performance.calibration_backtest import (
+        CalibrationObservationRow,
+        CalibrationOnlyConfig,
+        calibration_only_walk_forward,
+    )
+
+    test_from_utc = datetime.combine(cfg.test_from, datetime.min.time(), tzinfo=UTC)
+    eligible = [o for o in observations if _calibration_eligible(o)]
+
+    eligible_train = [o for o in eligible if o.decision_as_of < test_from_utc]
+    eligible_test = [o for o in eligible if o.decision_as_of >= test_from_utc]
+
+    if len(eligible_train) < 1:
+        raise ValueError(
+            f"only {len(eligible_train)} eligible calibration training rows; "
+            "at least 1 is required"
+        )
+    if not eligible_test:
+        raise ValueError("no eligible calibration test rows in the requested test window")
+
+    # Count only training rows whose outcome was already settled at test start.
+    # The evaluator's per-fold filter requires outcome_observed_at <= training_as_of;
+    # using len(eligible_train) would require every outcome to be settled at the
+    # first fold's cutoff, causing ValueError when late results arrive days after kickoff.
+    settled_train = [
+        o for o in eligible_train
+        if o.outcome_observed_at is not None and o.outcome_observed_at <= test_from_utc
+    ]
+    if len(settled_train) < 2:
+        raise ValueError(
+            f"only {len(settled_train)} calibration training row(s) with outcome settled by "
+            f"{test_from_utc}; calibration requires at least 2 — try widening the training window"
+        )
+
+    calib_rows = [
+        CalibrationObservationRow(
+            observation_id=obs.observation_id,
+            decision_as_of=obs.decision_as_of,
+            feature_as_of=obs.feature_as_of,
+            outcome_observed_at=obs.outcome_observed_at,  # type: ignore[arg-type]
+            model_version=obs.model_version,
+            raw_probability=obs.raw_probability,
+            outcome=obs.outcome,  # type: ignore[arg-type]
+            model_probabilities=obs.model_probabilities,
+        )
+        for obs in eligible
+    ]
+    calib_config = CalibrationOnlyConfig(
+        version="calibration-only:1.0.0",
+        model_version="poisson+elo-ensemble:1.0.0",
+        calibration_method=CalibrationMethod.ISOTONIC,
+        minimum_training_size=max(2, len(settled_train)),
+        test_window_size=max(1, len(eligible_test)),
+    )
+    report = calibration_only_walk_forward(calib_rows, calib_config)
+    return report, calib_config
 
 
 def _eligible_walk_forward_row(observation: Any) -> bool:
@@ -396,14 +462,25 @@ def _eligible_walk_forward_row(observation: Any) -> bool:
     )
 
 
+def _calibration_eligible(observation: Any) -> bool:
+    """Relaxed eligibility for --calibration-only: outcome required, odds not.
+
+    Rows without a market baseline still contribute to calibration training;
+    they will carry fair_market_probability=None and be skipped by the
+    value-gate evaluator at report time.
+    """
+    return (
+        observation.outcome is not None
+        and observation.outcome_observed_at is not None
+        and observation.outcome_observed_at > observation.decision_as_of
+    )
+
+
 def _record_experiment(
     session: Any, report: Any, cfg: ExperimentConfig, started_at: datetime
 ) -> None:
-    from backend.services.experiments import (
-        ExperimentIdentity,
-        complete_walk_forward_experiment,
-        start_walk_forward_experiment,
-    )
+    from backend.services.experiments import ExperimentIdentity
+    from qwantej.performance.calibration_backtest import CalibrationOnlyConfig
 
     try:
         code_commit = _current_code_commit()
@@ -415,40 +492,64 @@ def _record_experiment(
     test_from_utc = datetime.combine(cfg.test_from, datetime.min.time(), tzinfo=UTC)
     test_to_utc = datetime.combine(cfg.test_to, datetime.max.time(), tzinfo=UTC)
 
-    data_snapshot_ref = _data_snapshot_ref(cfg)
     identity = ExperimentIdentity(
         name=cfg.name,
         version="1.0.0",
         calibration_version="isotonic:1.0.0",
         code_commit=code_commit,
-        data_snapshot_ref=data_snapshot_ref,
+        data_snapshot_ref=_data_snapshot_ref(cfg),
         training_window_start=train_from_utc,
         training_window_end=train_to_utc,
         test_window_start=test_from_utc,
         test_window_end=test_to_utc,
     )
 
-    _, wf_config = report
-    actual_report = report[0]
-    experiment = start_walk_forward_experiment(
-        session,
-        identity=identity,
-        config=wf_config,
-        started_at=started_at,
-    )
-    complete_walk_forward_experiment(
-        session,
-        experiment,
-        actual_report,
-        finished_at=datetime.now(UTC),
-    )
+    actual_report, run_config = report
+    if isinstance(run_config, CalibrationOnlyConfig):
+        # Retrospective path — not PIT-certified; stored as a research experiment.
+        from backend.services.experiments import (
+            complete_research_experiment,
+            start_research_experiment,
+        )
+        experiment = start_research_experiment(
+            session,
+            identity=identity,
+            config=run_config,
+            started_at=started_at,
+        )
+        complete_research_experiment(
+            session,
+            experiment,
+            actual_report,
+            finished_at=datetime.now(UTC),
+        )
+    else:
+        from backend.services.experiments import (
+            complete_walk_forward_experiment,
+            start_walk_forward_experiment,
+        )
+        experiment = start_walk_forward_experiment(
+            session,
+            identity=identity,
+            config=run_config,
+            started_at=started_at,
+        )
+        complete_walk_forward_experiment(
+            session,
+            experiment,
+            actual_report,
+            finished_at=datetime.now(UTC),
+        )
     log.info("Experiment recorded: id=%s name=%s", experiment.id, cfg.name)
 
 
 def _print_report(report: Any) -> None:
     log.info("=== Walk-forward results ===")
     log.info("  sample_size:          %d", report.sample_size)
-    log.info("  leakage_rejected:     %d", report.leakage_rows_rejected)
+    if hasattr(report, "leakage_rows_rejected"):
+        log.info("  leakage_rejected:     %d", report.leakage_rows_rejected)
+    if hasattr(report, "temporal_order_rejections"):
+        log.info("  temporal_order_rejected (research): %d", report.temporal_order_rejections)
     if hasattr(report, "roi") and report.roi is not None:
         log.info("  ROI:                  %.2f%%", report.roi * 100)
     if hasattr(report, "hit_rate") and report.hit_rate is not None:
@@ -564,12 +665,6 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    if not args.skip_ingest:
-        log.error(
-            "Refusing current-state ingestion for a point-in-time walk-forward; "
-            "use --skip-ingest with an existing historical snapshot archive"
-        )
-        sys.exit(2)
     cfg = ExperimentConfig(
         league_id=args.league,
         season=args.season,
@@ -593,6 +688,35 @@ def main() -> None:
         sys.exit(1)
 
     engine = make_engine(settings.database_url)
+
+    if not args.skip_ingest:
+        if cfg.dry_run:
+            # Dry-run must not commit any rows.  Ingestion runs in a separate
+            # session_scope that commits on success, so skip it entirely rather
+            # than risk writing data the caller didn't intend to persist.
+            # Use --skip-ingest explicitly when you want to run against existing DB
+            # data without triggering this guard.
+            log.info("Dry-run: skipping ingestion (add --skip-ingest to suppress this message)")
+        else:
+            from backend.services.api_football_client import ApiFootballClient
+
+            if not settings.api_football_key:
+                log.error(
+                    "API_FOOTBALL_KEY is not set in .env — set it or use --skip-ingest"
+                )
+                sys.exit(1)
+            log.warning(
+                "Ingesting with captured_at=now; odds will NOT have pre-kickoff PIT "
+                "validity for historical fixtures. Add --calibration-only unless you "
+                "have a live-ingested snapshot archive. Use --skip-ingest to skip."
+            )
+            client = ApiFootballClient(
+                api_key=settings.api_football_key,
+                base_url=settings.api_football_base_url,
+                timeout_seconds=settings.api_football_timeout_seconds,
+            )
+            with session_scope(engine) as ingest_session:
+                _ingest_season(client, ingest_session, cfg)
 
     started_at = datetime.now(UTC)
 
