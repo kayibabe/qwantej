@@ -31,18 +31,18 @@ from scripts.run_signal_pipeline import (
     run_once,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers — shared DB seeding
 # ---------------------------------------------------------------------------
 
 def _make_session():
     """Return a SQLite in-memory session with all migrations applied."""
-    from backend.core.db import make_engine, session_scope
+    from backend.core.db import make_engine
     engine = make_engine("sqlite:///:memory:")
-    import alembic.config
-    import alembic.command
     from pathlib import Path
+
+    import alembic.command
+    import alembic.config
     alembic_cfg = alembic.config.Config(str(Path(__file__).resolve().parent.parent / "alembic.ini"))
     alembic_cfg.set_main_option("sqlalchemy.url", "sqlite:///:memory:")
     alembic_cfg.attributes["connection"] = engine.connect()
@@ -51,8 +51,7 @@ def _make_session():
 
 
 def _seed_provider_and_competition(session):
-    from backend.models import EntityType, Provider, Season, SourceMapping
-    from backend.models import Competition, Team
+    from backend.models import EntityType, Provider, Season, SourceMapping, Team
     prov = Provider(name="API-Football", kind="odds", base_url="https://api-football.com")
     session.add(prov)
     session.flush()
@@ -60,10 +59,20 @@ def _seed_provider_and_competition(session):
     comp = Comp(name="Premier League", country="England")
     session.add(comp)
     session.flush()
-    season = Season(competition_id=comp.id, label="2026", start_date=datetime(2026, 8, 1, tzinfo=UTC).date(), end_date=datetime(2027, 6, 1, tzinfo=UTC).date())
+    season = Season(
+        competition_id=comp.id,
+        label="2026",
+        start_date=datetime(2026, 8, 1, tzinfo=UTC).date(),
+        end_date=datetime(2027, 6, 1, tzinfo=UTC).date(),
+    )
     session.add(season)
     session.flush()
-    sm = SourceMapping(provider_id=prov.id, entity_type=EntityType.COMPETITION, external_id="39", canonical_id=comp.id)
+    sm = SourceMapping(
+        provider_id=prov.id,
+        entity_type=EntityType.COMPETITION,
+        external_id="39",
+        canonical_id=comp.id,
+    )
     session.add(sm)
     session.flush()
     home = Team(name="Arsenal", country="England")
@@ -146,7 +155,6 @@ class TestApplyCalibration:
 @pytest.fixture()
 def db_session(tmp_path):
     """Provide a session connected to a fresh in-memory SQLite DB."""
-    from sqlalchemy import event
     from backend.core.db import make_engine
     from backend.models.base import Base
 
@@ -207,8 +215,6 @@ class TestUpcomingUnpredictedFixtures:
 
 class TestEnsureChampionModel:
     def test_creates_registry_and_run_on_first_call(self, db_session):
-        from backend.models import ModelRegistry, ModelRun
-        from sqlalchemy import select
 
         now = datetime.now(UTC)
         registry, run = _ensure_champion_model(db_session, now)
@@ -220,8 +226,9 @@ class TestEnsureChampionModel:
         assert run.model_id == registry.id
 
     def test_idempotent_registry_row(self, db_session):
-        from backend.models import ModelRegistry
         from sqlalchemy import select
+
+        from backend.models import ModelRegistry
 
         now = datetime.now(UTC)
         r1, _ = _ensure_champion_model(db_session, now)
@@ -249,8 +256,6 @@ class TestEnsureChampionCalibration:
         assert cal.status.value == "champion"
 
     def test_idempotent_does_not_create_duplicate(self, db_session):
-        from backend.models import CalibrationModel
-        from sqlalchemy import select
 
         now = datetime.now(UTC)
         cal1 = _ensure_champion_calibration(db_session, now, "abc1234")
@@ -300,6 +305,85 @@ class TestBestPreKickoffOdds:
         db_session.flush()
         odds, _, _ = _best_pre_kickoff_odds(db_session, fid, "1X2", "home", before=now)
         assert odds is None
+
+
+class TestProcessFixtureSuccessPath:
+    """End-to-end test: fixture + odds → prediction published → accumulator seeded."""
+
+    def test_publishes_prediction_with_odds(self, db_session, monkeypatch):
+        """Full _process_fixture success path: odds available, gate passes, prediction written."""
+        from qwantej.features.engineering import MatchFeatures
+
+        comp, season, home, away = _seed_provider_and_competition(db_session)
+        now = datetime.now(UTC)
+        f = _make_fixture(db_session, comp, season, home, away, kickoff=now + timedelta(hours=6))
+
+        # Seed pre-kickoff odds (1 hour old — within max_quote_age of 2h).
+        from backend.models import OddsQuote
+        odds_quote = OddsQuote(
+            fixture_id=f.id,
+            bookmaker="B365",
+            market="1X2",
+            selection="home",
+            decimal_odds=1.80,
+            captured_at=now - timedelta(hours=1),
+            source="api-football",
+        )
+        db_session.add(odds_quote)
+        db_session.flush()
+
+        # Bootstrap lineage rows; use actual code_commit so it matches registry.
+        registry, pipeline_run = _ensure_champion_model(db_session, now)
+        commit = registry.code_commit  # must match the row already stored
+        calibration = _ensure_champion_calibration(db_session, now, commit)
+
+        # A dominant home team: Elo +200 pts and high xG.
+        fake_features = MatchFeatures(
+            elo_home_rating=1600.0,
+            elo_away_rating=1400.0,
+            home_xg=1.9,
+            away_xg=0.7,
+            home_attack=1.2,
+            home_defence=0.85,
+            away_attack=0.8,
+            away_defence=1.1,
+            home_form=0.70,
+            away_form=0.30,
+            h2h_home_win_rate=0.65,
+            home_matches=10,
+            away_matches=10,
+            league_home_avg=1.5,
+            league_away_avg=1.2,
+        )
+
+        # Return the real odds quote id so create_feature_snapshot has a source row.
+        monkeypatch.setattr(
+            "backend.services.feature_extraction.extract_fixture_features",
+            lambda *a, **kw: (fake_features, [], [odds_quote.id], []),
+        )
+
+        from qwantej.value.gate import ValueGatePolicy
+        from scripts.run_signal_pipeline import _process_fixture
+
+        prediction = _process_fixture(
+            db_session,
+            f,
+            now=now,
+            model_registry=registry,
+            model_run=pipeline_run,
+            calibration_model=calibration,
+            value_policy=ValueGatePolicy(),
+            commit=commit,
+        )
+
+        assert prediction is not None, "prediction should be published when edge is positive"
+        assert prediction.fixture_id == f.id
+        assert prediction.market == "1X2"
+        assert prediction.selection == "home"
+        assert prediction.ensemble_probability is not None
+        assert float(prediction.ensemble_probability) > 0.5
+        assert prediction.edge_pp is not None
+        assert float(prediction.edge_pp) > 0
 
 
 class TestRunOnceDryRun:
