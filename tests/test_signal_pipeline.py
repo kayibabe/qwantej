@@ -463,6 +463,43 @@ class TestProcessFixtureSuccessPath:
         commit = registry.code_commit  # must match the row already stored
         calibration = _ensure_champion_calibration(db_session, now, commit)
 
+        # Seed a ReliabilitySnapshot so the live reliability gate passes.
+        # created_at is set explicitly to a time before `now` so the PIT filter
+        # (created_at <= as_of) holds regardless of wall-clock timing in CI.
+        from backend.models.reliability import ReliabilitySnapshot, ReliabilityState
+        snap_eval = now - timedelta(hours=1)
+        rel_snap = ReliabilitySnapshot(
+            competition_id=comp.id,
+            competition_class="tier-1",
+            market_family="1X2",
+            evaluated_as_of=snap_eval,
+            window_start=now - timedelta(days=90),
+            window_end=snap_eval,
+            policy_version="reliability-v1",
+            observation_count=150,
+            effective_sample_size=140.0,
+            shrinkage_weight=0.58,
+            league_reliability=78.0,
+            market_reliability=75.0,
+            segment_reliability=76.0,
+            posterior_standard_deviation=0.03,
+            conservative_lower_bound=0.70,
+            status=ReliabilityState.QUALIFIED,
+            grade="A",
+            components={
+                "calibration": 0.82, "roi": 0.62, "clv": 0.55,
+                "variance": 0.71, "drawdown": 0.68, "stability": 0.82,
+            },
+            diagnostics={"raw_score": 0.70},
+            future_rows_excluded=0,
+            input_snapshot_ref="test-snap-ref",
+            input_snapshot_hash="b" * 64,
+            code_commit=commit,
+            created_at=snap_eval,
+        )
+        db_session.add(rel_snap)
+        db_session.flush()
+
         # A dominant home team: Elo +200 pts and high xG.
         fake_features = MatchFeatures(
             elo_home_rating=1600.0,
@@ -504,13 +541,20 @@ class TestProcessFixtureSuccessPath:
         )
 
         assert prediction is not None, "prediction should be published when edge is positive"
-        assert prediction.fixture_id == f.id
-        assert prediction.market == "1X2"
-        assert prediction.selection == "home"
-        assert prediction.ensemble_probability is not None
-        assert float(prediction.ensemble_probability) > 0.5
-        assert prediction.edge_pp is not None
-        assert float(prediction.edge_pp) > 0
+        # segment_reliability comes from the actual snapshot, not a hardcoded value.
+        assert prediction.segment_reliability == pytest.approx(76.0)
+        pred = prediction.prediction
+        assert pred.fixture_id == f.id
+        assert pred.market == "1X2"
+        assert pred.selection == "home"
+        assert pred.ensemble_probability is not None
+        assert float(pred.ensemble_probability) > 0.5
+        assert pred.edge_pp is not None
+        assert float(pred.edge_pp) > 0
+        # Phase 9: reliability scores and snapshot identity must be persisted.
+        assert float(pred.lrs) == pytest.approx(78.0), "lrs must match snapshot.league_reliability"
+        assert float(pred.mrs) == pytest.approx(75.0), "mrs must match snapshot.market_reliability"
+        assert pred.reliability_snapshot_id == rel_snap.id, "lineage must reference the snapshot"
 
 
 class TestRunOnceDryRun:
