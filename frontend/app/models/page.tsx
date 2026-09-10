@@ -12,7 +12,7 @@ const LIMIT = 20
 const STATUS_STYLE: Record<string, string> = {
   champion: "bg-[#1e2d1e] text-[var(--win)]",
   challenger: "bg-[#1a2035] text-[var(--accent)]",
-  shadow: "bg-[var(--bg-raised)] text-[var(--text-secondary)]",
+  development: "bg-[var(--bg-raised)] text-[var(--text-secondary)]",
   retired: "bg-[#2d251a] text-[var(--void)]",
 }
 
@@ -118,8 +118,8 @@ export default async function ModelsPage({
   const family = typeof sp.family === "string" ? sp.family : undefined
   const offset = Number(sp.offset ?? 0)
 
-  const statuses = ["", "champion", "challenger", "shadow", "retired"]
-  const families = ["", "poisson", "elo", "ensemble"]
+  const statuses = ["", "champion", "challenger", "development", "retired"]
+  const families = ["", "poisson", "dixon_coles", "zinb", "elo", "bayesian_hierarchical", "market", "ensemble"]
 
   return (
     <div className="flex flex-col gap-8 p-8">

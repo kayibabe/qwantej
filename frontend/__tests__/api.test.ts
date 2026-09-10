@@ -5,8 +5,14 @@ const mockFetch = vi.fn()
 vi.stubGlobal("fetch", mockFetch)
 
 // Import after stubbing so the module uses the mock
-const { fetchPredictions, fetchSettlements, fetchSettlementSummary, fetchAccumulators } =
-  await import("@/lib/api")
+const {
+  fetchPredictions,
+  fetchSettlements,
+  fetchSettlementSummary,
+  fetchAccumulators,
+  fetchPerformanceReport,
+  fetchModels,
+} = await import("@/lib/api")
 
 function makeResponse(data: unknown, ok = true, status = 200) {
   return Promise.resolve({
@@ -72,5 +78,60 @@ describe("fetchAccumulators", () => {
     const url: string = mockFetch.mock.calls[0][0]
     expect(url).toContain("status=pending")
     expect(url).toContain("limit=10")
+  })
+})
+
+describe("fetchPerformanceReport", () => {
+  it("calls /performance/report with no params", async () => {
+    const report = { n_total: 100, n_settled: 80 }
+    mockFetch.mockReturnValueOnce(makeResponse(report))
+    const result = await fetchPerformanceReport()
+    expect(result).toEqual(report)
+    const url: string = mockFetch.mock.calls[0][0]
+    expect(url).toContain("/performance/report")
+  })
+
+  it("does not send model_version param (not supported by backend)", async () => {
+    mockFetch.mockReturnValueOnce(makeResponse({}))
+    // Call with only supported params — ensure model_version cannot be passed
+    await fetchPerformanceReport({ subject_type: "prediction", market: "1X2" })
+    const url: string = mockFetch.mock.calls[0][0]
+    expect(url).not.toContain("model_version")
+    expect(url).toContain("subject_type=prediction")
+    expect(url).toContain("market=1X2")
+  })
+
+  it("throws on non-ok response", async () => {
+    mockFetch.mockReturnValueOnce(makeResponse(null, false, 503))
+    await expect(fetchPerformanceReport()).rejects.toThrow("/performance/report failed")
+  })
+})
+
+describe("fetchModels", () => {
+  it("calls /models with no params", async () => {
+    const page = { items: [], total: 0, limit: 20, offset: 0 }
+    mockFetch.mockReturnValueOnce(makeResponse(page))
+    const result = await fetchModels()
+    expect(result).toEqual(page)
+    const url: string = mockFetch.mock.calls[0][0]
+    expect(url).toContain("/models")
+  })
+
+  it("passes status=development (not shadow)", async () => {
+    mockFetch.mockReturnValueOnce(makeResponse({ items: [], total: 0, limit: 20, offset: 0 }))
+    await fetchModels({ status: "development" })
+    const url: string = mockFetch.mock.calls[0][0]
+    expect(url).toContain("status=development")
+    expect(url).not.toContain("shadow")
+  })
+
+  it("passes family filter for all seven families", async () => {
+    const families = ["poisson", "dixon_coles", "zinb", "elo", "bayesian_hierarchical", "market", "ensemble"]
+    for (const family of families) {
+      mockFetch.mockReturnValueOnce(makeResponse({ items: [], total: 0, limit: 20, offset: 0 }))
+      await fetchModels({ family })
+      const url: string = mockFetch.mock.calls[mockFetch.mock.calls.length - 1][0]
+      expect(url).toContain(`family=${family}`)
+    }
   })
 })

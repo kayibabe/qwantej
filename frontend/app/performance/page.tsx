@@ -118,10 +118,10 @@ export default async function PerformancePage() {
                     : undefined
                 }
                 valueClass={
-                  report.hit_rate !== null &&
-                  report.break_even_hit_rate !== null &&
-                  report.hit_rate >= report.break_even_hit_rate
-                    ? "text-[var(--win)]"
+                  report.hit_rate !== null && report.break_even_hit_rate !== null
+                    ? report.hit_rate >= report.break_even_hit_rate
+                      ? "text-[var(--win)]"
+                      : "text-[var(--loss)]"
                     : undefined
                 }
               />

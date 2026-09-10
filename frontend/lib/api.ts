@@ -60,7 +60,6 @@ export function fetchAccumulators(params: {
 export function fetchPerformanceReport(params?: {
   subject_type?: string
   market?: string
-  model_version?: string
 }): Promise<KPIReportOut> {
   return apiFetch("/performance/report", params as Record<string, string | undefined>)
 }
