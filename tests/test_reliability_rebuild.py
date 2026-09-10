@@ -245,6 +245,22 @@ class TestQueryReliabilityObservations:
         with pytest.raises(ValueError, match="as_of must be timezone-aware"):
             query_reliability_observations(session, as_of=datetime(2026, 9, 10, 12))
 
+    def test_duplicate_competition_names_raises(self, session):
+        # Two competitions with the same name but different IDs are ambiguous:
+        # the matrix would merge their data under one name but only one UUID
+        # would survive in competition_id_map.
+        comp_a = Competition(name="EPL", tier=1)
+        comp_b = Competition(name="EPL", tier=2)
+        session.add_all([comp_a, comp_b])
+        session.flush()
+        for comp in (comp_a, comp_b):
+            fix = _fixture(session, comp)
+            pred = _prediction(session, fix)
+            _settlement(session, pred)
+
+        with pytest.raises(ValueError, match="ambiguous competition names"):
+            query_reliability_observations(session, as_of=NOW)
+
     def test_no_clv_gives_none(self, session):
         comp = _competition(session)
         fix = _fixture(session, comp)
@@ -281,6 +297,26 @@ class TestRebuildReliabilitySnapshots:
             assert snap.market_family == "1X2"
             assert snap.input_snapshot_ref == "settlement-worker-rebuild"
             assert len(snap.input_snapshot_hash) == 64
+
+    def test_snapshot_hash_changes_when_decision_timestamp_changes(self, session):
+        # Regression for incomplete hash: changing decision_as_of (a matrix input)
+        # must change the provenance hash even when observation IDs are identical.
+        comp = _competition(session)
+        fix = _fixture(session, comp)
+        pred = _prediction(session, fix, calibrated_probability=0.60)
+        _settlement(session, pred, outcome=SettlementOutcome.WIN, taken_odds=2.00)
+        rebuild_reliability_snapshots(session, as_of=NOW, code_commit="abc1234")
+        first_hash = session.query(ReliabilitySnapshot).first().input_snapshot_hash
+
+        pred.decision_as_of = DECISION - timedelta(days=1)
+        session.flush()
+        now2 = NOW + timedelta(seconds=1)
+        rebuild_reliability_snapshots(session, as_of=now2, code_commit="abc1234")
+        second_hash = session.query(ReliabilitySnapshot).order_by(
+            ReliabilitySnapshot.created_at.desc()
+        ).first().input_snapshot_hash
+
+        assert first_hash != second_hash
 
     def test_snapshot_hash_changes_when_odds_change(self, session):
         # Regression: hash must cover behavior-affecting fields, not just IDs.

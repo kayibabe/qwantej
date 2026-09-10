@@ -201,10 +201,13 @@ def query_reliability_observations(
 
     observations: list[ReliabilityObservation] = []
     competition_id_map: dict[str, uuid.UUID] = {}
+    # Tracks all UUIDs seen per name to detect ambiguous (non-unique) names.
+    _name_to_ids: dict[str, set[uuid.UUID]] = {}
 
     for settlement, prediction, competition in session.execute(stmt):
         competition_class = f"tier-{competition.tier}" if competition.tier else "tier-1"
         competition_id_map[competition.name] = competition.id
+        _name_to_ids.setdefault(competition.name, set()).add(competition.id)
 
         is_win = settlement.outcome == SettlementOutcome.WIN
         taken_odds = float(settlement.taken_odds)
@@ -229,6 +232,13 @@ def query_reliability_observations(
                 ),
                 model_stability=1.0,
             )
+        )
+
+    ambiguous = sorted(name for name, ids in _name_to_ids.items() if len(ids) > 1)
+    if ambiguous:
+        raise ValueError(
+            f"ambiguous competition names (multiple IDs): {', '.join(ambiguous)}; "
+            "ensure competition names are unique in the database"
         )
 
     return observations, competition_id_map
@@ -256,8 +266,10 @@ def rebuild_reliability_snapshots(
         return 0
 
     fingerprints = sorted(
-        f"{obs.observation_id}:{obs.predicted_probability:.8f}:{obs.outcome}"
-        f":{obs.profit_units:.6f}:{obs.closing_line_value}"
+        f"{obs.observation_id}:{obs.league}:{obs.market_family}:{obs.competition_class}"
+        f":{obs.decision_as_of.isoformat()}:{obs.outcome_observed_at.isoformat()}"
+        f":{obs.predicted_probability:.8f}:{obs.outcome}:{obs.profit_units:.6f}"
+        f":{obs.closing_line_value}:{obs.model_stability:.4f}"
         for obs in observations
     )
     snapshot_hash = hashlib.sha256("|".join(fingerprints).encode()).hexdigest()
