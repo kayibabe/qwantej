@@ -2,16 +2,25 @@
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.models import ReliabilitySnapshot, ReliabilityState
-from qwantej.performance import ReliabilityMatrix
+from backend.models import (
+    Competition,
+    Fixture,
+    Prediction,
+    ReliabilitySnapshot,
+    ReliabilityState,
+    Settlement,
+    SettlementOutcome,
+)
+from qwantej.performance import ReliabilityMatrix, ReliabilityObservation, build_reliability_matrix
 
 _DEFAULT_POLICY_VERSION = "reliability-v1"
 
@@ -146,3 +155,118 @@ def current_reliability_for_fixture(
         segment_reliability=float(snap.segment_reliability),
         status=snap.status.value,
     )
+
+
+def _ensure_aware(dt: datetime) -> datetime:
+    """Return dt with UTC tzinfo when it is naive (SQLite returns naive datetimes)."""
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
+
+
+def query_reliability_observations(
+    session: Session,
+    *,
+    as_of: datetime,
+) -> tuple[list[ReliabilityObservation], dict[str, uuid.UUID]]:
+    """Build ReliabilityObservation objects from all effective WIN/LOSS settlements.
+
+    Only unsuperseded WIN/LOSS settlements with a recorded taken_probability and
+    a calibrated_probability on the linked prediction are included.  Filtered to
+    settled_at <= as_of for PIT safety.
+
+    Returns (observations, competition_id_map) where competition_id_map maps
+    competition.name → competition.id for use in archive_reliability_matrix.
+    """
+    if as_of.tzinfo is None or as_of.utcoffset() is None:
+        raise ValueError("as_of must be timezone-aware")
+
+    superseded_ids = (
+        select(Settlement.supersedes_id)
+        .where(Settlement.supersedes_id.is_not(None))
+    )
+
+    stmt = (
+        select(Settlement, Prediction, Fixture, Competition)
+        .join(Prediction, Prediction.id == Settlement.subject_id)
+        .join(Fixture, Fixture.id == Prediction.fixture_id)
+        .join(Competition, Competition.id == Fixture.competition_id)
+        .where(
+            Settlement.subject_type == "prediction",
+            Settlement.outcome.in_([SettlementOutcome.WIN, SettlementOutcome.LOSS]),
+            Settlement.taken_probability.is_not(None),
+            Settlement.id.not_in(superseded_ids),
+            Settlement.settled_at <= as_of,
+            Prediction.calibrated_probability.is_not(None),
+        )
+    )
+
+    observations: list[ReliabilityObservation] = []
+    competition_id_map: dict[str, uuid.UUID] = {}
+
+    for settlement, prediction, fixture, competition in session.execute(stmt):
+        competition_class = f"tier-{competition.tier}" if competition.tier else "tier-1"
+        competition_id_map[competition.name] = competition.id
+
+        is_win = settlement.outcome == SettlementOutcome.WIN
+        taken_p = float(settlement.taken_probability)
+        profit_units = (1.0 / taken_p - 1.0) if is_win else -1.0
+
+        decision_as_of = _ensure_aware(prediction.decision_as_of)
+        settled_at = _ensure_aware(settlement.settled_at)
+
+        observations.append(
+            ReliabilityObservation(
+                observation_id=str(settlement.subject_id),
+                league=competition.name,
+                market_family=prediction.market,
+                competition_class=competition_class,
+                decision_as_of=decision_as_of,
+                outcome_observed_at=settled_at,
+                predicted_probability=float(prediction.calibrated_probability),
+                outcome=1 if is_win else 0,
+                profit_units=profit_units,
+                closing_line_value=(
+                    float(settlement.clv) if settlement.clv is not None else None
+                ),
+                model_stability=1.0,
+            )
+        )
+
+    return observations, competition_id_map
+
+
+def rebuild_reliability_snapshots(
+    session: Session,
+    *,
+    as_of: datetime,
+    code_commit: str,
+) -> int:
+    """Rebuild reliability snapshots from all settled predictions up to as_of.
+
+    Intended for post-settlement invocation so the next signal pipeline run
+    uses up-to-date lrs/mrs scores.  Returns the number of new snapshot rows
+    written, or 0 when there are no qualifying observations.
+
+    Session contract: flushes but does not commit.  The caller controls the
+    commit boundary (same convention as the settlement worker).
+    """
+    observations, competition_id_map = query_reliability_observations(
+        session, as_of=as_of
+    )
+    if not observations:
+        return 0
+
+    sorted_ids = sorted(obs.observation_id for obs in observations)
+    snapshot_hash = hashlib.sha256("|".join(sorted_ids).encode()).hexdigest()
+    window_start = min(obs.decision_as_of for obs in observations)
+
+    matrix = build_reliability_matrix(observations, evaluated_as_of=as_of)
+    rows = archive_reliability_matrix(
+        session,
+        matrix,
+        competition_ids=competition_id_map,
+        window_start=window_start,
+        input_snapshot_ref="settlement-worker-rebuild",
+        input_snapshot_hash=snapshot_hash,
+        code_commit=code_commit,
+    )
+    return len(rows)
