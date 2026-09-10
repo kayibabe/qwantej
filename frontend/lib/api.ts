@@ -1,5 +1,8 @@
 import type {
   AccumulatorPage,
+  KPIReportOut,
+  ModelRegistryDetailOut,
+  ModelRegistryPage,
   PredictionPage,
   SettlementPage,
   SettlementSummary,
@@ -52,4 +55,25 @@ export function fetchAccumulators(params: {
   offset?: number
 }): Promise<AccumulatorPage> {
   return apiFetch("/accumulators", params as Record<string, string | number | undefined>)
+}
+
+export function fetchPerformanceReport(params?: {
+  subject_type?: string
+  market?: string
+  model_version?: string
+}): Promise<KPIReportOut> {
+  return apiFetch("/performance/report", params as Record<string, string | undefined>)
+}
+
+export function fetchModels(params?: {
+  status?: string
+  family?: string
+  limit?: number
+  offset?: number
+}): Promise<ModelRegistryPage> {
+  return apiFetch("/models", params as Record<string, string | number | undefined>)
+}
+
+export function fetchModel(id: string): Promise<ModelRegistryDetailOut> {
+  return apiFetch(`/models/${id}`)
 }

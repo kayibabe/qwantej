@@ -8,6 +8,8 @@ const links = [
   { href: "/accumulators", label: "Accumulators" },
   { href: "/predictions", label: "Predictions" },
   { href: "/settlements", label: "Settlements" },
+  { href: "/performance", label: "Performance" },
+  { href: "/models", label: "Models" },
 ]
 
 export default function Nav() {

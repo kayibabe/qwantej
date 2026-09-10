@@ -93,3 +93,81 @@ export interface AccumulatorPage {
   limit: number
   offset: number
 }
+
+export interface KPIReportOut {
+  // Counts
+  n_total: number
+  n_settled: number
+  n_wins: number
+  n_losses: number
+  n_voids: number
+  n_pushes: number
+  // Betting
+  hit_rate: number | null
+  average_odds: number | null
+  break_even_hit_rate: number | null
+  // Predictive
+  brier_score: number | null
+  brier_skill_score: number | null
+  log_loss: number | null
+  ece: number | null
+  calibration_slope: number | null
+  calibration_intercept: number | null
+  // Market quality
+  mean_clv: number | null
+  n_clv: number
+  // Financial
+  roi: number | null
+  total_stake: number | null
+  total_profit: number | null
+  // Risk
+  max_drawdown: number | null
+  volatility: number | null
+}
+
+export interface ModelRunOut {
+  id: string
+  model_id: string
+  kind: string
+  status: string
+  started_at: string
+  finished_at: string | null
+  data_as_of: string | null
+  data_snapshot_ref: string | null
+  code_commit: string | null
+  parameters: Record<string, unknown> | null
+  metrics: Record<string, unknown> | null
+  log_uri: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ModelRegistryOut {
+  id: string
+  family: string
+  name: string
+  version: string
+  status: string
+  training_window_start: string | null
+  training_window_end: string | null
+  code_commit: string | null
+  artefact_hash: string | null
+  artefact_uri: string | null
+  hyperparameters: Record<string, unknown> | null
+  description: string | null
+  promoted_at: string | null
+  retired_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ModelRegistryDetailOut extends ModelRegistryOut {
+  runs: ModelRunOut[]
+}
+
+export interface ModelRegistryPage {
+  items: ModelRegistryOut[]
+  total: number
+  limit: number
+  offset: number
+}
