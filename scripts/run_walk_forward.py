@@ -254,7 +254,9 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
         # Training results are not FK-tracked in the feature snapshot schema,
         # so this content hash is the replay contract for the exact PIT source
         # rows and capture times used by ELO/Poisson.
-        feature_dict = features_to_dict(features)
+        # Widen from dict[str, float | None] to accommodate the str metadata keys
+        # added below (_training_fixture_count stays float, hash is str).
+        feature_dict: dict[str, float | str | None] = dict(features_to_dict(features))
         feature_dict["_training_fixture_count"] = float(len(hist_rows))
         feature_dict["_training_result_snapshot_hash"] = historical_training_hash(hist_rows)
 
@@ -610,6 +612,28 @@ def _observation_manifest_hash(observations: list[Any]) -> str:
     return f"sha256:{hashlib.sha256(canonical.encode()).hexdigest()}"
 
 
+def _verify_snapshot_certification(session: Any, observations: list[Any]) -> bool:
+    """Return True only when every snapshot_ref resolves to a DB-verified snapshot.
+
+    Queries each referenced FeatureSnapshot by primary key and calls
+    verify_feature_snapshot() on it.  Any missing row or hash mismatch causes
+    immediate False — this is the persistence-boundary check that backs the
+    pit_certified flag before it is written to the experiment registry.
+    """
+    from backend.models.features import FeatureSnapshot
+    from backend.services.features import verify_feature_snapshot
+
+    for obs in observations:
+        if obs.snapshot_ref is None:
+            return False
+        snap_uuid = obs.snapshot_ref[len("feature-snapshot:"):]
+        snap = session.get(FeatureSnapshot, snap_uuid)
+        if snap is None or not verify_feature_snapshot(session, snap):
+            log.warning("Snapshot verification failed for ref=%s", obs.snapshot_ref)
+            return False
+    return True
+
+
 def _current_code_commit() -> str:
     import subprocess
 
@@ -737,6 +761,19 @@ def main() -> None:
         _print_report(report)
 
         if not cfg.dry_run:
+            # Persistence boundary: independently verify every snapshot_ref
+            # against the DB before allowing pit_certified=True into the registry.
+            # The domain flag is cheap (format-only); this check proves existence
+            # and hash integrity.
+            if getattr(report, "pit_certified", False):
+                from dataclasses import replace as _dc_replace
+                pit_ok = _verify_snapshot_certification(session, observations)
+                if not pit_ok:
+                    log.warning(
+                        "pit_certified overridden to False: "
+                        "one or more snapshots failed DB verification"
+                    )
+                    report = _dc_replace(report, pit_certified=False)
             _record_experiment(session, (report, wf_config), cfg, started_at)
         else:
             session.rollback()

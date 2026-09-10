@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import uuid as _uuid
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -99,10 +100,16 @@ class BacktestObservation:
         ):
             if state is not None and state not in valid_reliability_states:
                 raise ValueError(f"{name} is not a valid reliability state")
-        if self.snapshot_ref is not None and not self.snapshot_ref.startswith(
-            "feature-snapshot:"
-        ):
-            raise ValueError("snapshot_ref must start with 'feature-snapshot:'")
+        if self.snapshot_ref is not None:
+            prefix = "feature-snapshot:"
+            if not self.snapshot_ref.startswith(prefix):
+                raise ValueError("snapshot_ref must start with 'feature-snapshot:'")
+            try:
+                _uuid.UUID(self.snapshot_ref[len(prefix):])
+            except ValueError as exc:
+                raise ValueError(
+                    f"snapshot_ref suffix must be a valid UUID: {exc}"
+                ) from exc
 
 
 @dataclass(frozen=True)
@@ -172,6 +179,14 @@ class WalkForwardReport:
     break_even_hit_rate: float | None
     average_clv: float | None
     maximum_drawdown_units: float
+    # True only when *every* supplied observation (including rows later rejected
+    # for leakage, model mismatch, or missing market data) carries a verified
+    # snapshot_ref.  This is deliberately conservative: a run is not certified
+    # unless the frozen feature provenance is proven for the full input set, not
+    # just the evaluated subset.  Consumers must not weaken this to
+    # "all evaluated rows had snapshots" — that would allow unchecked inputs to
+    # silently slip through.  The persistence layer performs an independent
+    # DB-backed verification before storing this flag (see run_walk_forward.py).
     pit_certified: bool = False
 
 

@@ -146,6 +146,35 @@ def test_snapshot_ref_format_is_validated() -> None:
         replace(row, snapshot_ref="not-a-valid-ref")
 
 
+def test_snapshot_ref_with_invalid_uuid_suffix_is_rejected() -> None:
+    row = _rows()[0]
+    with pytest.raises(ValueError, match="valid UUID"):
+        replace(row, snapshot_ref="feature-snapshot:not-a-uuid")
+
+
+def test_pit_certified_false_for_leakage_rejected_row_without_ref() -> None:
+    """pit_certified is False even when only the leakage-rejected rows lack refs.
+
+    The flag is conservative: it covers all supplied observations, not just the
+    subset that passes PIT and market filters.  A row with future features is
+    properly rejected by the evaluator but still downgrades certification.
+    """
+    rows = [
+        replace(obs, snapshot_ref=f"feature-snapshot:00000000-0000-0000-0000-{i:012d}")
+        for i, obs in enumerate(_rows())
+    ]
+    # Make one row fail PIT (future feature_as_of) AND remove its snapshot_ref.
+    future_row = replace(
+        rows[0],
+        feature_as_of=rows[0].decision_as_of + timedelta(seconds=1),
+        snapshot_ref=None,
+    )
+    rows[0] = future_row
+    report = walk_forward_backtest(rows, _config())
+    assert report.leakage_rows_rejected >= 1
+    assert report.pit_certified is False
+
+
 def test_malformed_closing_quote_is_excluded_from_clv_not_decision() -> None:
     rows = _rows()
     rows[40] = replace(rows[40], closing_quote_timestamp=None)
