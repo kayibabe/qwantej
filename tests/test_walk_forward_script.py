@@ -377,9 +377,66 @@ class TestBuildBacktestObservationBranches:
         assert observations[0].outcome == 0
         assert observations[0].outcome_observed_at == target_kickoff + timedelta(hours=2)
         assert observations[0].fair_market_probability is None
+        # No stats or odds were seeded for the target fixture pre-kickoff, so no
+        # FeatureSnapshot is created and snapshot_ref must be None.
+        assert observations[0].snapshot_ref is None
 
         standard_cfg = _cfg(calibration_only=False, all_leagues=True)
         assert _build_backtest_observations(mem_session, standard_cfg) == []
+
+    def test_snapshot_ref_populated_when_pre_kickoff_stats_exist(self, mem_session):
+        """snapshot_ref must be non-None when FeatureSnapshot sources are available."""
+        target_kickoff = datetime(2026, 9, 6, 12, tzinfo=UTC)
+        target = _seed_finished_fixture(mem_session, kickoff=target_kickoff)
+        # Seed 3 historical fixtures with immutable result snapshots so
+        # extract_fixture_features can produce feature values.
+        for index in range(3):
+            historical = Fixture(
+                competition=target.competition,
+                season=target.season,
+                home_team=target.home_team,
+                away_team=target.away_team,
+                kickoff_utc=datetime(2026, 8, 1 + index, 12, tzinfo=UTC),
+                status=FixtureStatus.FINISHED,
+                home_goals=8,
+                away_goals=8,
+            )
+            mem_session.add(historical)
+            mem_session.flush()
+            _add_fixture_result_snapshot(
+                mem_session,
+                historical,
+                captured_at=historical.kickoff_utc + timedelta(hours=2),
+                home_goals=index + 1,
+                away_goals=index,
+            )
+        _add_fixture_result_snapshot(
+            mem_session,
+            target,
+            captured_at=target_kickoff + timedelta(hours=2),
+            home_goals=1,
+            away_goals=0,
+        )
+        # Add a pre-kickoff fixture-level stats snapshot (e.g. pre-match odds or
+        # lineups) directly on the target fixture. _fixture_stats_ids() queries by
+        # fixture_id, so only StatsSnapshot rows with fixture_id set are returned.
+        as_of = target_kickoff - timedelta(hours=2)
+        stats = StatsSnapshot(
+            subject_type=StatsSubjectType.FIXTURE,
+            fixture_id=target.id,
+            as_of_timestamp=as_of - timedelta(minutes=5),
+            payload={"pre_match": True},
+            source="api-football:prematch",
+        )
+        mem_session.add(stats)
+        mem_session.flush()
+
+        cfg = _cfg(calibration_only=True, all_leagues=True)
+        observations = _build_backtest_observations(mem_session, cfg)
+        assert len(observations) == 1
+        obs = observations[0]
+        assert obs.snapshot_ref is not None
+        assert obs.snapshot_ref.startswith("feature-snapshot:")
 
 
 # ---------------------------------------------------------------------------

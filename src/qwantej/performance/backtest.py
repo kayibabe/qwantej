@@ -47,6 +47,7 @@ class BacktestObservation:
     market_reliability_status: str | None = None
     probability_change: float = 0.0
     drift_score: float = 0.0
+    snapshot_ref: str | None = None
 
     def __post_init__(self) -> None:
         if not self.observation_id.strip() or not self.model_version.strip():
@@ -98,6 +99,10 @@ class BacktestObservation:
         ):
             if state is not None and state not in valid_reliability_states:
                 raise ValueError(f"{name} is not a valid reliability state")
+        if self.snapshot_ref is not None and not self.snapshot_ref.startswith(
+            "feature-snapshot:"
+        ):
+            raise ValueError("snapshot_ref must start with 'feature-snapshot:'")
 
 
 @dataclass(frozen=True)
@@ -167,6 +172,7 @@ class WalkForwardReport:
     break_even_hit_rate: float | None
     average_clv: float | None
     maximum_drawdown_units: float
+    pit_certified: bool = False
 
 
 @dataclass(frozen=True)
@@ -185,6 +191,7 @@ def walk_forward_backtest(
     ids = [item.observation_id for item in supplied]
     if len(ids) != len(set(ids)):
         raise ValueError("observation_id values must be unique")
+    pit_certified = all(item.snapshot_ref is not None for item in supplied)
 
     version_rejected = sum(item.model_version != config.model_version for item in supplied)
     version_rows = [item for item in supplied if item.model_version == config.model_version]
@@ -346,6 +353,7 @@ def walk_forward_backtest(
         break_even_hit_rate=float(np.mean([1.0 / value for value in odds])) if odds else None,
         average_clv=float(np.mean(clv_values)) if clv_values else None,
         maximum_drawdown_units=_maximum_drawdown(profits),
+        pit_certified=pit_certified,
     )
 
 

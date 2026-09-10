@@ -115,6 +115,37 @@ def test_missing_closing_odds_is_reported_without_affecting_decision() -> None:
     assert report.missing_closing_odds_rows >= 1
 
 
+def test_pit_certified_true_when_all_observations_carry_snapshot_ref() -> None:
+    rows = [
+        replace(obs, snapshot_ref=f"feature-snapshot:00000000-0000-0000-0000-{i:012d}")
+        for i, obs in enumerate(_rows())
+    ]
+    report = walk_forward_backtest(rows, _config())
+    assert report.pit_certified is True
+
+
+def test_pit_certified_false_when_any_observation_lacks_snapshot_ref() -> None:
+    rows = _rows()
+    report = walk_forward_backtest(rows, _config())
+    assert report.pit_certified is False
+
+
+def test_pit_certified_false_when_one_observation_missing_ref() -> None:
+    rows = [
+        replace(obs, snapshot_ref=f"feature-snapshot:00000000-0000-0000-0000-{i:012d}")
+        for i, obs in enumerate(_rows())
+    ]
+    rows[5] = replace(rows[5], snapshot_ref=None)
+    report = walk_forward_backtest(rows, _config())
+    assert report.pit_certified is False
+
+
+def test_snapshot_ref_format_is_validated() -> None:
+    row = _rows()[0]
+    with pytest.raises(ValueError, match="feature-snapshot:"):
+        replace(row, snapshot_ref="not-a-valid-ref")
+
+
 def test_malformed_closing_quote_is_excluded_from_clv_not_decision() -> None:
     rows = _rows()
     rows[40] = replace(rows[40], closing_quote_timestamp=None)

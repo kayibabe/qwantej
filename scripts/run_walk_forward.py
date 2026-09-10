@@ -258,8 +258,9 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
         feature_dict["_training_fixture_count"] = float(len(hist_rows))
         feature_dict["_training_result_snapshot_hash"] = historical_training_hash(hist_rows)
 
+        snap_ref: str | None = None
         if _stats_ids or source_odds_ids:
-            create_feature_snapshot(
+            snap = create_feature_snapshot(
                 session,
                 fixture_id=fixture.id,
                 feature_version="poisson-elo-features:1.0.0",
@@ -270,6 +271,7 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
                 imputation_policy_version="explicit-fallback-v1",
                 code_commit=code_commit,
             )
+            snap_ref = snap.snapshot_ref
 
         outcome = int(observed_result.home_goals > observed_result.away_goals)
         outcome_observed_at = observed_result.observed_at
@@ -286,6 +288,7 @@ def _build_backtest_observations(session: Any, cfg: ExperimentConfig) -> list[An
             executable_odds=executable_odds,
             quote_timestamp=best_odds_row.captured_at if odds_rows else None,
             model_probabilities=(model_home_win, model_draw, model_away_win),
+            snapshot_ref=snap_ref,
         )
         observations.append(obs)
 
