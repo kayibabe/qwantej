@@ -9,15 +9,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from backend.workers.ingestion_worker import (
-    RunSummary,
-    WorkerConfig,
-    _DEFAULT_INTERVAL_ALL,
     _DEFAULT_INTERVAL_SINGLE,
     SUPPORTED_LEAGUE_IDS,
+    WorkerConfig,
     current_season,
     discover_leagues,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -167,7 +164,6 @@ class TestRunOnce:
         mock_client = MagicMock()
         mock_client.last_requests_remaining = 50  # already at threshold
 
-        from backend.services.api_football_ingestion import IngestionSummary
         with (
             patch("backend.core.config.get_settings", return_value=mock_settings),
             patch("backend.core.logging.configure_logging"),
@@ -281,22 +277,19 @@ class TestSchedulerArgParsing:
 
     def test_scheduler_make_ingestion_run_production_uses_supported_ids(self):
         """_make_ingestion_run with no flags should embed the 4 supported IDs."""
-        from backend.workers.scheduler import _make_ingestion_run
         from backend.workers.ingestion_worker import SUPPORTED_LEAGUE_IDS, current_season
+        from backend.workers.scheduler import _make_ingestion_run
 
         season = current_season()
         _run = _make_ingestion_run(
             all_leagues=False, explicit_league_ids=[], season=season
         )
-        # The callable closes over a WorkerConfig — retrieve it.
-        import inspect
-        closed_config = None
-        for cell in _run.__code__.co_freevars:
-            pass
         # Access via closure cells
         closure_vars = {
             name: cell.cell_contents
-            for name, cell in zip(_run.__code__.co_freevars, _run.__closure__ or [])
+            for name, cell in zip(
+                _run.__code__.co_freevars, _run.__closure__ or [], strict=True
+            )
         }
         config = closure_vars.get("config")
         assert config is not None
@@ -307,8 +300,8 @@ class TestSchedulerArgParsing:
 
     def test_scheduler_make_ingestion_run_all_leagues_uses_none(self):
         """_make_ingestion_run with all_leagues=True should set leagues=None."""
-        from backend.workers.scheduler import _make_ingestion_run
         from backend.workers.ingestion_worker import current_season
+        from backend.workers.scheduler import _make_ingestion_run
 
         season = current_season()
         _run = _make_ingestion_run(
@@ -316,7 +309,9 @@ class TestSchedulerArgParsing:
         )
         closure_vars = {
             name: cell.cell_contents
-            for name, cell in zip(_run.__code__.co_freevars, _run.__closure__ or [])
+            for name, cell in zip(
+                _run.__code__.co_freevars, _run.__closure__ or [], strict=True
+            )
         }
         config = closure_vars.get("config")
         assert config is not None
@@ -324,8 +319,8 @@ class TestSchedulerArgParsing:
 
     def test_scheduler_make_ingestion_run_explicit_leagues(self):
         """_make_ingestion_run with explicit IDs uses only those IDs."""
-        from backend.workers.scheduler import _make_ingestion_run
         from backend.workers.ingestion_worker import current_season
+        from backend.workers.scheduler import _make_ingestion_run
 
         season = current_season()
         _run = _make_ingestion_run(
@@ -333,7 +328,9 @@ class TestSchedulerArgParsing:
         )
         closure_vars = {
             name: cell.cell_contents
-            for name, cell in zip(_run.__code__.co_freevars, _run.__closure__ or [])
+            for name, cell in zip(
+                _run.__code__.co_freevars, _run.__closure__ or [], strict=True
+            )
         }
         config = closure_vars.get("config")
         assert config is not None
@@ -370,6 +367,7 @@ class TestSkipOddsWhenNoFixtures:
     def test_odds_not_fetched_when_window_empty(self):
         from sqlalchemy import create_engine
         from sqlalchemy.orm import Session
+
         from backend.models import Base
         from backend.services.api_football_ingestion import ingest_walk_forward_window
 

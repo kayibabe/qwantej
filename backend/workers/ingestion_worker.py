@@ -194,7 +194,11 @@ def run_once(config: WorkerConfig | None = None) -> RunSummary:
                     include_odds=cfg.include_odds,
                 )
 
-                if summary.fixtures_created or summary.fixtures_updated or summary.odds_quotes_created:
+                if (
+                    summary.fixtures_created
+                    or summary.fixtures_updated
+                    or summary.odds_quotes_created
+                ):
                     log.info(
                         "ingestion_worker: league=%d season=%d — "
                         "fixtures +%d/~%d, odds +%d (deduped %d)",
