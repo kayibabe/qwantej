@@ -4,30 +4,39 @@ Runs one ingestion loop iteration: fetches fixtures and optionally odds for
 a configured set of leagues/seasons, committing each league-season window
 independently so a partial failure does not roll back earlier successes.
 
-League selection
----------------
-``WorkerConfig.leagues = None`` (the default) triggers automatic discovery:
-the worker fetches all leagues with a current season from the API at the
-start of each run.  Pass an explicit list to restrict to specific leagues.
+League tiers
+------------
+**Production mode (default):** ingest only the four leagues whose calibration
+and reliability evidence is established — Premier League (39), Bundesliga (78),
+Ligue 1 (61), and La Liga (140).  The season is derived from today's date
+using the European convention: seasons that start in July–August use the
+calendar year of their start (e.g. the 2026/27 season → season=2026).
+
+**Research mode (opt-in):** pass ``--all-leagues`` to discover all ~785
+current-season leagues from the API.  Fixtures and odds are stored but
+*signals are not published* for unvalidated competitions — the value gate
+requires a reliability snapshot, which is only built after settlements.
 
 Quota management
 ----------------
-The API-Football Pro plan provides 7,500 requests/day.  With ~785 active
-leagues the estimated cost per run is ~1,300 requests (785 fixture-list
-calls, ~250 leagues with fixtures × ~2 odds pages each).  The recommended
-ingest interval for all-leagues mode is 18,000 s (5 hours) — see the
-scheduler ``--all-leagues`` flag which applies this default.
+The API-Football Pro plan provides 7,500 requests/day.
+
+- Four-league production run: ~8 requests → comfortably within any interval.
+- All-leagues research run: ~1,285 requests estimated → recommended interval
+  18,000 s (5 h), giving ~4.8 runs/day.
 
 The worker aborts league processing early when ``quota_stop_below`` remaining
-requests are observed (default 100) so that other workers retain headroom.
+requests are observed (default 100) so that settlement and signal workers
+retain headroom.
 
 Usage (one-shot):
-    python -m backend.workers.ingestion_worker
+    python -m backend.workers.ingestion_worker              # 4-league default
     python -m backend.workers.ingestion_worker --all-leagues
-    python -m backend.workers.ingestion_worker --league 39 --league 78 --season 2026
+    python -m backend.workers.ingestion_worker --league 39 --league 78
 
 Usage (continuous):
-    python -m backend.workers.ingestion_worker --loop --interval 18000 --all-leagues
+    python -m backend.workers.ingestion_worker --loop
+    python -m backend.workers.ingestion_worker --loop --all-leagues --interval 18000
 """
 
 from __future__ import annotations
@@ -42,27 +51,49 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-# Default interval (seconds) recommended for single-league mode.
+# Leagues whose calibration and reliability evidence is established.
+# Only these are ingested in production mode.
+SUPPORTED_LEAGUE_IDS: tuple[int, ...] = (39, 78, 61, 140)
+
+# Default interval (seconds) for production 4-league mode.
 _DEFAULT_INTERVAL_SINGLE = 3600
-# Default interval recommended for all-leagues mode (~5 h keeps within 7,500/day quota).
+# Recommended interval for all-leagues research mode (~5 h, within 7,500/day quota).
 _DEFAULT_INTERVAL_ALL = 18000
+
+
+def current_season() -> int:
+    """Return the API-Football season year for today's date.
+
+    European football seasons start in July–August.  The season year is the
+    calendar year in which the season begins, so:
+    - January–June  → season started the *previous* calendar year
+    - July–December → season started *this* calendar year
+    """
+    today = date.today()
+    return today.year if today.month >= 7 else today.year - 1
+
+
+def _default_leagues() -> list[tuple[int, int]]:
+    """Four supported league IDs paired with the current season."""
+    season = current_season()
+    return [(lid, season) for lid in SUPPORTED_LEAGUE_IDS]
 
 
 @dataclass
 class WorkerConfig:
     """What to fetch on each scheduled run.
 
-    ``leagues = None`` means: discover all current-season leagues from the API
-    at the start of each run.  Provide an explicit list to restrict coverage.
+    ``leagues`` defaults to the four validated competitions at the current
+    season.  Pass ``None`` to enable all-leagues discovery (research/opt-in).
     """
 
-    leagues: list[tuple[int, int]] | None = None  # None → auto-discover
-    season: int = field(default_factory=lambda: date.today().year)
+    leagues: list[tuple[int, int]] | None = field(default_factory=_default_leagues)
+    season: int = field(default_factory=current_season)
     lookback_days: int = 7
     lookahead_days: int = 7
     include_odds: bool = True
     include_statistics: bool = False
-    interval_seconds: int = _DEFAULT_INTERVAL_ALL
+    interval_seconds: int = _DEFAULT_INTERVAL_SINGLE
     # Abort remaining leagues when API quota falls to or below this threshold.
     quota_stop_below: int = 100
 
@@ -115,7 +146,7 @@ def run_once(config: WorkerConfig | None = None) -> RunSummary:
     client = ApiFootballClient.from_settings(settings)
     engine = make_engine(settings.database_url)
 
-    # Resolve league list — discover if not explicitly configured.
+    # Resolve league list — discover if all-leagues mode requested.
     leagues = cfg.leagues
     if leagues is None:
         leagues = discover_leagues(client, cfg.season)
@@ -195,25 +226,29 @@ def run_once(config: WorkerConfig | None = None) -> RunSummary:
 
 
 def _parse_args() -> argparse.Namespace:
-    today_year = date.today().year
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     league_group = parser.add_mutually_exclusive_group()
     league_group.add_argument(
-        "--all-leagues", action="store_true",
+        "--all-leagues", action="store_true", default=False,
         help=(
-            "Discover and ingest all current-season leagues from the API "
-            f"(recommended interval: {_DEFAULT_INTERVAL_ALL}s)"
+            "Research mode: discover and ingest all current-season leagues. "
+            f"Recommended interval: {_DEFAULT_INTERVAL_ALL}s. "
+            "Signals are NOT published for unvalidated competitions."
         ),
     )
     league_group.add_argument(
         "--league", type=int, action="append", dest="leagues",
-        metavar="ID", help="League id to ingest (repeatable). Default: all leagues",
+        metavar="ID",
+        help=(
+            "Restrict to this league id (repeatable). "
+            f"Default: the {len(SUPPORTED_LEAGUE_IDS)} supported leagues."
+        ),
     )
     parser.add_argument(
-        "--season", type=int, default=today_year, metavar="YEAR",
-        help=f"Season year (default: {today_year})",
+        "--season", type=int, default=None, metavar="YEAR",
+        help=f"Season year. Default: derived from today ({current_season()}).",
     )
     parser.add_argument(
         "--lookback", type=int, default=7, metavar="DAYS",
@@ -243,8 +278,8 @@ def _parse_args() -> argparse.Namespace:
         "--interval", type=int, default=None, metavar="SECONDS",
         help=(
             f"Loop interval in seconds "
-            f"(default: {_DEFAULT_INTERVAL_ALL}s for --all-leagues, "
-            f"{_DEFAULT_INTERVAL_SINGLE}s for explicit leagues)"
+            f"(default: {_DEFAULT_INTERVAL_SINGLE}s for production mode, "
+            f"{_DEFAULT_INTERVAL_ALL}s for --all-leagues)"
         ),
     )
     return parser.parse_args()
@@ -262,20 +297,26 @@ def main() -> None:
     )
 
     args = _parse_args()
+    season = args.season if args.season is not None else current_season()
 
-    # Resolve league list: explicit IDs override --all-leagues; both absent → all-leagues.
     if args.leagues:
-        leagues: list[tuple[int, int]] | None = [(lid, args.season) for lid in args.leagues]
+        # Explicit league IDs provided.
+        leagues: list[tuple[int, int]] | None = [(lid, season) for lid in args.leagues]
         default_interval = _DEFAULT_INTERVAL_SINGLE
-    else:
+    elif args.all_leagues:
+        # Research/all-leagues mode.
         leagues = None  # discover at runtime
         default_interval = _DEFAULT_INTERVAL_ALL
+    else:
+        # Production default: four supported leagues.
+        leagues = [(lid, season) for lid in SUPPORTED_LEAGUE_IDS]
+        default_interval = _DEFAULT_INTERVAL_SINGLE
 
     interval = args.interval if args.interval is not None else default_interval
 
     config = WorkerConfig(
         leagues=leagues,
-        season=args.season,
+        season=season,
         lookback_days=args.lookback,
         lookahead_days=args.lookahead,
         include_odds=not args.no_odds,
