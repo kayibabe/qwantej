@@ -156,6 +156,17 @@ touching anything under model/ensemble/calibration/forecast code.
 - **External data sources earn their place.** A new data source is adopted
   because it measurably improves calibration/Brier score on held-out data,
   not because it seems intuitively useful.
+- **League validation gate (default-scoped, not fully enforced).** The
+  ingestion worker defaults to the four validated leagues (PL 39, Bundesliga
+  78, Ligue 1 61, La Liga 140).  `--all-leagues` widens ingestion scope for
+  research, but the signal pipeline has no hard publication barrier for
+  unvalidated competitions: once any league accumulates enough settled
+  predictions, `rebuild_reliability_snapshots` will build snapshots for it
+  and the value gate will pass.  The two-tier boundary is therefore
+  *ingestion-scoped*, not *publication-enforced*.  Until a validated flag is
+  added to the `Competition` model and checked in the signal pipeline, treat
+  `--all-leagues` data as research-only and do not rely on the gate alone to
+  prevent unvalidated leagues from generating live signals.
 
 ### Retrospective research evaluator
 

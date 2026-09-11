@@ -16,6 +16,15 @@ the 7,500-request/day Pro quota.  Fixtures and odds are stored for all
 leagues, but the signal pipeline only publishes predictions for competitions
 that have an established reliability snapshot.
 
+.. warning::
+    The two-tier boundary is **ingestion-scoped, not publication-enforced**.
+    Once an unsupported league accumulates enough settled predictions its
+    reliability snapshot will be built by ``rebuild_reliability_snapshots``
+    and the value gate will pass — there is no hard barrier preventing live
+    signals for unvalidated competitions.  Treat ``--all-leagues`` data as
+    research-only until a ``Competition.validated`` flag (or equivalent) is
+    added and checked by the signal pipeline before publication.
+
 Intervals:
     --ingest-interval  N   override the ingestion interval
     --signal-interval  N   seconds between signal pipeline  (default 3600)
