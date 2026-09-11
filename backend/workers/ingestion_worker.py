@@ -18,8 +18,10 @@ leagues.  The value gate requires a reliability snapshot (built after
 settlements), so unvalidated leagues do not publish signals *initially* —
 but this is a temporary barrier, not a hard publication boundary.  Once
 enough predictions settle the snapshot is built and the gate passes.
-Treat ``--all-leagues`` data as research-only until a
-``Competition.validated`` flag is added and checked by the signal pipeline.
+``Competition.validated`` (added in migration ``a4b6c8d0e2f4``) is the
+hard publication gate: the signal pipeline filters ``validated IS TRUE``
+before any inference, so unvalidated leagues can never generate live signals
+even after their reliability snapshots are built.
 
 Quota management
 ----------------
@@ -52,6 +54,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from typing import Any, Protocol
 
 log = logging.getLogger(__name__)
 
@@ -63,6 +66,13 @@ SUPPORTED_LEAGUE_IDS: tuple[int, ...] = (39, 78, 61, 140)
 _DEFAULT_INTERVAL_SINGLE = 3600
 # Recommended interval for all-leagues research mode (~5 h, within 7,500/day quota).
 _DEFAULT_INTERVAL_ALL = 18000
+
+
+class _LeagueDiscoveryClient(Protocol):
+    """Minimal client interface required by :func:`discover_leagues`."""
+
+    def leagues(self, *, current: str, season: int) -> tuple[dict[str, Any], ...]:
+        ...
 
 
 def current_season() -> int:
@@ -114,13 +124,13 @@ class RunSummary:
     errors: int = 0
 
 
-def discover_leagues(client: object, season: int) -> list[tuple[int, int]]:
+def discover_leagues(client: _LeagueDiscoveryClient, season: int) -> list[tuple[int, int]]:
     """Fetch all leagues with a current season from the API.
 
     Returns a list of ``(league_id, season)`` pairs sorted by league_id.
     Logs the count but not individual names to keep output concise.
     """
-    payloads = client.leagues(current="true", season=season)  # type: ignore[union-attr]
+    payloads = client.leagues(current="true", season=season)
     result: list[tuple[int, int]] = []
     for item in payloads:
         league_id = item.get("league", {}).get("id")
