@@ -12,7 +12,12 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from scripts.backup_db import _prune_old_backups, run_backup, verify_backup  # noqa: E402
+from scripts.backup_db import (  # noqa: E402
+    _prune_old_backups,
+    _server_major_version,
+    run_backup,
+    verify_backup,
+)
 
 # ---------------------------------------------------------------------------
 # _prune_old_backups — validation
@@ -27,6 +32,13 @@ def test_prune_rejects_zero_keep_count(tmp_path):
 def test_prune_rejects_negative_keep_count(tmp_path):
     with pytest.raises(ValueError, match="keep_count must be >= 1"):
         _prune_old_backups(tmp_path, keep_count=-1)
+
+
+def test_server_major_version_parsing():
+    assert _server_major_version("160011") == 16
+    assert _server_major_version(150005) == 15
+    with pytest.raises(RuntimeError, match="parse PostgreSQL server version"):
+        _server_major_version("unknown")
 
 
 def test_prune_deletes_oldest_files(tmp_path):
@@ -85,6 +97,7 @@ def test_verify_backup_requires_postgres_dump_header(tmp_path):
 def test_run_backup_promotes_only_verified_dump(tmp_path, monkeypatch):
     import subprocess
 
+    monkeypatch.setattr("scripts.backup_db._validate_pg_dump_compatibility", lambda *args: None)
     monkeypatch.setattr(
         "scripts.backup_db.subprocess.run",
         lambda *args, **kwargs: subprocess.CompletedProcess(
@@ -105,6 +118,7 @@ def test_run_backup_promotes_only_verified_dump(tmp_path, monkeypatch):
 def test_run_backup_rejects_unverified_dump_without_promoting(tmp_path, monkeypatch):
     import subprocess
 
+    monkeypatch.setattr("scripts.backup_db._validate_pg_dump_compatibility", lambda *args: None)
     monkeypatch.setattr(
         "scripts.backup_db.subprocess.run",
         lambda *args, **kwargs: subprocess.CompletedProcess(args, 0, b"", b""),

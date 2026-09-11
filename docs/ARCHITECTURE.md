@@ -98,7 +98,8 @@ Not all of these are provisioned yet — see the phase roadmap in
   failures only; permanent HTTP/API rejections fail without retrying.
 - Database backups are written atomically and gzip/SQL-header verified before
   retention pruning. A restore drill must still restore into a disposable
-  database; backup creation alone is not restore evidence.
+  database; backup creation alone is not restore evidence. The configured
+  `pg_dump` major version must match the PostgreSQL server major version.
 - Production must configure both `API_KEY` and a non-default `SECRET_KEY`.
 
 ## Build order
