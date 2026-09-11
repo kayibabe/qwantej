@@ -1,0 +1,84 @@
+name: Disposable backup restore drill
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup-restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: qwantej
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: qwantej
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U qwantej -d qwantej"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      DATABASE_URL: postgresql+psycopg://qwantej:password@localhost:5432/qwantej
+      ENVIRONMENT: ci
+      SECRET_KEY: ci-only
+      BACKUP_DIR: ${{ github.workspace }}/.drill-backups
+      BACKUP_KEEP_COUNT: 1
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install PostgreSQL 16 client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client-16
+          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
+
+      - name: Install project dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[backend]"
+
+      - name: Verify matching PostgreSQL tooling
+        run: |
+          pg_dump --version
+          psql --version
+
+      - name: Apply migrations to ephemeral database
+        run: python -m alembic upgrade head
+
+      - name: Create backup
+        run: python scripts/backup_db.py
+
+      - name: Restore and verify disposable database
+        shell: bash
+        run: |
+          set -euo pipefail
+          backup="$(find "$BACKUP_DIR" -maxdepth 1 -type f -name 'qwantej_*.sql.gz' -print -quit)"
+          test -n "$backup"
+          result="$(python scripts/restore_drill.py --backup "$backup")"
+          echo "$result"
+          if PGPASSWORD=password psql --host localhost --port 5432 --username qwantej --dbname postgres --no-psqlrc --tuples-only --command="SELECT 1 FROM pg_database WHERE datname = 'qwantej_restore_drill'" | grep -q 1; then
+            echo "restore drill target database was not cleaned up" >&2
+            exit 1
+          fi
+          {
+            echo "## Disposable backup/restore drill"
+            echo "- Result: passed"
+            echo "- Backup: created and restored with matching PostgreSQL 16 tooling"
+            echo "- Target: qwantej_restore_drill (cleaned up)"
+            echo "- Verification: $result"
+          } >> "$GITHUB_STEP_SUMMARY"

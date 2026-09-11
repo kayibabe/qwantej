@@ -20,3 +20,10 @@ disposable result locally.
 This is an operational verification, not a production migration. Never point
 the source or target at a production host, and never use a production database
 name as the target.
+
+## GitHub Actions
+
+The `Disposable backup restore drill` workflow can be started manually with
+`workflow_dispatch`. It provisions an ephemeral PostgreSQL 16 service, runs the
+same backup and restore commands, verifies cleanup, and records the result in
+the workflow summary. Database dumps are not uploaded as workflow artifacts.
