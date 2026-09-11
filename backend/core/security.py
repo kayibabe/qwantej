@@ -19,6 +19,7 @@ auth is disabled).
 
 from __future__ import annotations
 
+import re
 import secrets
 from typing import Annotated
 
@@ -42,6 +43,14 @@ def _verify_api_key(key: str | None = Security(_header_scheme)) -> str:
                 detail="API_KEY is not configured on this server",
             )
         return ""
+    if settings.environment == "production" and settings.secret_key.strip() in {
+        "",
+        "change-me",
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="SECRET_KEY is not configured on this server",
+        )
     if not key or not secrets.compare_digest(key, configured):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -55,3 +64,13 @@ ApiKeyDep = Annotated[str, Depends(_verify_api_key)]
 
 # Use this in APIRouter(dependencies=[...]) — can't use Annotated there.
 RequireApiKey = Depends(_verify_api_key)
+
+
+_REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+
+
+def normalize_request_id(value: str | None) -> str:
+    """Return a bounded, log-safe request ID or an empty value."""
+
+    candidate = (value or "").strip()
+    return candidate if _REQUEST_ID_RE.fullmatch(candidate) else ""

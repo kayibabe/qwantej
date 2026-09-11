@@ -90,6 +90,17 @@ orchestration, once ingestion/scoring jobs exist beyond a simple scheduler).
 Not all of these are provisioned yet — see the phase roadmap in
 `QWANTEJ_FRAMEWORK.md` §50 for when each is introduced.
 
+### Phase 11 operational safeguards
+
+- API requests receive a bounded request ID, security response headers, and a
+  structured completion log containing method, path, status, and elapsed time.
+- Provider and notification clients retry transient network/rate-limit/server
+  failures only; permanent HTTP/API rejections fail without retrying.
+- Database backups are written atomically and gzip/SQL-header verified before
+  retention pruning. A restore drill must still restore into a disposable
+  database; backup creation alone is not restore evidence.
+- Production must configure both `API_KEY` and a non-default `SECRET_KEY`.
+
 ## Build order
 
 Follow framework §50 (Phase 0–11) — data architecture before prediction

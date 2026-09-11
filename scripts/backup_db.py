@@ -25,6 +25,7 @@ import gzip
 import logging
 import os
 import subprocess
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
@@ -72,7 +73,7 @@ def run_backup(
     backup_dir.mkdir(parents=True, exist_ok=True)
 
     conn = _parse_db_url(database_url)
-    timestamp = datetime.now(tz=UTC).strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(tz=UTC).strftime("%Y%m%d_%H%M%S_%f")
     out_path = backup_dir / f"qwantej_{timestamp}.sql.gz"
 
     env = os.environ.copy()
@@ -103,14 +104,40 @@ def run_backup(
         stderr = result.stderr.decode(errors="replace")
         raise RuntimeError(f"pg_dump failed (exit {result.returncode}): {stderr}")
 
-    with gzip.open(out_path, "wb") as gz:
-        gz.write(result.stdout)
+    fd, temp_name = tempfile.mkstemp(
+        prefix=f".{out_path.name}.", suffix=".tmp", dir=backup_dir
+    )
+    os.close(fd)
+    temp_path = Path(temp_name)
+    try:
+        with gzip.open(temp_path, "wb") as gz:
+            gz.write(result.stdout)
+        verify_backup(temp_path)
+        temp_path.replace(out_path)
+    finally:
+        temp_path.unlink(missing_ok=True)
 
     size_kb = out_path.stat().st_size // 1024
     log.info("backup_db: wrote %s (%d KB)", out_path.name, size_kb)
 
     _prune_old_backups(backup_dir, keep_count=keep_count)
     return out_path
+
+
+def verify_backup(path: Path) -> None:
+    """Verify a readable, non-empty plain-SQL gzip dump.
+
+    This catches truncated gzip files and empty/non-dump output before the
+    backup is promoted or retained. Restore drills must use a disposable DB.
+    """
+
+    try:
+        with gzip.open(path, "rb") as gz:
+            prefix = gz.read(256)
+    except (OSError, EOFError) as exc:
+        raise RuntimeError(f"backup verification failed for {path.name}") from exc
+    if not prefix or b"PostgreSQL database dump" not in prefix:
+        raise RuntimeError(f"backup verification failed for {path.name}: invalid SQL dump")
 
 
 def _prune_old_backups(backup_dir: Path, *, keep_count: int) -> None:

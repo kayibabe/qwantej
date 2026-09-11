@@ -37,6 +37,10 @@ class UrllibJsonTransport:
     _RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504})
 
     def __init__(self, *, max_attempts: int = 3, backoff_base: float = 1.0) -> None:
+        if max_attempts < 1:
+            raise ValueError("max_attempts must be >= 1")
+        if backoff_base < 0:
+            raise ValueError("backoff_base must be >= 0")
         self._max_attempts = max_attempts
         self._backoff_base = backoff_base
 

@@ -71,6 +71,29 @@ def test_enabled_when_configured():
     assert _notifier().enabled is True
 
 
+def test_rejects_non_positive_timeout():
+    with pytest.raises(ValueError, match="timeout_seconds"):
+        TelegramNotifier(bot_token="tok", chat_id="1", timeout_seconds=0)
+
+
+def test_non_retryable_notification_error_is_not_retried():
+    from backend.services.notifier import NonRetryableNotificationError
+
+    class _RejectedTransport:
+        attempts = 0
+
+        def post_json(self, url, *, payload, timeout_seconds):
+            self.attempts += 1
+            raise NonRetryableNotificationError("bad token")
+
+    transport = _RejectedTransport()
+    result = _notifier(transport).send(
+        Notification(event=NotificationEvent.WORKER_FAILED, title="T", body="B")
+    )
+    assert result is False
+    assert transport.attempts == 1
+
+
 def test_disabled_when_no_token():
     n = TelegramNotifier(bot_token="", chat_id="42")
     assert n.enabled is False
