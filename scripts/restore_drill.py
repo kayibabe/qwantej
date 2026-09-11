@@ -119,12 +119,12 @@ def _verify_target(conn: dict[str, str], target_db: str) -> dict[str, str]:
         with connection.cursor() as cursor:
             cursor.execute("SELECT version_num FROM alembic_version")
             alembic_row = cursor.fetchone()
-            if alembic_row is None:
+            if alembic_row is None or alembic_row[0] is None:
                 raise RuntimeError("restored database has no Alembic version")
             alembic_head = str(alembic_row[0])
             cursor.execute("SELECT to_regclass('public.fixtures')")
             fixtures_row = cursor.fetchone()
-            if fixtures_row is None:
+            if fixtures_row is None or fixtures_row[0] is None:
                 raise RuntimeError("could not verify restored fixtures table")
             fixtures_table = str(fixtures_row[0])
             cursor.execute("SELECT COUNT(*) FROM fixtures")
