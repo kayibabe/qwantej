@@ -96,8 +96,10 @@ def ingest_walk_forward_window(
 
     # The provider retains only a short pre-match odds history. This call captures
     # what is currently available; repeated scheduled runs build Qwantej's archive.
+    # Skip the odds fetch entirely when the window contains no fixtures — this is
+    # the main quota saver for offseason leagues in all-leagues mode.
     odds_payloads: tuple[dict[str, Any], ...] = ()
-    if include_odds:
+    if include_odds and window_fixture_ids:
         odds_payloads = tuple(
             payload
             for payload in client.odds(league=league_id, season=season)
