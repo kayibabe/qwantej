@@ -13,8 +13,8 @@ defaults to 3,600 s.
 **Research mode (opt-in):** ``--all-leagues`` discovers all ~785 current-
 season leagues each run.  Interval defaults to 18,000 s (5 h) to stay within
 the 7,500-request/day Pro quota.  Fixtures and odds are stored for all
-leagues, but the signal pipeline only publishes predictions for competitions
-that have an established reliability snapshot.
+leagues, but the signal pipeline is **not yet publication-gated** by
+competition validation — see the warning below.
 
 .. warning::
     The two-tier boundary is **ingestion-scoped, not publication-enforced**.

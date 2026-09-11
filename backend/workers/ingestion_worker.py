@@ -13,9 +13,13 @@ using the European convention: seasons that start in July–August use the
 calendar year of their start (e.g. the 2026/27 season → season=2026).
 
 **Research mode (opt-in):** pass ``--all-leagues`` to discover all ~785
-current-season leagues from the API.  Fixtures and odds are stored but
-*signals are not published* for unvalidated competitions — the value gate
-requires a reliability snapshot, which is only built after settlements.
+current-season leagues from the API.  Fixtures and odds are stored for all
+leagues.  The value gate requires a reliability snapshot (built after
+settlements), so unvalidated leagues do not publish signals *initially* —
+but this is a temporary barrier, not a hard publication boundary.  Once
+enough predictions settle the snapshot is built and the gate passes.
+Treat ``--all-leagues`` data as research-only until a
+``Competition.validated`` flag is added and checked by the signal pipeline.
 
 Quota management
 ----------------
@@ -235,7 +239,8 @@ def _parse_args() -> argparse.Namespace:
         help=(
             "Research mode: discover and ingest all current-season leagues. "
             f"Recommended interval: {_DEFAULT_INTERVAL_ALL}s. "
-            "Signals are NOT published for unvalidated competitions."
+            "Signals are NOT publication-gated for unvalidated competitions "
+            "(temporary barrier only — see DEVELOPMENT.md §4)."
         ),
     )
     league_group.add_argument(
