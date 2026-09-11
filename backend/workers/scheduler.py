@@ -26,7 +26,6 @@ import logging
 import signal
 import sys
 import threading
-import time
 from datetime import UTC, datetime
 
 log = logging.getLogger(__name__)
