@@ -24,7 +24,7 @@ import json
 import logging
 import time
 from typing import Protocol
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from qwantej.notifications.types import Notification
@@ -34,6 +34,10 @@ log = logging.getLogger(__name__)
 _TELEGRAM_API = "https://api.telegram.org/bot{token}/sendMessage"
 _MAX_ATTEMPTS = 3
 _BACKOFF_BASE = 2.0  # seconds; doubled each retry
+
+
+class NonRetryableNotificationError(OSError):
+    """A notification was rejected permanently and should not be retried."""
 
 
 class NotificationTransport(Protocol):
@@ -57,8 +61,15 @@ class TelegramHttpTransport:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urlopen(request, timeout=timeout_seconds) as resp:  # noqa: S310
-            raw = resp.read()
+        try:
+            with urlopen(request, timeout=timeout_seconds) as resp:  # noqa: S310
+                raw = resp.read()
+        except HTTPError as exc:
+            if exc.code not in {429, 500, 502, 503, 504}:
+                raise NonRetryableNotificationError(
+                    f"Telegram HTTP error: {exc.code}"
+                ) from exc
+            raise
         # Telegram always returns {"ok": true/false, ...} even on HTTP 200.
         # A false ok is an API-level error.  Raise OSError so the retry loop
         # in send() handles it consistently with network failures.
@@ -75,7 +86,7 @@ class TelegramHttpTransport:
             )
         if not data.get("ok"):
             description = data.get("description", "unknown error")
-            raise OSError(f"Telegram API error: {description}")
+            raise NonRetryableNotificationError(f"Telegram API error: {description}")
 
 
 class TelegramNotifier:
@@ -102,6 +113,8 @@ class TelegramNotifier:
         timeout_seconds: float = 10.0,
         transport: NotificationTransport | None = None,
     ) -> None:
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
         self._bot_token = bot_token.strip()
         self._chat_id = chat_id.strip()
         self._timeout = timeout_seconds
@@ -148,6 +161,9 @@ class TelegramNotifier:
                 self._transport.post_json(url, payload=payload, timeout_seconds=self._timeout)
                 log.info("Telegram notification sent: %s", notification.event)
                 return True
+            except NonRetryableNotificationError as exc:
+                log.error("Telegram notification rejected: %s — %s", notification.event, exc)
+                return False
             except (URLError, OSError, TimeoutError) as exc:
                 if attempt < _MAX_ATTEMPTS - 1:
                     delay = _BACKOFF_BASE * (2**attempt)

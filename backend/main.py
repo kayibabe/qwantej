@@ -9,6 +9,8 @@ or in tests via ``from backend.main import app``.
 
 from __future__ import annotations
 
+import logging
+import time
 import uuid
 
 from fastapi import FastAPI, Request
@@ -25,6 +27,9 @@ from backend.api.routes import (
 )
 from backend.core.config import get_settings
 from backend.core.logging import configure_logging, request_id_ctx
+from backend.core.security import normalize_request_id
+
+log = logging.getLogger(__name__)
 
 
 def create_app() -> FastAPI:
@@ -59,14 +64,35 @@ def create_app() -> FastAPI:
         every log record emitted during this request without the caller having
         to pass it explicitly.
         """
-        request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        request_id = normalize_request_id(request.headers.get("X-Request-ID")) or str(uuid.uuid4())
         request.state.request_id = request_id
         token = request_id_ctx.set(request_id)
+        started = time.perf_counter()
         try:
             response = await call_next(request)
+            elapsed_ms = (time.perf_counter() - started) * 1000
+            log.info(
+                "http request complete method=%s path=%s status=%d elapsed_ms=%.1f",
+                request.method,
+                request.url.path,
+                response.status_code,
+                elapsed_ms,
+            )
+        except Exception:
+            elapsed_ms = (time.perf_counter() - started) * 1000
+            log.exception(
+                "http request failed method=%s path=%s elapsed_ms=%.1f",
+                request.method,
+                request.url.path,
+                elapsed_ms,
+            )
+            raise
         finally:
             request_id_ctx.reset(token)
         response.headers["X-Request-ID"] = request_id
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "no-referrer"
         return response
 
     application.include_router(health.router)

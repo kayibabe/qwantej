@@ -12,7 +12,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from scripts.backup_db import _prune_old_backups, run_backup  # noqa: E402
+from scripts.backup_db import _prune_old_backups, run_backup, verify_backup  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # _prune_old_backups — validation
@@ -63,3 +63,56 @@ def test_run_backup_rejects_zero_keep_count(tmp_path):
             backup_dir=tmp_path,
             keep_count=0,
         )
+
+
+def test_verify_backup_rejects_invalid_gzip(tmp_path):
+    path = tmp_path / "qwantej_bad.sql.gz"
+    path.write_bytes(b"not gzip")
+    with pytest.raises(RuntimeError, match="verification failed"):
+        verify_backup(path)
+
+
+def test_verify_backup_requires_postgres_dump_header(tmp_path):
+    import gzip
+
+    path = tmp_path / "qwantej_bad.sql.gz"
+    with gzip.open(path, "wb") as gz:
+        gz.write(b"SELECT 1;")
+    with pytest.raises(RuntimeError, match="invalid SQL dump"):
+        verify_backup(path)
+
+
+def test_run_backup_promotes_only_verified_dump(tmp_path, monkeypatch):
+    import subprocess
+
+    monkeypatch.setattr(
+        "scripts.backup_db.subprocess.run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args, 0, b"-- PostgreSQL database dump\nCREATE TABLE demo;\n", b""
+        ),
+    )
+    out = run_backup(
+        database_url="postgresql+psycopg://u:p@localhost:5433/db",
+        backup_dir=tmp_path,
+        keep_count=1,
+        pg_dump_bin="pg_dump",
+    )
+    assert out.exists()
+    verify_backup(out)
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_run_backup_rejects_unverified_dump_without_promoting(tmp_path, monkeypatch):
+    import subprocess
+
+    monkeypatch.setattr(
+        "scripts.backup_db.subprocess.run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args, 0, b"", b""),
+    )
+    with pytest.raises(RuntimeError, match="verification failed"):
+        run_backup(
+            database_url="postgresql+psycopg://u:p@localhost:5433/db",
+            backup_dir=tmp_path,
+            keep_count=1,
+        )
+    assert not list(tmp_path.glob("qwantej_*.sql.gz"))

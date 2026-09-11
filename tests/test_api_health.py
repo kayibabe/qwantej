@@ -38,6 +38,18 @@ class TestHealth:
         r = client.get("/health")
         assert r.status_code == 200
         assert r.json() == {"status": "ok"}
+        assert r.headers["X-Content-Type-Options"] == "nosniff"
+        assert r.headers["X-Frame-Options"] == "DENY"
+        assert r.headers["Referrer-Policy"] == "no-referrer"
+
+    def test_request_id_is_echoed_and_safe(self, client: TestClient) -> None:
+        r = client.get("/health", headers={"X-Request-ID": "trace-123"})
+        assert r.headers["X-Request-ID"] == "trace-123"
+
+    def test_invalid_request_id_is_replaced(self, client: TestClient) -> None:
+        r = client.get("/health", headers={"X-Request-ID": "bad\nvalue"})
+        assert r.headers["X-Request-ID"] != "bad\nvalue"
+        assert len(r.headers["X-Request-ID"]) == 36
 
     def test_readiness_with_db(self, client: TestClient) -> None:
         r = client.get("/health/ready")

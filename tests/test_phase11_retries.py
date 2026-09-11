@@ -63,6 +63,13 @@ def test_transport_succeeds_on_first_attempt(monkeypatch):
     assert fake.call_count[0] == 1
 
 
+def test_transport_rejects_invalid_retry_configuration():
+    with pytest.raises(ValueError, match="max_attempts"):
+        UrllibJsonTransport(max_attempts=0)
+    with pytest.raises(ValueError, match="backoff_base"):
+        UrllibJsonTransport(backoff_base=-1)
+
+
 def test_transport_retries_on_os_error(monkeypatch):
     """OSError on first two attempts; success on the third."""
     import backend.services.api_football_client as m
