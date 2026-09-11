@@ -24,6 +24,7 @@ from __future__ import annotations
 import gzip
 import logging
 import os
+import re
 import subprocess
 import tempfile
 from datetime import UTC, datetime
@@ -31,6 +32,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 log = logging.getLogger(__name__)
+
+_PG_DUMP_VERSION_RE = re.compile(r"pg_dump \(PostgreSQL\) (\d+)")
 
 
 def _parse_db_url(database_url: str) -> dict[str, str]:
@@ -73,6 +76,7 @@ def run_backup(
     backup_dir.mkdir(parents=True, exist_ok=True)
 
     conn = _parse_db_url(database_url)
+    _validate_pg_dump_compatibility(pg_dump_bin, conn)
     timestamp = datetime.now(tz=UTC).strftime("%Y%m%d_%H%M%S_%f")
     out_path = backup_dir / f"qwantej_{timestamp}.sql.gz"
 
@@ -122,6 +126,60 @@ def run_backup(
 
     _prune_old_backups(backup_dir, keep_count=keep_count)
     return out_path
+
+
+def _validate_pg_dump_compatibility(
+    pg_dump_bin: str, conn: dict[str, str]
+) -> None:
+    """Reject a client/server major-version mismatch before creating a dump."""
+
+    version = subprocess.run(
+        [pg_dump_bin, "--version"], capture_output=True, text=True, check=False
+    )
+    if version.returncode != 0:
+        detail = version.stderr.strip() or "could not determine pg_dump version"
+        raise RuntimeError(f"pg_dump version check failed: {detail}")
+    match = _PG_DUMP_VERSION_RE.search(version.stdout)
+    if match is None:
+        raise RuntimeError(f"could not parse pg_dump version: {version.stdout.strip()}")
+    client_major = int(match.group(1))
+
+    try:
+        import psycopg
+
+        with psycopg.connect(
+            host=conn["host"],
+            port=int(conn["port"]),
+            dbname=conn["dbname"],
+            user=conn["user"],
+            password=conn["password"] or None,
+            connect_timeout=10,
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SHOW server_version_num")
+                raw_server_version = cursor.fetchone()
+    except Exception as exc:
+        raise RuntimeError("could not determine PostgreSQL server version") from exc
+
+    if not raw_server_version:
+        raise RuntimeError("could not parse PostgreSQL server version")
+    server_major = _server_major_version(raw_server_version[0])
+    if client_major != server_major:
+        raise RuntimeError(
+            "pg_dump major version mismatch: "
+            f"client={client_major}, server={server_major}; use a matching client"
+        )
+
+
+def _server_major_version(raw_version: object) -> int:
+    """Convert PostgreSQL's MMmmpp server_version_num to its major version."""
+
+    value = str(raw_version)
+    if not value.isdigit():
+        raise RuntimeError("could not parse PostgreSQL server version")
+    # PostgreSQL's server_version_num is MMmmpp for PostgreSQL 10+;
+    # e.g. 160011 means 16.0.11.
+    return int(value) // 10_000
 
 
 def verify_backup(path: Path) -> None:
