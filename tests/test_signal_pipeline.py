@@ -576,13 +576,21 @@ class TestRunOnceDryRun:
             "API_FOOTBALL_KEY": "dummy",
             "API_KEY": "test",
         }):
-            # Bootstrap the schema.
-            from backend.core.db import make_engine
-            from backend.models.base import Base
-            engine = make_engine(db_url)
-            Base.metadata.create_all(engine)
+            # get_settings() uses @lru_cache — clear it so run_once reads the
+            # patched DATABASE_URL rather than the cached Postgres URL.
+            from backend.core.config import get_settings
+            get_settings.cache_clear()
+            try:
+                # Bootstrap the schema.
+                from backend.core.db import make_engine
+                from backend.models.base import Base
+                engine = make_engine(db_url)
+                Base.metadata.create_all(engine)
 
-            result = run_once(lookahead_hours=24, dry_run=True)
+                result = run_once(lookahead_hours=24, dry_run=True)
+            finally:
+                # Restore: clear again so subsequent tests get fresh Postgres settings.
+                get_settings.cache_clear()
 
         assert result.errors == 0
         assert result.predictions_published == 0
