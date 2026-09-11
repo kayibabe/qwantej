@@ -51,13 +51,13 @@ def _make_session():
     return engine
 
 
-def _seed_provider_and_competition(session):
+def _seed_provider_and_competition(session, *, validated: bool = True):
     from backend.models import EntityType, Provider, Season, SourceMapping, Team
     prov = Provider(name="API-Football", kind="odds", base_url="https://api-football.com")
     session.add(prov)
     session.flush()
     from backend.models.fixtures import Competition as Comp
-    comp = Comp(name="Premier League", country="England")
+    comp = Comp(name="Premier League", country="England", validated=validated)
     session.add(comp)
     session.flush()
     season = Season(
@@ -212,6 +212,251 @@ class TestUpcomingUnpredictedFixtures:
         f = _make_fixture(db_session, comp, season, home, away, kickoff=now - timedelta(hours=1))
         results = _upcoming_unpredicted_fixtures(db_session, now, lookahead_hours=36)
         assert not any(r.id == f.id for r in results)
+
+    def test_excludes_unvalidated_competition(self, db_session):
+        # Fail-closed gate: validated=False must block the fixture entirely.
+        comp, season, home, away = _seed_provider_and_competition(db_session, validated=False)
+        now = datetime.now(UTC)
+        f = _make_fixture(db_session, comp, season, home, away, kickoff=now + timedelta(hours=6))
+        results = _upcoming_unpredicted_fixtures(db_session, now, lookahead_hours=24)
+        assert not any(r.id == f.id for r in results)
+
+    def test_includes_validated_competition(self, db_session):
+        # Sanity: validated=True must pass the gate when other conditions are met.
+        comp, season, home, away = _seed_provider_and_competition(db_session, validated=True)
+        now = datetime.now(UTC)
+        f = _make_fixture(db_session, comp, season, home, away, kickoff=now + timedelta(hours=6))
+        results = _upcoming_unpredicted_fixtures(db_session, now, lookahead_hours=24)
+        assert any(r.id == f.id for r in results)
+
+    def test_mixed_competitions_only_returns_validated(self, db_session):
+        # Two competitions, one validated and one not; only the validated fixture appears.
+        comp_v, season_v, home_v, away_v = _seed_provider_and_competition(
+            db_session, validated=True
+        )
+        from backend.models.fixtures import Competition as Comp
+        from backend.models.fixtures import Season
+        comp_u = Comp(name="Liga MX", country="Mexico", validated=False)
+        db_session.add(comp_u)
+        db_session.flush()
+        season_u = Season(
+            competition_id=comp_u.id,
+            label="2026",
+            start_date=None,
+            end_date=None,
+        )
+        db_session.add(season_u)
+        db_session.flush()
+
+        from backend.models import Team
+        home_u = Team(name="Club América", country="Mexico")
+        away_u = Team(name="Chivas", country="Mexico")
+        db_session.add_all([home_u, away_u])
+        db_session.flush()
+
+        now = datetime.now(UTC)
+        f_v = _make_fixture(
+            db_session, comp_v, season_v, home_v, away_v, kickoff=now + timedelta(hours=6)
+        )
+        f_u = _make_fixture(
+            db_session, comp_u, season_u, home_u, away_u, kickoff=now + timedelta(hours=6)
+        )
+
+        results = _upcoming_unpredicted_fixtures(db_session, now, lookahead_hours=24)
+        result_ids = {r.id for r in results}
+        assert f_v.id in result_ids
+        assert f_u.id not in result_ids
+
+
+class TestMigrationA4B6C8D0E2F4Seeding:
+    """Run migration a4b6c8d0e2f4's upgrade() against an isolated SQLite DB.
+
+    The pre-migration schema (no validated column) is created with raw DDL so
+    that the real op.add_column() and seeding SQL inside upgrade() are exercised
+    — not a duplicate of that SQL.  downgrade() is also executed to prove the
+    column is removed cleanly.
+    """
+
+    _SEEDED = ("39", "78", "61", "140")
+    _UNSEEDED = "262"
+
+    def _build_pre_migration_schema(self, conn) -> None:
+        """DDL matching the competitions/providers/source_mappings tables as of
+        the parent revision c3e5a7b9d1f2 (no validated column)."""
+        import sqlalchemy as sa
+
+        conn.execute(sa.text("""
+            CREATE TABLE providers (
+                id   TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                base_url TEXT,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT, updated_at TEXT
+            )
+        """))
+        conn.execute(sa.text("""
+            CREATE TABLE competitions (
+                id      TEXT PRIMARY KEY,
+                name    TEXT NOT NULL,
+                country TEXT,
+                tier    INTEGER,
+                created_at TEXT, updated_at TEXT
+            )
+        """))
+        conn.execute(sa.text("""
+            CREATE TABLE source_mappings (
+                id          TEXT PRIMARY KEY,
+                provider_id TEXT NOT NULL REFERENCES providers(id),
+                entity_type TEXT NOT NULL,
+                external_id TEXT NOT NULL,
+                canonical_id TEXT NOT NULL,
+                confidence   REAL NOT NULL DEFAULT 1.0,
+                created_at TEXT, updated_at TEXT,
+                UNIQUE(provider_id, entity_type, external_id)
+            )
+        """))
+
+    def _insert_seed_data(self, conn, *, provider_name: str = "api-football") -> dict[str, str]:
+        """Insert one provider and five competitions (four validated IDs + one not).
+        Returns {external_id: competition_uuid}."""
+        import uuid
+
+        import sqlalchemy as sa
+
+        prov_id = str(uuid.uuid4())
+        conn.execute(
+            sa.text("INSERT INTO providers (id, name, kind) VALUES (:id, :n, :k)"),
+            {"id": prov_id, "n": provider_name, "k": "odds"},
+        )
+        comp_ids: dict[str, str] = {}
+        for ext_id, name in [
+            ("39", "Premier League"), ("78", "Bundesliga"),
+            ("61", "Ligue 1"), ("140", "La Liga"),
+            (self._UNSEEDED, "Liga MX"),
+        ]:
+            cid = str(uuid.uuid4())
+            conn.execute(
+                sa.text("INSERT INTO competitions (id, name) VALUES (:id, :n)"),
+                {"id": cid, "n": name},
+            )
+            conn.execute(
+                sa.text(
+                    "INSERT INTO source_mappings "
+                    "(id, provider_id, entity_type, external_id, canonical_id) "
+                    "VALUES (:id, :pv, :et, :ex, :ci)"
+                ),
+                {"id": str(uuid.uuid4()), "pv": prov_id,
+                 "et": "competition", "ex": ext_id, "ci": cid},
+            )
+            comp_ids[ext_id] = cid
+        return comp_ids
+
+    def _run_upgrade(self, engine) -> None:
+        from alembic.operations import Operations
+        from alembic.runtime.migration import MigrationContext
+
+        from backend.models.migrations.versions.a4b6c8d0e2f4_add_competition_validated_flag import (
+            upgrade,
+        )
+
+        with engine.connect() as conn:
+            ctx = MigrationContext.configure(conn)
+            with Operations.context(ctx):
+                upgrade()
+            conn.commit()
+
+    def test_upgrade_seeds_four_leagues_and_leaves_others_false(self, tmp_path):
+        """upgrade() adds the validated column and seeds exactly the four known IDs."""
+        import sqlalchemy as sa
+
+        engine = sa.create_engine(f"sqlite:///{tmp_path}/mig_seed.db")
+        with engine.connect() as conn:
+            self._build_pre_migration_schema(conn)
+            comp_ids = self._insert_seed_data(conn)
+            conn.commit()
+
+        self._run_upgrade(engine)
+
+        with engine.connect() as conn:
+            for ext_id in self._SEEDED:
+                row = conn.execute(
+                    sa.text("SELECT validated FROM competitions WHERE id = :id"),
+                    {"id": comp_ids[ext_id]},
+                ).one()
+                assert row.validated, f"ext_id={ext_id} should be validated=True after upgrade()"
+
+            row = conn.execute(
+                sa.text("SELECT validated FROM competitions WHERE id = :id"),
+                {"id": comp_ids[self._UNSEEDED]},
+            ).one()
+            assert not row.validated, "Unseeded league must remain validated=False"
+
+    def test_wrong_provider_not_seeded(self, tmp_path):
+        """Provider name 'api-football-unofficial' must not trigger seeding (exact = check)."""
+        import uuid
+
+        import sqlalchemy as sa
+
+        engine = sa.create_engine(f"sqlite:///{tmp_path}/mig_wrong_prov.db")
+        with engine.connect() as conn:
+            self._build_pre_migration_schema(conn)
+
+            prov_id = str(uuid.uuid4())
+            conn.execute(
+                sa.text("INSERT INTO providers (id, name, kind) VALUES (:id, :n, :k)"),
+                {"id": prov_id, "n": "api-football-unofficial", "k": "odds"},
+            )
+            cid = str(uuid.uuid4())
+            conn.execute(
+                sa.text("INSERT INTO competitions (id, name) VALUES (:id, :n)"),
+                {"id": cid, "n": "Unofficial League"},
+            )
+            conn.execute(
+                sa.text(
+                    "INSERT INTO source_mappings "
+                    "(id, provider_id, entity_type, external_id, canonical_id) "
+                    "VALUES (:id, :pv, :et, :ex, :ci)"
+                ),
+                {"id": str(uuid.uuid4()), "pv": prov_id,
+                 "et": "competition", "ex": "39", "ci": cid},
+            )
+            conn.commit()
+
+        self._run_upgrade(engine)
+
+        with engine.connect() as conn:
+            row = conn.execute(
+                sa.text("SELECT validated FROM competitions WHERE id = :id"), {"id": cid}
+            ).one()
+            assert not row.validated, "'api-football-unofficial' must not be seeded as validated"
+
+    def test_downgrade_removes_validated_column(self, tmp_path):
+        """downgrade() drops the validated column."""
+        import sqlalchemy as sa
+        from alembic.operations import Operations
+        from alembic.runtime.migration import MigrationContext
+
+        from backend.models.migrations.versions.a4b6c8d0e2f4_add_competition_validated_flag import (
+            downgrade,
+            upgrade,
+        )
+
+        engine = sa.create_engine(f"sqlite:///{tmp_path}/mig_downgrade.db")
+        with engine.connect() as conn:
+            self._build_pre_migration_schema(conn)
+            conn.commit()
+
+        with engine.connect() as conn:
+            ctx = MigrationContext.configure(conn)
+            with Operations.context(ctx):
+                upgrade()
+                downgrade()
+            conn.commit()
+
+        with engine.connect() as conn:
+            cols = [c["name"] for c in sa.inspect(conn).get_columns("competitions")]
+            assert "validated" not in cols
 
 
 class TestEnsureChampionModel:

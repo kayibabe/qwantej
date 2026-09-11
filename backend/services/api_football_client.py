@@ -132,11 +132,19 @@ class ApiFootballClient:
     def fixtures(self, **parameters: str | int) -> tuple[dict[str, Any], ...]:
         return self._all_pages("fixtures", parameters)
 
+    def leagues(self, **parameters: str | int) -> tuple[dict[str, Any], ...]:
+        return self._all_pages("leagues", parameters)
+
     def odds(self, **parameters: str | int) -> tuple[dict[str, Any], ...]:
         return self._all_pages("odds", parameters)
 
     def fixture_statistics(self, fixture_id: int) -> tuple[dict[str, Any], ...]:
         return self._all_pages("fixtures/statistics", {"fixture": fixture_id})
+
+    @property
+    def last_requests_remaining(self) -> int | None:
+        """Most recent x-ratelimit-requests-remaining value seen, or None if not yet set."""
+        return getattr(self, "_last_requests_remaining", None)
 
     def _all_pages(
         self, endpoint: str, parameters: Mapping[str, str | int]
@@ -154,10 +162,12 @@ class ApiFootballClient:
 
     def _check_quota(self, page: ApiPage) -> None:
         remaining = page.requests_remaining
-        if remaining is not None and remaining <= self._quota_warning_threshold:
-            log.warning(
-                "API-Football quota low: %d request(s) remaining", remaining
-            )
+        if remaining is not None:
+            self._last_requests_remaining = remaining
+            if remaining <= self._quota_warning_threshold:
+                log.warning(
+                    "API-Football quota low: %d request(s) remaining", remaining
+                )
 
     def _get_page(
         self, endpoint: str, parameters: Mapping[str, str | int]

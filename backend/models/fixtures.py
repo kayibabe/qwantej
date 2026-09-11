@@ -4,7 +4,16 @@ import enum
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import CheckConstraint, Date, DateTime, Enum, ForeignKey, String, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.models.base import Base, TimestampMixin, UUIDPKMixin
@@ -16,6 +25,9 @@ class Competition(UUIDPKMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     country: Mapped[str | None] = mapped_column(String(80))
     tier: Mapped[int | None] = mapped_column()
+    # True only for leagues with established calibration and reliability evidence.
+    # The signal pipeline rejects fixtures whose competition has validated=False.
+    validated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     seasons: Mapped[list["Season"]] = relationship(back_populates="competition")
 
