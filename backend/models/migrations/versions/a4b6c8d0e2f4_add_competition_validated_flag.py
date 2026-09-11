@@ -50,7 +50,7 @@ def upgrade() -> None:
                     SELECT sm.canonical_id
                     FROM source_mappings sm
                     JOIN providers p ON p.id = sm.provider_id
-                    WHERE LOWER(p.name) LIKE 'api-football%'
+                    WHERE LOWER(p.name) = 'api-football'
                       AND sm.entity_type = 'competition'
                       AND sm.external_id = ANY(:ids)
                 )
@@ -71,7 +71,7 @@ def upgrade() -> None:
                     SELECT sm.canonical_id
                     FROM source_mappings sm
                     JOIN providers p ON p.id = sm.provider_id
-                    WHERE LOWER(p.name) LIKE 'api-football%'
+                    WHERE LOWER(p.name) = 'api-football'
                       AND sm.entity_type = 'competition'
                       AND sm.external_id IN ({placeholders})
                 )

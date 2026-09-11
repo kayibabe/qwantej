@@ -268,6 +268,134 @@ class TestUpcomingUnpredictedFixtures:
         assert f_u.id not in result_ids
 
 
+class TestMigrationA4B6C8D0E2F4Seeding:
+    """Verify the seeding SQL in migration a4b6c8d0e2f4 sets validated=True
+    for exactly the four known API-Football league IDs and leaves others False.
+
+    This test runs the seeding SQL directly against the in-memory SQLite session
+    (schema already includes the validated column via Base.metadata.create_all)
+    to isolate the logic from Alembic plumbing.
+    """
+
+    _SEEDED_IDS = ("39", "78", "61", "140")
+    _UNSEEDED_ID = "262"  # Liga MX — not in the validated set
+
+    def _run_seeding_sql(self, session) -> None:
+        """Execute the SQLite branch of the migration seeding SQL."""
+        import sqlalchemy as sa
+        placeholders = ", ".join(f":id{i}" for i in range(len(self._SEEDED_IDS)))
+        params = {f"id{i}": v for i, v in enumerate(self._SEEDED_IDS)}
+        session.execute(
+            sa.text(
+                f"""
+                UPDATE competitions
+                SET validated = 1
+                WHERE id IN (
+                    SELECT sm.canonical_id
+                    FROM source_mappings sm
+                    JOIN providers p ON p.id = sm.provider_id
+                    WHERE LOWER(p.name) = 'api-football'
+                      AND sm.entity_type = 'competition'
+                      AND sm.external_id IN ({placeholders})
+                )
+                """
+            ),
+            params,
+        )
+        session.expire_all()
+
+    def _seed_competitions(self, session):
+        from backend.models import EntityType, Provider, SourceMapping
+        from backend.models.fixtures import Competition
+
+        prov = Provider(name="api-football", kind="odds")
+        session.add(prov)
+        session.flush()
+
+        comp_map: dict[str, object] = {}
+        for ext_id, name in [
+            ("39", "Premier League"),
+            ("78", "Bundesliga"),
+            ("61", "Ligue 1"),
+            ("140", "La Liga"),
+            (self._UNSEEDED_ID, "Liga MX"),
+        ]:
+            comp = Competition(name=name, country="Test", validated=False)
+            session.add(comp)
+            session.flush()
+            session.add(SourceMapping(
+                provider_id=prov.id,
+                entity_type=EntityType.COMPETITION,
+                external_id=ext_id,
+                canonical_id=comp.id,
+            ))
+            comp_map[ext_id] = comp.id
+        session.flush()
+        return prov, comp_map
+
+    def test_seeds_exactly_four_leagues(self, db_session):
+        from sqlalchemy import select
+
+        from backend.models.fixtures import Competition
+
+        prov, comp_map = self._seed_competitions(db_session)
+        self._run_seeding_sql(db_session)
+
+        for ext_id in self._SEEDED_IDS:
+            comp = db_session.scalars(
+                select(Competition).where(Competition.id == comp_map[ext_id])
+            ).one()
+            assert comp.validated, f"ext_id={ext_id} should be validated after seeding"
+
+    def test_unseeded_league_remains_false(self, db_session):
+        from sqlalchemy import select
+
+        from backend.models.fixtures import Competition
+
+        prov, comp_map = self._seed_competitions(db_session)
+        self._run_seeding_sql(db_session)
+
+        comp = db_session.scalars(
+            select(Competition).where(Competition.id == comp_map[self._UNSEEDED_ID])
+        ).one()
+        assert not comp.validated, "Non-validated league must remain validated=False after seeding"
+
+    def test_wrong_provider_name_not_seeded(self, db_session):
+        """A provider whose name starts with 'api-football' but is not an exact
+        match must not cause unintended seeding — verifying the exact = predicate."""
+        from sqlalchemy import select
+
+        from backend.models import EntityType, Provider, SourceMapping
+        from backend.models.fixtures import Competition
+
+        # Provider name that would have matched the old LIKE predicate but not =
+        prov_fake = Provider(name="api-football-unofficial", kind="odds")
+        db_session.add(prov_fake)
+        db_session.flush()
+
+        comp = Competition(name="Unofficial League", country="Test", validated=False)
+        db_session.add(comp)
+        db_session.flush()
+        db_session.add(SourceMapping(
+            provider_id=prov_fake.id,
+            entity_type=EntityType.COMPETITION,
+            external_id="39",  # same ext_id as Premier League
+            canonical_id=comp.id,
+        ))
+        db_session.flush()
+
+        self._run_seeding_sql(db_session)
+        db_session.expire_all()
+
+        comp_refreshed = db_session.scalars(
+            select(Competition).where(Competition.id == comp.id)
+        ).one()
+        assert not comp_refreshed.validated, (
+            "Competition mapped to a provider whose name only starts with 'api-football' "
+            "must not be seeded as validated"
+        )
+
+
 class TestEnsureChampionModel:
     def test_creates_registry_and_run_on_first_call(self, db_session):
 
