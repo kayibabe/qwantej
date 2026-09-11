@@ -323,10 +323,17 @@ def _upcoming_unpredicted_fixtures(
     now: datetime,
     lookahead_hours: int,
 ) -> list[Any]:
-    """Return fixtures kicking off in (now, now+lookahead_hours] with no 1X2 HOME prediction."""
+    """Return fixtures in validated competitions kicking off in (now, now+lookahead_hours].
+
+    Fixtures are excluded when:
+    - already predicted on 1X2/HOME for this market,
+    - outside the lookahead window,
+    - or their Competition.validated flag is False (fail-closed publication gate).
+    """
     from sqlalchemy import select
 
     from backend.models import Fixture, FixtureStatus, Prediction
+    from backend.models.fixtures import Competition
 
     window_end = now + timedelta(hours=lookahead_hours)
 
@@ -338,7 +345,9 @@ def _upcoming_unpredicted_fixtures(
 
     stmt = (
         select(Fixture)
+        .join(Competition, Fixture.competition_id == Competition.id)
         .where(
+            Competition.validated.is_(True),
             Fixture.status == FixtureStatus.SCHEDULED,
             Fixture.kickoff_utc > now,
             Fixture.kickoff_utc <= window_end,

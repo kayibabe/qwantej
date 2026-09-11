@@ -51,13 +51,13 @@ def _make_session():
     return engine
 
 
-def _seed_provider_and_competition(session):
+def _seed_provider_and_competition(session, *, validated: bool = True):
     from backend.models import EntityType, Provider, Season, SourceMapping, Team
     prov = Provider(name="API-Football", kind="odds", base_url="https://api-football.com")
     session.add(prov)
     session.flush()
     from backend.models.fixtures import Competition as Comp
-    comp = Comp(name="Premier League", country="England")
+    comp = Comp(name="Premier League", country="England", validated=validated)
     session.add(comp)
     session.flush()
     season = Season(
@@ -212,6 +212,60 @@ class TestUpcomingUnpredictedFixtures:
         f = _make_fixture(db_session, comp, season, home, away, kickoff=now - timedelta(hours=1))
         results = _upcoming_unpredicted_fixtures(db_session, now, lookahead_hours=36)
         assert not any(r.id == f.id for r in results)
+
+    def test_excludes_unvalidated_competition(self, db_session):
+        # Fail-closed gate: validated=False must block the fixture entirely.
+        comp, season, home, away = _seed_provider_and_competition(db_session, validated=False)
+        now = datetime.now(UTC)
+        f = _make_fixture(db_session, comp, season, home, away, kickoff=now + timedelta(hours=6))
+        results = _upcoming_unpredicted_fixtures(db_session, now, lookahead_hours=24)
+        assert not any(r.id == f.id for r in results)
+
+    def test_includes_validated_competition(self, db_session):
+        # Sanity: validated=True must pass the gate when other conditions are met.
+        comp, season, home, away = _seed_provider_and_competition(db_session, validated=True)
+        now = datetime.now(UTC)
+        f = _make_fixture(db_session, comp, season, home, away, kickoff=now + timedelta(hours=6))
+        results = _upcoming_unpredicted_fixtures(db_session, now, lookahead_hours=24)
+        assert any(r.id == f.id for r in results)
+
+    def test_mixed_competitions_only_returns_validated(self, db_session):
+        # Two competitions, one validated and one not; only the validated fixture appears.
+        comp_v, season_v, home_v, away_v = _seed_provider_and_competition(
+            db_session, validated=True
+        )
+        from backend.models.fixtures import Competition as Comp
+        from backend.models.fixtures import Season
+        comp_u = Comp(name="Liga MX", country="Mexico", validated=False)
+        db_session.add(comp_u)
+        db_session.flush()
+        season_u = Season(
+            competition_id=comp_u.id,
+            label="2026",
+            start_date=None,
+            end_date=None,
+        )
+        db_session.add(season_u)
+        db_session.flush()
+
+        from backend.models import Team
+        home_u = Team(name="Club América", country="Mexico")
+        away_u = Team(name="Chivas", country="Mexico")
+        db_session.add_all([home_u, away_u])
+        db_session.flush()
+
+        now = datetime.now(UTC)
+        f_v = _make_fixture(
+            db_session, comp_v, season_v, home_v, away_v, kickoff=now + timedelta(hours=6)
+        )
+        f_u = _make_fixture(
+            db_session, comp_u, season_u, home_u, away_u, kickoff=now + timedelta(hours=6)
+        )
+
+        results = _upcoming_unpredicted_fixtures(db_session, now, lookahead_hours=24)
+        result_ids = {r.id for r in results}
+        assert f_v.id in result_ids
+        assert f_u.id not in result_ids
 
 
 class TestEnsureChampionModel:
