@@ -15,14 +15,15 @@ PostgreSQL service:
 docker compose up -d db
 .venv\Scripts\alembic.exe upgrade head
 .venv\Scripts\python.exe -m backend.workers.ingestion_worker
-.venv\Scripts\python.exe scripts\run_signal_pipeline.py
+.venv\Scripts\python.exe scripts\run_signal_pipeline.py --shadow
 .venv\Scripts\python.exe -m backend.workers.settlement_worker
 .venv\Scripts\python.exe scripts\run_readiness_report.py --json
 ```
 
 The ingestion worker's default scope is the four validated leagues. The
-signal pipeline must archive every produced forecast with its feature snapshot,
-model run, code commit, and input hash. Settlement and reliability/KPI rebuilds
+shadow signal pipeline archives gate-rejected PIT-safe forecasts with a
+current-code challenger, feature snapshot, model run, code commit, and input
+hash. It never builds accumulators. Settlement and reliability/KPI rebuilds
 must complete before the readiness report is evaluated.
 
 If migration, provider credentials, or a required service is unavailable,

@@ -40,6 +40,8 @@ class ReadinessEvidence:
     experiment_metrics_complete: bool
     experiment_metrics: dict[str, Any]
     prediction_count: int
+    production_prediction_count: int
+    shadow_prediction_count: int
     predictions_missing_provenance: int
     settled_prediction_count: int
     reliability_snapshot_count: int
@@ -114,9 +116,10 @@ def evaluate_readiness(
         ReadinessCheck("required_metrics_present", metrics_complete,
                        "Brier, log loss, calibration, CLV, and ROI must be persisted"),
         ReadinessCheck("forecast_archive_provenance",
-                       evidence.prediction_count > 0
+                       evidence.production_prediction_count > 0
                        and evidence.predictions_missing_provenance == 0,
-                       f"predictions={evidence.prediction_count}, "
+                       f"production_predictions={evidence.production_prediction_count}, "
+                       f"shadow_predictions={evidence.shadow_prediction_count}, "
                        f"missing_provenance={evidence.predictions_missing_provenance}"),
         ReadinessCheck("settled_prediction_sample",
                        evidence.settled_prediction_count >= minimum_sample_size,
@@ -173,20 +176,31 @@ def collect_evidence(session: Any) -> ReadinessEvidence:
         metrics.get("roi"),
     )
     metrics_complete = all(_finite_number(value) for value in required_metric_values)
+    production_filter = Prediction.research_mode.is_(False)
     prediction_count = _count(session, select(func.count()).select_from(Prediction))
-    missing_provenance = _count(session, select(func.count()).select_from(Prediction).where(
-        (Prediction.code_commit.is_(None))
-        | (Prediction.input_snapshot_ref.is_(None))
-        | (Prediction.input_snapshot_hash.is_(None))
-        | (Prediction.model_run_id.is_(None))
-    ))
+    production_prediction_count = _count(
+        session, select(func.count()).select_from(Prediction).where(production_filter)
+    )
+    shadow_prediction_count = prediction_count - production_prediction_count
+    missing_provenance = _count(
+        session,
+        select(func.count()).select_from(Prediction).where(
+            production_filter,
+            (Prediction.code_commit.is_(None))
+            | (Prediction.input_snapshot_ref.is_(None))
+            | (Prediction.input_snapshot_hash.is_(None))
+            | (Prediction.model_run_id.is_(None)),
+        ),
+    )
     settled_count = _count(
         session,
         select(func.count(func.distinct(Settlement.subject_id)))
         .select_from(Settlement)
+        .join(Prediction, Prediction.id == Settlement.subject_id)
         .where(
-        Settlement.subject_type == "prediction",
-        Settlement.outcome.in_(("win", "loss", "push")),
+            Settlement.subject_type == "prediction",
+            production_filter,
+            Settlement.outcome.in_(("win", "loss", "push")),
         ),
     )
     reliability_count = _count(session, select(func.count()).select_from(ReliabilitySnapshot))
@@ -213,6 +227,8 @@ def collect_evidence(session: Any) -> ReadinessEvidence:
         experiment_metrics_complete=bool(metrics_complete),
         experiment_metrics=metrics,
         prediction_count=prediction_count,
+        production_prediction_count=production_prediction_count,
+        shadow_prediction_count=shadow_prediction_count,
         predictions_missing_provenance=missing_provenance,
         settled_prediction_count=settled_count,
         reliability_snapshot_count=reliability_count,

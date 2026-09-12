@@ -150,6 +150,30 @@ def test_complete_record_publishes(session: Session) -> None:
     assert stored.model_run_id == lineage.model_run_id
 
 
+def test_research_mode_is_persisted_as_an_explicit_boundary(session: Session) -> None:
+    record, lineage = _valid(session)
+    prediction = publish_prediction(
+        session, record=replace(record, research_mode=True), lineage=lineage
+    )
+    assert prediction.research_mode is True
+
+
+def test_research_mode_may_use_a_challenger_but_production_cannot(session: Session) -> None:
+    record, lineage = _valid(session)
+    model = session.get(ModelRegistry, lineage.model_version_id)
+    assert model is not None
+    model.status = ModelStatus.CHALLENGER
+    session.flush()
+
+    with pytest.raises(PredictionPublicationError, match="not the champion model"):
+        publish_prediction(session, record=record, lineage=lineage)
+
+    prediction = publish_prediction(
+        session, record=replace(record, research_mode=True), lineage=lineage
+    )
+    assert prediction.research_mode is True
+
+
 def test_missing_conservative_probability_fails_closed(session: Session) -> None:
     record, lineage = _valid(session)
     record = replace(record, conservative_probability=None)  # type: ignore[arg-type]
