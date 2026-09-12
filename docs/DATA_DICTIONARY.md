@@ -168,6 +168,9 @@ artifact fields are frozen after insertion while lifecycle status remains mutabl
   concrete run that supplied the parameters), `input_snapshot_ref` (retrievable
   canonical inputs) and `input_snapshot_hash` (content verification). The
   database requires the run to belong to `model_version_id`.
+- **Research boundary**: `research_mode` marks predictions derived from
+  retrospective or otherwise non-production data. It defaults to `false` and
+  such rows must not support live reliability or promotion evidence.
 - **Calibration lineage**: `calibration_model_id` → `calibration_models`, plus
   the denormalized `calibration_version` written into the immutable record.
 - **Linkage/diagnostics**: `accumulator_id` (polymorphic UUID, no FK until

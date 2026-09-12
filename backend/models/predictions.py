@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -137,6 +138,10 @@ class Prediction(UUIDPKMixin, CreatedAtMixin, Base):
     reliability_snapshot_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("reliability_snapshots.id"), index=True
     )
+    # Retrospective rows are explicitly excluded from live reliability
+    # evidence. The migration default preserves the production path for old
+    # and newly-created forecasts unless a research caller opts in.
+    research_mode: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # --- Linkage & diagnostics ---
     # Polymorphic linkage to a future accumulators row (that table lands with
