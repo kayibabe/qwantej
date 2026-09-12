@@ -19,6 +19,8 @@ def _evidence(**overrides):
             "roi": 0.04,
         },
         prediction_count=30,
+        production_prediction_count=30,
+        shadow_prediction_count=0,
         predictions_missing_provenance=0,
         settled_prediction_count=30,
         reliability_snapshot_count=1,
@@ -88,4 +90,17 @@ def test_non_finite_metrics_are_not_readiness_evidence():
         )
     )
     check = next(item for item in report.checks if item.name == "required_metrics_present")
+    assert check.passed is False
+
+
+def test_shadow_predictions_cannot_satisfy_production_archive_evidence():
+    report = evaluate_readiness(
+        _evidence(
+            prediction_count=30,
+            production_prediction_count=0,
+            shadow_prediction_count=30,
+            predictions_missing_provenance=0,
+        )
+    )
+    check = next(item for item in report.checks if item.name == "forecast_archive_provenance")
     assert check.passed is False

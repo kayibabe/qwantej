@@ -99,6 +99,8 @@ class MinimumPredictionRecord:
     fair_market_probability: float | None = None
     edge_pp: float | None = None
     expected_value: float | None = None
+    # Shadow rows are archived evidence only and cannot drive live tickets.
+    research_mode: bool = False
 
 
 def publish_prediction(
@@ -152,6 +154,7 @@ def publish_prediction(
         input_snapshot_ref=lineage.input_snapshot_ref,
         input_snapshot_hash=lineage.input_snapshot_hash,
         reason_codes=record.reason_codes,
+        research_mode=record.research_mode,
     )
     session.add(prediction)
     session.flush()
@@ -289,8 +292,17 @@ def _lineage_existence_problems(
     if model is None:
         problems.append("lineage.model_version_id does not exist")
     else:
-        if model.status is not ModelStatus.CHAMPION:
-            problems.append("lineage.model_version_id is not the champion model")
+        allowed_statuses = (
+            (ModelStatus.CHAMPION, ModelStatus.CHALLENGER)
+            if record.research_mode
+            else (ModelStatus.CHAMPION,)
+        )
+        if model.status not in allowed_statuses:
+            problems.append(
+                "research predictions require a champion or challenger model"
+                if record.research_mode
+                else "lineage.model_version_id is not the champion model"
+            )
         if model.code_commit != lineage.code_commit:
             problems.append("lineage.code_commit does not match the model version")
     run = session.get(ModelRun, lineage.model_run_id)

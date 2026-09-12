@@ -88,6 +88,8 @@ class PipelineRun:
     fixtures_evaluated: int = 0
     features_extracted: int = 0
     predictions_published: int = 0
+    predictions_archived: int = 0
+    shadow_predictions_archived: int = 0
     value_gate_rejected: int = 0
     feature_errors: int = 0
     accumulators: list[str] = field(default_factory=list)  # "CORE", "GROWTH", "ALPHA"
@@ -96,9 +98,10 @@ class PipelineRun:
 
 @dataclass
 class _ProcessResult:
-    """Bundles a published prediction with its reliability score for the accumulator."""
+    """Bundles a prediction with its reliability score and gate outcome."""
     prediction: Any
     segment_reliability: float  # 0-100; taken from the matching ReliabilitySnapshot
+    gate_passed: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -189,6 +192,58 @@ def _ensure_champion_model(session: Any, now: datetime) -> tuple[Any, Any]:
     session.add(run)
     session.flush()
     log.info("signal_pipeline: created model_run %s", run.id)
+    return registry, run
+
+
+def _ensure_shadow_model(session: Any, now: datetime) -> tuple[Any, Any]:
+    """Return a current-code challenger model/run for paper evidence only."""
+    from sqlalchemy import select
+
+    from backend.models import (
+        ModelFamily,
+        ModelRegistry,
+        ModelRun,
+        ModelRunKind,
+        ModelRunStatus,
+        ModelStatus,
+    )
+
+    commit = _code_commit()
+    version = f"{_MODEL_VERSION}-shadow-{commit[:12]}"
+    registry = session.scalars(
+        select(ModelRegistry).where(
+            ModelRegistry.name == f"{_MODEL_NAME}-shadow",
+            ModelRegistry.version == version,
+        )
+    ).first()
+    if registry is None:
+        registry = ModelRegistry(
+            family=ModelFamily.ENSEMBLE,
+            name=f"{_MODEL_NAME}-shadow",
+            version=version,
+            status=ModelStatus.CHALLENGER,
+            code_commit=commit,
+            hyperparameters={
+                "k_factor": 20.0,
+                "home_elo_advantage": 65.0,
+                "initial_elo": 1500.0,
+                "poisson_elo_blend": 0.5,
+            },
+            description="Paper-only Poisson + Elo shadow challenger.",
+        )
+        session.add(registry)
+        session.flush()
+    run = ModelRun(
+        model_id=registry.id,
+        kind=ModelRunKind.INFERENCE,
+        status=ModelRunStatus.RUNNING,
+        started_at=now,
+        code_commit=commit,
+        parameters={"market": _MARKET, "selection": _SELECTION, "shadow": True},
+    )
+    session.add(run)
+    session.flush()
+    log.info("signal_pipeline: created shadow challenger run %s", run.id)
     return registry, run
 
 
@@ -524,11 +579,13 @@ def _process_fixture(
     calibration_model: Any,
     value_policy: Any,
     commit: str,
+    shadow: bool = False,
 ) -> _ProcessResult | None:
     """Extract features, run models, apply calibration, evaluate gate, publish.
 
     Returns a _ProcessResult on success (prediction + reliability score), None
-    when the fixture is skipped or the value gate rejects it.
+    when the fixture is skipped or the value gate rejects it. In ``shadow``
+    mode, rejected but PIT-safe forecasts are archived as research evidence.
     """
     from backend.services.feature_extraction import (
         FeatureExtractionError,
@@ -648,12 +705,14 @@ def _process_fixture(
     # 8. Value Gate.
     # fair_prob is None iff the devigged-probability snapshot is unavailable;
     # guarding on it alongside decimal_odds keeps the type-checker satisfied.
+    gate_reasons: list[str] = []
     if decimal_odds is None or fair_prob is None or quote_ts is None:
         executable_odds = None
         edge = 0.0
         ev = 0.0
         edge_pp_val = 0.0
         gate_passed = False
+        gate_reasons = ["MARKET_STALE"]
         log.debug("signal_pipeline: fixture %s — no odds, skipping gate", fixture.id)
     else:
         edge = p_cons - fair_prob
@@ -679,6 +738,7 @@ def _process_fixture(
         )
         gate_result = evaluate_value_gate(candidate, value_policy)
         gate_passed = gate_result.passed
+        gate_reasons = [reason.value for reason in gate_result.reason_codes]
 
         if not gate_passed:
             log.debug(
@@ -688,11 +748,13 @@ def _process_fixture(
             )
         executable_odds = decimal_odds
 
-    if not gate_passed:
+    if not gate_passed and not shadow:
         return None
 
-    # Gate passed → rel_result is not None (None → RELIABILITY_LOW rejection above).
-    assert rel_result is not None, "gate passed but rel_result is None — logic error"
+    # A production-passed row has reliability lineage; a shadow row may be
+    # archived specifically because reliability is unavailable or restricted.
+    if gate_passed:
+        assert rel_result is not None, "gate passed but rel_result is None — logic error"
 
     # 9. Publish prediction.
     record = MinimumPredictionRecord(
@@ -706,8 +768,8 @@ def _process_fixture(
         calibrated_probability=cal_prob,
         conservative_probability=p_cons,
         dqs=dqs,
-        lrs=rel_result.league_reliability,
-        mrs=rel_result.market_reliability,
+        lrs=rel_result.league_reliability if rel_result is not None else None,
+        mrs=rel_result.market_reliability if rel_result is not None else None,
         bookmaker=bookmaker,
         executable_odds=executable_odds,
         quote_timestamp=quote_ts,
@@ -715,12 +777,14 @@ def _process_fixture(
         edge_pp=edge_pp_val if executable_odds is not None else None,
         expected_value=ev if executable_odds is not None else None,
         qss=max(0.0, min(100.0, dqs)),
+        reason_codes=gate_reasons or None,
+        research_mode=shadow,
     )
     lineage = PredictionLineage(
         model_version_id=model_registry.id,
         model_run_id=fixture_run.id,
         calibration_model_id=calibration_model.id,
-        reliability_snapshot_id=rel_result.snapshot_id,
+        reliability_snapshot_id=rel_result.snapshot_id if rel_result is not None else None,
         feature_version=_FEATURE_VERSION,
         calibration_version=calibration_model.version,
         code_commit=commit,
@@ -731,14 +795,16 @@ def _process_fixture(
     try:
         prediction = publish_prediction(session, record=record, lineage=lineage)
         log.info(
-            "signal_pipeline: published prediction %s for fixture %s "
-            "(p_cons=%.3f odds=%.2f edge=+%.3f seg_rel=%.1f)",
+            "signal_pipeline: %s prediction %s for fixture %s "
+            "(p_cons=%.3f odds=%.2f edge=+%.3f)",
+            "shadow" if shadow else "published",
             prediction.id, fixture.id, p_cons,
-            executable_odds or 0.0, edge, rel_result.segment_reliability,
+            executable_odds or 0.0, edge,
         )
         return _ProcessResult(
             prediction=prediction,
-            segment_reliability=rel_result.segment_reliability,
+            segment_reliability=rel_result.segment_reliability if rel_result is not None else 0.0,
+            gate_passed=gate_passed,
         )
     except PredictionPublicationError as exc:
         log.warning("signal_pipeline: publish failed for fixture %s: %s", fixture.id, exc)
@@ -899,6 +965,7 @@ def run_once(
     *,
     lookahead_hours: int = _LOOKAHEAD_HOURS_DEFAULT,
     dry_run: bool = False,
+    shadow: bool = False,
 ) -> PipelineRun:
     from backend.core.config import get_settings
     from backend.core.db import make_engine, session_scope
@@ -921,7 +988,11 @@ def run_once(
     try:
         with session_scope(engine) as session:
             # Bootstrap: ensure model and calibration registry rows exist.
-            model_registry, model_run = _ensure_champion_model(session, now)
+            model_registry, model_run = (
+                _ensure_shadow_model(session, now)
+                if shadow
+                else _ensure_champion_model(session, now)
+            )
             calibration_model = _ensure_champion_calibration(session, now, commit)
 
             # Find upcoming unpredicted fixtures.
@@ -943,16 +1014,23 @@ def run_once(
                     calibration_model=calibration_model,
                     value_policy=value_policy,
                     commit=commit,
+                    shadow=shadow,
                 )
                 if result is not None:
                     process_results.append(result)
-                    run.predictions_published += 1
+                    run.predictions_archived += 1
+                    if result.prediction.research_mode:
+                        run.shadow_predictions_archived += 1
+                    else:
+                        run.predictions_published += 1
+                    if not result.gate_passed:
+                        run.value_gate_rejected += 1
                     run.features_extracted += 1
                 else:
                     run.value_gate_rejected += 1
 
             # Accumulator phase.
-            if process_results:
+            if process_results and not shadow:
                 decision = _run_accumulator_phase(
                     session,
                     process_results,
@@ -969,6 +1047,8 @@ def run_once(
             model_run.metrics = {
                 "fixtures_evaluated": run.fixtures_evaluated,
                 "predictions_published": run.predictions_published,
+                "predictions_archived": run.predictions_archived,
+                "shadow_predictions_archived": run.shadow_predictions_archived,
                 "gate_rejected": run.value_gate_rejected,
             }
 
@@ -987,9 +1067,12 @@ def run_once(
         _notify(run, decision)
 
     log.info(
-        "signal_pipeline: run complete — fixtures=%d predictions=%d gate_rejected=%d errors=%d",
+        "signal_pipeline: run complete — fixtures=%d published=%d archived=%d "
+        "shadow=%d gate_rejected=%d errors=%d",
         run.fixtures_evaluated,
         run.predictions_published,
+        run.predictions_archived,
+        run.shadow_predictions_archived,
         run.value_gate_rejected,
         run.errors,
     )
@@ -1019,6 +1102,13 @@ def _parse_args() -> argparse.Namespace:
         "--dry-run", action="store_true",
         help="Roll back all writes — no predictions or accumulators persisted",
     )
+    parser.add_argument(
+        "--shadow", action="store_true",
+        help=(
+            "Archive gate-rejected PIT-safe forecasts as research evidence; "
+            "never build accumulators"
+        ),
+    )
     return parser.parse_args()
 
 
@@ -1028,13 +1118,17 @@ def main() -> None:
     if args.loop:
         log.info("signal_pipeline: loop mode — every %ds", args.interval)
         while True:
-            run = run_once(lookahead_hours=args.lookahead, dry_run=args.dry_run)
+            run = run_once(
+                lookahead_hours=args.lookahead, dry_run=args.dry_run, shadow=args.shadow
+            )
             if run.errors:
                 log.warning("signal_pipeline: %d error(s) in run", run.errors)
             log.info("signal_pipeline: sleeping %ds", args.interval)
             time.sleep(args.interval)
     else:
-        run = run_once(lookahead_hours=args.lookahead, dry_run=args.dry_run)
+        run = run_once(
+            lookahead_hours=args.lookahead, dry_run=args.dry_run, shadow=args.shadow
+        )
         sys.exit(1 if run.errors else 0)
 
 
