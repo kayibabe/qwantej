@@ -116,8 +116,8 @@ def evaluate_readiness(
         ReadinessCheck("required_metrics_present", metrics_complete,
                        "Brier, log loss, calibration, CLV, and ROI must be persisted"),
         ReadinessCheck("forecast_archive_provenance",
-            evidence.production_prediction_count > 0
-            and evidence.predictions_missing_provenance == 0,
+                       evidence.production_prediction_count > 0
+                       and evidence.predictions_missing_provenance == 0,
                        f"production_predictions={evidence.production_prediction_count}, "
                        f"shadow_predictions={evidence.shadow_prediction_count}, "
                        f"missing_provenance={evidence.predictions_missing_provenance}"),
@@ -176,7 +176,6 @@ def collect_evidence(session: Any) -> ReadinessEvidence:
         metrics.get("roi"),
     )
     metrics_complete = all(_finite_number(value) for value in required_metric_values)
-    prediction_count = _count(session, select(func.count()).select_from(Prediction))
     production_filter = Prediction.research_mode.is_(False)
     prediction_count = _count(session, select(func.count()).select_from(Prediction))
     production_prediction_count = _count(
@@ -199,9 +198,9 @@ def collect_evidence(session: Any) -> ReadinessEvidence:
         .select_from(Settlement)
         .join(Prediction, Prediction.id == Settlement.subject_id)
         .where(
-        Settlement.subject_type == "prediction",
-        production_filter,
-        Settlement.outcome.in_(("win", "loss", "push")),
+            Settlement.subject_type == "prediction",
+            production_filter,
+            Settlement.outcome.in_(("win", "loss", "push")),
         ),
     )
     reliability_count = _count(session, select(func.count()).select_from(ReliabilitySnapshot))
