@@ -1,8 +1,8 @@
 """Multi-worker scheduler.
 
-Runs ingestion, signal pipeline, and settlement on configurable fixed
-intervals using daemon threads.  Each worker is fully isolated: an
-exception in one thread does not affect the others.
+Runs ingestion, shadow signal capture, and settlement on configurable fixed
+intervals using daemon threads.  Each worker is fully isolated: an exception
+in one thread does not affect the others.
 
 League tiers
 ------------
@@ -107,7 +107,8 @@ def _make_ingestion_run(
     return _run
 
 
-def _signal_pipeline_run() -> None:
+def _shadow_signal_pipeline_run() -> None:
+    """Archive prospective shadow forecasts without enabling live publishing."""
     # run_once lives in a script, not a package — import via importlib.
     import importlib.util
     from pathlib import Path
@@ -116,7 +117,7 @@ def _signal_pipeline_run() -> None:
     spec = importlib.util.spec_from_file_location("run_signal_pipeline", script)
     mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
     spec.loader.exec_module(mod)  # type: ignore[union-attr]
-    mod.run_once()
+    mod.run_once(shadow=True)
 
 
 def _settlement_run() -> None:
@@ -215,7 +216,8 @@ def main() -> None:
 
     workers = [
         ("ingestion",       ingestion_run,         ingest_interval,      0),
-        ("signal-pipeline", _signal_pipeline_run,  args.signal_interval, args.signal_offset),
+        ("shadow-signal-pipeline", _shadow_signal_pipeline_run,
+         args.signal_interval, args.signal_offset),
         ("settlement",      _settlement_run,        args.settle_interval, 0),
     ]
 

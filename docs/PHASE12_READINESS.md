@@ -20,6 +20,18 @@ docker compose up -d db
 .venv\Scripts\python.exe scripts\run_readiness_report.py --json
 ```
 
+For continuous prospective collection, start the scheduler from the
+repository root:
+
+```powershell
+.venv\Scripts\python.exe -m backend.workers.scheduler
+```
+
+The scheduler runs ingestion, the signal pipeline in mandatory shadow mode,
+and settlement on separate intervals. It never enables live publishing or
+builds live accumulators; stop it with Ctrl-C when the collection window is
+complete.
+
 The ingestion worker's default scope is the four validated leagues. The
 shadow signal pipeline archives gate-rejected PIT-safe forecasts with a
 current-code challenger, feature snapshot, model run, code commit, and input

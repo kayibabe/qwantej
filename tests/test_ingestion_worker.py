@@ -361,6 +361,21 @@ class TestSchedulerArgParsing:
         assert config is not None
         assert config.leagues == [(39, season)]
 
+    def test_scheduler_signal_worker_forces_shadow_mode(self):
+        from backend.workers.scheduler import _shadow_signal_pipeline_run
+
+        fake_module = MagicMock()
+        fake_spec = MagicMock()
+        fake_spec.loader = MagicMock()
+        with (
+            patch("importlib.util.spec_from_file_location", return_value=fake_spec),
+            patch("importlib.util.module_from_spec", return_value=fake_module),
+        ):
+            _shadow_signal_pipeline_run()
+
+        fake_spec.loader.exec_module.assert_called_once_with(fake_module)
+        fake_module.run_once.assert_called_once_with(shadow=True)
+
 
 # ---------------------------------------------------------------------------
 # Ingestion service: skip odds when fixture window is empty
