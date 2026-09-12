@@ -172,7 +172,7 @@ def run_once(config: WorkerConfig | None = None) -> RunSummary:
 
     aggregate = RunSummary()
     log.info(
-        "ingestion_worker: starting run — %d league-season windows, window %s→%s",
+        "ingestion_worker: starting run - %d league-season windows, window %s->%s",
         len(leagues), start, end,
     )
 

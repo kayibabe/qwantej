@@ -141,6 +141,31 @@ class TestDiscoverLeagues:
 # ---------------------------------------------------------------------------
 
 class TestRunOnce:
+    def test_start_log_is_encodable_by_windows_cp1252(self, caplog):
+        caplog.set_level("INFO", logger="backend.workers.ingestion_worker")
+        cfg = WorkerConfig(leagues=[(39, 2026)])
+        mock_settings = MagicMock()
+        mock_settings.api_football_key = "test-key"
+        mock_client = MagicMock()
+        mock_client.last_requests_remaining = 50
+
+        with (
+            patch("backend.core.config.get_settings", return_value=mock_settings),
+            patch("backend.core.logging.configure_logging"),
+            patch("backend.core.db.make_engine"),
+            patch("backend.services.api_football_client.ApiFootballClient.from_settings",
+                  return_value=mock_client),
+            patch("backend.core.db.session_scope"),
+        ):
+            from backend.workers.ingestion_worker import run_once
+            run_once(cfg)
+
+        start_log = next(
+            record.message for record in caplog.records
+            if record.message.startswith("ingestion_worker: starting run")
+        )
+        start_log.encode("cp1252")
+
     def test_missing_api_key_returns_error(self):
         cfg = WorkerConfig(leagues=[(39, 2026)])
         mock_settings = MagicMock()
