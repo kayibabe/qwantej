@@ -377,11 +377,13 @@ def _upcoming_unpredicted_fixtures(
     session: Any,
     now: datetime,
     lookahead_hours: int,
+    *,
+    shadow: bool = False,
 ) -> list[Any]:
     """Return fixtures in validated competitions kicking off in (now, now+lookahead_hours].
 
     Fixtures are excluded when:
-    - already predicted on 1X2/HOME for this market,
+    - already predicted on 1X2/HOME for this market in the requested mode,
     - outside the lookahead window,
     - or their Competition.validated flag is False (fail-closed publication gate).
     """
@@ -392,10 +394,13 @@ def _upcoming_unpredicted_fixtures(
 
     window_end = now + timedelta(hours=lookahead_hours)
 
-    # Fixtures already predicted on 1X2/home for this market.
+    # Keep production and shadow archives independent. A production forecast
+    # must not prevent prospective shadow evidence for the same fixture, and
+    # vice versa.
     predicted_fixture_ids = select(Prediction.fixture_id).where(
         Prediction.market == _MARKET,
         Prediction.selection == _SELECTION,
+        Prediction.research_mode.is_(shadow),
     )
 
     stmt = (
@@ -996,7 +1001,9 @@ def run_once(
             calibration_model = _ensure_champion_calibration(session, now, commit)
 
             # Find upcoming unpredicted fixtures.
-            fixtures = _upcoming_unpredicted_fixtures(session, now, lookahead_hours)
+            fixtures = _upcoming_unpredicted_fixtures(
+                session, now, lookahead_hours, shadow=shadow
+            )
             run.fixtures_evaluated = len(fixtures)
             log.info(
                 "signal_pipeline: %d fixture(s) in next %dh to process",
