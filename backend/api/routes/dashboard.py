@@ -81,8 +81,6 @@ def today_status(db: DbDep) -> TodayStatusOut:
             if freshness.tzinfo is not None and freshness.utcoffset() is not None
             else freshness.replace(tzinfo=UTC)
         )
-    next_run = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-
     freshness_age = now - freshness if freshness is not None else None
     if tickets:
         status, label, detail = (
@@ -132,6 +130,9 @@ def today_status(db: DbDep) -> TodayStatusOut:
         date=local_now.date().isoformat(),
         data_freshness_utc=freshness,
         checked_leagues=leagues,
-        next_run_utc=next_run,
+        # The scheduler uses process-relative intervals and is not observable
+        # from this request. Never turn a rounded clock hour into a false
+        # promise about an active worker.
+        next_run_utc=None,
         tickets_available=tickets,
     )

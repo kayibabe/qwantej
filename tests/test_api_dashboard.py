@@ -37,6 +37,7 @@ def test_today_status_fails_closed_when_no_data() -> None:
         assert body["tickets_available"] == 0
         assert body["data_freshness_utc"] is None
         assert body["checked_leagues"] == []
+        assert body["next_run_utc"] is None
     finally:
         app.dependency_overrides.clear()
 

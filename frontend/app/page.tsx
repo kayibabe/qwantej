@@ -49,7 +49,7 @@ export default async function DashboardPage() {
             </div>
             <div className="mt-5 grid grid-cols-1 gap-4 border-t border-current/20 pt-4 sm:grid-cols-3">
               <div><p className="text-xs uppercase tracking-wider opacity-70">Data last checked</p><p className="mt-1 text-sm font-mono">{today.data_freshness_utc ? fmtDatetime(today.data_freshness_utc) : "Not available"}</p></div>
-              <div><p className="text-xs uppercase tracking-wider opacity-70">Next scheduled run</p><p className="mt-1 text-sm font-mono">{fmtDatetime(today.next_run_utc)}</p></div>
+              <div><p className="text-xs uppercase tracking-wider opacity-70">Next scheduled run</p><p className="mt-1 text-sm font-mono">{today.next_run_utc ? fmtDatetime(today.next_run_utc) : "Not currently reported"}</p></div>
               <div><p className="text-xs uppercase tracking-wider opacity-70">Leagues checked</p><p className="mt-1 text-sm">{today.checked_leagues.length ? today.checked_leagues.join(", ") : "No validated leagues configured"}</p></div>
             </div>
           </section>

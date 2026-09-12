@@ -107,7 +107,7 @@ export interface TodayStatus {
   date: string
   data_freshness_utc: string | null
   checked_leagues: string[]
-  next_run_utc: string
+  next_run_utc: string | null
   tickets_available: number
 }
 

@@ -12,5 +12,5 @@ class TodayStatusOut(BaseModel):
     date: str
     data_freshness_utc: datetime | None
     checked_leagues: list[str]
-    next_run_utc: datetime
+    next_run_utc: datetime | None
     tickets_available: int
