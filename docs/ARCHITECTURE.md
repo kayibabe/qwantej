@@ -111,8 +111,8 @@ does not promote models or disable the paper-only accumulator boundary.
 
 ## Build order
 
-Follow framework §50 (Phase 0–11) — data architecture before prediction
-models, prediction/calibration before value detection, value detection
-before the optimiser, the optimiser before risk sizing, everything before
-the dashboard. Do not build UI-visible features ahead of the decision
-pipeline they depend on.
+Follow framework §50 (Phases 0–11), then complete the Phase 12 evidence
+closure described above — data architecture before prediction models,
+prediction/calibration before value detection, value detection before the
+optimiser, the optimiser before risk sizing, everything before the dashboard.
+Do not build UI-visible features ahead of the decision pipeline they depend on.
