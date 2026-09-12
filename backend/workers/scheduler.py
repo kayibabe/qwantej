@@ -13,17 +13,12 @@ defaults to 3,600 s.
 **Research mode (opt-in):** ``--all-leagues`` discovers all ~785 current-
 season leagues each run.  Interval defaults to 18,000 s (5 h) to stay within
 the 7,500-request/day Pro quota.  Fixtures and odds are stored for all
-leagues, but the signal pipeline is **not yet publication-gated** by
-competition validation — see the warning below.
+leagues, and the signal pipeline enforces the ``Competition.validated``
+publication gate before feature extraction or inference.
 
 .. warning::
-    The two-tier boundary is **ingestion-scoped, not publication-enforced**.
-    Once an unsupported league accumulates enough settled predictions its
-    reliability snapshot will be built by ``rebuild_reliability_snapshots``
-    and the value gate will pass — there is no hard barrier preventing live
-    signals for unvalidated competitions.  Treat ``--all-leagues`` data as
-    research-only until a ``Competition.validated`` flag (or equivalent) is
-    added and checked by the signal pipeline before publication.
+    Research runs may ingest all leagues, but unvalidated competitions cannot
+    publish signals because the signal pipeline checks the validation flag.
 
 Intervals:
     --ingest-interval  N   override the ingestion interval
