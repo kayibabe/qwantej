@@ -1,96 +1,70 @@
 import type { Metadata } from "next"
-import { fetchSettlementSummary, fetchAccumulators } from "@/lib/api"
-import StatTile from "@/components/StatTile"
+import { fetchAccumulators, fetchTodayStatus } from "@/lib/api"
+import { fmtDate, fmtDatetime } from "@/lib/format"
 import AccumulatorCard from "@/components/AccumulatorCard"
 
-export const metadata: Metadata = { title: "Dashboard" }
+export const metadata: Metadata = { title: "Today" }
 
-function fmtPct(v: number | null) {
-  if (v === null) return null
-  return `${(v * 100).toFixed(1)}%`
-}
-
-function fmtNum(v: number | null, decimals = 3) {
-  if (v === null) return null
-  return v.toFixed(decimals)
+const STATUS_STYLES: Record<string, string> = {
+  qualified: "border-[var(--win)] bg-[#15251a] text-[var(--win)]",
+  no_qualifying_combination: "border-[var(--void)] bg-[#292316] text-[var(--void)]",
+  collecting: "border-[var(--accent)] bg-[#172238] text-[var(--accent)]",
+  stale: "border-[var(--loss)] bg-[#2b171b] text-[var(--loss)]",
+  no_upcoming_data: "border-[var(--border)] bg-[var(--bg-raised)] text-[var(--text-secondary)]",
 }
 
 export default async function DashboardPage() {
-  const [summary, accPage] = await Promise.all([
-    fetchSettlementSummary().catch(() => null),
-    fetchAccumulators({ limit: 5 }).catch(() => null),
+  const [today, accPage] = await Promise.all([
+    fetchTodayStatus().catch(() => null),
+    fetchAccumulators({ limit: 100 }).catch(() => null),
   ])
+  const todayAccumulators = today && accPage
+    ? accPage.items.filter((acc) => fmtDate(acc.published_at) === fmtDate(`${today.date}T00:00:00+02:00`))
+    : []
+  const statusClass = STATUS_STYLES[today?.status ?? ""] ?? STATUS_STYLES.collecting
 
   return (
-    <div className="flex flex-col gap-8 p-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:gap-8 sm:p-8">
       <div>
-        <h1 className="text-xl font-semibold text-[var(--text-primary)]">Dashboard</h1>
-        <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          Prediction settlement performance — all-time
-        </p>
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">Qwantej / Today</p>
+        <h1 className="mt-2 text-2xl font-semibold text-[var(--text-primary)] sm:text-3xl">What is available today?</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">Paper-only ticket availability, data freshness, and the checks behind this run. Historical performance lives on the Performance page.</p>
       </div>
 
-      {/* KPI tiles */}
-      <section aria-label="Key performance indicators">
-        {summary === null ? (
-          <p className="text-sm text-[var(--loss)]">
-            Could not load settlement summary — is the backend running?
-          </p>
-        ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <StatTile
-              label="Win rate"
-              value={fmtPct(summary.win_rate)}
-              sub={`${summary.n_wins}W / ${summary.n_losses}L / ${summary.n_voids}V`}
-              valueClass={
-                summary.win_rate !== null && summary.win_rate >= 0.5
-                  ? "text-[var(--win)]"
-                  : "text-[var(--text-primary)]"
-              }
-            />
-            <StatTile
-              label="Settled"
-              value={summary.n_settled}
-              sub="total effective settlements"
-            />
-            <StatTile
-              label="Avg CLV"
-              value={fmtNum(summary.avg_clv)}
-              sub="closing-line value"
-              valueClass={
-                summary.avg_clv !== null && summary.avg_clv > 0
-                  ? "text-[var(--win)]"
-                  : "text-[var(--text-primary)]"
-              }
-            />
-            <StatTile
-              label="Avg Brier"
-              value={fmtNum(summary.avg_brier)}
-              sub="lower is better"
-            />
-          </div>
-        )}
-      </section>
+      {!today ? (
+        <section className="rounded-lg border border-[var(--loss)]/60 bg-[#2b171b] p-5" aria-live="polite">
+          <h2 className="font-semibold text-[var(--loss)]">Today&apos;s status is temporarily unavailable</h2>
+          <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">The dashboard could not read the status service. Check that the API is running, then refresh. No ticket availability is inferred while this check is unavailable.</p>
+        </section>
+      ) : (
+        <>
+          <section className={`rounded-lg border p-5 ${statusClass}`} aria-labelledby="today-status-heading">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider opacity-80">{today.date} · Africa/Blantyre</p>
+                <h2 id="today-status-heading" className="mt-2 text-xl font-semibold">{today.label}</h2>
+                <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">{today.detail}</p>
+              </div>
+              <span className="rounded-full border border-current px-3 py-1 text-xs font-semibold uppercase tracking-wider">{today.status.replaceAll("_", " ")}</span>
+            </div>
+            <div className="mt-5 grid grid-cols-1 gap-4 border-t border-current/20 pt-4 sm:grid-cols-3">
+              <div><p className="text-xs uppercase tracking-wider opacity-70">Data last checked</p><p className="mt-1 text-sm font-mono">{today.data_freshness_utc ? fmtDatetime(today.data_freshness_utc) : "Not available"}</p></div>
+              <div><p className="text-xs uppercase tracking-wider opacity-70">Next scheduled run</p><p className="mt-1 text-sm font-mono">{fmtDatetime(today.next_run_utc)}</p></div>
+              <div><p className="text-xs uppercase tracking-wider opacity-70">Leagues checked</p><p className="mt-1 text-sm">{today.checked_leagues.length ? today.checked_leagues.join(", ") : "No validated leagues configured"}</p></div>
+            </div>
+          </section>
 
-      {/* Recent accumulators */}
-      <section aria-label="Recent accumulator tickets">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
-          Recent accumulators
-        </h2>
-        {accPage === null ? (
-          <p className="text-sm text-[var(--loss)]">
-            Could not reach the API — is the backend running?
-          </p>
-        ) : accPage.items.length === 0 ? (
-          <p className="text-sm text-[var(--text-muted)]">No accumulators yet.</p>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {accPage.items.map((acc) => (
-              <AccumulatorCard key={acc.id} acc={acc} />
-            ))}
-          </div>
-        )}
-      </section>
+          <section aria-label="Today&apos;s paper tickets">
+            <div className="mb-4 flex items-end justify-between gap-4">
+              <div><h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-secondary)]">Today&apos;s paper tickets</h2><p className="mt-1 text-xs text-[var(--text-muted)]">Exact prices and sources are shown on every leg when archived.</p></div>
+              <a href="/accumulators" className="text-xs font-medium text-[var(--accent)] hover:underline">View archive</a>
+            </div>
+            {todayAccumulators.length ? <div className="flex flex-col gap-4">{todayAccumulators.map((acc) => <AccumulatorCard key={acc.id} acc={acc} />)}</div> : <div className="rounded-lg border border-dashed border-[var(--border)] p-6 text-sm text-[var(--text-secondary)]">No ticket is available to display for this date. The status above explains whether the system is still collecting or no combination qualified.</div>}
+          </section>
+        </>
+      )}
+
+      {accPage === null && <p className="text-xs text-[var(--text-muted)]">The ticket archive could not be loaded; availability is still governed by the status check above.</p>}
     </div>
   )
 }

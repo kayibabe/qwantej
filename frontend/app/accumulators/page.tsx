@@ -19,7 +19,12 @@ async function AccumulatorList({
 
   if (!page) {
     return (
-      <p className="text-sm text-[var(--loss)]">Could not load accumulators — is the API running?</p>
+      <section className="rounded-lg border border-[var(--loss)]/60 bg-[#2b171b] p-5" aria-live="polite">
+        <h2 className="font-semibold text-[var(--loss)]">The ticket archive is temporarily unavailable</h2>
+        <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
+          We could not load archived tickets. Refresh this page in a moment; today&apos;s availability is shown separately on the Today page.
+        </p>
+      </section>
     )
   }
 

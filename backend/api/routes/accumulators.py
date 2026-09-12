@@ -11,7 +11,8 @@ from sqlalchemy.orm import selectinload
 
 from backend.api.deps import DbDep
 from backend.core.security import RequireApiKey
-from backend.models import Accumulator
+from backend.models import Accumulator, AccumulatorLeg
+from backend.models.fixtures import Fixture
 from backend.schemas.accumulators import AccumulatorOut, AccumulatorPage
 
 router = APIRouter(prefix="/accumulators", tags=["accumulators"], dependencies=[RequireApiKey])
@@ -38,9 +39,16 @@ def list_accumulators(
         select(func.count()).select_from(base_stmt.subquery())
     ) or 0
 
+    _leg_load = selectinload(Accumulator.legs).options(
+        selectinload(AccumulatorLeg.fixture).options(
+            selectinload(Fixture.home_team),
+            selectinload(Fixture.away_team),
+            selectinload(Fixture.competition),
+        )
+    )
     rows = list(
         db.scalars(
-            base_stmt.options(selectinload(Accumulator.legs))
+            base_stmt.options(_leg_load)
             .order_by(Accumulator.published_at.desc(), Accumulator.id.desc())
             .offset(offset)
             .limit(limit)
@@ -63,10 +71,17 @@ def get_accumulator(
     db: DbDep,
 ) -> AccumulatorOut:
     """Return a single accumulator ticket with its legs."""
+    _leg_load = selectinload(Accumulator.legs).options(
+        selectinload(AccumulatorLeg.fixture).options(
+            selectinload(Fixture.home_team),
+            selectinload(Fixture.away_team),
+            selectinload(Fixture.competition),
+        )
+    )
     row = db.scalar(
         select(Accumulator)
         .where(Accumulator.id == accumulator_id)
-        .options(selectinload(Accumulator.legs))
+        .options(_leg_load)
     )
     if row is None:
         raise HTTPException(status_code=404, detail="Accumulator not found")

@@ -83,6 +83,7 @@ def seeded_client():
             selection="home",
             conservative_probability=0.62,
             executable_odds=1.85,
+            bookmaker="Bet365",
         )
         p2 = Prediction(
             fixture_id=fixture.id,
@@ -92,6 +93,7 @@ def seeded_client():
             selection="yes",
             conservative_probability=0.55,
             executable_odds=1.72,
+            bookmaker="Betway",
         )
         seed.add_all([p1, p2])
         seed.flush()
@@ -136,6 +138,7 @@ def seeded_client():
             conservative_probability=0.62,
             edge=0.07,
             qss=88.0,
+            bookmaker="Bet365",
             quote_captured_at=QUOTE_TS,
         )
         leg2 = AccumulatorLeg(
@@ -150,6 +153,7 @@ def seeded_client():
             conservative_probability=0.55,
             edge=0.05,
             qss=85.0,
+            bookmaker="Betway",
             quote_captured_at=QUOTE_TS,
         )
         seed.add_all([leg1, leg2])
@@ -209,6 +213,12 @@ class TestListAccumulators:
         parsed = datetime.fromisoformat(leg["quote_captured_at"].replace("Z", "+00:00"))
         expected = NOW - timedelta(minutes=30)
         assert parsed.replace(tzinfo=None) == expected.replace(tzinfo=None)
+
+    def test_legs_carry_bookmaker_attribution(self, seeded_client) -> None:
+        client, _, _ = seeded_client
+        r = client.get("/accumulators", params={"status": "pending"})
+        legs = r.json()["items"][0]["legs"]
+        assert [leg["bookmaker"] for leg in legs] == ["Bet365", "Betway"]
 
     def test_legs_ordered_by_leg_index(self, seeded_client) -> None:
         client, _, _ = seeded_client
@@ -351,6 +361,7 @@ def service_seeded_client():
                 selection="Over 2.5",
                 conservative_probability=0.60,
                 executable_odds=1.70,
+                bookmaker="Bet365",
             )
             seed.add(pred)
             seed.flush()
@@ -418,3 +429,9 @@ class TestServicePathRoundTrip:
             )
             # Wall-clock comparison: SQLite strips tzinfo; PostgreSQL preserves it.
             assert parsed.replace(tzinfo=None) == _QUOTE_TS.replace(tzinfo=None)
+
+    def test_bookmaker_written_by_service_and_returned_by_api(self, service_seeded_client) -> None:
+        r = service_seeded_client.get("/accumulators")
+        assert r.status_code == 200
+        legs = r.json()["items"][0]["legs"]
+        assert all(leg["bookmaker"] == "Bet365" for leg in legs)
