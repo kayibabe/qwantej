@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
@@ -77,6 +78,10 @@ def _metric(metrics: dict[str, Any], *path: str) -> Any:
     return value
 
 
+def _finite_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and math.isfinite(float(value))
+
+
 def evaluate_readiness(
     evidence: ReadinessEvidence,
     *,
@@ -87,6 +92,17 @@ def evaluate_readiness(
 
     if minimum_sample_size < 1:
         raise ValueError("minimum_sample_size must be positive")
+    metrics = evidence.experiment_metrics
+    required_metric_values = (
+        _metric(metrics, "calibrated_calibration", "brier_score"),
+        _metric(metrics, "calibrated_calibration", "log_loss"),
+        _metric(metrics, "calibrated_calibration", "expected_calibration_error"),
+        metrics.get("average_clv"),
+        metrics.get("roi"),
+    )
+    metrics_complete = evidence.experiment_metrics_complete and all(
+        _finite_number(value) for value in required_metric_values
+    )
     checks = (
         ReadinessCheck("pit_certified_walk_forward", evidence.latest_pit_experiment,
                        "a succeeded, de-vigged-market walk-forward must be PIT-certified"),
@@ -95,7 +111,7 @@ def evaluate_readiness(
                        f"sample={evidence.experiment_sample_size}, required={minimum_sample_size}"),
         ReadinessCheck("no_leakage_rows", evidence.experiment_leakage_rows_rejected == 0,
                        f"leakage_rows_rejected={evidence.experiment_leakage_rows_rejected}"),
-        ReadinessCheck("required_metrics_present", evidence.experiment_metrics_complete,
+        ReadinessCheck("required_metrics_present", metrics_complete,
                        "Brier, log loss, calibration, CLV, and ROI must be persisted"),
         ReadinessCheck("forecast_archive_provenance",
                        evidence.prediction_count > 0
@@ -156,7 +172,7 @@ def collect_evidence(session: Any) -> ReadinessEvidence:
         metrics.get("average_clv"),
         metrics.get("roi"),
     )
-    metrics_complete = all(value is not None for value in required_metric_values)
+    metrics_complete = all(_finite_number(value) for value in required_metric_values)
     prediction_count = _count(session, select(func.count()).select_from(Prediction))
     missing_provenance = _count(session, select(func.count()).select_from(Prediction).where(
         (Prediction.code_commit.is_(None))
@@ -164,9 +180,15 @@ def collect_evidence(session: Any) -> ReadinessEvidence:
         | (Prediction.input_snapshot_hash.is_(None))
         | (Prediction.model_run_id.is_(None))
     ))
-    settled_count = _count(session, select(func.count()).select_from(Settlement).where(
-        Settlement.subject_type == "prediction"
-    ))
+    settled_count = _count(
+        session,
+        select(func.count(func.distinct(Settlement.subject_id)))
+        .select_from(Settlement)
+        .where(
+        Settlement.subject_type == "prediction",
+        Settlement.outcome.in_(("win", "loss", "push")),
+        ),
+    )
     reliability_count = _count(session, select(func.count()).select_from(ReliabilitySnapshot))
     excluded = session.scalar(select(func.coalesce(func.sum(
         ReliabilitySnapshot.future_rows_excluded

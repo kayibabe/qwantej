@@ -9,7 +9,15 @@ def _evidence(**overrides):
         experiment_sample_size=30,
         experiment_leakage_rows_rejected=0,
         experiment_metrics_complete=True,
-        experiment_metrics={"calibrated_calibration": {"brier_score": 0.2}},
+        experiment_metrics={
+            "calibrated_calibration": {
+                "brier_score": 0.2,
+                "log_loss": 0.6,
+                "expected_calibration_error": 0.03,
+            },
+            "average_clv": 0.01,
+            "roi": 0.04,
+        },
         prediction_count=30,
         predictions_missing_provenance=0,
         settled_prediction_count=30,
@@ -63,3 +71,21 @@ def test_zero_valued_metrics_are_present_not_missing():
     )
     check = next(item for item in report.checks if item.name == "required_metrics_present")
     assert check.passed is True
+
+
+def test_non_finite_metrics_are_not_readiness_evidence():
+    report = evaluate_readiness(
+        _evidence(
+            experiment_metrics={
+                "calibrated_calibration": {
+                    "brier_score": float("nan"),
+                    "log_loss": 0.0,
+                    "expected_calibration_error": 0.0,
+                },
+                "average_clv": 0.0,
+                "roi": 0.0,
+            }
+        )
+    )
+    check = next(item for item in report.checks if item.name == "required_metrics_present")
+    assert check.passed is False
