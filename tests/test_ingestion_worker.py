@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from datetime import UTC, date, datetime
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -141,6 +142,31 @@ class TestDiscoverLeagues:
 # ---------------------------------------------------------------------------
 
 class TestRunOnce:
+    def test_start_log_is_encodable_by_windows_cp1252(self, caplog):
+        caplog.set_level("INFO", logger="backend.workers.ingestion_worker")
+        cfg = WorkerConfig(leagues=[(39, 2026)])
+        mock_settings = MagicMock()
+        mock_settings.api_football_key = "test-key"
+        mock_client = MagicMock()
+        mock_client.last_requests_remaining = 50
+
+        with (
+            patch("backend.core.config.get_settings", return_value=mock_settings),
+            patch("backend.core.logging.configure_logging"),
+            patch("backend.core.db.make_engine"),
+            patch("backend.services.api_football_client.ApiFootballClient.from_settings",
+                  return_value=mock_client),
+            patch("backend.core.db.session_scope"),
+        ):
+            from backend.workers.ingestion_worker import run_once
+            run_once(cfg)
+
+        start_log = next(
+            record.message for record in caplog.records
+            if record.message.startswith("ingestion_worker: starting run")
+        )
+        start_log.encode("cp1252")
+
     def test_missing_api_key_returns_error(self):
         cfg = WorkerConfig(leagues=[(39, 2026)])
         mock_settings = MagicMock()
@@ -335,6 +361,24 @@ class TestSchedulerArgParsing:
         config = closure_vars.get("config")
         assert config is not None
         assert config.leagues == [(39, season)]
+
+    def test_scheduler_signal_worker_forces_shadow_mode(self):
+        from backend.workers.scheduler import _shadow_signal_pipeline_run
+
+        fake_module = MagicMock()
+        fake_spec = MagicMock()
+        fake_spec.name = "run_signal_pipeline"
+        fake_spec.loader = MagicMock()
+        with (
+            patch("importlib.util.spec_from_file_location", return_value=fake_spec),
+            patch("importlib.util.module_from_spec", return_value=fake_module),
+            patch.dict("sys.modules", {}, clear=False),
+        ):
+            _shadow_signal_pipeline_run()
+            assert sys.modules["run_signal_pipeline"] is fake_module
+
+        fake_spec.loader.exec_module.assert_called_once_with(fake_module)
+        fake_module.run_once.assert_called_once_with(shadow=True)
 
 
 # ---------------------------------------------------------------------------
