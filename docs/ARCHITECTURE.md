@@ -102,6 +102,13 @@ Not all of these are provisioned yet — see the phase roadmap in
   `pg_dump` major version must match the PostgreSQL server major version.
 - Production must configure both `API_KEY` and a non-default `SECRET_KEY`.
 
+### Phase 12 evidence and governance closure
+
+The read-only `scripts/run_readiness_report.py` command evaluates whether
+persisted PIT, provenance, settlement, reliability, calibration, and champion
+lineage evidence satisfies the promotion prerequisites. It is fail-closed and
+does not promote models or disable the paper-only accumulator boundary.
+
 ## Build order
 
 Follow framework §50 (Phase 0–11) — data architecture before prediction

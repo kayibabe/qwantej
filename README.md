@@ -7,16 +7,14 @@ archived and measured against realized outcomes.
 
 ## Status
 
-Rebuild through Phase 7: canonical point-in-time storage, immutable prediction
-lineage, coherent baseline probability models, calibration monitoring, a
-versioned conservative-probability policy, an explicit reason-coded Value Gate,
-reproducible walk-forward evaluation against a de-vigged market baseline,
-recency-weighted Bayesian LRS/MRS with an immutable league-market matrix, and a
-risk engine — fractional Kelly, exposure caps and a drawdown-aware operating
-state over an append-only bankroll ledger. The foundation also includes an
-immutable point-in-time feature store and an API-Football acquisition adapter.
-These components remain research-only
-until a real historical snapshot passes the model-governance promotion criteria.
+The implementation is through Phase 11, with Phase 12 evidence and governance
+closure now in progress. The system includes point-in-time storage, immutable
+forecast lineage, baseline models, calibration, value and risk controls,
+settlement, reliability/KPI tracking, the API/dashboard, validated-league
+publication gating, retries, security, and disposable backup/restore drills.
+Signals and accumulators remain research/paper-only until a genuinely
+pre-kickoff PIT archive passes the model-governance promotion criteria. Run
+`python scripts/run_readiness_report.py` for the current fail-closed decision.
 
 ## Start here
 
