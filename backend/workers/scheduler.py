@@ -115,8 +115,11 @@ def _shadow_signal_pipeline_run() -> None:
 
     script = Path(__file__).resolve().parent.parent.parent / "scripts" / "run_signal_pipeline.py"
     spec = importlib.util.spec_from_file_location("run_signal_pipeline", script)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"scheduler: unable to load signal pipeline from {script}")
     mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
-    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
     mod.run_once(shadow=True)
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from datetime import UTC, date, datetime
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -366,12 +367,15 @@ class TestSchedulerArgParsing:
 
         fake_module = MagicMock()
         fake_spec = MagicMock()
+        fake_spec.name = "run_signal_pipeline"
         fake_spec.loader = MagicMock()
         with (
             patch("importlib.util.spec_from_file_location", return_value=fake_spec),
             patch("importlib.util.module_from_spec", return_value=fake_module),
+            patch.dict("sys.modules", {}, clear=False),
         ):
             _shadow_signal_pipeline_run()
+            assert sys.modules["run_signal_pipeline"] is fake_module
 
         fake_spec.loader.exec_module.assert_called_once_with(fake_module)
         fake_module.run_once.assert_called_once_with(shadow=True)
