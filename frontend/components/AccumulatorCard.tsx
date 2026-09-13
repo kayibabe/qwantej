@@ -14,10 +14,10 @@ const PRODUCT_LABEL_CLASS: Record<string, string> = {
 }
 
 const STATUS_STYLE: Record<string, string> = {
-  pending: "bg-[#1e2d1e] text-[var(--win)]",
-  locked: "bg-[#1a2035] text-[var(--accent)]",
-  settled: "bg-[var(--bg-raised)] text-[var(--text-secondary)]",
-  void: "bg-[#2d251a] text-[var(--void)]",
+  pending: "status-badge status-badge-pending",
+  locked: "status-badge status-badge-locked",
+  settled: "status-badge status-badge-settled",
+  void: "status-badge status-badge-void",
 }
 
 function pct(v: number) {
@@ -57,15 +57,15 @@ export default function AccumulatorCard({ acc }: { acc: AccumulatorOut }) {
   const product = acc.product.toUpperCase()
   const accentColor = PRODUCT_COLOR[product] ?? "var(--border)"
   const labelClass = PRODUCT_LABEL_CLASS[product] ?? "text-[var(--text-secondary)]"
-  const statusStyle = STATUS_STYLE[acc.status] ?? "bg-[var(--bg-raised)] text-[var(--text-secondary)]"
+  const statusStyle = STATUS_STYLE[acc.status] ?? "status-badge status-badge-development"
 
   return (
     <article
-      className="rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] overflow-hidden"
+      className="rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] overflow-hidden shadow-[var(--surface-shadow)]"
       style={{ borderLeftWidth: "4px", borderLeftStyle: "solid", borderLeftColor: accentColor }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border)]">
+      <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--bg-raised)] px-5 py-3">
         <div className="flex items-center gap-3 min-w-0">
           <span className={`text-xs font-bold uppercase tracking-widest shrink-0 ${labelClass}`}>
             {product} ACCA
@@ -78,7 +78,7 @@ export default function AccumulatorCard({ acc }: { acc: AccumulatorOut }) {
             {acc.legs.length} leg{acc.legs.length !== 1 ? "s" : ""}
           </span>
         </div>
-        <span className={`rounded px-2 py-0.5 text-xs font-medium shrink-0 ml-3 ${statusStyle}`}>
+        <span className={`shrink-0 ml-3 ${statusStyle}`}>
           {acc.status.toUpperCase()}
         </span>
       </div>
