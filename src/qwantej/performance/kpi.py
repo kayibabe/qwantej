@@ -24,7 +24,7 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from qwantej.performance.drift import detect_calibration_drift
+from qwantej.performance.drift import CalibrationBin, detect_calibration_drift
 
 _VALID_OUTCOMES = frozenset({"win", "loss", "void", "push"})
 
@@ -143,6 +143,9 @@ class KPIReport:
     max_drawdown: float | None       # peak-to-trough on ordered P/L sequence
     volatility: float | None         # sample std-dev of ordered P/L sequence
 
+    # --- Reliability diagram (None when calibration metrics unavailable) ---
+    calibration_bins: tuple[CalibrationBin, ...] | None = None
+
 
 # ---------------------------------------------------------------------------
 # Core computation
@@ -246,6 +249,7 @@ def compute_kpis(observations: Sequence[PerformanceObservation]) -> KPIReport:
     ece: float | None = None
     calibration_slope: float | None = None
     calibration_intercept: float | None = None
+    calibration_bins: tuple[CalibrationBin, ...] | None = None
     if len(calib_probs) >= _MIN_CALIB_N:
         try:
             drift_result = detect_calibration_drift(
@@ -254,6 +258,7 @@ def compute_kpis(observations: Sequence[PerformanceObservation]) -> KPIReport:
             ece = drift_result.mean_calibration_error
             calibration_slope = drift_result.slope
             calibration_intercept = drift_result.intercept
+            calibration_bins = drift_result.bins
         except ValueError:
             pass  # not enough data for calibration bins
 
@@ -288,6 +293,7 @@ def compute_kpis(observations: Sequence[PerformanceObservation]) -> KPIReport:
         roi=roi,
         total_stake=stake_sum,
         total_profit=pl_sum,
+        calibration_bins=calibration_bins,
         max_drawdown=max_drawdown,
         volatility=volatility,
     )

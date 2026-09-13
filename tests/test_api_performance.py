@@ -126,9 +126,19 @@ class TestPerformanceReport:
             "brier_score", "brier_skill_score", "log_loss", "ece",
             "calibration_slope", "calibration_intercept",
             "mean_clv", "n_clv", "roi", "total_stake", "total_profit",
-            "max_drawdown", "volatility",
+            "max_drawdown", "volatility", "calibration_bins",
         ):
             assert field in data, f"missing field: {field}"
+
+    def test_calibration_bins_shape(self, client: TestClient) -> None:
+        data = client.get("/performance/report").json()
+        bins = data["calibration_bins"]
+        assert bins is not None
+        assert len(bins) == 2  # one WIN at p=0.60, one LOSS at p=0.45 — different bins
+        for b in bins:
+            assert set(b.keys()) == {"predicted_probability", "observed_frequency", "count"}
+        preds = sorted(b["predicted_probability"] for b in bins)
+        assert preds == pytest.approx([0.45, 0.60])
 
     def test_counts_correct(self, client: TestClient) -> None:
         data = client.get("/performance/report").json()
