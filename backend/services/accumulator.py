@@ -120,6 +120,7 @@ def persist_accumulator_decision(
         for leg_index, leg in enumerate(ticket.legs):
             prediction_id = uuid.UUID(leg.prediction_id)
             fixture_uuid = uuid.UUID(leg.fixture_id)
+            prediction = session.get(Prediction, prediction_id)
             session.add(
                 AccumulatorLeg(
                     accumulator_id=accumulator.id,
@@ -133,12 +134,13 @@ def persist_accumulator_decision(
                     conservative_probability=leg.conservative_probability,
                     edge=leg.edge,
                     qss=leg.qss,
+                    bookmaker=prediction.bookmaker if prediction is not None else None,
+                    quote_captured_at=leg.captured_at,
                 )
             )
             # The Prediction is already in the session identity map — it was
             # loaded and locked by _validate() above.  No second DB round-trip;
             # the row lock is still held by this transaction.
-            prediction = session.get(Prediction, prediction_id)
             if prediction is not None:
                 prediction.accumulator_id = accumulator.id
 

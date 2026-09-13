@@ -69,6 +69,12 @@ export interface AccumulatorLegOut {
   conservative_probability: number
   edge: number
   qss: number
+  bookmaker: string | null
+  home_team: string | null
+  away_team: string | null
+  kickoff_utc: string | null
+  competition_name: string | null
+  quote_captured_at: string | null
 }
 
 export interface AccumulatorOut {
@@ -92,6 +98,17 @@ export interface AccumulatorPage {
   total: number
   limit: number
   offset: number
+}
+
+export interface TodayStatus {
+  status: "qualified" | "no_qualifying_combination" | "collecting" | "stale" | "no_upcoming_data"
+  label: string
+  detail: string
+  date: string
+  data_freshness_utc: string | null
+  checked_leagues: string[]
+  next_run_utc: string | null
+  tickets_available: number
 }
 
 export interface KPIReportOut {

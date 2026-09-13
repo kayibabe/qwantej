@@ -17,6 +17,7 @@ stored here alongside the raw outcome.
 import enum
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     JSON,
@@ -32,6 +33,9 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.models.base import Base, CreatedAtMixin, UUIDPKMixin
+
+if TYPE_CHECKING:
+    from backend.models.fixtures import Fixture
 
 
 class TicketStatus(enum.StrEnum):
@@ -135,8 +139,41 @@ class AccumulatorLeg(UUIDPKMixin, CreatedAtMixin, Base):
     conservative_probability: Mapped[float] = mapped_column(Numeric(9, 8), nullable=False)
     edge: Mapped[float] = mapped_column(Numeric(8, 6), nullable=False)
     qss: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)
+    # The bookmaker whose exact quote was used for this paper ticket.
+    # Nullable so historical rows without attribution remain readable.
+    bookmaker: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    # The exact moment the price was observed; written at leg creation time.
+    # Nullable so existing rows without this value remain valid.
+    quote_captured_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     accumulator: Mapped["Accumulator"] = relationship(back_populates="legs")
+    fixture: Mapped["Fixture"] = relationship()
+
+    # --- Display helpers (read from eagerly-loaded fixture) ---
+
+    @property
+    def home_team(self) -> str | None:
+        if self.fixture and self.fixture.home_team:
+            return self.fixture.home_team.name
+        return None
+
+    @property
+    def away_team(self) -> str | None:
+        if self.fixture and self.fixture.away_team:
+            return self.fixture.away_team.name
+        return None
+
+    @property
+    def kickoff_utc(self) -> datetime | None:
+        return self.fixture.kickoff_utc if self.fixture else None
+
+    @property
+    def competition_name(self) -> str | None:
+        if self.fixture and self.fixture.competition:
+            return self.fixture.competition.name
+        return None
 
 
 class Settlement(UUIDPKMixin, CreatedAtMixin, Base):

@@ -22,6 +22,14 @@ class AccumulatorLegOut(BaseModel):
     conservative_probability: float
     edge: float
     qss: float
+    bookmaker: str | None = None
+    # Display fields populated from the eagerly-loaded fixture relationship.
+    home_team: str | None = None
+    away_team: str | None = None
+    kickoff_utc: datetime | None = None
+    competition_name: str | None = None
+    # Price-freshness timestamp written at leg creation time.
+    quote_captured_at: datetime | None = None
 
 
 class AccumulatorOut(BaseModel):

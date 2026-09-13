@@ -23,11 +23,10 @@ After changing code:
 
 ## Role in the multi-agent workflow
 
-Codex normally operates as the reviewer. When Claude Code is unavailable,
-Codex assumes both the builder and reviewer roles. The pipeline is the same;
-the agent is the same for both steps. **Enforce the split explicitly:**
+**Claude Code is the builder. Codex is the reviewer.** One agent edits the
+working tree at a time — never concurrently.
 
-### Builder pass (implement)
+### Claude Code (builder)
 
 1. Read `DEVELOPMENT.md` in full.
 2. Create a feature branch (`git checkout -b feature/<name>`).
@@ -37,9 +36,9 @@ the agent is the same for both steps. **Enforce the split explicitly:**
 4. Implement the change: code, Alembic migration if schema changed, tests.
 5. Run tests and linting. Fix failures before proceeding.
 6. Commit to the feature branch. Do **not** merge yet.
-7. Hand off to the reviewer pass below.
+7. Hand the diff to Codex for review.
 
-### Reviewer pass (self-review)
+### Codex (reviewer)
 
 Given the diff on the feature branch, perform an independent review:
 
@@ -52,7 +51,7 @@ Given the diff on the feature branch, perform an independent review:
    - No historical forecast or settled bet deleted or silently overwritten?
 3. Run tests, lint, type-check again from a clean state.
 4. Report findings explicitly, even if there are none ("No §4 issues found").
-5. If findings exist: fix them on the branch, re-run tests, re-review the fix.
+5. If findings exist: either fix them directly or hand back to Claude Code.
 6. Only after a clean reviewer pass: open a PR to `main`, fill in the
    Definition of Done checklist (`DEVELOPMENT.md` §7).
 

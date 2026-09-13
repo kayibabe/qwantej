@@ -10,19 +10,19 @@ export const metadata: Metadata = { title: "Models" }
 const LIMIT = 20
 
 const STATUS_STYLE: Record<string, string> = {
-  champion: "bg-[#1e2d1e] text-[var(--win)]",
-  challenger: "bg-[#1a2035] text-[var(--accent)]",
-  development: "bg-[var(--bg-raised)] text-[var(--text-secondary)]",
-  retired: "bg-[#2d251a] text-[var(--void)]",
+  champion: "status-badge status-badge-champion",
+  challenger: "status-badge status-badge-challenger",
+  development: "status-badge status-badge-development",
+  retired: "status-badge status-badge-retired",
 }
 
 function ModelRow({ model }: { model: ModelRegistryOut }) {
   const statusStyle =
     STATUS_STYLE[model.status.toLowerCase()] ??
-    "bg-[var(--bg-raised)] text-[var(--text-secondary)]"
+    "status-badge status-badge-development"
 
   return (
-    <tr className="border-b border-[var(--border)] hover:bg-[var(--bg-raised)] transition-colors">
+    <tr className="border-b border-[var(--border-subtle)]">
       <td className="px-4 py-3 text-sm font-medium text-[var(--text-primary)]">
         {model.name}
         {model.description && (
@@ -34,7 +34,7 @@ function ModelRow({ model }: { model: ModelRegistryOut }) {
       <td className="px-4 py-3 text-xs text-[var(--text-secondary)]">{model.family}</td>
       <td className="px-4 py-3 text-xs font-mono text-[var(--text-secondary)]">{model.version}</td>
       <td className="px-4 py-3">
-        <span className={`rounded px-2 py-0.5 text-xs font-medium ${statusStyle}`}>
+        <span className={statusStyle}>
           {model.status.toUpperCase()}
         </span>
       </td>
@@ -80,10 +80,10 @@ async function ModelTable({
 
   return (
     <>
-      <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
-        <table className="w-full text-left">
+      <div className="theme-table-shell">
+        <table className="theme-table w-full text-left">
           <thead>
-            <tr className="border-b border-[var(--border)] bg-[var(--bg-surface)]">
+            <tr className="border-b border-[var(--border)]">
               {["Name", "Family", "Version", "Status", "Commit", "Promoted", "Training window"].map(
                 (h) => (
                   <th
@@ -131,8 +131,8 @@ export default async function ModelsPage({
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-4">
-        <div className="flex gap-2 flex-wrap">
+      <div className="flex flex-col gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-3 shadow-[var(--surface-shadow)] sm:flex-row sm:flex-wrap sm:items-start">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="text-xs text-[var(--text-muted)] self-center">Status:</span>
           {statuses.map((s) => {
             const label = s === "" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)
@@ -154,7 +154,7 @@ export default async function ModelsPage({
           })}
         </div>
 
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="text-xs text-[var(--text-muted)] self-center">Family:</span>
           {families.map((f) => {
             const label = f === "" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)

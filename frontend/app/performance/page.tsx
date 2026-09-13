@@ -38,7 +38,7 @@ export default async function PerformancePage() {
       <div>
         <h1 className="text-xl font-semibold text-[var(--text-primary)]">Performance</h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          All-time KPI report across settled predictions
+          Historical KPI report across settled predictions and paper tickets. This page does not determine today&apos;s availability.
         </p>
       </div>
 

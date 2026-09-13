@@ -6,6 +6,7 @@ import type {
   PredictionPage,
   SettlementPage,
   SettlementSummary,
+  TodayStatus,
 } from "./types"
 
 const API_URL =
@@ -55,6 +56,10 @@ export function fetchAccumulators(params: {
   offset?: number
 }): Promise<AccumulatorPage> {
   return apiFetch("/accumulators", params as Record<string, string | number | undefined>)
+}
+
+export function fetchTodayStatus(): Promise<TodayStatus> {
+  return apiFetch("/dashboard/today")
 }
 
 export function fetchPerformanceReport(params?: {

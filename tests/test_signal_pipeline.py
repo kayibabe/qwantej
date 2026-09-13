@@ -206,6 +206,79 @@ class TestUpcomingUnpredictedFixtures:
         results = _upcoming_unpredicted_fixtures(db_session, now, lookahead_hours=24)
         assert not any(r.id == f.id for r in results)
 
+    def test_shadow_includes_fixture_with_only_production_prediction(self, db_session):
+        from backend.models import Prediction
+        comp, season, home, away = _seed_provider_and_competition(db_session)
+        now = datetime.now(UTC)
+        f = _make_fixture(db_session, comp, season, home, away, kickoff=now + timedelta(hours=6))
+        db_session.add(Prediction(
+            fixture_id=f.id,
+            prediction_timestamp=now,
+            decision_as_of=now,
+            market="1X2",
+            selection="home",
+            model_probabilities={"home": 0.4},
+            ensemble_probability=0.4,
+            calibrated_probability=0.4,
+            conservative_probability=0.35,
+            dqs=80.0,
+            research_mode=False,
+        ))
+        db_session.flush()
+
+        results = _upcoming_unpredicted_fixtures(
+            db_session, now, lookahead_hours=24, shadow=True
+        )
+        assert any(r.id == f.id for r in results)
+
+    def test_shadow_excludes_fixture_with_shadow_prediction(self, db_session):
+        from backend.models import Prediction
+        comp, season, home, away = _seed_provider_and_competition(db_session)
+        now = datetime.now(UTC)
+        f = _make_fixture(db_session, comp, season, home, away, kickoff=now + timedelta(hours=6))
+        db_session.add(Prediction(
+            fixture_id=f.id,
+            prediction_timestamp=now,
+            decision_as_of=now,
+            market="1X2",
+            selection="home",
+            model_probabilities={"home": 0.4},
+            ensemble_probability=0.4,
+            calibrated_probability=0.4,
+            conservative_probability=0.35,
+            dqs=80.0,
+            research_mode=True,
+        ))
+        db_session.flush()
+
+        results = _upcoming_unpredicted_fixtures(
+            db_session, now, lookahead_hours=24, shadow=True
+        )
+        assert not any(r.id == f.id for r in results)
+
+    def test_production_includes_fixture_with_only_shadow_prediction(self, db_session):
+        from backend.models import Prediction
+        comp, season, home, away = _seed_provider_and_competition(db_session)
+        now = datetime.now(UTC)
+        f = _make_fixture(db_session, comp, season, home, away, kickoff=now + timedelta(hours=6))
+        db_session.add(Prediction(
+            fixture_id=f.id,
+            prediction_timestamp=now,
+            decision_as_of=now,
+            market="1X2",
+            selection="home",
+            model_probabilities={"home": 0.4},
+            ensemble_probability=0.4,
+            calibrated_probability=0.4,
+            conservative_probability=0.35,
+            dqs=80.0,
+            research_mode=True,
+        ))
+        db_session.flush()
+
+        results = _upcoming_unpredicted_fixtures(db_session, now, lookahead_hours=24)
+        assert any(r.id == f.id for r in results)
+
     def test_excludes_past_fixtures(self, db_session):
         comp, season, home, away = _seed_provider_and_competition(db_session)
         now = datetime.now(UTC)
