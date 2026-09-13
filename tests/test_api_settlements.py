@@ -140,6 +140,32 @@ class TestListSettlements:
         assert len(r.json()["items"]) == 2
 
 
+class TestSortSettlements:
+    def test_sort_by_clv_ascending(self, seeded_client: TestClient) -> None:
+        r = seeded_client.get("/settlements", params={"sort": "clv", "dir": "asc"})
+        assert r.status_code == 200
+        clvs = [item["clv"] for item in r.json()["items"]]
+        assert clvs == sorted(clvs)
+        assert clvs[0] == -0.03
+
+    def test_sort_by_brier_contribution_descending(self, seeded_client: TestClient) -> None:
+        r = seeded_client.get(
+            "/settlements", params={"sort": "brier_contribution", "dir": "desc"}
+        )
+        assert r.status_code == 200
+        briers = [item["brier_contribution"] for item in r.json()["items"]]
+        assert briers == sorted(briers, reverse=True)
+        assert briers[0] == 0.40
+
+    def test_unknown_sort_column_rejected(self, seeded_client: TestClient) -> None:
+        r = seeded_client.get("/settlements", params={"sort": "not_a_real_column"})
+        assert r.status_code == 422
+
+    def test_invalid_dir_rejected(self, seeded_client: TestClient) -> None:
+        r = seeded_client.get("/settlements", params={"sort": "clv", "dir": "sideways"})
+        assert r.status_code == 422
+
+
 class TestSettlementSummary:
     def test_counts_correct(self, seeded_client: TestClient) -> None:
         r = seeded_client.get("/settlements/summary")

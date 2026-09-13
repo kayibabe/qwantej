@@ -125,6 +125,74 @@ class TestListPredictions:
         assert r.json()["total"] == 0
 
 
+class TestSortPredictions:
+    def test_sort_by_conservative_probability_ascending(self, seeded_client) -> None:
+        client, _, _ = seeded_client
+        r = client.get("/predictions", params={"sort": "conservative_probability", "dir": "asc"})
+        assert r.status_code == 200
+        probs = [item["conservative_probability"] for item in r.json()["items"]]
+        assert probs == sorted(probs)
+
+    def test_sort_by_market_descending(self, seeded_client) -> None:
+        client, _, _ = seeded_client
+        r = client.get("/predictions", params={"sort": "market", "dir": "desc"})
+        assert r.status_code == 200
+        markets = [item["market"] for item in r.json()["items"]]
+        assert markets == ["BTTS", "1X2"]
+
+    def test_default_order_unchanged_when_no_sort_given(self, seeded_client) -> None:
+        client, _, _ = seeded_client
+        r = client.get("/predictions")
+        assert r.status_code == 200
+        # Newest prediction_timestamp first, matching pre-existing behaviour.
+        assert r.json()["items"][0]["market"] == "1X2"
+
+    def test_unknown_sort_column_rejected(self, seeded_client) -> None:
+        client, _, _ = seeded_client
+        r = client.get("/predictions", params={"sort": "not_a_real_column"})
+        assert r.status_code == 422
+
+    def test_invalid_dir_rejected(self, seeded_client) -> None:
+        client, _, _ = seeded_client
+        r = client.get(
+            "/predictions", params={"sort": "conservative_probability", "dir": "sideways"}
+        )
+        assert r.status_code == 422
+
+    def test_nulls_sort_last_even_when_descending(self, seeded_client) -> None:
+        """A NULL executable_odds must never appear first in a 'highest first' sort.
+
+        Postgres defaults DESC ordering to NULLS FIRST, which would otherwise
+        put a prediction with no odds at all above one with the highest odds.
+        """
+        client, fixture_id, _ = seeded_client
+
+        # Insert a third prediction with no odds via the same DB override
+        # the fixture already wired up.
+        gen = app.dependency_overrides[get_db]()
+        db = next(gen)
+        try:
+            null_odds_pred = Prediction(
+                fixture_id=fixture_id,
+                prediction_timestamp=KICKOFF - timedelta(hours=3),
+                decision_as_of=KICKOFF - timedelta(hours=3),
+                market="OU",
+                selection="over",
+                conservative_probability=0.50,
+                executable_odds=None,
+            )
+            db.add(null_odds_pred)
+            db.commit()
+        finally:
+            gen.close()
+
+        r = client.get("/predictions", params={"sort": "executable_odds", "dir": "desc"})
+        assert r.status_code == 200
+        odds = [item["executable_odds"] for item in r.json()["items"]]
+        assert odds[-1] is None
+        assert odds[0] == max(o for o in odds if o is not None)
+
+
 class TestGetPrediction:
     def test_returns_prediction_by_id(self, seeded_client) -> None:
         client, _, p1_id = seeded_client

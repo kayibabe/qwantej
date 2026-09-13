@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Query
 from sqlalchemy import func, select
+from sqlalchemy.orm import InstrumentedAttribute
 
 from backend.api.deps import DbDep
 from backend.core.security import RequireApiKey
@@ -16,6 +17,28 @@ from backend.schemas.settlements import SettlementOut, SettlementPage, Settlemen
 router = APIRouter(prefix="/settlements", tags=["settlements"], dependencies=[RequireApiKey])
 
 _MAX_LIMIT = 200
+
+# Allowlist of client-sortable columns — see predictions.py for why this
+# can't be a raw client-supplied column name.
+_SORT_COLUMNS: dict[str, InstrumentedAttribute] = {
+    "settled_at": Settlement.settled_at,
+    "outcome": Settlement.outcome,
+    "taken_odds": Settlement.taken_odds,
+    "closing_odds": Settlement.closing_odds,
+    "clv": Settlement.clv,
+    "brier_contribution": Settlement.brier_contribution,
+    "calibration_bin": Settlement.calibration_bin,
+}
+SortField = Literal[
+    "settled_at",
+    "outcome",
+    "taken_odds",
+    "closing_odds",
+    "clv",
+    "brier_contribution",
+    "calibration_bin",
+]
+SortDir = Literal["asc", "desc"]
 
 
 def _effective_stmt(subject_type: str):
@@ -76,14 +99,20 @@ def list_settlements(
     db: DbDep,
     subject_type: Annotated[str, Query(max_length=20)] = "prediction",
     outcome: Annotated[str | None, Query(max_length=10)] = None,
+    sort: Annotated[SortField | None, Query()] = None,
+    direction: Annotated[SortDir, Query(alias="dir")] = "desc",
     limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> SettlementPage:
-    """Return a page of effective settlements, most-recently-settled first.
+    """Return a page of effective settlements, most-recently-settled first by default.
 
     Optional filters:
     - ``subject_type`` — ``prediction`` (default) or ``accumulator``
     - ``outcome`` — ``win``, ``loss``, ``void``, or ``push``
+
+    Optional sort:
+    - ``sort`` — one of the allowlisted columns in ``_SORT_COLUMNS``
+    - ``dir`` — ``asc`` or ``desc`` (default ``desc``); ignored if ``sort`` is omitted
     """
     stmt = _effective_stmt(subject_type)
     if outcome is not None:
@@ -93,9 +122,13 @@ def list_settlements(
         select(func.count()).select_from(stmt.subquery())
     ) or 0
 
+    sort_column = _SORT_COLUMNS[sort] if sort else Settlement.settled_at
+    primary_order = sort_column.asc() if sort and direction == "asc" else sort_column.desc()
+    # NULLS LAST regardless of direction — see predictions.py for rationale.
+    primary_order = primary_order.nulls_last()
     rows = list(
         db.scalars(
-            stmt.order_by(Settlement.settled_at.desc(), Settlement.id.desc())
+            stmt.order_by(primary_order, Settlement.id.desc())
             .offset(offset)
             .limit(limit)
         )
