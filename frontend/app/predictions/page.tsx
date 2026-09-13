@@ -4,6 +4,7 @@ import { fetchPredictions } from "@/lib/api"
 import { fmtDate } from "@/lib/format"
 import type { PredictionOut } from "@/lib/types"
 import Pagination from "@/components/Pagination"
+import SortableHeader from "@/components/SortableHeader"
 
 export const metadata: Metadata = { title: "Predictions" }
 
@@ -41,14 +42,29 @@ function PredictionRow({ p }: { p: PredictionOut }) {
   )
 }
 
+const COLUMNS: { label: string; sortKey: string; align: "left" | "right" }[] = [
+  { label: "Date", sortKey: "prediction_timestamp", align: "left" },
+  { label: "Market", sortKey: "market", align: "left" },
+  { label: "Selection", sortKey: "selection", align: "left" },
+  { label: "Cons. prob.", sortKey: "conservative_probability", align: "right" },
+  { label: "Odds", sortKey: "executable_odds", align: "right" },
+  { label: "EV", sortKey: "expected_value", align: "right" },
+  { label: "QSS", sortKey: "qss", align: "right" },
+  { label: "DQS", sortKey: "dqs", align: "right" },
+]
+
 async function PredictionsTable({
   market,
+  sort,
+  dir,
   offset,
 }: {
   market: string | undefined
+  sort: string | undefined
+  dir: "asc" | "desc" | undefined
   offset: number
 }) {
-  const page = await fetchPredictions({ market, limit: LIMIT, offset }).catch(() => null)
+  const page = await fetchPredictions({ market, sort, dir, limit: LIMIT, offset }).catch(() => null)
 
   if (!page) {
     return <p className="text-sm text-[var(--loss)]">Could not load predictions.</p>
@@ -64,10 +80,8 @@ async function PredictionsTable({
         <table className="w-full text-sm">
           <thead className="bg-[var(--bg-surface)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
             <tr>
-              {["Date", "Market", "Selection", "Cons. prob.", "Odds", "EV", "QSS", "DQS"].map((h) => (
-                <th key={h} className="px-4 py-2 text-left font-medium">
-                  {h}
-                </th>
+              {COLUMNS.map((c) => (
+                <SortableHeader key={c.sortKey} label={c.label} sortKey={c.sortKey} align={c.align} />
               ))}
             </tr>
           </thead>
@@ -92,6 +106,8 @@ export default async function PredictionsPage({
 }) {
   const sp = await searchParams
   const market = typeof sp.market === "string" ? sp.market : undefined
+  const sort = typeof sp.sort === "string" ? sp.sort : undefined
+  const dir = sp.dir === "asc" ? "asc" : sp.dir === "desc" ? "desc" : undefined
   const offset = Number(sp.offset ?? 0)
 
   return (
@@ -108,10 +124,11 @@ export default async function PredictionsPage({
         {MARKETS.map((m) => {
           const label = m === "" ? "All markets" : m
           const active = (market ?? "") === m
+          const sortQuery = sort ? `&sort=${encodeURIComponent(sort)}&dir=${dir ?? "desc"}` : ""
           return (
             <a
               key={m}
-              href={m ? `?market=${encodeURIComponent(m)}&offset=0` : `?offset=0`}
+              href={`?${m ? `market=${encodeURIComponent(m)}&` : ""}offset=0${sortQuery}`}
               className={[
                 "rounded px-3 py-1 text-xs font-medium border transition-colors",
                 active
@@ -126,10 +143,10 @@ export default async function PredictionsPage({
       </div>
 
       <Suspense
-        key={`${market}-${offset}`}
+        key={`${market}-${sort}-${dir}-${offset}`}
         fallback={<p className="text-sm text-[var(--text-muted)] animate-pulse">Loading…</p>}
       >
-        <PredictionsTable market={market} offset={offset} />
+        <PredictionsTable market={market} sort={sort} dir={dir} offset={offset} />
       </Suspense>
     </div>
   )

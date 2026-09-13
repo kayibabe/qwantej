@@ -5,6 +5,7 @@ import { fmtDate } from "@/lib/format"
 import type { SettlementOut } from "@/lib/types"
 import StatTile from "@/components/StatTile"
 import Pagination from "@/components/Pagination"
+import SortableHeader from "@/components/SortableHeader"
 
 export const metadata: Metadata = { title: "Settlements" }
 
@@ -48,18 +49,34 @@ function SettlementRow({ s }: { s: SettlementOut }) {
   )
 }
 
+const COLUMNS: { label: string; sortKey: string; align: "left" | "right" }[] = [
+  { label: "Date", sortKey: "settled_at", align: "left" },
+  { label: "Outcome", sortKey: "outcome", align: "left" },
+  { label: "Taken odds", sortKey: "taken_odds", align: "right" },
+  { label: "Closing odds", sortKey: "closing_odds", align: "right" },
+  { label: "CLV", sortKey: "clv", align: "right" },
+  { label: "Brier", sortKey: "brier_contribution", align: "right" },
+  { label: "Cal. bin", sortKey: "calibration_bin", align: "left" },
+]
+
 async function SettlementsTable({
   outcome,
   subjectType,
+  sort,
+  dir,
   offset,
 }: {
   outcome: string | undefined
   subjectType: string
+  sort: string | undefined
+  dir: "asc" | "desc" | undefined
   offset: number
 }) {
   const page = await fetchSettlements({
     subject_type: subjectType,
     outcome,
+    sort,
+    dir,
     limit: LIMIT,
     offset,
   }).catch(() => null)
@@ -78,10 +95,8 @@ async function SettlementsTable({
         <table className="w-full text-sm">
           <thead className="bg-[var(--bg-surface)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
             <tr>
-              {["Date", "Outcome", "Taken odds", "Closing odds", "CLV", "Brier", "Cal. bin"].map((h) => (
-                <th key={h} className="px-4 py-2 text-left font-medium">
-                  {h}
-                </th>
+              {COLUMNS.map((c) => (
+                <SortableHeader key={c.sortKey} label={c.label} sortKey={c.sortKey} align={c.align} />
               ))}
             </tr>
           </thead>
@@ -105,7 +120,10 @@ export default async function SettlementsPage({
   const sp = await searchParams
   const outcome = typeof sp.outcome === "string" ? sp.outcome : undefined
   const subjectType = typeof sp.type === "string" ? sp.type : "prediction"
+  const sort = typeof sp.sort === "string" ? sp.sort : undefined
+  const dir = sp.dir === "asc" ? "asc" : sp.dir === "desc" ? "desc" : undefined
   const offset = Number(sp.offset ?? 0)
+  const sortQuery = sort ? `&sort=${encodeURIComponent(sort)}&dir=${dir ?? "desc"}` : ""
 
   const summary = await fetchSettlementSummary({ subject_type: subjectType }).catch(() => null)
 
@@ -125,7 +143,7 @@ export default async function SettlementsPage({
         {["prediction", "accumulator"].map((t) => (
           <a
             key={t}
-            href={`?type=${t}&offset=0`}
+            href={`?type=${t}&offset=0${sortQuery}`}
             className={[
               "rounded px-3 py-1 text-xs font-medium border transition-colors capitalize",
               subjectType === t
@@ -177,7 +195,7 @@ export default async function SettlementsPage({
           return (
             <a
               key={o}
-              href={o ? `?type=${subjectType}&outcome=${o}&offset=0` : `?type=${subjectType}&offset=0`}
+              href={`?type=${subjectType}${o ? `&outcome=${o}` : ""}&offset=0${sortQuery}`}
               className={[
                 "rounded px-3 py-1 text-xs font-medium border transition-colors",
                 active
@@ -192,10 +210,10 @@ export default async function SettlementsPage({
       </div>
 
       <Suspense
-        key={`${subjectType}-${outcome}-${offset}`}
+        key={`${subjectType}-${outcome}-${sort}-${dir}-${offset}`}
         fallback={<p className="text-sm text-[var(--text-muted)] animate-pulse">Loading…</p>}
       >
-        <SettlementsTable outcome={outcome} subjectType={subjectType} offset={offset} />
+        <SettlementsTable outcome={outcome} subjectType={subjectType} sort={sort} dir={dir} offset={offset} />
       </Suspense>
     </div>
   )

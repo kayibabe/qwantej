@@ -29,6 +29,8 @@ async function apiFetch<T>(path: string, params?: Record<string, string | number
 export function fetchPredictions(params: {
   fixture_id?: string
   market?: string
+  sort?: string
+  dir?: "asc" | "desc"
   limit?: number
   offset?: number
 }): Promise<PredictionPage> {
@@ -38,6 +40,8 @@ export function fetchPredictions(params: {
 export function fetchSettlements(params: {
   subject_type?: string
   outcome?: string
+  sort?: string
+  dir?: "asc" | "desc"
   limit?: number
   offset?: number
 }): Promise<SettlementPage> {
