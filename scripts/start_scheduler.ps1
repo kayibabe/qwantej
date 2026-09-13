@@ -1,4 +1,4 @@
-# start_scheduler.ps1 — launch the qwantej multi-worker scheduler.
+# start_scheduler.ps1 - launch the qwantej multi-worker scheduler.
 #
 # Usage (foreground, Ctrl-C to stop):
 #   .\scripts\start_scheduler.ps1
@@ -21,7 +21,7 @@ $repo = Split-Path $PSScriptRoot -Parent
 $venv = Join-Path $repo ".venv\Scripts\python.exe"
 
 if (-not (Test-Path $venv)) {
-    Write-Error "virtualenv not found at $venv — run: python -m venv .venv && .venv\Scripts\pip install -e .[backend]"
+    Write-Error "virtualenv not found at $venv. Run python -m venv .venv, then .venv\Scripts\pip install -e .[backend]."
     exit 1
 }
 
@@ -29,5 +29,5 @@ $logDir = Join-Path $repo "logs"
 if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir | Out-Null }
 $logFile = Join-Path $logDir "scheduler-$(Get-Date -Format 'yyyyMMdd').log"
 
-Write-Host "Starting qwantej scheduler — log: $logFile"
+Write-Host "Starting qwantej scheduler - log: $logFile"
 & $venv -m backend.workers.scheduler @args 2>&1 | Tee-Object -FilePath $logFile -Append

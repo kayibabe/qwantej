@@ -27,6 +27,12 @@ const BASE: AccumulatorOut = {
       conservative_probability: 0.62,
       edge: 0.083,
       qss: 88,
+      bookmaker: "Bet365",
+      home_team: "Home FC",
+      away_team: "Away FC",
+      kickoff_utc: "2026-09-07T20:00:00Z",
+      competition_name: "Premier League",
+      quote_captured_at: "2026-09-07T17:30:00Z",
     },
     {
       id: "bbbbbbbb-0000-0000-0000-000000000002",
@@ -40,6 +46,12 @@ const BASE: AccumulatorOut = {
       conservative_probability: 0.68,
       edge: 0.092,
       qss: 91,
+      bookmaker: "Betway",
+      home_team: "Away FC",
+      away_team: "Home FC",
+      kickoff_utc: "2026-09-07T20:00:00Z",
+      competition_name: "Bundesliga",
+      quote_captured_at: "2026-09-07T17:30:00Z",
     },
   ],
   created_at: "2026-09-07T07:55:00Z",
@@ -76,6 +88,13 @@ describe("AccumulatorCard", () => {
   it("renders stake", () => {
     render(<AccumulatorCard acc={BASE} />)
     expect(screen.getByText(/£10\.00/)).toBeInTheDocument()
+  })
+
+  it("renders fixture identity and executable price source", () => {
+    render(<AccumulatorCard acc={BASE} />)
+    expect(screen.getByText("Home FC vs Away FC")).toBeInTheDocument()
+    expect(screen.getByText(/Bet365/)).toBeInTheDocument()
+    expect(screen.getAllByText(/Price as of/)).toHaveLength(2)
   })
 
   it("renders GROWTH product with correct label", () => {
