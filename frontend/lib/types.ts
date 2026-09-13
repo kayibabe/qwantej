@@ -111,6 +111,12 @@ export interface TodayStatus {
   tickets_available: number
 }
 
+export interface CalibrationBinOut {
+  predicted_probability: number
+  observed_frequency: number
+  count: number
+}
+
 export interface KPIReportOut {
   // Counts
   n_total: number
@@ -140,6 +146,8 @@ export interface KPIReportOut {
   // Risk
   max_drawdown: number | null
   volatility: number | null
+  // Reliability diagram
+  calibration_bins: CalibrationBinOut[] | null
 }
 
 export interface ModelRunOut {

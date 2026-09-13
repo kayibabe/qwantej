@@ -26,6 +26,21 @@ from dataclasses import dataclass
 # ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
+class CalibrationBin:
+    """One equal-width calibration bin: predicted vs. observed within it.
+
+    `predicted_probability` — mean of the raw probabilities that fell in this
+        bin (not the bin's nominal center — the actual mean observed).
+    `observed_frequency` — fraction of those observations that were wins.
+    `count` — number of observations in this bin.
+    """
+
+    predicted_probability: float
+    observed_frequency: float
+    count: int
+
+
+@dataclass(frozen=True)
 class CalibrationDriftResult:
     """Result of a calibration-drift check.
 
@@ -37,6 +52,9 @@ class CalibrationDriftResult:
     `n_samples` — total predictions evaluated.
     `is_drifted` — True when MCE exceeds `threshold`.
     `threshold` — the MCE threshold used.
+    `bins` — the per-bin (predicted, observed, count) points behind the
+        aggregate MCE/slope/intercept, for rendering a reliability diagram.
+        Ordered by predicted_probability ascending.
     """
 
     mean_calibration_error: float
@@ -46,6 +64,7 @@ class CalibrationDriftResult:
     n_samples: int
     is_drifted: bool
     threshold: float
+    bins: tuple[CalibrationBin, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -137,8 +156,9 @@ def detect_calibration_drift(
         bin_act_sum[idx] += o
         bin_counts[idx] += 1
 
+    active_indices = [i for i in range(n_bins) if bin_counts[i] > 0]
     active_bins = [(bin_pred_sum[i] / bin_counts[i], bin_act_sum[i] / bin_counts[i])
-                   for i in range(n_bins) if bin_counts[i] > 0]
+                   for i in active_indices]
 
     if not active_bins:
         raise ValueError("no active bins — all predictions fell outside (0, 1]")
@@ -159,6 +179,10 @@ def detect_calibration_drift(
         n_samples=len(preds),
         is_drifted=mce > threshold,
         threshold=threshold,
+        bins=tuple(
+            CalibrationBin(predicted_probability=pred, observed_frequency=act, count=bin_counts[i])
+            for i, (pred, act) in zip(active_indices, active_bins, strict=True)
+        ),
     )
 
 

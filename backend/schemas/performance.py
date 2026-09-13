@@ -2,7 +2,17 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
+
+
+class CalibrationBinOut(BaseModel):
+    """Serialisable form of qwantej.performance.drift.CalibrationBin."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    predicted_probability: float
+    observed_frequency: float
+    count: int
 
 
 class KPIReportOut(BaseModel):
@@ -41,6 +51,9 @@ class KPIReportOut(BaseModel):
     # Risk
     max_drawdown: float | None
     volatility: float | None
+
+    # Reliability diagram
+    calibration_bins: list[CalibrationBinOut] | None = None
 
 
 class PerformanceSegmentsOut(BaseModel):

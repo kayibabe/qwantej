@@ -390,6 +390,23 @@ class TestComputeKpisCalibration:
         assert r.ece is None
         assert r.calibration_slope is None
         assert r.calibration_intercept is None
+        assert r.calibration_bins is None
+
+    def test_calibration_bins_populated_with_probabilities(self) -> None:
+        obs = self._perfect_calibrated()
+        r = compute_kpis(obs)
+        assert r.calibration_bins is not None
+        assert len(r.calibration_bins) >= 1
+        # All four observations share taken_probability=0.5, so they land in
+        # one bin: predicted 0.5, 2 of 4 wins observed.
+        assert r.calibration_bins[0].predicted_probability == pytest.approx(0.5)
+        assert r.calibration_bins[0].observed_frequency == pytest.approx(0.5)
+        assert r.calibration_bins[0].count == 4
+
+    def test_calibration_bins_none_without_probabilities(self) -> None:
+        obs = [_obs("win", brier=0.16), _obs("loss", brier=0.16)]
+        r = compute_kpis(obs)
+        assert r.calibration_bins is None
 
     def test_brier_skill_score_computed(self) -> None:
         # Perfect hit rate 0.5, brier=0.25 → reference_brier=0.25, BSS=0

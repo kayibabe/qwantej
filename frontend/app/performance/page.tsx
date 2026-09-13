@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { fetchPerformanceReport } from "@/lib/api"
 import StatTile from "@/components/StatTile"
+import CalibrationCurveChart from "@/components/CalibrationCurveChart"
 
 export const metadata: Metadata = { title: "Performance" }
 
@@ -170,6 +171,16 @@ export default async function PerformancePage() {
               />
             </div>
           </section>
+
+          {/* Calibration curve */}
+          {report.calibration_bins && report.calibration_bins.length > 0 && (
+            <section aria-label="Calibration curve">
+              <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
+                Reliability diagram
+              </h2>
+              <CalibrationCurveChart bins={report.calibration_bins} />
+            </section>
+          )}
         </>
       )}
     </div>

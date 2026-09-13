@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from qwantej.performance.drift import (
+    CalibrationBin,
     CalibrationDriftResult,
     ExecutionDriftResult,
     PredictionDriftResult,
@@ -76,6 +77,40 @@ class TestDetectCalibrationDrift:
     def test_rejects_nbins_less_than_2(self) -> None:
         with pytest.raises(ValueError, match="n_bins"):
             detect_calibration_drift([0.5], [1.0], n_bins=1)
+
+    def test_bins_reflect_perfect_calibration(self) -> None:
+        probs, outcomes = self._perfect()
+        result = detect_calibration_drift(probs, outcomes, n_bins=10)
+        assert len(result.bins) == 1
+        bin0 = result.bins[0]
+        assert isinstance(bin0, CalibrationBin)
+        assert bin0.predicted_probability == pytest.approx(0.6)
+        assert bin0.observed_frequency == pytest.approx(0.6)
+        assert bin0.count == 10
+
+    def test_bins_split_across_multiple_buckets(self) -> None:
+        probs = [0.25, 0.25, 0.55, 0.55, 0.80, 0.80]
+        outcomes = [0.0, 1.0, 0.0, 1.0, 1.0, 1.0]
+        result = detect_calibration_drift(probs, outcomes, n_bins=4)
+        assert len(result.bins) == 3
+        assert sum(b.count for b in result.bins) == 6
+        # Bins are ordered by predicted_probability ascending.
+        preds = [b.predicted_probability for b in result.bins]
+        assert preds == sorted(preds)
+
+    def test_bins_empty_by_default(self) -> None:
+        # Backward compatibility: bins has a default so existing positional
+        # construction of CalibrationDriftResult (if any) still works.
+        result = CalibrationDriftResult(
+            mean_calibration_error=0.0,
+            slope=1.0,
+            intercept=0.0,
+            n_bins=1,
+            n_samples=1,
+            is_drifted=False,
+            threshold=0.05,
+        )
+        assert result.bins == ()
 
 
 # ---------------------------------------------------------------------------
