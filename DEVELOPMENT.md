@@ -27,14 +27,15 @@ normal web-app concern does.
 - **Containerization:** Docker (local dev only — Render builds the backend
   natively from `render.yaml`, it does not use a Dockerfile)
 - **CI:** GitHub Actions
-- **Deployment:** Neon + Render + Vercel — **deploys are manual.** Pushing to
-  GitHub does not deploy the backend: `render.yaml` sets `autoDeploy: false`,
-  so after a change is merged and CI is green, trigger the Render deploy
-  explicitly (dashboard "Manual Deploy" or `render deploy`) and say so out
-  loud before doing it. The Vercel frontend keeps its default behavior
-  (preview deployment per PR, production deployment on push to `main`) —
-  acceptable because the frontend carries no data/migration risk; the
-  manual-deploy discipline applies to the backend/database, not the UI.
+- **Deployment:** Neon + Render + Vercel — **deploys are automatic.** Pushing
+  to (merging into) `main` auto-deploys the backend: `render.yaml` sets
+  `autoDeploy: true`, so once a PR merges, Render starts building and
+  deploying within seconds — there is no separate manual trigger step. Any
+  pending Alembic migration against Neon must therefore run **before** the
+  merge lands on `main`, not after (see §6) — auto-deploy removes the window
+  a manual trigger used to leave for running migrations first. The Vercel
+  frontend keeps its default behavior (preview deployment per PR, production
+  deployment on push to `main`).
 
 ## 2. Repository Layout
 
@@ -255,19 +256,25 @@ being enforced.
 
 ## 6. Deployment
 
-1. Merge to `main` via PR.
-2. Confirm CI (GitHub Actions) is green.
-3. Run any pending Alembic migrations against the Neon database
-   (`alembic upgrade head` with `DATABASE_URL` pointed at Neon —
-   from a machine/CI runner that has the production connection string, never
-   from a developer's local `.env`).
-4. Trigger the Render deploy manually (dashboard "Manual Deploy" or
-   `render deploy`). This step is never automatic (`autoDeploy: false` in
-   `render.yaml`) — say explicitly when you're about to do it.
-5. The Vercel frontend deploys automatically on push to `main`; confirm the
+Render auto-deploys the backend the moment a PR merges into `main`
+(`autoDeploy: true` in `render.yaml`) — there is no manual trigger step and
+no gap between merge and deploy to run something in between. That changes
+the ordering that used to work under manual deploys:
+
+1. Confirm CI (GitHub Actions) is green on the PR.
+2. If the PR includes an Alembic migration, run it against the Neon database
+   **before merging** (`alembic upgrade head` with `DATABASE_URL` pointed at
+   Neon — from a machine/CI runner that has the production connection
+   string, never from a developer's local `.env`). Merging first would let
+   the new code reach production and start querying a schema that doesn't
+   exist yet.
+3. Merge to `main` via PR. Render begins building and deploying
+   automatically within seconds — say explicitly when you're about to merge
+   a PR that will trigger this.
+4. The Vercel frontend deploys automatically on push to `main`; confirm the
    resulting production deployment builds successfully and points at the
    correct `NEXT_PUBLIC_API_URL` (the Render backend's public URL).
-6. Verify the deployed forecast/signal pipeline is producing archived output,
+5. Verify the deployed forecast/signal pipeline is producing archived output,
    not just that the app boots.
 
 ## 7. Definition of Done
