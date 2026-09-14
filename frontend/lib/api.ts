@@ -12,6 +12,11 @@ import type {
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:8000"
 
+// Server-only (no NEXT_PUBLIC_ prefix) so it is never bundled to the
+// browser. Every caller in this module runs in a Server Component/route
+// handler, never client-side.
+const API_KEY = process.env.API_KEY ?? ""
+
 async function apiFetch<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
   const url = new URL(`${API_URL}${path}`)
   if (params) {
@@ -19,7 +24,10 @@ async function apiFetch<T>(path: string, params?: Record<string, string | number
       if (v !== undefined) url.searchParams.set(k, String(v))
     }
   }
-  const res = await fetch(url.toString(), { cache: "no-store" })
+  const res = await fetch(url.toString(), {
+    cache: "no-store",
+    headers: API_KEY ? { "X-API-Key": API_KEY } : undefined,
+  })
   if (!res.ok) {
     throw new Error(`API ${path} failed: ${res.status} ${res.statusText}`)
   }
