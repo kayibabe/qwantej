@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import UTC, date as _date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
+from datetime import date as _date
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException, Query
