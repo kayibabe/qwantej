@@ -321,6 +321,86 @@ def test_window_loader_ignores_odds_for_fixtures_outside_window(session: Session
     assert session.query(OddsQuote).count() == 2
 
 
+def test_odds_before_fixture_raises(session: Session) -> None:
+    with pytest.raises(
+        ApiFootballIngestionError, match="fixture 1001 must be ingested before its odds"
+    ):
+        ingest_odds(session, [_odds_payload()])
+
+
+def test_odds_ingestion_batches_queries_independent_of_row_count(
+    session: Session,
+) -> None:
+    """The odds ingest path must not issue one SELECT per odds line item.
+
+    Regression guard for the N+1 fixture-lookup / dedup-check pattern that made
+    real (non-local) Postgres ingestion runs stall on thousands of sequential
+    round-trips inside one long-held transaction.
+    """
+
+    def _bookmaker(name: str, odd_over: str, odd_under: str) -> dict:
+        return {
+            "id": hash(name) % 1000,
+            "name": name,
+            "bets": [
+                {
+                    "id": 5,
+                    "name": "Goals Over/Under",
+                    "values": [
+                        {"value": "Over 2.5", "odd": odd_over},
+                        {"value": "Under 2.5", "odd": odd_under},
+                    ],
+                }
+            ],
+        }
+
+    fixture_ids = [1001, 1002, 1003]
+    fixture_payloads = [_fixture_payload()]
+    fixture_payloads[0]["fixture"]["id"] = fixture_ids[0]
+    for fid in fixture_ids[1:]:
+        payload = _fixture_payload()
+        payload["fixture"]["id"] = fid
+        fixture_payloads.append(payload)
+    ingest_fixtures(session, fixture_payloads, captured_at=NOW)
+
+    odds_payloads = []
+    for fid in fixture_ids:
+        odds_payloads.append(
+            {
+                "fixture": {"id": fid},
+                "update": "2026-09-06T12:30:00+00:00",
+                "bookmakers": [
+                    _bookmaker(f"Bookmaker {i}", "2.10", "1.75") for i in range(10)
+                ],
+            }
+        )
+    # 3 fixtures x 10 bookmakers x 2 selections = 60 odds line items.
+    total_quotes = 3 * 10 * 2
+
+    select_statements = []
+
+    def _capture(conn, cursor, statement, *args, **kwargs):
+        if statement.strip().upper().startswith("SELECT"):
+            select_statements.append(statement)
+
+    from sqlalchemy import event
+
+    event.listen(session.bind, "before_cursor_execute", _capture)
+    try:
+        summary = ingest_odds(session, odds_payloads)
+    finally:
+        event.remove(session.bind, "before_cursor_execute", _capture)
+
+    assert summary.odds_quotes_created == total_quotes
+    # A batched implementation issues a small, fixed number of SELECTs
+    # (mapping lookup, canonical-id check, dedup preload) regardless of
+    # how many odds rows are ingested — not one (or two) per row.
+    assert len(select_statements) < 10, (
+        f"expected O(1) SELECT statements, got {len(select_statements)}: "
+        f"{select_statements}"
+    )
+
+
 def test_window_loader_can_skip_odds_without_calling_provider(session: Session) -> None:
     class StubClient:
         def fixtures(self, **parameters):
