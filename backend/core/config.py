@@ -24,6 +24,14 @@ class Settings(BaseSettings):
     # Security — empty string disables API key auth (dev only).
     api_key: str = ""
 
+    # Comma-separated list of allowed CORS origins (e.g. the Vercel frontend
+    # URL) — required in production, where the default is "allow nothing".
+    cors_origins: str = ""
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
     # Logging
     log_level: str = "INFO"
     log_format: str = "plain"  # "json" in production
