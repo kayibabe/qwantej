@@ -21,7 +21,9 @@ normal web-app concern does.
 - **Migrations:** Alembic — every schema change is a migration, no exceptions
 - **Frontend:** React / Next.js, hosted on [Vercel](https://vercel.com)
 - **Backend hosting:** [Render](https://render.com) (`render.yaml` at repo
-  root defines the web service)
+  root defines both the web service and the `qwantej-scheduler` Background
+  Worker that runs ingestion/signal-pipeline/settlement on a loop —
+  `backend/workers/scheduler.py`)
 - **Containerization:** Docker (local dev only — Render builds the backend
   natively from `render.yaml`, it does not use a Dockerfile)
 - **CI:** GitHub Actions
