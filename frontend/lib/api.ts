@@ -70,8 +70,8 @@ export function fetchAccumulators(params: {
   return apiFetch("/accumulators", params as Record<string, string | number | undefined>)
 }
 
-export function fetchTodayStatus(): Promise<TodayStatus> {
-  return apiFetch("/dashboard/today")
+export function fetchTodayStatus(date?: string): Promise<TodayStatus> {
+  return apiFetch("/dashboard/today", date ? { date } : undefined)
 }
 
 export function fetchPerformanceReport(params?: {

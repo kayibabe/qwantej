@@ -88,6 +88,85 @@ def test_today_status_stays_collecting_when_scheduled_fixture_has_no_price() -> 
         app.dependency_overrides.clear()
 
 
+def test_today_status_rejects_invalid_date() -> None:
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine)
+
+    def override_db():
+        with factory() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        with TestClient(app) as client:
+            response = client.get("/dashboard/today", params={"date": "not-a-date"})
+        assert response.status_code == 400
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_today_status_scopes_to_requested_date() -> None:
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine)
+    yesterday_local = (
+        datetime.now(UTC).astimezone(ZoneInfo("Africa/Blantyre")) - timedelta(days=1)
+    )
+    kickoff = yesterday_local.replace(hour=20, minute=0, second=0, microsecond=0).astimezone(UTC)
+
+    with factory() as session:
+        competition = Competition(id=uuid.uuid4(), name="Validated League", validated=True)
+        season = Season(id=uuid.uuid4(), competition=competition, label="2026")
+        home = Team(id=uuid.uuid4(), name="Home")
+        away = Team(id=uuid.uuid4(), name="Away")
+        session.add(
+            Fixture(
+                id=uuid.uuid4(),
+                competition=competition,
+                season=season,
+                home_team=home,
+                away_team=away,
+                kickoff_utc=kickoff,
+                status=FixtureStatus.SCHEDULED,
+            )
+        )
+        session.commit()
+
+    def override_db():
+        with factory() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        with TestClient(app) as client:
+            today_response = client.get("/dashboard/today")
+            yesterday_response = client.get(
+                "/dashboard/today", params={"date": yesterday_local.date().isoformat()}
+            )
+        assert today_response.status_code == 200
+        assert today_response.json()["status"] == "collecting"
+        assert today_response.json()["detail"] == (
+            "No current fixture or price observations are available yet."
+        )
+
+        assert yesterday_response.status_code == 200
+        yesterday_body = yesterday_response.json()
+        assert yesterday_body["date"] == yesterday_local.date().isoformat()
+        assert yesterday_body["status"] == "collecting"
+        assert yesterday_body["label"] == "Collecting prices"
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_today_status_marks_old_price_as_stale() -> None:
     engine = create_engine(
         "sqlite:///:memory:",

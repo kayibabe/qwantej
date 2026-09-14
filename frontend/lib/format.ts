@@ -30,3 +30,29 @@ export function fmtDatetime(iso: string): string {
     hour12: false,
   }).format(new Date(iso))
 }
+
+/** Today's date in CAT as an ISO YYYY-MM-DD string. */
+export function todayIsoDate(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(new Date())
+}
+
+/** Add `days` (may be negative) to an ISO YYYY-MM-DD date string. */
+export function addDaysIso(iso: string, days: number): string {
+  const [y, m, d] = iso.split("-").map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  dt.setUTCDate(dt.getUTCDate() + days)
+  return dt.toISOString().slice(0, 10)
+}
+
+/** Format an ISO YYYY-MM-DD date string for display, e.g. "07 Sep 2026". */
+export function fmtIsoDate(iso: string): string {
+  return fmtDate(`${iso}T00:00:00+02:00`)
+}
+
+/** True if an ISO YYYY-MM-DD date string is syntactically valid. */
+export function isValidIsoDate(iso: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false
+  const [y, m, d] = iso.split("-").map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d
+}

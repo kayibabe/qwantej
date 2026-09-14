@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from datetime import date as _date
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Query
+from fastapi import status as http_status
 from sqlalchemy import func, select
 
 from backend.api.deps import DbDep
@@ -19,11 +21,28 @@ PRICE_FRESHNESS_LIMIT = timedelta(hours=2)
 
 
 @router.get("/today", response_model=TodayStatusOut)
-def today_status(db: DbDep) -> TodayStatusOut:
-    """Return an honest, data-backed summary for the user's current day."""
+def today_status(
+    db: DbDep,
+    date: str | None = Query(
+        None, description="ISO date (YYYY-MM-DD) to view; defaults to today"
+    ),
+) -> TodayStatusOut:
+    """Return an honest, data-backed summary for the given (or current) day."""
     now = datetime.now(UTC)
-    local_now = now.astimezone(PRODUCT_DAY_ZONE)
-    day_start_local = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if date is not None:
+        try:
+            target_date = _date.fromisoformat(date)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+                detail="date must be an ISO date (YYYY-MM-DD)",
+            ) from exc
+        day_start_local = datetime.combine(
+            target_date, datetime.min.time(), tzinfo=PRODUCT_DAY_ZONE
+        )
+    else:
+        local_now = now.astimezone(PRODUCT_DAY_ZONE)
+        day_start_local = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
     day_start = day_start_local.astimezone(UTC)
     day_end = (day_start_local + timedelta(days=1)).astimezone(UTC)
 
@@ -86,7 +105,7 @@ def today_status(db: DbDep) -> TodayStatusOut:
         status, label, detail = (
             "qualified",
             "Ticket available",
-            f"{tickets} paper ticket{'s' if tickets != 1 else ''} qualified today.",
+            f"{tickets} paper ticket{'s' if tickets != 1 else ''} qualified.",
         )
     elif upcoming and freshness is None:
         status, label, detail = (
@@ -119,15 +138,15 @@ def today_status(db: DbDep) -> TodayStatusOut:
     else:
         status, label, detail = (
             "no_upcoming_data",
-            "No ticket found today",
-            "No validated-league fixtures are scheduled for today.",
+            "No ticket found",
+            "No validated-league fixtures are scheduled for this date.",
         )
 
     return TodayStatusOut(
         status=status,
         label=label,
         detail=detail,
-        date=local_now.date().isoformat(),
+        date=day_start_local.date().isoformat(),
         data_freshness_utc=freshness,
         checked_leagues=leagues,
         # The scheduler uses process-relative intervals and is not observable
