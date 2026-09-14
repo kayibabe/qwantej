@@ -1,0 +1,56 @@
+# Render Blueprint for the Qwantej backend (FastAPI).
+#
+# Deploys are deliberately NOT automatic on push, matching the manual-deploy
+# governance rule in DEVELOPMENT.md §6 (a broken migration or model change
+# must never reach production just because someone pushed to main). To
+# deploy: merge to main, confirm CI is green, then trigger a deploy manually
+# from the Render dashboard ("Manual Deploy" -> "Deploy latest commit") or
+# via `render deploy` in the Render CLI.
+#
+# The Postgres database itself is NOT defined here — it lives on Neon, not
+# Render. Set DATABASE_URL below to the Neon connection string via the
+# Render dashboard's environment group / secret, never committed here.
+
+services:
+  - type: web
+    name: qwantej-api
+    runtime: python
+    plan: starter
+    region: oregon
+    branch: main
+    autoDeploy: false
+    rootDir: .
+    buildCommand: pip install -e ".[backend]"
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: API_FOOTBALL_KEY
+        sync: false
+      - key: API_FOOTBALL_BASE_URL
+        value: https://v3.football.api-sports.io
+      - key: API_FOOTBALL_TIMEOUT_SECONDS
+        value: "30"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: LOG_FORMAT
+        value: json
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: TELEGRAM_TIMEOUT_SECONDS
+        value: "10"
+      - key: BACKUP_DIR
+        value: backups
+      - key: BACKUP_KEEP_COUNT
+        value: "7"

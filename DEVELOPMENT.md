@@ -16,15 +16,23 @@ normal web-app concern does.
 ## 1. Architecture
 
 - **Backend:** FastAPI (Python)
-- **Database:** PostgreSQL
+- **Database:** PostgreSQL, hosted on [Neon](https://neon.tech)
 - **ORM:** SQLAlchemy
 - **Migrations:** Alembic — every schema change is a migration, no exceptions
-- **Frontend:** React / Next.js
-- **Containerization:** Docker
+- **Frontend:** React / Next.js, hosted on [Vercel](https://vercel.com)
+- **Backend hosting:** [Render](https://render.com) (`render.yaml` at repo
+  root defines the web service)
+- **Containerization:** Docker (local dev only — Render builds the backend
+  natively from `render.yaml`, it does not use a Dockerfile)
 - **CI:** GitHub Actions
-- **Deployment:** Fly.io — **deploys are manual.** Pushing to GitHub does not
-  deploy anything. After a change is merged and you intend it to go live, run
-  `flyctl deploy` explicitly and say so out loud before doing it.
+- **Deployment:** Neon + Render + Vercel — **deploys are manual.** Pushing to
+  GitHub does not deploy the backend: `render.yaml` sets `autoDeploy: false`,
+  so after a change is merged and CI is green, trigger the Render deploy
+  explicitly (dashboard "Manual Deploy" or `render deploy`) and say so out
+  loud before doing it. The Vercel frontend keeps its default behavior
+  (preview deployment per PR, production deployment on push to `main`) —
+  acceptable because the frontend carries no data/migration risk; the
+  manual-deploy discipline applies to the backend/database, not the UI.
 
 ## 2. Repository Layout
 
@@ -98,7 +106,8 @@ in a commit message or PR description, not silent sprawl.
 ### Secrets & Configuration
 - Never hard-code API keys, database URLs, or credentials in source.
 - All secrets live in environment variables, loaded via `.env` locally
-  (never committed) and Fly.io secrets in production.
+  (never committed) and via the Render dashboard's environment variables
+  (backend) / Vercel's environment variables (frontend) in production.
 - Commit `.env.example` with every new required variable, kept in sync with
   reality — a missing var here is a bug.
 
@@ -246,10 +255,17 @@ being enforced.
 
 1. Merge to `main` via PR.
 2. Confirm CI (GitHub Actions) is green.
-3. Run any pending Alembic migrations against the target database.
-4. Run `flyctl deploy` manually. This step is never automatic — say
-   explicitly when you're about to do it.
-5. Verify the deployed forecast/signal pipeline is producing archived output,
+3. Run any pending Alembic migrations against the Neon database
+   (`alembic upgrade head` with `DATABASE_URL` pointed at Neon —
+   from a machine/CI runner that has the production connection string, never
+   from a developer's local `.env`).
+4. Trigger the Render deploy manually (dashboard "Manual Deploy" or
+   `render deploy`). This step is never automatic (`autoDeploy: false` in
+   `render.yaml`) — say explicitly when you're about to do it.
+5. The Vercel frontend deploys automatically on push to `main`; confirm the
+   resulting production deployment builds successfully and points at the
+   correct `NEXT_PUBLIC_API_URL` (the Render backend's public URL).
+6. Verify the deployed forecast/signal pipeline is producing archived output,
    not just that the app boots.
 
 ## 7. Definition of Done

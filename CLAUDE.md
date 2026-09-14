@@ -20,7 +20,7 @@ Claude Code is typically the builder: plan and implement the feature or fix,
 then hand off a git diff for Codex to review, test, and hunt for bugs (see
 `DEVELOPMENT.md` §5). When Codex's review comes back, either agent may apply
 the fix — but only one agent edits the working tree at a time. Never run a
-migration against a real database or run `flyctl deploy` without the user
-confirming first.
+migration against the real (Neon) database or trigger a Render deploy
+without the user confirming first.
 
 `DEVELOPMENT.md` is the authoritative engineering specification.
