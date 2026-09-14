@@ -6,6 +6,7 @@ import uuid
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from typing import Any, TypeVar
 
 from sqlalchemy import select
@@ -257,6 +258,9 @@ def _ingest_odds(
     created = deduplicated = unsupported = 0
     unsupported_markets: set[str] = set()
     provider_timestamps: list[datetime] = []
+
+    supported: list[tuple[ApiFootballOddsQuote, str, str]] = []
+    external_fixture_ids: set[str] = set()
     for payload in payloads:
         for parsed in parse_odds(payload):
             provider_timestamps.append(parsed.captured_at)
@@ -266,35 +270,47 @@ def _ingest_odds(
                 unsupported_markets.add(parsed.market)
                 continue
             market, selection = canonical
-            fixture = _mapped_entity(
-                session,
-                provider.id,
-                EntityType.FIXTURE,
-                parsed.external_fixture_id,
-                Fixture,
+            supported.append((parsed, market, selection))
+            external_fixture_ids.add(parsed.external_fixture_id)
+
+    fixture_id_by_external = _mapped_fixture_ids(session, provider.id, external_fixture_ids)
+    for external_fixture_id in external_fixture_ids:
+        if external_fixture_id not in fixture_id_by_external:
+            raise ApiFootballIngestionError(
+                f"fixture {external_fixture_id} must be ingested before its odds"
             )
-            if fixture is None:
-                raise ApiFootballIngestionError(
-                    f"fixture {parsed.external_fixture_id} must be ingested before its odds"
-                )
-            if _find_odds_quote(
-                session, fixture.id, parsed, market=market, selection=selection
-            ) is not None:
-                deduplicated += 1
-                continue
-            session.add(
-                OddsQuote(
-                    fixture_id=fixture.id,
-                    bookmaker=_bounded(parsed.bookmaker, 80, "bookmaker"),
-                    market=market,
-                    selection=selection,
-                    line=parsed.line,
-                    decimal_odds=parsed.decimal_odds,
-                    captured_at=parsed.captured_at,
-                    source=SOURCE_NAME,
-                )
+
+    existing_keys = _existing_odds_keys(
+        session, set(fixture_id_by_external.values())
+    )
+    for parsed, market, selection in supported:
+        fixture_id = fixture_id_by_external[parsed.external_fixture_id]
+        key = (
+            fixture_id,
+            parsed.bookmaker,
+            market,
+            selection,
+            parsed.line,
+            parsed.decimal_odds,
+            _as_utc(parsed.captured_at),
+        )
+        if key in existing_keys:
+            deduplicated += 1
+            continue
+        session.add(
+            OddsQuote(
+                fixture_id=fixture_id,
+                bookmaker=_bounded(parsed.bookmaker, 80, "bookmaker"),
+                market=market,
+                selection=selection,
+                line=parsed.line,
+                decimal_odds=parsed.decimal_odds,
+                captured_at=parsed.captured_at,
+                source=SOURCE_NAME,
             )
-            created += 1
+        )
+        existing_keys.add(key)
+        created += 1
     if unsupported:
         session.add(
             AuditEvent(
@@ -560,27 +576,57 @@ def _append_stats_snapshot(
     return True
 
 
-def _find_odds_quote(
+def _mapped_fixture_ids(
     session: Session,
-    fixture_id: uuid.UUID,
-    parsed: ApiFootballOddsQuote,
-    *,
-    market: str,
-    selection: str,
-) -> OddsQuote | None:
-    conditions = [
-        OddsQuote.fixture_id == fixture_id,
-        OddsQuote.bookmaker == parsed.bookmaker,
-        OddsQuote.market == market,
-        OddsQuote.selection == selection,
-        OddsQuote.decimal_odds == parsed.decimal_odds,
-        OddsQuote.captured_at == parsed.captured_at,
-        OddsQuote.source == SOURCE_NAME,
-    ]
-    conditions.append(
-        OddsQuote.line.is_(None) if parsed.line is None else OddsQuote.line == parsed.line
+    provider_id: uuid.UUID,
+    external_fixture_ids: set[str],
+) -> dict[str, uuid.UUID]:
+    """Batch-resolve external fixture ids to canonical Fixture ids for a whole window at once."""
+    if not external_fixture_ids:
+        return {}
+    mappings = session.scalars(
+        select(SourceMapping).where(
+            SourceMapping.provider_id == provider_id,
+            SourceMapping.entity_type == EntityType.FIXTURE,
+            SourceMapping.external_id.in_(external_fixture_ids),
+        )
+    ).all()
+    canonical_by_external = {mapping.external_id: mapping.canonical_id for mapping in mappings}
+    canonical_ids = set(canonical_by_external.values())
+    existing_ids = (
+        set(session.scalars(select(Fixture.id).where(Fixture.id.in_(canonical_ids))))
+        if canonical_ids
+        else set()
     )
-    return session.scalar(select(OddsQuote).where(*conditions))
+    for external_id, canonical_id in canonical_by_external.items():
+        if canonical_id not in existing_ids:
+            raise ApiFootballIngestionError(
+                f"{EntityType.FIXTURE.value} mapping {external_id} points to a missing row"
+            )
+    return canonical_by_external
+
+
+def _existing_odds_keys(
+    session: Session, fixture_ids: set[uuid.UUID]
+) -> set[tuple[uuid.UUID, str, str, str, Decimal | None, Decimal, datetime]]:
+    """Batch-preload the dedup identity of every odds quote already stored for these fixtures."""
+    if not fixture_ids:
+        return set()
+    rows = session.execute(
+        select(
+            OddsQuote.fixture_id,
+            OddsQuote.bookmaker,
+            OddsQuote.market,
+            OddsQuote.selection,
+            OddsQuote.line,
+            OddsQuote.decimal_odds,
+            OddsQuote.captured_at,
+        ).where(OddsQuote.fixture_id.in_(fixture_ids), OddsQuote.source == SOURCE_NAME)
+    ).all()
+    return {
+        (fixture_id, bookmaker, market, selection, line, decimal_odds, _as_utc(captured_at))
+        for fixture_id, bookmaker, market, selection, line, decimal_odds, captured_at in rows
+    }
 
 
 def _canonical_market_selection(
