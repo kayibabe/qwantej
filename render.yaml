@@ -1,11 +1,10 @@
 # Render Blueprint for the Qwantej backend (FastAPI).
 #
-# Deploys are deliberately NOT automatic on push, matching the manual-deploy
-# governance rule in DEVELOPMENT.md §6 (a broken migration or model change
-# must never reach production just because someone pushed to main). To
-# deploy: merge to main, confirm CI is green, then trigger a deploy manually
-# from the Render dashboard ("Manual Deploy" -> "Deploy latest commit") or
-# via `render deploy` in the Render CLI.
+# autoDeploy is true: the live service (dashboard-verified 2026-09-14)
+# deploys automatically the moment a PR merges into main. Because there is
+# no manual trigger step to run a migration in between, DEVELOPMENT.md §6
+# requires any pending Alembic migration to run against Neon BEFORE the
+# merge, not after.
 #
 # The Postgres database itself is NOT defined here — it lives on Neon, not
 # Render. Set DATABASE_URL below to the Neon connection string via the
@@ -13,12 +12,12 @@
 
 services:
   - type: web
-    name: qwantej-api
+    name: qwantej
     runtime: python
     plan: starter
-    region: oregon
+    region: frankfurt
     branch: main
-    autoDeploy: false
+    autoDeploy: true
     rootDir: .
     buildCommand: pip install -e ".[backend]"
     startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
