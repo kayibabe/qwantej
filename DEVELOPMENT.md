@@ -20,21 +20,26 @@ normal web-app concern does.
 - **ORM:** SQLAlchemy
 - **Migrations:** Alembic — every schema change is a migration, no exceptions
 - **Frontend:** React / Next.js, hosted on [Vercel](https://vercel.com)
-- **Backend hosting:** [Render](https://render.com) (`render.yaml` at repo
-  root defines both the web service and the `qwantej-scheduler` Background
-  Worker that runs ingestion/signal-pipeline/settlement on a loop —
-  `backend/workers/scheduler.py`)
-- **Containerization:** Docker (local dev only — Render builds the backend
-  natively from `render.yaml`, it does not use a Dockerfile)
+- **Backend hosting:** [Railway](https://railway.app) — two services in the
+  same Railway project, both sourced from this repo:
+  - `qwantej-api`: the FastAPI web service (`railway.toml` at repo root).
+  - `qwantej-scheduler`: the Background Worker that runs
+    ingestion/signal-pipeline/settlement on a loop
+    (`backend/workers/scheduler.py`); start command
+    `python -m backend.workers.scheduler`.
+  The `Procfile` at repo root documents both process types.
+- **Containerization:** Docker (local dev only — Railway builds the backend
+  natively via Nixpacks from `railway.toml`, it does not use a Dockerfile)
 - **CI:** GitHub Actions
-- **Deployment:** Neon + Render + Vercel — **deploys are manual.** Pushing to
-  GitHub does not deploy the backend: `render.yaml` sets `autoDeploy: false`,
-  so after a change is merged and CI is green, trigger the Render deploy
-  explicitly (dashboard "Manual Deploy" or `render deploy`) and say so out
-  loud before doing it. The Vercel frontend keeps its default behavior
-  (preview deployment per PR, production deployment on push to `main`) —
-  acceptable because the frontend carries no data/migration risk; the
-  manual-deploy discipline applies to the backend/database, not the UI.
+- **Deployment:** Neon + Railway + Vercel — **deploys are manual.** Pushing to
+  GitHub does not deploy the backend: "deploy on push" must be disabled for
+  both Railway services, so after a change is merged and CI is green, trigger
+  the Railway deploy explicitly (dashboard "Deploy" button or
+  `railway up --detach`) and say so out loud before doing it. The Vercel
+  frontend keeps its default behavior (preview deployment per PR, production
+  deployment on push to `main`) — acceptable because the frontend carries no
+  data/migration risk; the manual-deploy discipline applies to the
+  backend/database, not the UI.
 
 ## 2. Repository Layout
 
@@ -261,13 +266,17 @@ being enforced.
    (`alembic upgrade head` with `DATABASE_URL` pointed at Neon —
    from a machine/CI runner that has the production connection string, never
    from a developer's local `.env`).
-4. Trigger the Render deploy manually (dashboard "Manual Deploy" or
-   `render deploy`). This step is never automatic (`autoDeploy: false` in
-   `render.yaml`) — say explicitly when you're about to do it.
-5. The Vercel frontend deploys automatically on push to `main`; confirm the
+4. Trigger the Railway deploy manually — open the Railway dashboard, select
+   the `qwantej-api` service, and click "Deploy" (or run `railway up --detach`
+   from the repo root with the Railway CLI). This step is **never automatic**
+   ("deploy on push" must be disabled in the Railway dashboard) — say
+   explicitly when you're about to do it.
+5. Trigger the `qwantej-scheduler` Railway service deploy the same way.
+6. The Vercel frontend deploys automatically on push to `main`; confirm the
    resulting production deployment builds successfully and points at the
-   correct `NEXT_PUBLIC_API_URL` (the Render backend's public URL).
-6. Verify the deployed forecast/signal pipeline is producing archived output,
+   correct `NEXT_PUBLIC_API_URL` (the Railway API service's public URL —
+   visible under the service's "Settings → Domains" in the Railway dashboard).
+7. Verify the deployed forecast/signal pipeline is producing archived output,
    not just that the app boots.
 
 ## 7. Definition of Done
