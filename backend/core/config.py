@@ -24,8 +24,9 @@ class Settings(BaseSettings):
     # Security — empty string disables API key auth (dev only).
     api_key: str = ""
 
-    # Comma-separated list of allowed CORS origins (e.g. the Vercel frontend
-    # URL) — required in production, where the default is "allow nothing".
+    # Comma-separated list of allowed CORS origins (e.g. the qwantej-frontend
+    # Railway service's URL) — required in production, where the default is
+    # "allow nothing".
     cors_origins: str = ""
 
     @property

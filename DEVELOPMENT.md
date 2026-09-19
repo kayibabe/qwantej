@@ -19,27 +19,32 @@ normal web-app concern does.
 - **Database:** PostgreSQL, hosted on [Neon](https://neon.tech)
 - **ORM:** SQLAlchemy
 - **Migrations:** Alembic — every schema change is a migration, no exceptions
-- **Frontend:** React / Next.js, hosted on [Vercel](https://vercel.com)
-- **Backend hosting:** [Railway](https://railway.app) — two services in the
-  same Railway project, both sourced from this repo:
+- **Frontend:** React / Next.js
+- **Hosting:** [Railway](https://railway.app), exclusively — one Railway
+  project, three services, all sourced from this repo:
   - `qwantej-api`: the FastAPI web service (`railway.toml` at repo root).
   - `qwantej-scheduler`: the Background Worker that runs
     ingestion/signal-pipeline/settlement on a loop
     (`backend/workers/scheduler.py`); start command
     `python -m backend.workers.scheduler`.
-  The `Procfile` at repo root documents both process types.
-- **Containerization:** Docker (local dev only — Railway builds the backend
-  natively via Nixpacks from `railway.toml`, it does not use a Dockerfile)
+  - `qwantej-frontend`: the Next.js app (`frontend/railway.toml`).
+  The `Procfile` at repo root documents the backend's two process types.
+  No other hosting provider (Vercel, Render, Fly.io) is used for any part of
+  this project — if you find a reference to one, it's stale; fix it or flag
+  it.
+- **Containerization:** Docker (local dev only — Railway builds every service
+  natively via Nixpacks from its `railway.toml`, it does not use a
+  Dockerfile)
 - **CI:** GitHub Actions
-- **Deployment:** Neon + Railway + Vercel — **deploys are manual.** Pushing to
-  GitHub does not deploy the backend: "deploy on push" must be disabled for
-  both Railway services, so after a change is merged and CI is green, trigger
-  the Railway deploy explicitly (dashboard "Deploy" button or
-  `railway up --detach`) and say so out loud before doing it. The Vercel
-  frontend keeps its default behavior (preview deployment per PR, production
-  deployment on push to `main`) — acceptable because the frontend carries no
-  data/migration risk; the manual-deploy discipline applies to the
-  backend/database, not the UI.
+- **Deployment:** Neon + Railway — **deploys are manual for all three
+  services.** Pushing to GitHub does not deploy anything: "deploy on push"
+  must stay disabled for `qwantej-api`, `qwantej-scheduler`, and
+  `qwantej-frontend` alike, so after a change is merged and CI is green,
+  trigger each Railway deploy explicitly (dashboard "Deploy" button or
+  `railway up --detach`) and say so out loud before doing it. The frontend
+  gets the same manual-deploy discipline as the backend now that it lives on
+  Railway too — there is no platform-default auto-deploy-on-push left in this
+  stack to rely on.
 
 ## 2. Repository Layout
 
@@ -113,8 +118,8 @@ in a commit message or PR description, not silent sprawl.
 ### Secrets & Configuration
 - Never hard-code API keys, database URLs, or credentials in source.
 - All secrets live in environment variables, loaded via `.env` locally
-  (never committed) and via the Render dashboard's environment variables
-  (backend) / Vercel's environment variables (frontend) in production.
+  (never committed) and via each Railway service's own Variables tab in
+  production (`qwantej-api`, `qwantej-scheduler`, `qwantej-frontend`).
 - Commit `.env.example` with every new required variable, kept in sync with
   reality — a missing var here is a bug.
 
@@ -272,10 +277,13 @@ being enforced.
    ("deploy on push" must be disabled in the Railway dashboard) — say
    explicitly when you're about to do it.
 5. Trigger the `qwantej-scheduler` Railway service deploy the same way.
-6. The Vercel frontend deploys automatically on push to `main`; confirm the
-   resulting production deployment builds successfully and points at the
-   correct `NEXT_PUBLIC_API_URL` (the Railway API service's public URL —
-   visible under the service's "Settings → Domains" in the Railway dashboard).
+6. Trigger the `qwantej-frontend` Railway service deploy the same way — it is
+   **not** automatic either. Confirm the resulting deployment builds
+   successfully and its `NEXT_PUBLIC_API_URL` variable points at the correct
+   `qwantej-api` public URL (visible under that service's "Settings →
+   Domains" in the Railway dashboard); this is a Next.js build-time variable,
+   so a value change only takes effect after `qwantej-frontend` is rebuilt,
+   not just restarted.
 7. Verify the deployed forecast/signal pipeline is producing archived output,
    not just that the app boots.
 

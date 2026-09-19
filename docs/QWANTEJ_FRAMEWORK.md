@@ -24,7 +24,7 @@ Football Accumulator Engine.
 | Authoritative probability | Calibrated probability, then uncertainty-adjusted conservative probability for betting decisions. |
 | Core engineering principle | Every live prediction is immutable, timestamped, reproducible and linked to its exact data/model/calibration versions. |
 | Accumulator products | Core 3.00–5.00; Growth 5.00–10.00; Alpha 10.00–20.00 operating band. No ticket is mandatory. |
-| Development baseline | VS Code + GitHub + Claude Code + OpenAI Codex; Python/FastAPI; PostgreSQL; Docker; Fly.io; CI/CD. |
+| Development baseline | VS Code + GitHub + Claude Code + OpenAI Codex; Python/FastAPI; PostgreSQL; Docker; Railway; CI/CD. |
 | Critical new controls | Point-in-time backtesting, data leakage prevention, Bayesian shrinkage, dependence/covariance controls, explicit Value Gate, model registry and champion–challenger promotion. |
 
 > Version 2.0 keeps the original framework’s philosophy but hardens it into a system that can be coded, tested, audited, and challenged. It is not a promise of profit; it is a disciplined mechanism for discovering whether a repeatable edge exists.
@@ -110,7 +110,7 @@ Qwantej should be built using agentic software engineering rather than relying o
 | Experiment tracking | MLflow or equivalent | Model registry, runs, metrics, artefacts and promotion evidence |
 | Job orchestration | Prefect initially | Ingestion, scoring, settlement, monitoring and recalibration jobs |
 | Containers | Docker | Reproducible runtime environments |
-| Deployment | Fly.io initially | API, workers, scheduler and web services |
+| Deployment | Railway | API, workers, scheduler and web services |
 | CI/CD | GitHub Actions | Tests, quality gates and deployment automation |
 
 ## 6. Dual-agent engineering model

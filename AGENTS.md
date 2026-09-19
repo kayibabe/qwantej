@@ -55,7 +55,7 @@ Given the diff on the feature branch, perform an independent review:
 6. Only after a clean reviewer pass: open a PR to `main`, fill in the
    Definition of Done checklist (`DEVELOPMENT.md` §7).
 
-Never run migrations against a real (Neon) database or trigger a Render
+Never run migrations against a real (Neon) database or trigger a Railway
 deploy without explicit user confirmation. Never modify production data
 directly.
 

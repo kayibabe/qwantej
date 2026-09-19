@@ -29,8 +29,10 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+## Deployment
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This app is hosted on [Railway](https://railway.app) as the `qwantej-frontend`
+service (`railway.toml` in this directory), alongside the `qwantej-api` and
+`qwantej-scheduler` backend services in the same Railway project. Deploys are
+manual — see `DEVELOPMENT.md` §6 at the repo root for the full deployment
+checklist and the governance rule against auto-deploy-on-push.

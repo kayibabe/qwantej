@@ -14,7 +14,7 @@ The script:
 3. Names the file ``qwantej_YYYYMMDD_HHMMSS.sql.gz``.
 4. Deletes the oldest dumps beyond BACKUP_KEEP_COUNT (default 7).
 
-Intended for scheduled invocation (cron, APScheduler, Fly.io cron).  Never
+Intended for scheduled invocation (cron, APScheduler, a Railway cron job).  Never
 targets a production database without explicit confirmation (see DEVELOPMENT.md
 §3 — never modify production data directly).
 """
