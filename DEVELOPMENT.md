@@ -16,35 +16,47 @@ normal web-app concern does.
 ## 1. Architecture
 
 - **Backend:** FastAPI (Python)
-- **Database:** PostgreSQL, hosted on [Neon](https://neon.tech)
+- **Database:** PostgreSQL, hosted as a Railway-managed Postgres service
+  (`Postgres`) in the same Railway project as the app services. Neon is no
+  longer used anywhere in this stack — if you find a reference to it, it's
+  stale; fix it or flag it.
 - **ORM:** SQLAlchemy
 - **Migrations:** Alembic — every schema change is a migration, no exceptions
 - **Frontend:** React / Next.js
 - **Hosting:** [Railway](https://railway.app), exclusively — one Railway
-  project, three services, all sourced from this repo:
+  project, four services, all in the same project:
   - `qwantej-api`: the FastAPI web service (`railway.toml` at repo root).
   - `qwantej-scheduler`: the Background Worker that runs
     ingestion/signal-pipeline/settlement on a loop
     (`backend/workers/scheduler.py`); start command
     `python -m backend.workers.scheduler`.
   - `qwantej-frontend`: the Next.js app (`frontend/railway.toml`).
+  - `Postgres`: the Railway-managed Postgres database. `qwantej-api` and
+    `qwantej-scheduler` reference its connection details via Railway
+    variable references (e.g.
+    `DATABASE_URL=postgresql+psycopg://${{Postgres.PGUSER}}:${{Postgres.PGPASSWORD}}@${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/${{Postgres.PGDATABASE}}`)
+    rather than a copy-pasted connection string, so rotating the database's
+    credentials never requires touching the app services.
   The `Procfile` at repo root documents the backend's two process types.
-  No other hosting provider (Vercel, Render, Fly.io) is used for any part of
-  this project — if you find a reference to one, it's stale; fix it or flag
-  it.
+  No other hosting or database provider (Vercel, Render, Fly.io, Neon) is
+  used for any part of this project — if you find a reference to one, it's
+  stale; fix it or flag it.
 - **Containerization:** Docker (local dev only — Railway builds every service
   natively via Nixpacks from its `railway.toml`, it does not use a
   Dockerfile)
 - **CI:** GitHub Actions
-- **Deployment:** Neon + Railway — **deploys are manual for all three
-  services.** Pushing to GitHub does not deploy anything: "deploy on push"
-  must stay disabled for `qwantej-api`, `qwantej-scheduler`, and
+- **Deployment:** Railway, exclusively — **deploys are manual for all three
+  app services.** Pushing to GitHub does not deploy anything: "deploy on
+  push" must stay disabled for `qwantej-api`, `qwantej-scheduler`, and
   `qwantej-frontend` alike, so after a change is merged and CI is green,
   trigger each Railway deploy explicitly (dashboard "Deploy" button or
   `railway up --detach`) and say so out loud before doing it. The frontend
   gets the same manual-deploy discipline as the backend now that it lives on
   Railway too — there is no platform-default auto-deploy-on-push left in this
-  stack to rely on.
+  stack to rely on. The `Postgres` database service itself is not
+  "deployed" in this sense — it's a long-running data store, not a
+  redeployable app; treat changes to it (migrations, credential rotation) as
+  data operations, not deploys.
 
 ## 2. Repository Layout
 
@@ -267,10 +279,12 @@ being enforced.
 
 1. Merge to `main` via PR.
 2. Confirm CI (GitHub Actions) is green.
-3. Run any pending Alembic migrations against the Neon database
-   (`alembic upgrade head` with `DATABASE_URL` pointed at Neon —
-   from a machine/CI runner that has the production connection string, never
-   from a developer's local `.env`).
+3. Run any pending Alembic migrations against the production Railway
+   Postgres database (`alembic upgrade head` with `DATABASE_URL` pointed at
+   the `Postgres` service — via `railway run --service qwantej-api --
+   alembic upgrade head`, or a tunnel via `railway connect Postgres
+   --tunnel-only` for a local run; never from a developer's local `.env`,
+   which points at the local dev database).
 4. Trigger the Railway deploy manually — open the Railway dashboard, select
    the `qwantej-api` service, and click "Deploy" (or run `railway up --detach`
    from the repo root with the Railway CLI). This step is **never automatic**
