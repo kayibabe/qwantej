@@ -23,9 +23,6 @@ dist/
 build/
 .turbo/
 
-# Fly.io
-.fly/
-
 # IDE / OS
 .vscode/*
 .idea/

@@ -83,7 +83,7 @@ flowchart TD
 ## Infrastructure
 
 Per framework §5: PostgreSQL (institutional memory), Redis (cache/locks/
-jobs), Docker (reproducible runtime), Fly.io (deploy — manual, see
+jobs), Docker (reproducible runtime), Railway (deploy — manual, see
 `DEVELOPMENT.md` §6), GitHub Actions (CI), MLflow or equivalent (model
 registry/experiment tracking, once Phase 6+ needs it), Prefect (job
 orchestration, once ingestion/scoring jobs exist beyond a simple scheduler).
