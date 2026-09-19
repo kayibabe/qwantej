@@ -1,0 +1,14 @@
+numpy
+scipy
+pandas
+statsmodels
+scikit-learn
+pydantic
+sqlalchemy
+python-dateutil
+fastapi
+uvicorn[standard]
+alembic
+psycopg[binary]
+pydantic-settings
+python-dotenv

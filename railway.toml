@@ -1,0 +1,27 @@
+# Railway configuration for the Qwantej backend (FastAPI API service).
+#
+# The PostgreSQL database lives on Neon, not Railway — set DATABASE_URL
+# to the Neon pooled connection string in the Railway service's Variables tab.
+#
+# TWO Railway services are required (both pointing at this GitHub repo):
+#
+#   1. qwantej-api    — web process (this file)
+#   2. qwantej-scheduler — worker process (same repo, different start command)
+#
+# For the scheduler service, set the start command in the Railway dashboard to:
+#   python -m backend.workers.scheduler
+# (or Railway will pick up the "worker" entry from the Procfile).
+#
+# IMPORTANT: disable "deploy on push" for both services in the Railway
+# dashboard to preserve the manual-deploy governance rule (DEVELOPMENT.md §6).
+# Only trigger a deploy after CI is green and migrations have been applied.
+
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "PYTHONPATH=src python -m uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
