@@ -31,7 +31,14 @@ jobs:
 
     env:
       DATABASE_URL: postgresql+psycopg://qwantej:password@localhost:5432/qwantej
-      ENVIRONMENT: ci
+      # Only the explicit "development" value gets relaxed auth/CORS defaults
+      # (backend/main.py:_validate_environment_config). Most of the test suite
+      # constructs the app from real ambient settings and expects auth/CORS to
+      # be open, so CI must stay "development" rather than some other
+      # non-production label — the environment fail-closed matrix itself is
+      # covered by tests/test_security.py against explicitly-constructed
+      # Settings, independent of this ambient value.
+      ENVIRONMENT: development
       SECRET_KEY: ci-only
 
     steps:

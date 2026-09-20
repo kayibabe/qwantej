@@ -33,6 +33,17 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
+    @property
+    def is_development(self) -> bool:
+        """True only for the explicit ``development`` value.
+
+        Every relaxed-security default (open CORS, no API key required, docs
+        exposed) is gated on this rather than on ``environment != "production"``,
+        so an unset/typo'd/unexpected ENVIRONMENT value (e.g. "staging", "",
+        "prod") fails closed instead of silently inheriting dev-mode laxity.
+        """
+        return self.environment == "development"
+
     # Logging
     log_level: str = "INFO"
     log_format: str = "plain"  # "json" in production
