@@ -110,6 +110,7 @@ def _make_ingestion_run(
             season=season,
             interval_seconds=ingest_interval_seconds,
             max_leagues_per_run=all_leagues_batch_size,
+            priority_league_ids=SUPPORTED_LEAGUE_IDS,
         )
     else:
         # Production default: four supported leagues.

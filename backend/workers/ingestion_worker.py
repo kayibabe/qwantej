@@ -114,6 +114,10 @@ class WorkerConfig:
     # ``None`` keeps the CLI one-shot all-league mode. The managed scheduler
     # supplies a bounded batch size for quota-safe broad coverage.
     max_leagues_per_run: int | None = None
+    # These league ids are refreshed on every bounded research pass so the
+    # production dashboard's price-freshness signal cannot be starved by the
+    # research rotation.
+    priority_league_ids: tuple[int, ...] = ()
 
 
 @dataclass
@@ -135,6 +139,7 @@ def select_research_batch(
     batch_size: int,
     now: datetime,
     interval_seconds: int,
+    priority_league_ids: tuple[int, ...] = (),
 ) -> list[tuple[int, int]]:
     """Return one deterministic all-league batch for this UTC scheduler slot.
 
@@ -147,10 +152,20 @@ def select_research_batch(
         raise ValueError("interval_seconds must be positive")
     if not leagues:
         return []
-    batch_count = math.ceil(len(leagues) / batch_size)
+    priority_ids = set(priority_league_ids)
+    priority = [item for item in leagues if item[0] in priority_ids]
+    if len(priority) > batch_size:
+        raise ValueError("batch_size cannot be smaller than priority league count")
+    rotating = [item for item in leagues if item[0] not in priority_ids]
+    if not rotating:
+        return priority
+    rotating_capacity = batch_size - len(priority)
+    if rotating_capacity == 0:
+        return priority
+    batch_count = math.ceil(len(rotating) / rotating_capacity)
     batch_index = (int(now.timestamp()) // interval_seconds) % batch_count
-    start = batch_index * batch_size
-    return leagues[start:start + batch_size]
+    start = batch_index * rotating_capacity
+    return priority + rotating[start:start + rotating_capacity]
 
 
 def discover_leagues(client: _LeagueDiscoveryClient, season: int) -> list[tuple[int, int]]:
@@ -200,6 +215,7 @@ def run_once(config: WorkerConfig | None = None) -> RunSummary:
                 batch_size=cfg.max_leagues_per_run,
                 now=datetime.now(UTC),
                 interval_seconds=cfg.interval_seconds,
+                priority_league_ids=cfg.priority_league_ids,
             )
             log.info(
                 "ingestion_worker: selected research batch %d/%d leagues",
