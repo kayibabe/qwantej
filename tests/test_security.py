@@ -131,12 +131,16 @@ _FULLY_CONFIGURED = {
     "secret_key": "a-real-secret",
     "cors_origins": "https://app.example.com",
 }
+# Every field pinned explicitly (not omitted) so these tests are correct
+# regardless of ambient environment variables (e.g. CI's SECRET_KEY) that
+# pydantic-settings would otherwise silently fill in for any field left out.
+_UNCONFIGURED = {"api_key": "", "secret_key": "change-me", "cors_origins": ""}
 
 
 @pytest.mark.parametrize("environment", ["production", "staging", "ci", "prod", "", "Production"])
 def test_non_development_environment_unconfigured_fails_validation(environment):
     """Any non-'development' value with missing config must fail closed."""
-    settings = Settings(environment=environment)
+    settings = Settings(environment=environment, **_UNCONFIGURED)
     with pytest.raises(RuntimeError):
         _validate_environment_config(settings)
 
@@ -155,7 +159,12 @@ def test_development_environment_passes_validation_even_when_unconfigured():
 
 
 def test_secret_key_default_change_me_fails_validation_outside_development():
-    settings = Settings(environment="production", api_key="secret", cors_origins="https://x")
+    settings = Settings(
+        environment="production",
+        api_key="secret",
+        cors_origins="https://x",
+        secret_key="change-me",
+    )
     with pytest.raises(RuntimeError, match="SECRET_KEY"):
         _validate_environment_config(settings)
 
