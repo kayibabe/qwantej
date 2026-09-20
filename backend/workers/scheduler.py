@@ -45,7 +45,7 @@ log = logging.getLogger(__name__)
 _STOP = threading.Event()
 
 _DEFAULT_INGEST_INTERVAL_PRODUCTION = 3600
-_DEFAULT_INGEST_INTERVAL_ALL = 18000
+_DEFAULT_INGEST_INTERVAL_ALL = 3600
 
 
 def _all_leagues_enabled(cli_requested: bool) -> bool:

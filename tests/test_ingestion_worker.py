@@ -329,6 +329,7 @@ class TestSchedulerArgParsing:
             else 999999
         )
         assert resolved == _DEFAULT_INGEST_INTERVAL_ALL
+        assert resolved == 3600
 
     def test_environment_setting_enables_managed_all_leagues_mode(self, monkeypatch):
         from backend.core.config import get_settings
