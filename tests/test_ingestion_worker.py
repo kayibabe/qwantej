@@ -278,6 +278,28 @@ class TestSchedulerArgParsing:
         )
         assert resolved == _DEFAULT_INGEST_INTERVAL_ALL
 
+    def test_environment_setting_enables_managed_all_leagues_mode(self, monkeypatch):
+        from backend.core.config import get_settings
+        from backend.workers.scheduler import _all_leagues_enabled
+
+        monkeypatch.setenv("INGEST_ALL_LEAGUES", "true")
+        get_settings.cache_clear()
+        try:
+            assert _all_leagues_enabled(False) is True
+        finally:
+            get_settings.cache_clear()
+
+    def test_cli_all_leagues_has_priority_without_environment_setting(self, monkeypatch):
+        from backend.core.config import get_settings
+        from backend.workers.scheduler import _all_leagues_enabled
+
+        monkeypatch.delenv("INGEST_ALL_LEAGUES", raising=False)
+        get_settings.cache_clear()
+        try:
+            assert _all_leagues_enabled(True) is True
+        finally:
+            get_settings.cache_clear()
+
     # 3. --league overrides defaults
     def test_explicit_league_overrides_default(self):
         args = self._parse(["--league", "39"])
@@ -379,6 +401,23 @@ class TestSchedulerArgParsing:
 
         fake_spec.loader.exec_module.assert_called_once_with(fake_module)
         fake_module.run_once.assert_called_once_with(shadow=True)
+
+    def test_scheduler_paper_ticket_worker_disables_shadow_mode(self):
+        from backend.workers.scheduler import _signal_pipeline_run
+
+        fake_module = MagicMock()
+        fake_spec = MagicMock()
+        fake_spec.name = "run_signal_pipeline"
+        fake_spec.loader = MagicMock()
+        with (
+            patch("importlib.util.spec_from_file_location", return_value=fake_spec),
+            patch("importlib.util.module_from_spec", return_value=fake_module),
+            patch.dict("sys.modules", {}, clear=False),
+        ):
+            _signal_pipeline_run(paper_ticket_pipeline_enabled=True)
+
+        fake_spec.loader.exec_module.assert_called_once_with(fake_module)
+        fake_module.run_once.assert_called_once_with(shadow=False)
 
 
 # ---------------------------------------------------------------------------
