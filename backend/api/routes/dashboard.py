@@ -53,6 +53,34 @@ def today_status(
             .order_by(Competition.name)
         )
     )
+    # Coverage is deliberately broader than publication scope.  Research
+    # leagues are visible to users as collected fixtures, while only the
+    # validated list above can enter inference or a paper ticket.
+    observed_leagues = list(
+        db.scalars(
+            select(Competition.name)
+            .join(Fixture, Fixture.competition_id == Competition.id)
+            .where(
+                Fixture.status == FixtureStatus.SCHEDULED,
+                Fixture.kickoff_utc >= day_start,
+                Fixture.kickoff_utc < day_end,
+            )
+            .distinct()
+            .order_by(Competition.name)
+        )
+    )
+    observed_fixture_count = int(
+        db.scalar(
+            select(func.count())
+            .select_from(Fixture)
+            .where(
+                Fixture.status == FixtureStatus.SCHEDULED,
+                Fixture.kickoff_utc >= day_start,
+                Fixture.kickoff_utc < day_end,
+            )
+        )
+        or 0
+    )
     upcoming = int(
         db.scalar(
             select(func.count())
@@ -149,6 +177,8 @@ def today_status(
         date=day_start_local.date().isoformat(),
         data_freshness_utc=freshness,
         checked_leagues=leagues,
+        observed_leagues=observed_leagues,
+        observed_fixture_count=observed_fixture_count,
         # The scheduler uses process-relative intervals and is not observable
         # from this request. Never turn a rounded clock hour into a false
         # promise about an active worker.

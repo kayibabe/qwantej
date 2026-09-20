@@ -56,11 +56,16 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Protocol
 
+from backend.services.api_football_ingestion import VALIDATED_PRODUCTION_EXTERNAL_IDS
+
 log = logging.getLogger(__name__)
 
 # Leagues whose calibration and reliability evidence is established.
-# Only these are ingested in production mode.
-SUPPORTED_LEAGUE_IDS: tuple[int, ...] = (39, 78, 61, 140)
+# Only these are ingested in production mode. Derive this from the canonical
+# ingestion allow-list so ingestion and publication scope cannot drift.
+SUPPORTED_LEAGUE_IDS: tuple[int, ...] = tuple(
+    sorted(int(league_id) for league_id in VALIDATED_PRODUCTION_EXTERNAL_IDS)
+)
 
 # Default interval (seconds) for production 4-league mode.
 _DEFAULT_INTERVAL_SINGLE = 3600

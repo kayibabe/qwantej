@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from backend.models import (
     AuditEvent,
     Base,
+    Competition,
     FeatureSnapshot,
     Fixture,
     FixtureStatus,
@@ -37,6 +38,8 @@ KICKOFF = NOW + timedelta(hours=2)
 
 def _fixture_payload(
     *,
+    league_id: int = 39,
+    league_name: str = "Premier League",
     status: str = "NS",
     home_id: int = 10,
     home_goals: int | None = None,
@@ -50,7 +53,7 @@ def _fixture_payload(
             "status": {"short": status},
             "venue": {"name": "National Stadium"},
         },
-        "league": {"id": 39, "name": "Premier League", "country": "England", "season": 2026},
+        "league": {"id": league_id, "name": league_name, "country": "England", "season": 2026},
         "teams": {
             "home": {"id": home_id, "name": "Home FC"},
             "away": {"id": 20, "name": "Away FC"},
@@ -184,6 +187,25 @@ def test_fixture_ingestion_creates_canonical_mappings_and_snapshot(
     assert snapshot is not None
     assert snapshot.as_of_timestamp.replace(tzinfo=UTC) == NOW
     assert snapshot.payload["endpoint"] == "fixtures"
+
+
+def test_new_approved_competition_is_validated_at_creation(session: Session) -> None:
+    """A fresh DB created after the one-time backfill retains approved scope."""
+    ingest_fixtures(session, [_fixture_payload(league_id=39)], captured_at=NOW)
+    competition = session.scalar(select(Competition))
+    assert competition is not None
+    assert competition.validated is True
+
+
+def test_new_research_competition_remains_unvalidated(session: Session) -> None:
+    ingest_fixtures(
+        session,
+        [_fixture_payload(league_id=999, league_name="Research League")],
+        captured_at=NOW,
+    )
+    competition = session.scalar(select(Competition))
+    assert competition is not None
+    assert competition.validated is False
 
 
 def test_fixture_exact_retry_is_idempotent(session: Session) -> None:

@@ -37,6 +37,13 @@ FIXTURE_SOURCE = "api-football:fixtures"
 STATISTICS_SOURCE = "api-football:fixture-statistics"
 PROVIDER_BASE_URL = "https://v3.football.api-sports.io"
 
+# These are the only API-Football competitions that have passed the current
+# production validation policy.  Keep the allow-list beside canonical mapping:
+# a competition is created here before a one-time migration backfill can see it.
+# Provider identifiers are canonical strings throughout source_mappings and
+# ApiFootballFixture, even when API-Football sends numeric JSON values.
+VALIDATED_PRODUCTION_EXTERNAL_IDS: frozenset[str] = frozenset({"39", "61", "78", "140"})
+
 _MARKET_MAP = {
     "Match Winner": "1X2",
     "Goals Over/Under": "TOTALS",
@@ -366,6 +373,10 @@ def _competition(
     competition = Competition(
         name=_bounded(parsed.league_name, 150, "competition name"),
         country=_bounded(parsed.league_country, 80, "competition country"),
+        # A fresh database (or a later re-ingestion) must not lose the approved
+        # production scope merely because the migration ran before this row
+        # existed. Unlisted leagues remain research-only.
+        validated=parsed.external_league_id in VALIDATED_PRODUCTION_EXTERNAL_IDS,
     )
     session.add(competition)
     session.flush()

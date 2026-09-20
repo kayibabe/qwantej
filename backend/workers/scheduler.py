@@ -38,6 +38,7 @@ import signal
 import sys
 import threading
 from datetime import UTC, datetime
+from functools import partial
 
 log = logging.getLogger(__name__)
 
@@ -45,6 +46,15 @@ _STOP = threading.Event()
 
 _DEFAULT_INGEST_INTERVAL_PRODUCTION = 3600
 _DEFAULT_INGEST_INTERVAL_ALL = 18000
+
+
+def _all_leagues_enabled(cli_requested: bool) -> bool:
+    """Resolve broad research coverage without weakening publication scope."""
+    if cli_requested:
+        return True
+    from backend.core.config import get_settings
+
+    return get_settings().ingest_all_leagues
 
 
 def _worker_loop(
@@ -107,8 +117,12 @@ def _make_ingestion_run(
     return _run
 
 
-def _shadow_signal_pipeline_run() -> None:
-    """Archive prospective shadow forecasts without enabling live publishing."""
+def _signal_pipeline_run(*, paper_ticket_pipeline_enabled: bool) -> None:
+    """Run shadow collection or the approved-league paper-ticket path.
+
+    ``paper_ticket_pipeline_enabled`` never enables live staking: the
+    accumulator persistence service rejects every non-paper decision.
+    """
     # run_once lives in a script, not a package — import via importlib.
     import importlib.util
     from pathlib import Path
@@ -120,7 +134,12 @@ def _shadow_signal_pipeline_run() -> None:
     mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
     sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)
-    mod.run_once(shadow=True)
+    mod.run_once(shadow=not paper_ticket_pipeline_enabled)
+
+
+def _shadow_signal_pipeline_run() -> None:
+    """Compatibility wrapper for explicit shadow-only callers and tests."""
+    _signal_pipeline_run(paper_ticket_pipeline_enabled=False)
 
 
 def _settlement_run() -> None:
@@ -190,7 +209,12 @@ def main() -> None:
     season = args.season if args.season is not None else current_season()
 
     explicit_league_ids: list[int] = args.leagues or []
-    all_leagues_mode: bool = args.all_leagues  # False by default — opt-in only
+    # The CLI switch supports ad-hoc runs; the environment setting enables
+    # quota-safe research coverage for the managed Railway scheduler.
+    all_leagues_mode = _all_leagues_enabled(args.all_leagues)
+    from backend.core.config import get_settings
+
+    paper_ticket_pipeline_enabled = get_settings().paper_ticket_pipeline_enabled
 
     ingest_interval = args.ingest_interval
     if ingest_interval is None:
@@ -219,7 +243,11 @@ def main() -> None:
 
     workers = [
         ("ingestion",       ingestion_run,         ingest_interval,      0),
-        ("shadow-signal-pipeline", _shadow_signal_pipeline_run,
+        ("paper-ticket-pipeline" if paper_ticket_pipeline_enabled else "shadow-signal-pipeline",
+         partial(
+             _signal_pipeline_run,
+             paper_ticket_pipeline_enabled=paper_ticket_pipeline_enabled,
+         ),
          args.signal_interval, args.signal_offset),
         ("settlement",      _settlement_run,        args.settle_interval, 0),
     ]

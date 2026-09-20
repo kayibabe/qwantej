@@ -52,6 +52,12 @@ class Settings(BaseSettings):
     api_football_key: str = ""
     api_football_base_url: str = "https://v3.football.api-sports.io"
     api_football_timeout_seconds: float = 30.0
+    # Opt-in broad research collection. The signal pipeline still requires
+    # Competition.validated before it can create a public prediction.
+    ingest_all_leagues: bool = False
+    # When enabled, the scheduler runs the approved-league paper-ticket path.
+    # It remains paper-only; live stakes and ticket locking are not implemented.
+    paper_ticket_pipeline_enabled: bool = False
 
     # Notifications
     telegram_bot_token: str = ""
