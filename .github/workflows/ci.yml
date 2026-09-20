@@ -33,6 +33,12 @@ jobs:
       DATABASE_URL: postgresql+psycopg://qwantej:password@localhost:5432/qwantej
       ENVIRONMENT: ci
       SECRET_KEY: ci-only
+      # Only ENVIRONMENT=development gets relaxed auth/CORS defaults
+      # (backend/main.py:_validate_environment_config) — CI must supply real
+      # values or the app (and any test importing backend.main.app) refuses
+      # to boot at all, by design.
+      API_KEY: ci-only
+      CORS_ORIGINS: http://localhost:3000
 
     steps:
       - name: Check out repository

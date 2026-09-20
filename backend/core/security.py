@@ -35,15 +35,17 @@ def _verify_api_key(key: str | None = Security(_header_scheme)) -> str:
     settings = get_settings()
     configured = settings.api_key.strip()
     if not configured:
-        # Production with no API_KEY set is a misconfiguration — fail closed rather
-        # than silently allowing all traffic through.
-        if settings.environment == "production":
+        # Any environment other than the explicit "development" running with no
+        # API_KEY is a misconfiguration — fail closed rather than silently
+        # allowing all traffic through. This also catches typo'd/unset
+        # ENVIRONMENT values, which default away from development.
+        if not settings.is_development:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="API_KEY is not configured on this server",
             )
         return ""
-    if settings.environment == "production" and settings.secret_key.strip() in {
+    if not settings.is_development and settings.secret_key.strip() in {
         "",
         "change-me",
     }:

@@ -11,7 +11,10 @@ no Postgres container is required.  Tests cover:
 - _best_pre_kickoff_odds: returns correct quote and respects cutoff
 - run_once: dry-run integration test that wires the full pipeline
 
-Fixtures with no odds → value gate rejects → no predictions published (expected).
+Fixtures with no odds → value gate rejects → archived with gate_passed=False
+and reason_codes=["MARKET_STALE"], never published/staked (DEVELOPMENT.md §4:
+every computed forecast is archived; a rejected one is never treated as a
+live signal).
 """
 
 from __future__ import annotations
@@ -873,6 +876,172 @@ class TestProcessFixtureSuccessPath:
         assert float(pred.lrs) == pytest.approx(78.0), "lrs must match snapshot.league_reliability"
         assert float(pred.mrs) == pytest.approx(75.0), "mrs must match snapshot.market_reliability"
         assert pred.reliability_snapshot_id == rel_snap.id, "lineage must reference the snapshot"
+
+
+class TestProcessFixtureGateRejectedPath:
+    """Regression test for the forecast-archive invariant (DEVELOPMENT.md §4).
+
+    Before the fix, a fixture with no odds returned None from
+    _process_fixture and the computed forecast was silently discarded.
+    """
+
+    def test_no_odds_archives_rejected_forecast_instead_of_discarding_it(
+        self, db_session, monkeypatch
+    ):
+        from qwantej.features.engineering import MatchFeatures
+
+        comp, season, home, away = _seed_provider_and_competition(db_session)
+        now = datetime.now(UTC)
+        f = _make_fixture(db_session, comp, season, home, away, kickoff=now + timedelta(hours=6))
+
+        # A single incomplete quote (draw/away legs missing) — enough for the
+        # feature snapshot's lineage requirement, but not a coherent 1X2
+        # market, so the value gate must still reject on MARKET_STALE.
+        from backend.models import OddsQuote
+        lone_quote = OddsQuote(
+            fixture_id=f.id,
+            bookmaker="B365",
+            market="1X2",
+            selection="home",
+            decimal_odds=1.80,
+            captured_at=now - timedelta(hours=1),
+            source="api-football",
+        )
+        db_session.add(lone_quote)
+        db_session.flush()
+
+        registry, pipeline_run = _ensure_champion_model(db_session, now)
+        commit = registry.code_commit
+        calibration = _ensure_champion_calibration(db_session, now, commit)
+
+        fake_features = MatchFeatures(
+            elo_home_rating=1600.0,
+            elo_away_rating=1400.0,
+            home_xg=1.9,
+            away_xg=0.7,
+            home_attack=1.2,
+            home_defence=0.85,
+            away_attack=0.8,
+            away_defence=1.1,
+            home_form=0.70,
+            away_form=0.30,
+            h2h_home_win_rate=0.65,
+            home_matches=10,
+            away_matches=10,
+            league_home_avg=1.5,
+            league_away_avg=1.2,
+        )
+        monkeypatch.setattr(
+            "backend.services.feature_extraction.extract_fixture_features",
+            lambda *a, **kw: (fake_features, [], [lone_quote.id], []),
+        )
+
+        from qwantej.value.gate import ValueGatePolicy
+        from scripts.run_signal_pipeline import _process_fixture
+
+        result = _process_fixture(
+            db_session,
+            f,
+            now=now,
+            model_registry=registry,
+            model_run=pipeline_run,
+            calibration_model=calibration,
+            value_policy=ValueGatePolicy(),
+            commit=commit,
+        )
+
+        assert result is not None, (
+            "a computed forecast must always be archived, even when the gate rejects it"
+        )
+        assert result.gate_passed is False
+        pred = result.prediction
+        assert pred.gate_passed is False
+        assert pred.reason_codes == ["MARKET_STALE"]
+        assert pred.research_mode is False
+        # Non-executable: no price data, so it can never be mistaken for a live signal.
+        assert pred.executable_odds is None
+        assert pred.edge_pp is None
+        assert pred.expected_value is None
+
+
+class TestAccumulatorPhaseFiltersGateRejected:
+    """The accumulator optimiser must never select an archived-but-rejected row."""
+
+    def test_gate_rejected_result_excluded_from_qualified_selections(
+        self, db_session, monkeypatch
+    ):
+        from types import SimpleNamespace
+
+        from scripts.run_signal_pipeline import _run_accumulator_phase
+
+        captured: dict = {}
+
+        def fake_build_accumulator_decision(qualified, **kwargs):
+            captured["qualified"] = list(qualified)
+            return SimpleNamespace(candidate_count=len(qualified), paper_only=True, products=[])
+
+        def fake_persist_accumulator_decision(session, decision, *, published_at):
+            return decision
+
+        monkeypatch.setattr(
+            "qwantej.accumulator.decision.build_accumulator_decision",
+            fake_build_accumulator_decision,
+        )
+        monkeypatch.setattr(
+            "backend.services.accumulator.persist_accumulator_decision",
+            fake_persist_accumulator_decision,
+        )
+
+        now = datetime.now(UTC)
+        registry, _ = _ensure_champion_model(db_session, now)
+        calibration = _ensure_champion_calibration(db_session, now, registry.code_commit)
+
+        def _fake_pred(*, fixture_id, gate_passed):
+            return SimpleNamespace(
+                id=uuid.uuid4(),
+                fixture_id=fixture_id,
+                edge_pp=5.0,
+                qss=70.0,
+                dqs=70.0,
+                executable_odds=2.0,
+                conservative_probability=0.55,
+                calibrated_probability=0.55,
+                quote_timestamp=now,
+                input_snapshot_hash="a" * 64,
+                gate_passed=gate_passed,
+            )
+
+        passed_fixture_id = uuid.uuid4()
+        rejected_fixture_id = uuid.uuid4()
+        from scripts.run_signal_pipeline import _ProcessResult as PR
+
+        results = [
+            PR(
+                prediction=_fake_pred(fixture_id=passed_fixture_id, gate_passed=True),
+                segment_reliability=76.0,
+                gate_passed=True,
+            ),
+            PR(
+                prediction=_fake_pred(fixture_id=rejected_fixture_id, gate_passed=False),
+                segment_reliability=76.0,
+                gate_passed=False,
+            ),
+        ]
+
+        _run_accumulator_phase(
+            db_session,
+            results,
+            fixtures_by_id={},
+            now=now,
+            model_registry=registry,
+            calibration_model=calibration,
+            commit=registry.code_commit,
+        )
+
+        assert "qualified" in captured, "build_accumulator_decision should have been called"
+        qualified_fixture_ids = {qs.fixture_id for qs in captured["qualified"]}
+        assert str(passed_fixture_id) in qualified_fixture_ids
+        assert str(rejected_fixture_id) not in qualified_fixture_ids
 
 
 class TestRunOnceDryRun:

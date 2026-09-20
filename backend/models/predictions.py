@@ -142,6 +142,11 @@ class Prediction(UUIDPKMixin, CreatedAtMixin, Base):
     # evidence. The migration default preserves the production path for old
     # and newly-created forecasts unless a research caller opts in.
     research_mode: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Whether this forecast passed the value gate at decision time. False rows
+    # are archived for audit/calibration evidence only (DEVELOPMENT.md §4:
+    # every computed forecast is archived) and must never be treated as a
+    # published/stakeable signal — the accumulator optimiser filters on this.
+    gate_passed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # --- Linkage & diagnostics ---
     # Polymorphic linkage to a future accumulators row (that table lands with

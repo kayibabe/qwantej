@@ -1,4 +1,5 @@
-"""Tests for API key authentication (backend.core.security)."""
+"""Tests for API key authentication (backend.core.security) and the
+environment fail-closed policy (backend.main._validate_environment_config)."""
 
 from __future__ import annotations
 
@@ -6,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.core.config import Settings, get_settings
-from backend.main import create_app
+from backend.main import _validate_environment_config, create_app
 
 
 def _app_with_key(api_key: str):
@@ -120,26 +121,95 @@ def test_data_routes_open_when_no_key_configured(open_client):
 
 
 # ---------------------------------------------------------------------------
-# Production environment with no API_KEY set — fail closed
+# Environment fail-closed policy: only "development" may run unconfigured.
+# Everything else — "production", "staging", CI, or an unset/typo'd value —
+# must have API_KEY, SECRET_KEY and CORS_ORIGINS all set, or refuse to boot.
 # ---------------------------------------------------------------------------
 
-def test_production_without_api_key_fails_closed():
-    """Empty API_KEY in production returns 500, not a silent bypass."""
-    get_settings.cache_clear()
+_FULLY_CONFIGURED = {
+    "api_key": "secret",
+    "secret_key": "a-real-secret",
+    "cors_origins": "https://app.example.com",
+}
 
-    import backend.core.config as cfg
+
+@pytest.mark.parametrize("environment", ["production", "staging", "ci", "prod", "", "Production"])
+def test_non_development_environment_unconfigured_fails_validation(environment):
+    """Any non-'development' value with missing config must fail closed."""
+    settings = Settings(environment=environment)
+    with pytest.raises(RuntimeError):
+        _validate_environment_config(settings)
+
+
+@pytest.mark.parametrize("environment", ["production", "staging", "ci"])
+def test_non_development_environment_fully_configured_passes_validation(environment):
+    """The same environments boot fine once real config is supplied."""
+    settings = Settings(environment=environment, **_FULLY_CONFIGURED)
+    _validate_environment_config(settings)  # must not raise
+
+
+def test_development_environment_passes_validation_even_when_unconfigured():
+    """Only the explicit 'development' value gets the relaxed default."""
+    settings = Settings(environment="development")
+    _validate_environment_config(settings)  # must not raise
+
+
+def test_secret_key_default_change_me_fails_validation_outside_development():
+    settings = Settings(environment="production", api_key="secret", cors_origins="https://x")
+    with pytest.raises(RuntimeError, match="SECRET_KEY"):
+        _validate_environment_config(settings)
+
+
+def test_missing_cors_origins_fails_validation_outside_development():
+    settings = Settings(
+        environment="staging", api_key="secret", secret_key="a-real-secret", cors_origins=""
+    )
+    with pytest.raises(RuntimeError, match="CORS_ORIGINS"):
+        _validate_environment_config(settings)
+
+
+# NOTE: backend.main and backend.core.security each do ``from
+# backend.core.config import get_settings`` — that binds the name in their
+# own module namespace at import time. Patching backend.core.config's
+# attribute alone does not affect create_app()'s already-bound name, so
+# these tests patch ``backend.main.get_settings`` (and, for auth-dependent
+# assertions, ``backend.core.security.get_settings``) directly.
+
+def test_create_app_refuses_to_boot_for_misconfigured_production(monkeypatch):
+    """create_app() itself must fail — not just return an app that 500s per request."""
     import backend.core.security as sec
+    import backend.main as main
 
-    original_get = cfg.get_settings
-    cfg.get_settings = lambda: Settings(api_key="", environment="production")  # type: ignore[assignment]
-    sec.get_settings = cfg.get_settings  # type: ignore[assignment]
+    bad_settings = Settings(api_key="", environment="production")
+    monkeypatch.setattr(main, "get_settings", lambda: bad_settings)
+    monkeypatch.setattr(sec, "get_settings", lambda: bad_settings)
+
+    with pytest.raises(RuntimeError):
+        create_app()
+
+
+def test_create_app_boots_for_fully_configured_staging(monkeypatch):
+    """A staging environment with real config boots and enforces auth normally."""
+    import backend.core.security as sec
+    import backend.main as main
+
+    staging_settings = Settings(environment="staging", **_FULLY_CONFIGURED)
+    monkeypatch.setattr(main, "get_settings", lambda: staging_settings)
+    monkeypatch.setattr(sec, "get_settings", lambda: staging_settings)
 
     app = create_app()
     client = TestClient(app, raise_server_exceptions=False)
+    assert client.get("/predictions").status_code == 401
+    # 200 or 500 depending on DB availability — we only need it to NOT be 401.
+    assert client.get("/predictions", headers={"X-API-Key": "secret"}).status_code != 401
+    assert client.get("/docs").status_code == 404, "docs must stay closed outside development"
 
-    resp = client.get("/predictions")
-    assert resp.status_code == 500
 
-    cfg.get_settings = original_get
-    sec.get_settings = original_get  # type: ignore[assignment]
-    get_settings.cache_clear()
+def test_docs_enabled_in_development_only(monkeypatch):
+    import backend.main as main
+
+    monkeypatch.setattr(main, "get_settings", lambda: Settings(environment="development"))
+
+    app = create_app()
+    client = TestClient(app)
+    assert client.get("/docs").status_code == 200

@@ -9,9 +9,12 @@ within the lookahead window that has not yet been predicted, the pipeline:
   4. Applies the current champion linear calibrator (fitted from recent settled
      predictions, or identity if fewer than CALIBRATION_MIN_SAMPLES exist).
   5. Evaluates the ValueGate (edge, EV, DQS, reliability).
-  6. Publishes a fail-closed Prediction record for every fixture that passes.
-  7. Runs the accumulator optimiser over all qualified selections for Core,
-     Growth and Alpha tiers.
+  6. Archives a fail-closed Prediction record for every fixture with a
+     complete, lineage-verified forecast — gate-passed rows are published as
+     live signals; gate-rejected rows are archived with `gate_passed=False`
+     and reason codes for audit/calibration only, never selected for staking.
+  7. Runs the accumulator optimiser over all qualified (gate-passed) selections
+     for Core, Growth and Alpha tiers.
   8. Persists accumulator decisions (paper_only=True until production sign-off).
   9. Sends a Telegram summary notification.
 
@@ -586,11 +589,15 @@ def _process_fixture(
     commit: str,
     shadow: bool = False,
 ) -> _ProcessResult | None:
-    """Extract features, run models, apply calibration, evaluate gate, publish.
+    """Extract features, run models, apply calibration, evaluate gate, archive.
 
-    Returns a _ProcessResult on success (prediction + reliability score), None
-    when the fixture is skipped or the value gate rejects it. In ``shadow``
-    mode, rejected but PIT-safe forecasts are archived as research evidence.
+    Returns a _ProcessResult on success — the prediction is always archived
+    once a complete, lineage-verified forecast exists, whether or not it
+    passed the value gate (`_ProcessResult.gate_passed` records the outcome;
+    only gate-passed, non-shadow rows are eligible for staking). Returns
+    ``None`` only when the fixture is skipped outright (feature extraction
+    failed — nothing was computed to archive). In ``shadow`` mode, forecasts
+    are archived as research evidence regardless of gate outcome.
     """
     from backend.services.feature_extraction import (
         FeatureExtractionError,
@@ -753,8 +760,11 @@ def _process_fixture(
             )
         executable_odds = decimal_odds
 
-    if not gate_passed and not shadow:
-        return None
+    # Every computed forecast is archived — gate-rejected production forecasts
+    # are no longer discarded. `gate_passed` (persisted on the row and carried
+    # on _ProcessResult) is the single source of truth downstream consumers
+    # (the accumulator phase) must filter on before treating a row as a live,
+    # stakeable signal; a rejected row is archived for audit/calibration only.
 
     # A production-passed row has reliability lineage; a shadow row may be
     # archived specifically because reliability is unavailable or restricted.
@@ -784,6 +794,7 @@ def _process_fixture(
         qss=max(0.0, min(100.0, dqs)),
         reason_codes=gate_reasons or None,
         research_mode=shadow,
+        gate_passed=gate_passed,
     )
     lineage = PredictionLineage(
         model_version_id=model_registry.id,
@@ -812,8 +823,12 @@ def _process_fixture(
             gate_passed=gate_passed,
         )
     except PredictionPublicationError as exc:
-        log.warning("signal_pipeline: publish failed for fixture %s: %s", fixture.id, exc)
-        return None
+        # A forecast was computed but cannot be archived — this must not be
+        # swallowed (DEVELOPMENT.md §4: "every prediction is archived"). Raise
+        # so the run fails visibly and rolls back rather than silently
+        # dropping a computed forecast; the fixture is retried on the next run.
+        log.error("signal_pipeline: publish failed for fixture %s: %s", fixture.id, exc)
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -847,6 +862,9 @@ def _run_accumulator_phase(
 
     qualified: list[QualifiedSelection] = []
     for process_result in results:
+        if not process_result.gate_passed:
+            # Archived for audit/calibration only — never eligible for staking.
+            continue
         pred = process_result.prediction
         fixture = fixtures_by_id.get(str(pred.fixture_id))
         league_id = str(fixture.competition_id) if fixture else "unknown"
@@ -1026,15 +1044,17 @@ def run_once(
                 if result is not None:
                     process_results.append(result)
                     run.predictions_archived += 1
+                    run.features_extracted += 1
                     if result.prediction.research_mode:
                         run.shadow_predictions_archived += 1
-                    else:
+                    elif result.gate_passed:
                         run.predictions_published += 1
-                    if not result.gate_passed:
+                    else:
+                        # Archived for audit/calibration only — not published.
                         run.value_gate_rejected += 1
-                    run.features_extracted += 1
                 else:
-                    run.value_gate_rejected += 1
+                    # Feature extraction failed — nothing was computed to archive.
+                    run.feature_errors += 1
 
             # Accumulator phase.
             if process_results and not shadow:
@@ -1075,12 +1095,13 @@ def run_once(
 
     log.info(
         "signal_pipeline: run complete — fixtures=%d published=%d archived=%d "
-        "shadow=%d gate_rejected=%d errors=%d",
+        "shadow=%d gate_rejected=%d feature_errors=%d errors=%d",
         run.fixtures_evaluated,
         run.predictions_published,
         run.predictions_archived,
         run.shadow_predictions_archived,
         run.value_gate_rejected,
+        run.feature_errors,
         run.errors,
     )
     return run

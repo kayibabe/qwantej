@@ -26,15 +26,41 @@ from backend.api.routes import (
     predictions,
     settlements,
 )
-from backend.core.config import get_settings
+from backend.core.config import Settings, get_settings
 from backend.core.logging import configure_logging, request_id_ctx
 from backend.core.security import normalize_request_id
 
 log = logging.getLogger(__name__)
 
 
+def _validate_environment_config(settings: Settings) -> None:
+    """Fail fast (at startup) if a non-development environment is misconfigured.
+
+    Only the explicit ``development`` value may run with relaxed security
+    defaults. Any other value — "production", "staging", a CI environment, or
+    an unset/typo'd value — must have real auth and CORS configuration, or the
+    app refuses to boot rather than silently serving traffic wide open.
+    """
+    if settings.is_development:
+        return
+
+    problems = []
+    if not settings.api_key.strip():
+        problems.append("API_KEY must be set when ENVIRONMENT is not 'development'")
+    if settings.secret_key.strip() in {"", "change-me"}:
+        problems.append("SECRET_KEY must be set when ENVIRONMENT is not 'development'")
+    if not settings.cors_origin_list:
+        problems.append("CORS_ORIGINS must be set when ENVIRONMENT is not 'development'")
+    if problems:
+        raise RuntimeError(
+            f"Invalid configuration for ENVIRONMENT={settings.environment!r}: "
+            + "; ".join(problems)
+        )
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
+    _validate_environment_config(settings)
 
     configure_logging(log_level=settings.log_level, log_format=settings.log_format)
 
@@ -45,13 +71,13 @@ def create_app() -> FastAPI:
             "performance for football accumulator intelligence."
         ),
         version="0.1.0",
-        docs_url="/docs" if settings.environment != "production" else None,
-        redoc_url="/redoc" if settings.environment != "production" else None,
+        docs_url="/docs" if settings.is_development else None,
+        redoc_url="/redoc" if settings.is_development else None,
     )
 
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"] if settings.environment != "production" else settings.cors_origin_list,
+        allow_origins=["*"] if settings.is_development else settings.cors_origin_list,
         allow_credentials=True,
         allow_methods=["GET"],
         allow_headers=["*"],

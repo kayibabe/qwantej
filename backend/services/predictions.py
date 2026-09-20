@@ -101,6 +101,10 @@ class MinimumPredictionRecord:
     expected_value: float | None = None
     # Shadow rows are archived evidence only and cannot drive live tickets.
     research_mode: bool = False
+    # Whether this forecast passed the value gate. False means the row is
+    # archived for audit/calibration evidence only — callers (the accumulator
+    # optimiser) must filter on this before treating a row as a live signal.
+    gate_passed: bool = True
 
 
 def publish_prediction(
@@ -155,6 +159,7 @@ def publish_prediction(
         input_snapshot_hash=lineage.input_snapshot_hash,
         reason_codes=record.reason_codes,
         research_mode=record.research_mode,
+        gate_passed=record.gate_passed,
     )
     session.add(prediction)
     session.flush()
