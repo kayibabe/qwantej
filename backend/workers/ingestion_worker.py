@@ -12,24 +12,19 @@ Ligue 1 (61), and La Liga (140).  The season is derived from today's date
 using the European convention: seasons that start in July–August use the
 calendar year of their start (e.g. the 2026/27 season → season=2026).
 
-**Research mode (opt-in):** pass ``--all-leagues`` to discover all ~785
-current-season leagues from the API.  Fixtures and odds are stored for all
-leagues.  The value gate requires a reliability snapshot (built after
-settlements), so unvalidated leagues do not publish signals *initially* —
-but this is a temporary barrier, not a hard publication boundary.  Once
-enough predictions settle the snapshot is built and the gate passes.
-``Competition.validated`` (added in migration ``a4b6c8d0e2f4``) is the
-hard publication gate: the signal pipeline filters ``validated IS TRUE``
-before any inference, so unvalidated leagues can never generate live signals
-even after their reliability snapshots are built.
+**Research mode (opt-in):** pass ``--all-leagues`` to discover the current
+season's leagues from the API. The managed scheduler ingests a deterministic,
+bounded batch each hour so its full rotation completes in about one day
+without bursting the provider. ``Competition.validated`` remains the hard
+public-signal and paper-ticket gate. Unvalidated leagues may be forecast in a
+separate ``research_mode`` archive only, where they cannot be published,
+selected, or staked.
 
 Quota management
 ----------------
-The API-Football Pro plan provides 7,500 requests/day.
-
-- Four-league production run: ~8 requests → comfortably within any interval.
-- All-leagues research run: ~1,285 requests estimated → recommended interval
-  18,000 s (5 h), giving ~4.8 runs/day.
+The API-Football Pro plan provides a finite request budget. The managed
+all-league mode therefore rotates a small batch at the hourly cadence and
+stops immediately if the provider returns a rate-limit response.
 
 The worker aborts league processing early when ``quota_stop_below`` remaining
 requests are observed (default 100) so that settlement and signal workers
@@ -42,13 +37,14 @@ Usage (one-shot):
 
 Usage (continuous):
     python -m backend.workers.ingestion_worker --loop
-    python -m backend.workers.ingestion_worker --loop --all-leagues --interval 18000
+    python -m backend.workers.ingestion_worker --loop --all-leagues --interval 3600
 """
 
 from __future__ import annotations
 
 import argparse
 import logging
+import math
 import sys
 import time
 from dataclasses import dataclass, field
@@ -69,8 +65,8 @@ SUPPORTED_LEAGUE_IDS: tuple[int, ...] = tuple(
 
 # Default interval (seconds) for production 4-league mode.
 _DEFAULT_INTERVAL_SINGLE = 3600
-# Recommended interval for all-leagues research mode (~5 h, within 7,500/day quota).
-_DEFAULT_INTERVAL_ALL = 18000
+# Managed all-league research rotates a bounded batch each hour.
+_DEFAULT_INTERVAL_ALL = 3600
 
 
 class _LeagueDiscoveryClient(Protocol):
@@ -115,6 +111,9 @@ class WorkerConfig:
     interval_seconds: int = _DEFAULT_INTERVAL_SINGLE
     # Abort remaining leagues when API quota falls to or below this threshold.
     quota_stop_below: int = 100
+    # ``None`` keeps the CLI one-shot all-league mode. The managed scheduler
+    # supplies a bounded batch size for quota-safe broad coverage.
+    max_leagues_per_run: int | None = None
 
 
 @dataclass
@@ -127,6 +126,31 @@ class RunSummary:
     fixtures_updated: int = 0
     odds_quotes_created: int = 0
     errors: int = 0
+    rate_limited: bool = False
+
+
+def select_research_batch(
+    leagues: list[tuple[int, int]],
+    *,
+    batch_size: int,
+    now: datetime,
+    interval_seconds: int,
+) -> list[tuple[int, int]]:
+    """Return one deterministic all-league batch for this UTC scheduler slot.
+
+    Restarts select the same time slot instead of resetting to the first
+    league, and every discovered league appears once in each full rotation.
+    """
+    if batch_size < 1:
+        raise ValueError("batch_size must be positive")
+    if interval_seconds < 1:
+        raise ValueError("interval_seconds must be positive")
+    if not leagues:
+        return []
+    batch_count = math.ceil(len(leagues) / batch_size)
+    batch_index = (int(now.timestamp()) // interval_seconds) % batch_count
+    start = batch_index * batch_size
+    return leagues[start:start + batch_size]
 
 
 def discover_leagues(client: _LeagueDiscoveryClient, season: int) -> list[tuple[int, int]]:
@@ -151,7 +175,7 @@ def run_once(config: WorkerConfig | None = None) -> RunSummary:
     from backend.core.config import get_settings
     from backend.core.db import make_engine, session_scope
     from backend.core.logging import configure_logging
-    from backend.services.api_football_client import ApiFootballClient
+    from backend.services.api_football_client import ApiFootballClient, ApiFootballRateLimitError
     from backend.services.api_football_ingestion import IngestionSummary, ingest_walk_forward_window
 
     configure_logging()
@@ -169,6 +193,18 @@ def run_once(config: WorkerConfig | None = None) -> RunSummary:
     leagues = cfg.leagues
     if leagues is None:
         leagues = discover_leagues(client, cfg.season)
+        if cfg.max_leagues_per_run is not None:
+            discovered_count = len(leagues)
+            leagues = select_research_batch(
+                leagues,
+                batch_size=cfg.max_leagues_per_run,
+                now=datetime.now(UTC),
+                interval_seconds=cfg.interval_seconds,
+            )
+            log.info(
+                "ingestion_worker: selected research batch %d/%d leagues",
+                len(leagues), discovered_count,
+            )
 
     today = date.today()
     start = today - timedelta(days=cfg.lookback_days)
@@ -227,6 +263,14 @@ def run_once(config: WorkerConfig | None = None) -> RunSummary:
                 aggregate.fixtures_updated += summary.fixtures_updated
                 aggregate.odds_quotes_created += summary.odds_quotes_created
 
+        except ApiFootballRateLimitError:
+            aggregate.rate_limited = True
+            aggregate.leagues_skipped_quota = len(leagues) - aggregate.leagues_attempted
+            log.warning(
+                "ingestion_worker: provider rate limit reached — stopping after %d/%d leagues",
+                aggregate.leagues_attempted, len(leagues),
+            )
+            break
         except Exception:
             log.exception(
                 "ingestion_worker: league=%d season=%d — ingestion failed",
@@ -237,12 +281,13 @@ def run_once(config: WorkerConfig | None = None) -> RunSummary:
     log.info(
         "ingestion_worker: run complete — "
         "leagues=%d/%d skipped_quota=%d "
-        "fixtures_created=%d fixtures_updated=%d odds_created=%d errors=%d",
+        "fixtures_created=%d fixtures_updated=%d odds_created=%d rate_limited=%s errors=%d",
         aggregate.leagues_attempted, len(leagues),
         aggregate.leagues_skipped_quota,
         aggregate.fixtures_created,
         aggregate.fixtures_updated,
         aggregate.odds_quotes_created,
+        aggregate.rate_limited,
         aggregate.errors,
     )
     return aggregate

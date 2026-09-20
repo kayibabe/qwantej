@@ -383,12 +383,15 @@ def _upcoming_unpredicted_fixtures(
     *,
     shadow: bool = False,
 ) -> list[Any]:
-    """Return fixtures in validated competitions kicking off in (now, now+lookahead_hours].
+    """Return upcoming fixtures for production or non-public research.
 
     Fixtures are excluded when:
     - already predicted on 1X2/HOME for this market in the requested mode,
     - outside the lookahead window,
-    - or their Competition.validated flag is False (fail-closed publication gate).
+    - or, in production only, their Competition.validated flag is False.
+
+    Shadow forecasts intentionally include unvalidated leagues, but are stored
+    under ``research_mode=True`` and are never eligible for accumulators.
     """
     from sqlalchemy import select
 
@@ -406,16 +409,19 @@ def _upcoming_unpredicted_fixtures(
         Prediction.research_mode.is_(shadow),
     )
 
+    filters = [
+        Fixture.status == FixtureStatus.SCHEDULED,
+        Fixture.kickoff_utc > now,
+        Fixture.kickoff_utc <= window_end,
+        Fixture.id.not_in(predicted_fixture_ids),
+    ]
+    if not shadow:
+        filters.append(Competition.validated.is_(True))
+
     stmt = (
         select(Fixture)
         .join(Competition, Fixture.competition_id == Competition.id)
-        .where(
-            Competition.validated.is_(True),
-            Fixture.status == FixtureStatus.SCHEDULED,
-            Fixture.kickoff_utc > now,
-            Fixture.kickoff_utc <= window_end,
-            Fixture.id.not_in(predicted_fixture_ids),
-        )
+        .where(*filters)
         .order_by(Fixture.kickoff_utc)
     )
     return list(session.scalars(stmt))
