@@ -162,6 +162,24 @@ class TestResearchBatchSelection:
             leagues, batch_size=3, now=now, interval_seconds=3600
         )
 
+    def test_priority_leagues_are_refreshed_in_every_research_batch(self):
+        leagues = [(league_id, 2026) for league_id in range(1, 9)]
+        priority = (2, 7)
+        batches = [
+            select_research_batch(
+                leagues,
+                batch_size=4,
+                now=datetime.fromtimestamp(slot * 3600, UTC),
+                interval_seconds=3600,
+                priority_league_ids=priority,
+            )
+            for slot in range(3)
+        ]
+        assert all({(2, 2026), (7, 2026)}.issubset(batch) for batch in batches)
+        assert {
+            league for batch in batches for league in batch if league[0] not in priority
+        } == {(1, 2026), (3, 2026), (4, 2026), (5, 2026), (6, 2026), (8, 2026)}
+
 
 # ---------------------------------------------------------------------------
 # run_once — API-key guard, quota guard, discovery path
@@ -437,6 +455,7 @@ class TestSchedulerArgParsing:
         config = closure_vars["config"]
         assert config.max_leagues_per_run == 40
         assert config.interval_seconds == 7200
+        assert config.priority_league_ids == SUPPORTED_LEAGUE_IDS
 
     def test_scheduler_make_ingestion_run_explicit_leagues(self):
         """_make_ingestion_run with explicit IDs uses only those IDs."""
