@@ -20,6 +20,10 @@ class ApiFootballError(RuntimeError):
     """Provider or transport failure that never includes the API credential."""
 
 
+class ApiFootballRateLimitError(ApiFootballError):
+    """The provider rejected a request because its rate limit was reached."""
+
+
 class JsonTransport(Protocol):
     def get_json(
         self, url: str, *, headers: Mapping[str, str], timeout_seconds: float
@@ -190,6 +194,8 @@ class ApiFootballClient:
             raise ApiFootballError(f"API-Football request failed with HTTP {status}")
         errors = payload.get("errors")
         if errors not in (None, [], {}):
+            if _is_rate_limit_error(errors):
+                raise ApiFootballRateLimitError("API-Football rate limit reached")
             raise ApiFootballError(f"API-Football rejected the request: {_safe_errors(errors)}")
         raw_response = payload.get("response")
         if not isinstance(raw_response, list) or not all(
@@ -232,3 +238,12 @@ def _safe_errors(value: Any) -> str:
     if isinstance(value, list):
         return f"{len(value)} error(s)"
     return "provider error"
+
+
+def _is_rate_limit_error(value: Any) -> bool:
+    """Recognise API-Football's structured ``rateLimit`` response safely."""
+    if isinstance(value, dict):
+        return any("rate" in str(key).lower() and "limit" in str(key).lower() for key in value)
+    if isinstance(value, list):
+        return any(_is_rate_limit_error(item) for item in value)
+    return "rate" in str(value).lower() and "limit" in str(value).lower()

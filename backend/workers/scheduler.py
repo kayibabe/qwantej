@@ -10,15 +10,15 @@ League tiers
 (Premier League 39, Bundesliga 78, Ligue 1 61, La Liga 140).  Interval
 defaults to 3,600 s.
 
-**Research mode (opt-in):** ``--all-leagues`` discovers all ~785 current-
-season leagues each run.  Interval defaults to 18,000 s (5 h) to stay within
-the 7,500-request/day Pro quota.  Fixtures and odds are stored for all
-leagues, and the signal pipeline enforces the ``Competition.validated``
-publication gate before feature extraction or inference.
+**Research mode (opt-in):** ``--all-leagues`` discovers current-season
+leagues and rotates a bounded batch each hour. Fixtures and odds are stored
+over the rotation, and unvalidated leagues can only enter a separate
+``research_mode`` forecast archive; the production signal and paper-ticket
+path still enforces ``Competition.validated``.
 
 .. warning::
-    Research runs may ingest all leagues, but unvalidated competitions cannot
-    publish signals because the signal pipeline checks the validation flag.
+    Research runs never publish signals or paper tickets from unvalidated
+    competitions. Their forecasts are isolated for prospective measurement.
 
 Intervals:
     --ingest-interval  N   override the ingestion interval
@@ -87,6 +87,8 @@ def _make_ingestion_run(
     all_leagues: bool,
     explicit_league_ids: list[int],
     season: int,
+    all_leagues_batch_size: int | None = None,
+    ingest_interval_seconds: int = _DEFAULT_INGEST_INTERVAL_ALL,
 ) -> object:
     """Return a zero-argument callable for the ingestion worker loop.
 
@@ -101,8 +103,14 @@ def _make_ingestion_run(
             season=season,
         )
     elif all_leagues:
-        # Research mode: discover all leagues at runtime.
-        config = WorkerConfig(leagues=None, season=season)
+        # Research mode: discover all leagues but ingest only the scheduled
+        # bounded batch so one provider limit cannot stall the whole run.
+        config = WorkerConfig(
+            leagues=None,
+            season=season,
+            interval_seconds=ingest_interval_seconds,
+            max_leagues_per_run=all_leagues_batch_size,
+        )
     else:
         # Production default: four supported leagues.
         config = WorkerConfig(
@@ -140,6 +148,21 @@ def _signal_pipeline_run(*, paper_ticket_pipeline_enabled: bool) -> None:
 def _shadow_signal_pipeline_run() -> None:
     """Compatibility wrapper for explicit shadow-only callers and tests."""
     _signal_pipeline_run(paper_ticket_pipeline_enabled=False)
+
+
+def _all_leagues_research_pipeline_run() -> None:
+    """Archive all-league forecasts under the non-public research namespace."""
+    import importlib.util
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parent.parent.parent / "scripts" / "run_signal_pipeline.py"
+    spec = importlib.util.spec_from_file_location("run_signal_pipeline_research", script)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"scheduler: unable to load signal pipeline from {script}")
+    mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    mod.run_once(shadow=True)
 
 
 def _settlement_run() -> None:
@@ -214,7 +237,11 @@ def main() -> None:
     all_leagues_mode = _all_leagues_enabled(args.all_leagues)
     from backend.core.config import get_settings
 
-    paper_ticket_pipeline_enabled = get_settings().paper_ticket_pipeline_enabled
+    settings = get_settings()
+    paper_ticket_pipeline_enabled = settings.paper_ticket_pipeline_enabled
+    all_leagues_research_pipeline_enabled = (
+        all_leagues_mode and settings.all_leagues_research_pipeline_enabled
+    )
 
     ingest_interval = args.ingest_interval
     if ingest_interval is None:
@@ -227,6 +254,8 @@ def main() -> None:
         all_leagues=all_leagues_mode,
         explicit_league_ids=explicit_league_ids,
         season=season,
+        all_leagues_batch_size=(settings.all_leagues_batch_size if all_leagues_mode else None),
+        ingest_interval_seconds=ingest_interval,
     )
 
     if all_leagues_mode:
@@ -251,6 +280,11 @@ def main() -> None:
          args.signal_interval, args.signal_offset),
         ("settlement",      _settlement_run,        args.settle_interval, 0),
     ]
+    if all_leagues_research_pipeline_enabled:
+        workers.append(
+            ("all-leagues-research-pipeline", _all_leagues_research_pipeline_run,
+             args.signal_interval, args.signal_offset)
+        )
 
     threads = []
     for name, fn, interval, delay in workers:

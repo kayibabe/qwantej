@@ -297,6 +297,15 @@ class TestUpcomingUnpredictedFixtures:
         results = _upcoming_unpredicted_fixtures(db_session, now, lookahead_hours=24)
         assert not any(r.id == f.id for r in results)
 
+    def test_shadow_includes_unvalidated_competition_as_research_only(self, db_session):
+        comp, season, home, away = _seed_provider_and_competition(db_session, validated=False)
+        now = datetime.now(UTC)
+        f = _make_fixture(db_session, comp, season, home, away, kickoff=now + timedelta(hours=6))
+        results = _upcoming_unpredicted_fixtures(
+            db_session, now, lookahead_hours=24, shadow=True
+        )
+        assert any(r.id == f.id for r in results)
+
     def test_includes_validated_competition(self, db_session):
         # Sanity: validated=True must pass the gate when other conditions are met.
         comp, season, home, away = _seed_provider_and_competition(db_session, validated=True)

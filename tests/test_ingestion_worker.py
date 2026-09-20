@@ -15,6 +15,7 @@ from backend.workers.ingestion_worker import (
     WorkerConfig,
     current_season,
     discover_leagues,
+    select_research_batch,
 )
 
 # ---------------------------------------------------------------------------
@@ -137,6 +138,31 @@ class TestDiscoverLeagues:
         assert discover_leagues(_MockClient(), 2026) == []
 
 
+class TestResearchBatchSelection:
+    def test_rotation_is_bounded_and_covers_every_league_once(self):
+        leagues = [(league_id, 2026) for league_id in range(1, 9)]
+        batches = [
+            select_research_batch(
+                leagues,
+                batch_size=3,
+                now=datetime.fromtimestamp(slot * 3600, UTC),
+                interval_seconds=3600,
+            )
+            for slot in range(3)
+        ]
+        assert batches == [leagues[:3], leagues[3:6], leagues[6:]]
+        assert [item for batch in batches for item in batch] == leagues
+
+    def test_restarting_same_scheduler_slot_keeps_same_batch(self):
+        leagues = [(league_id, 2026) for league_id in range(1, 9)]
+        now = datetime.fromtimestamp(7 * 3600 + 123, UTC)
+        assert select_research_batch(
+            leagues, batch_size=3, now=now, interval_seconds=3600
+        ) == select_research_batch(
+            leagues, batch_size=3, now=now, interval_seconds=3600
+        )
+
+
 # ---------------------------------------------------------------------------
 # run_once — API-key guard, quota guard, discovery path
 # ---------------------------------------------------------------------------
@@ -231,6 +257,32 @@ class TestRunOnce:
             run_once(cfg)
 
         mock_discover.assert_called_once_with(mock_client, 2026)
+
+    def test_provider_rate_limit_stops_without_counting_an_ingestion_error(self):
+        from backend.services.api_football_client import ApiFootballRateLimitError
+
+        cfg = WorkerConfig(leagues=[(39, 2026), (78, 2026)])
+        mock_settings = MagicMock(api_football_key="test-key")
+        mock_client = MagicMock(last_requests_remaining=None)
+        with (
+            patch("backend.core.config.get_settings", return_value=mock_settings),
+            patch("backend.core.logging.configure_logging"),
+            patch("backend.core.db.make_engine"),
+            patch("backend.services.api_football_client.ApiFootballClient.from_settings",
+                  return_value=mock_client),
+            patch("backend.core.db.session_scope") as mock_scope,
+            patch("backend.services.api_football_ingestion.ingest_walk_forward_window",
+                  side_effect=ApiFootballRateLimitError("limited")),
+        ):
+            mock_scope.return_value.__enter__ = MagicMock(return_value=MagicMock())
+            mock_scope.return_value.__exit__ = MagicMock(return_value=False)
+            from backend.workers.ingestion_worker import run_once
+            summary = run_once(cfg)
+
+        assert summary.rate_limited is True
+        assert summary.errors == 0
+        assert summary.leagues_attempted == 1
+        assert summary.leagues_skipped_quota == 1
 
 
 # ---------------------------------------------------------------------------
@@ -365,6 +417,26 @@ class TestSchedulerArgParsing:
         assert config is not None
         assert config.leagues is None  # None = discover at runtime
 
+    def test_scheduler_all_league_batch_uses_actual_scheduler_interval(self):
+        from backend.workers.scheduler import _make_ingestion_run
+
+        _run = _make_ingestion_run(
+            all_leagues=True,
+            explicit_league_ids=[],
+            season=2026,
+            all_leagues_batch_size=40,
+            ingest_interval_seconds=7200,
+        )
+        closure_vars = {
+            name: cell.cell_contents
+            for name, cell in zip(
+                _run.__code__.co_freevars, _run.__closure__ or [], strict=True
+            )
+        }
+        config = closure_vars["config"]
+        assert config.max_leagues_per_run == 40
+        assert config.interval_seconds == 7200
+
     def test_scheduler_make_ingestion_run_explicit_leagues(self):
         """_make_ingestion_run with explicit IDs uses only those IDs."""
         from backend.workers.ingestion_worker import current_season
@@ -418,6 +490,23 @@ class TestSchedulerArgParsing:
 
         fake_spec.loader.exec_module.assert_called_once_with(fake_module)
         fake_module.run_once.assert_called_once_with(shadow=False)
+
+    def test_scheduler_all_leagues_research_worker_uses_shadow_mode(self):
+        from backend.workers.scheduler import _all_leagues_research_pipeline_run
+
+        fake_module = MagicMock()
+        fake_spec = MagicMock()
+        fake_spec.name = "run_signal_pipeline_research"
+        fake_spec.loader = MagicMock()
+        with (
+            patch("importlib.util.spec_from_file_location", return_value=fake_spec),
+            patch("importlib.util.module_from_spec", return_value=fake_module),
+            patch.dict("sys.modules", {}, clear=False),
+        ):
+            _all_leagues_research_pipeline_run()
+
+        fake_spec.loader.exec_module.assert_called_once_with(fake_module)
+        fake_module.run_once.assert_called_once_with(shadow=True)
 
 
 # ---------------------------------------------------------------------------

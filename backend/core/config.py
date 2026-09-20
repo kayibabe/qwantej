@@ -7,6 +7,7 @@ there too.
 
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -55,9 +56,13 @@ class Settings(BaseSettings):
     # Opt-in broad research collection. The signal pipeline still requires
     # Competition.validated before it can create a public prediction.
     ingest_all_leagues: bool = False
+    # A bounded hourly batch keeps research coverage below the provider limit.
+    all_leagues_batch_size: int = Field(default=40, ge=1, le=100)
     # When enabled, the scheduler runs the approved-league paper-ticket path.
     # It remains paper-only; live stakes and ticket locking are not implemented.
     paper_ticket_pipeline_enabled: bool = False
+    # Archive all-league prospective forecasts separately from production.
+    all_leagues_research_pipeline_enabled: bool = False
 
     # Notifications
     telegram_bot_token: str = ""
