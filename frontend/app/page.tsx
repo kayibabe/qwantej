@@ -33,16 +33,17 @@ export default async function DashboardPage({
     ? accPage.items.filter((acc) => fmtDate(acc.published_at) === fmtIsoDate(selectedDate))
     : []
   const statusClass = STATUS_STYLES[today?.status ?? ""] ?? STATUS_STYLES.collecting
+  const observedLeagueCount = today ? new Set(today.observed_leagues).size : 0
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:gap-8 sm:p-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-8">
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">Qwantej / {isToday ? "Today" : fmtIsoDate(selectedDate)}</p>
-        <h1 className="mt-2 text-2xl font-semibold text-[var(--text-primary)] sm:text-3xl">{isToday ? "What is available today?" : `What was available on ${fmtIsoDate(selectedDate)}?`}</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">Paper-only ticket availability, data freshness, and the checks behind this run. Historical performance lives on the Performance page.</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">{isToday ? "Today's paper tickets" : `Paper tickets for ${fmtIsoDate(selectedDate)}`}</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">Ticket availability and the data behind it, shown in Africa/Blantyre time.</p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-3">
+      <nav aria-label="Choose dashboard date" className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3 shadow-[var(--surface-shadow)]">
         <a
           href={`?date=${addDaysIso(selectedDate, -1)}`}
           className="rounded px-3 py-1 text-xs font-medium border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-raised)]"
@@ -64,8 +65,8 @@ export default async function DashboardPage({
             Jump to today
           </a>
         )}
-        <DateJumpForm selectedDate={selectedDate} />
-      </div>
+        <div className="w-full sm:ml-auto sm:w-auto"><DateJumpForm selectedDate={selectedDate} /></div>
+      </nav>
 
       {!today ? (
         <section className="status-panel status-stale rounded-lg border p-5" aria-live="polite">
@@ -74,20 +75,28 @@ export default async function DashboardPage({
         </section>
       ) : (
         <>
-          <section className={`rounded-lg border p-5 ${statusClass}`} aria-labelledby="today-status-heading">
+          <section className={`rounded-xl border p-5 sm:p-6 ${statusClass}`} aria-labelledby="today-status-heading">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="status-muted text-xs font-semibold uppercase tracking-wider">{today.date} · Africa/Blantyre</p>
-                <h2 id="today-status-heading" className="mt-2 text-xl font-semibold">{today.label}</h2>
+                <h2 id="today-status-heading" className="mt-2 text-2xl font-semibold tracking-tight">{today.label}</h2>
                 <p className="status-secondary mt-2 text-sm leading-6">{today.detail}</p>
               </div>
               <span className="rounded-full border border-current px-3 py-1 text-xs font-semibold uppercase tracking-wider">{today.status.replaceAll("_", " ")}</span>
             </div>
-            <div className="mt-5 grid grid-cols-1 gap-4 border-t border-[var(--status-border)]/50 pt-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div><p className="status-muted text-xs uppercase tracking-wider">Data last checked</p><p className="mt-1 text-sm font-mono">{today.data_freshness_utc ? fmtDatetime(today.data_freshness_utc) : "Not available"}</p></div>
-              <div><p className="status-muted text-xs uppercase tracking-wider">Next scheduled run</p><p className="mt-1 text-sm font-mono">{today.next_run_utc ? fmtDatetime(today.next_run_utc) : "Not currently reported"}</p></div>
-              <div><p className="status-muted text-xs uppercase tracking-wider">Leagues checked</p><p className="mt-1 text-sm">{today.checked_leagues.length ? today.checked_leagues.join(", ") : "No validated leagues configured"}</p></div>
-              <div><p className="status-muted text-xs uppercase tracking-wider">Research coverage</p><p className="mt-1 text-sm">{today.observed_fixture_count ? `${today.observed_fixture_count} fixture${today.observed_fixture_count === 1 ? "" : "s"} · ${today.observed_leagues.join(", ")}` : "No scheduled fixtures observed"}</p></div>
+          </section>
+
+          <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-5 shadow-[var(--surface-shadow)] sm:p-6" aria-label="Run details">
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">Run details</h2>
+            <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              <div><p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Data last checked</p><p className="mt-1 text-sm text-[var(--text-primary)]">{today.data_freshness_utc ? fmtDatetime(today.data_freshness_utc) : "Not available"}</p></div>
+              <div><p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Next scheduled run</p><p className="mt-1 text-sm text-[var(--text-primary)]">{today.next_run_utc ? fmtDatetime(today.next_run_utc) : "Not currently reported"}</p></div>
+              <div><p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Validated leagues checked</p><p className="mt-1 text-sm text-[var(--text-primary)]">{today.checked_leagues.length ? today.checked_leagues.join(", ") : "No validated leagues configured"}</p></div>
+            </div>
+            <div className="mt-5 border-t border-[var(--border-subtle)] pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Research coverage</p>
+              <p className="mt-1 text-sm text-[var(--text-primary)]">{today.observed_fixture_count ? `${today.observed_fixture_count} scheduled fixtures observed across ${observedLeagueCount} ${observedLeagueCount === 1 ? "league" : "leagues"}` : "No scheduled fixtures observed"}</p>
+              {observedLeagueCount > 0 && <details className="mt-2 text-sm text-[var(--text-secondary)]"><summary className="w-fit cursor-pointer font-medium text-[var(--accent)] hover:underline">View observed leagues</summary><p className="mt-2 max-w-3xl leading-6">{today.observed_leagues.join(", ")}</p></details>}
             </div>
           </section>
 
