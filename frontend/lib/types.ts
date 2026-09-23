@@ -74,6 +74,12 @@ export interface AccumulatorLegOut {
   away_team: string | null
   kickoff_utc: string | null
   competition_name: string | null
+  match_state: "pending" | "live" | "won" | "lost" | "void" | string
+  fixture_status: string
+  score: string | null
+  live_phase: string | null
+  elapsed_minutes: number | null
+  settlement_outcome: string | null
   quote_captured_at: string | null
 }
 

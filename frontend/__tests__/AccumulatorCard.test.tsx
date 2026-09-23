@@ -32,6 +32,12 @@ const BASE: AccumulatorOut = {
       away_team: "Away FC",
       kickoff_utc: "2026-09-07T20:00:00Z",
       competition_name: "Premier League",
+      match_state: "pending",
+      fixture_status: "scheduled",
+      score: null,
+      live_phase: null,
+      elapsed_minutes: null,
+      settlement_outcome: null,
       quote_captured_at: "2026-09-07T17:30:00Z",
     },
     {
@@ -51,6 +57,12 @@ const BASE: AccumulatorOut = {
       away_team: "Home FC",
       kickoff_utc: "2026-09-07T20:00:00Z",
       competition_name: "Bundesliga",
+      match_state: "pending",
+      fixture_status: "scheduled",
+      score: null,
+      live_phase: null,
+      elapsed_minutes: null,
+      settlement_outcome: null,
       quote_captured_at: "2026-09-07T17:30:00Z",
     },
   ],
@@ -77,7 +89,7 @@ describe("AccumulatorCard", () => {
 
   it("renders status badge", () => {
     render(<AccumulatorCard acc={BASE} />)
-    expect(screen.getByText("PENDING")).toBeInTheDocument()
+    expect(screen.getAllByText("PENDING")).toHaveLength(3)
   })
 
   it("renders leg count", () => {
@@ -95,6 +107,33 @@ describe("AccumulatorCard", () => {
     expect(screen.getByText("Home FC vs Away FC")).toBeInTheDocument()
     expect(screen.getByText(/Bet365/)).toBeInTheDocument()
     expect(screen.getAllByText(/Price as of/)).toHaveLength(2)
+  })
+
+  it("shows live phase, elapsed minutes, and score for a live match", () => {
+    const live = {
+      ...BASE,
+      legs: [{
+        ...BASE.legs[0], match_state: "live", fixture_status: "live",
+        score: "1–0", live_phase: "2nd half", elapsed_minutes: 67,
+      }, BASE.legs[1]],
+    }
+    render(<AccumulatorCard acc={live} />)
+    expect(screen.getByText("LIVE · 2nd half · 67′")).toBeInTheDocument()
+    expect(screen.getByLabelText("Score 1–0")).toBeInTheDocument()
+  })
+
+  it("shows a settled leg outcome separately from ticket status", () => {
+    const settledLeg = {
+      ...BASE,
+      legs: [{
+        ...BASE.legs[0], match_state: "won", fixture_status: "finished",
+        score: "2–1", settlement_outcome: "win",
+      }, BASE.legs[1]],
+    }
+    render(<AccumulatorCard acc={settledLeg} />)
+    expect(screen.getByText("WON")).toBeInTheDocument()
+    expect(screen.getByLabelText("Score 2–1")).toBeInTheDocument()
+    expect(screen.getAllByText("PENDING")).toHaveLength(2)
   })
 
   it("renders GROWTH product with correct label", () => {
