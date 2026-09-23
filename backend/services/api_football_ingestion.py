@@ -9,7 +9,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, TypeVar
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.models import (
@@ -23,8 +23,10 @@ from backend.models import (
     Fixture,
     FixtureStatus,
     OddsQuote,
+    Prediction,
     Provider,
     Season,
+    Settlement,
     SourceMapping,
     StatsSnapshot,
     StatsSubjectType,
@@ -39,6 +41,10 @@ SOURCE_NAME = "api-football"
 FIXTURE_SOURCE = "api-football:fixtures"
 STATISTICS_SOURCE = "api-football:fixture-statistics"
 PROVIDER_BASE_URL = "https://v3.football.api-sports.io"
+_LIVE_FIXTURE_REFRESH_INTERVAL = timedelta(minutes=2)
+_OVERDUE_FIXTURE_REFRESH_INTERVAL = timedelta(minutes=15)
+_OVERDUE_FIXTURE_THRESHOLD = timedelta(hours=3)
+_TRACKED_FIXTURE_LOOKBACK = timedelta(days=3)
 
 # These are the only API-Football competitions that have passed the current
 # production validation policy.  Keep the allow-list beside canonical mapping:
@@ -166,11 +172,26 @@ def refresh_tracked_accumulator_fixtures(
     """
     _require_aware(now, "now")
     _require_aware(captured_at, "captured_at")
-    earliest_kickoff = now.astimezone(UTC) - timedelta(hours=6)
+    now_utc = now.astimezone(UTC)
+    earliest_kickoff = now_utc - _TRACKED_FIXTURE_LOOKBACK
     latest_kickoff = now.astimezone(UTC) + timedelta(minutes=15)
-    external_ids = list(
-        session.scalars(
-            select(SourceMapping.external_id)
+    latest_snapshot_at = (
+        select(func.max(StatsSnapshot.as_of_timestamp))
+        .where(
+            StatsSnapshot.fixture_id == Fixture.id,
+            StatsSnapshot.source == FIXTURE_SOURCE,
+        )
+        .correlate(Fixture)
+        .scalar_subquery()
+    )
+    candidates = list(
+        session.execute(
+            select(
+                SourceMapping.external_id,
+                Fixture.status,
+                Fixture.kickoff_utc,
+                latest_snapshot_at.label("latest_snapshot_at"),
+            )
             .join(Provider, Provider.id == SourceMapping.provider_id)
             .join(Fixture, Fixture.id == SourceMapping.canonical_id)
             .join(AccumulatorLeg, AccumulatorLeg.fixture_id == Fixture.id)
@@ -187,6 +208,20 @@ def refresh_tracked_accumulator_fixtures(
             .order_by(SourceMapping.external_id)
         ).all()
     )
+    external_ids: list[str] = []
+    for row in candidates:
+        kickoff = _as_utc(row.kickoff_utc)
+        overdue = now_utc - kickoff >= _OVERDUE_FIXTURE_THRESHOLD
+        refresh_interval = (
+            _OVERDUE_FIXTURE_REFRESH_INTERVAL
+            if overdue and row.status is FixtureStatus.SCHEDULED
+            else _LIVE_FIXTURE_REFRESH_INTERVAL
+        )
+        if row.latest_snapshot_at is not None:
+            last_snapshot_at = _as_utc(row.latest_snapshot_at)
+            if now_utc - last_snapshot_at < refresh_interval:
+                continue
+        external_ids.append(row.external_id)
     if not external_ids:
         return IngestionSummary()
 
@@ -568,10 +603,29 @@ def _update_fixture(
         "away_goals": fixture.away_goals,
     }
     if fixture.status is FixtureStatus.FINISHED and parsed.status != "finished":
-        raise ApiFootballIngestionError("a finished fixture cannot regress to a non-final status")
+        # Keep stale providers from making a completed match look pending again.
+        # The raw response is still retained as a point-in-time snapshot below.
+        return False
     next_venue = _bounded(parsed.venue, 150, "fixture venue")
     next_home_goals = parsed.home_goals if parsed.status == "finished" else fixture.home_goals
     next_away_goals = parsed.away_goals if parsed.status == "finished" else fixture.away_goals
+    if (
+        fixture.status is FixtureStatus.FINISHED
+        and (next_home_goals, next_away_goals) != (fixture.home_goals, fixture.away_goals)
+    ):
+        prediction_ids = select(Prediction.id).where(Prediction.fixture_id == fixture.id)
+        settled_prediction = session.scalar(
+            select(Settlement.id)
+            .where(
+                Settlement.subject_type == "prediction",
+                Settlement.subject_id.in_(prediction_ids),
+            )
+            .limit(1)
+        )
+        if settled_prediction is not None:
+            raise ApiFootballIngestionError(
+                "finished fixture result conflicts with a settlement; governed correction required"
+            )
     after = {
         "kickoff_utc": parsed.kickoff_utc.isoformat(),
         "status": parsed.status,

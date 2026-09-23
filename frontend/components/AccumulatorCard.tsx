@@ -69,6 +69,7 @@ function matchStateLabel(leg: AccumulatorLegOut): string {
   if (leg.match_state === "won") return "WON"
   if (leg.match_state === "lost") return "LOST"
   if (leg.match_state === "void") return "VOID"
+  if (leg.match_state === "awaiting_result") return "RESULT DATA STALE"
   if (leg.fixture_status === "finished") return "FINISHED · AWAITING SETTLEMENT"
   if (leg.fixture_status === "postponed") return "POSTPONED"
   if (leg.fixture_status === "cancelled") return "CANCELLED"
@@ -80,6 +81,7 @@ function matchStateClass(state: string): string {
   if (state === "lost") return "text-[var(--loss)] border-[var(--loss)]/40 bg-[var(--loss)]/10"
   if (state === "live") return "text-[var(--accent)] border-[var(--accent)]/40 bg-[var(--accent)]/10"
   if (state === "void") return "text-[var(--text-muted)] border-[var(--border)] bg-[var(--bg-raised)]"
+  if (state === "awaiting_result") return "text-amber-700 border-amber-500/40 bg-amber-500/10 dark:text-amber-300"
   return "text-[var(--text-secondary)] border-[var(--border)] bg-[var(--bg-raised)]"
 }
 
@@ -182,6 +184,9 @@ export default function AccumulatorCard({ acc }: { acc: AccumulatorOut }) {
                   <div className="mt-1 flex items-center gap-3 flex-wrap">
                     <span
                       className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-bold tracking-wide ${matchStateClass(leg.match_state)}`}
+                      title={leg.match_state === "awaiting_result"
+                        ? "Kickoff passed more than three hours ago, but the provider still reports Not Started. No result has been assumed."
+                        : undefined}
                     >
                       {matchStateLabel(leg)}
                     </span>

@@ -131,6 +131,24 @@ ticket EV and constraints. If the executable price falls below minimum
 value, the leg is removed or the ticket withdrawn — the UI must never
 preserve a stale "value" label.
 
+### Match result visibility and recovery
+
+- Accumulator legs show each fixture's pending, live, won, lost, or void
+  state alongside the latest available score. For live fixtures, retain the
+  provider's period and elapsed-minute fields when present.
+- Ticket fixtures continue refreshing for three days after kickoff. Live and
+  near-kickoff fixtures refresh every two minutes; scheduled fixtures more
+  than three hours overdue back off to fifteen minutes while unresolved.
+- If the canonical fixture remains scheduled and the latest provider snapshot
+  still reports `NS`/`TBD` at least three hours after kickoff, show
+  `RESULT DATA STALE`; do not infer a score or settle a ticket from elapsed
+  time alone.
+- A human-reviewed external result can be ingested only with a public HTTPS
+  evidence URL. The application appends its source snapshot and audit event,
+  then uses the normal settlement worker. Existing settled history is never
+  rewritten; a conflicting settled result requires the governed correction
+  path.
+
 ## Candidate funnel (framework §28)
 
 ```

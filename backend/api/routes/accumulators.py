@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
@@ -79,6 +80,14 @@ def _leg_display_data(
             elapsed = None
         outcome = latest_settlement.get(leg.prediction_id)
         outcome_value = outcome.outcome.value if outcome else None
+        latest_status = short_phase.upper() if isinstance(short_phase, str) else None
+        provider_result_is_stale = (
+            fixture is not None
+            and fixture_status == FixtureStatus.SCHEDULED.value
+            and fixture_snapshot is not None
+            and latest_status in {"NS", "TBD"}
+            and _snapshot_is_overdue(fixture_snapshot, fixture.kickoff_utc)
+        )
 
         if outcome_value == SettlementOutcome.WIN.value:
             match_state = "won"
@@ -88,6 +97,8 @@ def _leg_display_data(
             match_state = "void"
         elif fixture_status == FixtureStatus.LIVE.value:
             match_state = "live"
+        elif provider_result_is_stale:
+            match_state = "awaiting_result"
         else:
             match_state = "pending"
 
@@ -134,6 +145,17 @@ def _leg_display_data(
             "settlement_outcome": outcome_value,
         }
     return result
+
+
+def _snapshot_is_overdue(snapshot: StatsSnapshot, kickoff_utc: datetime) -> bool:
+    """Whether a scheduled/not-started snapshot is at least three hours stale."""
+    snapshot_at = snapshot.as_of_timestamp
+    kickoff = kickoff_utc
+    if snapshot_at.tzinfo is None:
+        snapshot_at = snapshot_at.replace(tzinfo=UTC)
+    if kickoff.tzinfo is None:
+        kickoff = kickoff.replace(tzinfo=UTC)
+    return snapshot_at.astimezone(UTC) - kickoff.astimezone(UTC) >= timedelta(hours=3)
 
 
 @router.get("", response_model=AccumulatorPage)

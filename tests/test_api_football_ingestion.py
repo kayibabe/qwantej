@@ -21,6 +21,8 @@ from backend.models import (
     FixtureStatus,
     OddsQuote,
     Prediction,
+    Settlement,
+    SettlementOutcome,
     SourceMapping,
     StatsSnapshot,
     TicketStatus,
@@ -390,6 +392,140 @@ def test_tracked_accumulator_fixture_refreshes_live_status_and_snapshot(session:
     assert snapshot.payload["record"]["fixture"]["status"]["elapsed"] == 58
     assert snapshot.payload["record"]["goals"] == {"home": 2, "away": 0}
 
+
+def test_overdue_unresolved_ticket_keeps_refreshing_with_backoff(session: Session) -> None:
+    ingest_fixtures(session, [_fixture_payload()], captured_at=NOW)
+    fixture = session.scalar(select(Fixture))
+    assert fixture is not None
+    prediction = Prediction(
+        fixture_id=fixture.id,
+        prediction_timestamp=NOW,
+        decision_as_of=NOW,
+        market="1X2",
+        selection="home",
+        conservative_probability=0.6,
+        executable_odds=1.8,
+    )
+    accumulator = Accumulator(
+        product="Core",
+        optimiser_version="v1",
+        policy_version="v1",
+        combined_odds=2.0,
+        conservative_joint_probability=0.6,
+        stressed_joint_probability=0.5,
+        objective_score=0.5,
+        dependence_penalty_applied=0,
+        published_at=NOW,
+        status=TicketStatus.PENDING,
+    )
+    session.add_all([prediction, accumulator])
+    session.flush()
+    session.add(
+        AccumulatorLeg(
+            accumulator_id=accumulator.id,
+            prediction_id=prediction.id,
+            leg_index=0,
+            fixture_id=fixture.id,
+            league_id="39",
+            market_family="1X2",
+            selection="home",
+            decimal_odds=1.8,
+            conservative_probability=0.6,
+            edge=0.1,
+            qss=80,
+        )
+    )
+    session.flush()
+
+    not_started = _fixture_payload(status="NS")
+    not_started["fixture"]["status"] = {
+        "short": "NS", "long": "Not Started", "elapsed": None,
+    }
+
+    class StubClient:
+        requested: list[dict[str, str]] = []
+
+        def fixtures(self, **parameters):
+            self.requested.append(parameters)
+            return (not_started,)
+
+    client = StubClient()
+    first_capture = KICKOFF + timedelta(hours=7)
+    summary = refresh_tracked_accumulator_fixtures(
+        session,
+        client,  # type: ignore[arg-type]
+        now=first_capture,
+        captured_at=first_capture,
+    )
+    assert summary.fixture_snapshots_created == 1
+    assert client.requested == [{"ids": "1001"}]
+
+    later = first_capture + timedelta(minutes=2)
+    skipped = refresh_tracked_accumulator_fixtures(
+        session,
+        client,  # type: ignore[arg-type]
+        now=later,
+        captured_at=later,
+    )
+    assert skipped.fixture_snapshots_created == 0
+    assert client.requested == [{"ids": "1001"}]
+
+
+def test_finished_fixture_ignores_later_non_final_provider_status(session: Session) -> None:
+    finished = _fixture_payload(status="FT", home_goals=1, away_goals=0)
+    ingest_fixtures(session, [finished], captured_at=NOW)
+    fixture = session.scalar(select(Fixture))
+    assert fixture is not None
+
+    stale = _fixture_payload(status="NS")
+    summary = ingest_fixtures(session, [stale], captured_at=NOW + timedelta(minutes=2))
+
+    assert summary.fixtures_updated == 0
+    assert fixture.status is FixtureStatus.FINISHED
+    assert (fixture.home_goals, fixture.away_goals) == (1, 0)
+    assert session.query(StatsSnapshot).count() == 2
+
+
+def test_conflicting_final_provider_result_is_rejected_after_settlement(
+    session: Session,
+) -> None:
+    ingest_fixtures(
+        session,
+        [_fixture_payload(status="FT", home_goals=1, away_goals=0)],
+        captured_at=NOW,
+    )
+    fixture = session.scalar(select(Fixture))
+    assert fixture is not None
+    prediction = Prediction(
+        fixture_id=fixture.id,
+        prediction_timestamp=NOW,
+        decision_as_of=NOW,
+        market="1X2",
+        selection="home",
+        conservative_probability=0.6,
+        executable_odds=1.8,
+    )
+    session.add(prediction)
+    session.flush()
+    session.add(
+        Settlement(
+            subject_type="prediction",
+            subject_id=prediction.id,
+            outcome=SettlementOutcome.WIN,
+            settled_at=NOW,
+        )
+    )
+    session.flush()
+
+    with pytest.raises(ApiFootballIngestionError, match="governed correction required"):
+        ingest_fixtures(
+            session,
+            [_fixture_payload(status="FT", home_goals=0, away_goals=1)],
+            captured_at=NOW + timedelta(minutes=1),
+        )
+
+    assert fixture.status is FixtureStatus.FINISHED
+    assert (fixture.home_goals, fixture.away_goals) == (1, 0)
 
 def test_statistics_before_fixture_raises(session: Session) -> None:
     with pytest.raises(ApiFootballIngestionError, match="must be ingested before its statistics"):

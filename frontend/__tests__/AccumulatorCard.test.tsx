@@ -122,6 +122,19 @@ describe("AccumulatorCard", () => {
     expect(screen.getByLabelText("Score 1–0")).toBeInTheDocument()
   })
 
+  it("flags a stale provider result instead of showing PENDING", () => {
+    const stale = {
+      ...BASE,
+      legs: [{
+        ...BASE.legs[0], match_state: "awaiting_result", fixture_status: "scheduled",
+        score: null,
+      }, BASE.legs[1]],
+    }
+    render(<AccumulatorCard acc={stale} />)
+    expect(screen.getByText("RESULT DATA STALE")).toBeInTheDocument()
+    expect(screen.getByTitle(/provider still reports Not Started/)).toBeInTheDocument()
+  })
+
   it("shows a settled leg outcome separately from ticket status", () => {
     const settledLeg = {
       ...BASE,

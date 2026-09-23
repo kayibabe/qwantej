@@ -9,10 +9,11 @@ from decimal import Decimal
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from backend.api.deps import get_db
+from backend.api.routes.accumulators import _leg_display_data
 from backend.main import app
 from backend.models import (
     Accumulator,
@@ -23,6 +24,8 @@ from backend.models import (
     FixtureStatus,
     Prediction,
     Season,
+    StatsSnapshot,
+    StatsSubjectType,
     Team,
 )
 from backend.models.settlements import TicketStatus
@@ -168,6 +171,85 @@ def seeded_client():
 
 
 class TestListAccumulators:
+    def test_stale_not_started_provider_snapshot_is_not_presented_as_pending(self) -> None:
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        with Session(engine) as session:
+            competition = Competition(name="1st League - RS")
+            season = Season(competition=competition, label="2026/27")
+            home, away = Team(name="Drina Zvornik"), Team(name="Rudar Prijedor")
+            fixture = Fixture(
+                competition=competition,
+                season=season,
+                home_team=home,
+                away_team=away,
+                kickoff_utc=KICKOFF,
+                status=FixtureStatus.SCHEDULED,
+            )
+            session.add(fixture)
+            session.flush()
+            prediction = Prediction(
+                fixture_id=fixture.id,
+                prediction_timestamp=NOW,
+                decision_as_of=NOW,
+                market="1X2",
+                selection="home",
+                conservative_probability=0.60,
+                executable_odds=1.47,
+            )
+            accumulator = Accumulator(
+                product="Core",
+                optimiser_version="v1",
+                policy_version="v1",
+                combined_odds=1.47,
+                conservative_joint_probability=0.60,
+                stressed_joint_probability=0.55,
+                objective_score=0.5,
+                dependence_penalty_applied=0,
+                published_at=NOW,
+                status=TicketStatus.PENDING,
+            )
+            session.add_all([prediction, accumulator])
+            session.flush()
+            leg = AccumulatorLeg(
+                accumulator_id=accumulator.id,
+                prediction_id=prediction.id,
+                leg_index=0,
+                fixture_id=fixture.id,
+                league_id="rs",
+                market_family="1X2",
+                selection="home",
+                decimal_odds=1.47,
+                conservative_probability=0.60,
+                edge=-0.009,
+                qss=62.5,
+            )
+            stale_at = KICKOFF + timedelta(hours=4)
+            session.add_all([
+                leg,
+                StatsSnapshot(
+                    subject_type=StatsSubjectType.FIXTURE,
+                    fixture_id=fixture.id,
+                    as_of_timestamp=stale_at,
+                    payload={
+                        "record": {
+                            "fixture": {
+                                "status": {"short": "NS", "long": "Not Started"},
+                            },
+                            "goals": {"home": None, "away": None},
+                        }
+                    },
+                    source="api-football:fixtures",
+                ),
+            ])
+            session.flush()
+
+            state = _leg_display_data(session, [accumulator])[leg.id]
+
+        assert state["match_state"] == "awaiting_result"
+        assert state["fixture_status"] == "scheduled"
+        assert state["score"] is None
+
     def test_returns_all(self, seeded_client) -> None:
         client, _, _ = seeded_client
         r = client.get("/accumulators")
