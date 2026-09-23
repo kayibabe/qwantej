@@ -3,6 +3,7 @@ import { Suspense } from "react"
 import { fetchAccumulators } from "@/lib/api"
 import AccumulatorCard from "@/components/AccumulatorCard"
 import Pagination from "@/components/Pagination"
+import LiveMatchRefresh from "@/components/LiveMatchRefresh"
 
 export const metadata: Metadata = { title: "Accumulators" }
 
@@ -57,6 +58,7 @@ export default async function AccumulatorsPage({
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 sm:p-8">
+      <LiveMatchRefresh />
       <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-5 shadow-[var(--surface-shadow)] sm:p-6">
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--accent)]">Published research output</p>
         <h1 className="mt-1 text-2xl font-semibold text-[var(--text-primary)]">Paper accumulators</h1>

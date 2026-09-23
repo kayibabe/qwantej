@@ -11,6 +11,8 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from backend.models import (
+    Accumulator,
+    AccumulatorLeg,
     AuditEvent,
     Base,
     Competition,
@@ -18,8 +20,10 @@ from backend.models import (
     Fixture,
     FixtureStatus,
     OddsQuote,
+    Prediction,
     SourceMapping,
     StatsSnapshot,
+    TicketStatus,
 )
 from backend.services.api_football_client import ApiFootballClient, ApiFootballError
 from backend.services.api_football_ingestion import (
@@ -28,6 +32,7 @@ from backend.services.api_football_ingestion import (
     ingest_fixtures,
     ingest_odds,
     ingest_walk_forward_window,
+    refresh_tracked_accumulator_fixtures,
 )
 from backend.services.features import create_feature_snapshot
 from qwantej.fixtures import ApiFootballPayloadError, parse_fixture, parse_odds
@@ -303,6 +308,87 @@ def test_ingested_sources_feed_frozen_feature_snapshot(session: Session) -> None
     )
     assert isinstance(feature, FeatureSnapshot)
     assert feature.snapshot_ref.startswith("feature-snapshot:")
+
+
+def test_tracked_accumulator_fixture_refreshes_live_status_and_snapshot(session: Session) -> None:
+    ingest_fixtures(session, [_fixture_payload()], captured_at=NOW)
+    fixture = session.scalar(select(Fixture))
+    assert fixture is not None
+    prediction = Prediction(
+        fixture_id=fixture.id,
+        prediction_timestamp=NOW,
+        decision_as_of=NOW,
+        market="1X2",
+        selection="home",
+        conservative_probability=0.6,
+        executable_odds=1.8,
+        bookmaker="Bet Example",
+    )
+    accumulator = Accumulator(
+        product="Core",
+        optimiser_version="v1",
+        policy_version="v1",
+        combined_odds=2.0,
+        conservative_joint_probability=0.6,
+        stressed_joint_probability=0.5,
+        objective_score=0.5,
+        dependence_penalty_applied=0,
+        published_at=NOW,
+        status=TicketStatus.PENDING,
+    )
+    session.add_all([prediction, accumulator])
+    session.flush()
+    session.add(
+        AccumulatorLeg(
+            accumulator_id=accumulator.id,
+            prediction_id=prediction.id,
+            leg_index=0,
+            fixture_id=fixture.id,
+            league_id="39",
+            market_family="1X2",
+            selection="home",
+            decimal_odds=1.8,
+            conservative_probability=0.6,
+            edge=0.1,
+            qss=80,
+        )
+    )
+    session.flush()
+
+    live_payload = _fixture_payload(status="2H", home_goals=2, away_goals=0)
+    live_payload["fixture"]["status"] = {
+        "short": "2H", "long": "Second Half", "elapsed": 58,
+    }
+
+    class StubClient:
+        requested: list[dict[str, str]] = []
+
+        def fixtures(self, **parameters):
+            self.requested.append(parameters)
+            return (live_payload,)
+
+    client = StubClient()
+    captured_at = KICKOFF + timedelta(minutes=58)
+    summary = refresh_tracked_accumulator_fixtures(
+        session,
+        client,  # type: ignore[arg-type]
+        now=captured_at,
+        captured_at=captured_at,
+    )
+
+    assert client.requested == [{"ids": "1001"}]
+    assert summary.fixtures_updated == 1
+    assert summary.fixture_snapshots_created == 1
+    assert fixture.status is FixtureStatus.LIVE
+    # Live scores stay in the immutable provider snapshot until full time.
+    assert fixture.home_goals is None and fixture.away_goals is None
+    snapshot = session.scalar(
+        select(StatsSnapshot).where(StatsSnapshot.source == "api-football:fixtures")
+        .order_by(StatsSnapshot.as_of_timestamp.desc())
+    )
+    assert snapshot is not None
+    assert snapshot.payload["record"]["fixture"]["status"]["elapsed"] == 58
+    assert snapshot.payload["record"]["goals"] == {"home": 2, "away": 0}
 
 
 def test_statistics_before_fixture_raises(session: Session) -> None:
