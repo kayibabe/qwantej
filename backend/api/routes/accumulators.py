@@ -96,10 +96,18 @@ def _leg_display_data(
         away_goals = fixture.away_goals if fixture else None
         if home_goals is None and isinstance(goals, dict):
             raw_home = goals.get("home")
-            home_goals = raw_home if isinstance(raw_home, int) and not isinstance(raw_home, bool) else None
+            home_goals = (
+                raw_home
+                if isinstance(raw_home, int) and not isinstance(raw_home, bool)
+                else None
+            )
         if away_goals is None and isinstance(goals, dict):
             raw_away = goals.get("away")
-            away_goals = raw_away if isinstance(raw_away, int) and not isinstance(raw_away, bool) else None
+            away_goals = (
+                raw_away
+                if isinstance(raw_away, int) and not isinstance(raw_away, bool)
+                else None
+            )
         score = (
             f"{home_goals}–{away_goals}"
             if home_goals is not None and away_goals is not None
