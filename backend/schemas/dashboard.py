@@ -6,7 +6,8 @@ from pydantic import BaseModel
 
 
 class TodayStatusOut(BaseModel):
-    status: str  # qualified, no_qualifying_combination, collecting, stale, no_upcoming_data
+    # See the dashboard status branches for the supported states.
+    status: str
     label: str
     detail: str
     date: str

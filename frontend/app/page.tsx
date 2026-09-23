@@ -12,6 +12,7 @@ const STATUS_STYLES: Record<string, string> = {
   collecting: "status-panel status-collecting",
   stale: "status-panel status-stale",
   no_upcoming_data: "status-panel status-no-upcoming-data",
+  no_ticket_recorded: "status-panel status-no-upcoming-data",
 }
 
 export default async function DashboardPage({
@@ -89,9 +90,9 @@ export default async function DashboardPage({
           <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-5 shadow-[var(--surface-shadow)] sm:p-6" aria-label="Run details">
             <h2 className="text-base font-semibold text-[var(--text-primary)]">Run details</h2>
             <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              <div><p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Data last checked</p><p className="mt-1 text-sm text-[var(--text-primary)]">{today.data_freshness_utc ? fmtDatetime(today.data_freshness_utc) : "Not available"}</p></div>
+              <div><p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Latest validated-league price observation</p><p className="mt-1 text-sm text-[var(--text-primary)]">{today.data_freshness_utc ? fmtDatetime(today.data_freshness_utc) : "None recorded for this date"}</p></div>
               <div><p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Next scheduled run</p><p className="mt-1 text-sm text-[var(--text-primary)]">{today.next_run_utc ? fmtDatetime(today.next_run_utc) : "Not currently reported"}</p></div>
-              <div><p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Validated leagues checked</p><p className="mt-1 text-sm text-[var(--text-primary)]">{today.checked_leagues.length ? today.checked_leagues.join(", ") : "No validated leagues configured"}</p></div>
+              <div><p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Validated leagues configured</p><p className="mt-1 text-sm text-[var(--text-primary)]">{today.checked_leagues.length ? today.checked_leagues.join(", ") : "No validated leagues configured"}</p></div>
             </div>
             <div className="mt-5 border-t border-[var(--border-subtle)] pt-4">
               <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Research coverage</p>
