@@ -1,5 +1,9 @@
+"use client"
+
+import { useRef, useState } from "react"
 import type { AccumulatorLegOut, AccumulatorOut } from "@/lib/types"
 import { CURRENCY_SYMBOL, fmtDate, fmtDatetime } from "@/lib/format"
+import SelectionEvidenceDialog from "@/components/SelectionEvidenceDialog"
 
 const PRODUCT_COLOR: Record<string, string> = {
   CORE: "var(--core)",
@@ -60,6 +64,8 @@ function isDailyPick(product: string): boolean {
 }
 
 export default function AccumulatorCard({ acc }: { acc: AccumulatorOut }) {
+  const [selectedLeg, setSelectedLeg] = useState<AccumulatorLegOut | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
   const daily = isDailyPick(acc.product)
   // Built at the last-resort rung on a thin slate: the product name alone
   // (e.g. "SAFE") would overstate it, so say so explicitly.
@@ -73,21 +79,14 @@ export default function AccumulatorCard({ acc }: { acc: AccumulatorOut }) {
 
   return (
     <article
-      className="rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] overflow-hidden shadow-[var(--surface-shadow)]"
+      className="rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] overflow-hidden shadow-[var(--surface-shadow)]"
       style={{ borderLeftWidth: "4px", borderLeftStyle: "solid", borderLeftColor: accentColor }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--bg-raised)] px-5 py-3">
+      <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] bg-[var(--bg-raised)] px-5 py-4">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
           <span className={`text-xs font-bold uppercase tracking-widest shrink-0 ${labelClass}`}>
             {product} ACCA
-          </span>
-          <span className="text-[var(--text-muted)] text-xs shrink-0">·</span>
-          <span className="text-lg font-bold font-mono text-[var(--text-primary)] shrink-0">
-            {acc.combined_odds.toFixed(2)}
-          </span>
-          <span className="text-xs text-[var(--text-secondary)] shrink-0">
-            {acc.legs.length} leg{acc.legs.length !== 1 ? "s" : ""}
           </span>
           {daily && (
             <span
@@ -107,12 +106,31 @@ export default function AccumulatorCard({ acc }: { acc: AccumulatorOut }) {
         </span>
       </div>
 
+      <div className="grid grid-cols-2 gap-2 p-4 sm:grid-cols-4">
+        {[
+          { label: "Ticket odds", value: `${acc.combined_odds.toFixed(2)}×` },
+          { label: "Joint probability", value: pct(acc.conservative_joint_probability) },
+          { label: "Stressed probability", value: pct(acc.stressed_joint_probability) },
+          { label: "Stake", value: acc.stake !== null ? `${CURRENCY_SYMBOL}${fmt(acc.stake)}` : "—" },
+        ].map(({ label, value }) => (
+          <div key={label} className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-2.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">{label}</p>
+            <p className="mt-1 text-sm font-bold text-[var(--text-primary)]">{value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-between border-t border-[var(--border)] bg-[var(--bg-raised)] px-5 py-2 text-xs font-semibold text-[var(--text-secondary)]">
+        <span>{acc.legs.length} leg{acc.legs.length !== 1 ? "s" : ""} · Published {fmtDate(acc.published_at)}</span>
+        <span>Open a match for evidence</span>
+      </div>
+
       {/* Legs — fixture context first */}
       <ul className="divide-y divide-[var(--border)]">
         {acc.legs.map((leg) => {
           const kickoff = kickoffLabel(leg)
           return (
-            <li key={leg.id} className="px-5 py-3">
+            <li key={leg.id}>
+              <button type="button" onClick={(event) => { triggerRef.current = event.currentTarget; setSelectedLeg(leg) }} aria-label={`View evidence for ${matchLabel(leg)}`} className="w-full px-5 py-4 text-left transition-colors hover:bg-[var(--bg-raised)] focus-visible:outline-2 focus-visible:outline-[var(--accent)]">
               {/* Row 1: index + match + competition/kickoff */}
               <div className="flex items-start gap-3 min-w-0">
                 <span className="shrink-0 mt-0.5 w-5 h-5 rounded-full bg-[var(--bg-raised)] flex items-center justify-center text-[10px] font-mono text-[var(--text-muted)]">
@@ -154,26 +172,13 @@ export default function AccumulatorCard({ acc }: { acc: AccumulatorOut }) {
                     </span>
                   </div>
                 </div>
+                <span aria-hidden="true" className="self-center text-lg text-[var(--accent)]">›</span>
               </div>
+              </button>
             </li>
           )
         })}
       </ul>
-
-      {/* KPI row — responsive 2-col on mobile, 4-col on sm+ */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-[var(--border)] border-t border-[var(--border)]">
-        {[
-          { label: "Joint prob.", value: pct(acc.conservative_joint_probability) },
-          { label: "Stressed", value: pct(acc.stressed_joint_probability) },
-          { label: "Stake", value: acc.stake !== null ? `${CURRENCY_SYMBOL}${fmt(acc.stake)}` : "—" },
-          { label: "Published", value: fmtDate(acc.published_at) },
-        ].map(({ label, value }) => (
-          <div key={label} className="px-4 py-2">
-            <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">{label}</p>
-            <p className="text-sm font-mono font-medium text-[var(--text-primary)]">{value}</p>
-          </div>
-        ))}
-      </div>
 
       {/* Model diagnostics — behind a disclosure */}
       <details className="border-t border-[var(--border)]">
@@ -197,6 +202,7 @@ export default function AccumulatorCard({ acc }: { acc: AccumulatorOut }) {
           )}
         </div>
       </details>
+      {selectedLeg && <SelectionEvidenceDialog leg={selectedLeg} ticketStatus={acc.status} daily={daily} onClose={() => { setSelectedLeg(null); triggerRef.current?.focus() }} />}
     </article>
   )
 }
