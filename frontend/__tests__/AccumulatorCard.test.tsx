@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { fireEvent, render, screen } from "@testing-library/react"
 import AccumulatorCard from "@/components/AccumulatorCard"
 import type { AccumulatorOut } from "@/lib/types"
 
@@ -65,7 +65,7 @@ describe("AccumulatorCard", () => {
 
   it("renders combined odds", () => {
     render(<AccumulatorCard acc={BASE} />)
-    expect(screen.getByText("4.12")).toBeInTheDocument()
+    expect(screen.getByText("4.12×")).toBeInTheDocument()
   })
 
   it("renders all legs", () => {
@@ -82,7 +82,7 @@ describe("AccumulatorCard", () => {
 
   it("renders leg count", () => {
     render(<AccumulatorCard acc={BASE} />)
-    expect(screen.getByText("2 legs")).toBeInTheDocument()
+    expect(screen.getByText(/2 legs/)).toBeInTheDocument()
   })
 
   it("renders stake", () => {
@@ -130,5 +130,24 @@ describe("AccumulatorCard", () => {
     render(<AccumulatorCard acc={BASE} />)
     expect(screen.queryByText(/not value-qualified/i)).not.toBeInTheDocument()
     expect(screen.getAllByText(/model prob/)).toHaveLength(2)
+  })
+
+  it("opens archived selection evidence and closes with Escape", () => {
+    render(<AccumulatorCard acc={BASE} />)
+    fireEvent.click(screen.getByRole("button", { name: /View evidence for Home FC vs Away FC/ }))
+    expect(screen.getByRole("dialog", { name: "Home FC vs Away FC" })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("tab", { name: "Probability" }))
+    expect(screen.getByText("Stored conservative model probability:")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("tab", { name: "Odds" }))
+    expect(screen.getByText(/Archived snapshot:/)).toBeInTheDocument()
+    fireEvent.keyDown(document, { key: "Escape" })
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  })
+
+  it("does not invent missing match statistics", () => {
+    render(<AccumulatorCard acc={BASE} />)
+    fireEvent.click(screen.getByRole("button", { name: /View evidence for Home FC vs Away FC/ }))
+    fireEvent.click(screen.getByRole("tab", { name: "Stats" }))
+    expect(screen.getByText("Match statistics are not included in the published ticket archive.")).toBeInTheDocument()
   })
 })

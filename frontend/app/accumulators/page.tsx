@@ -34,7 +34,7 @@ async function AccumulatorList({
 
   return (
     <>
-      <div className="flex flex-col gap-4">
+      <div className="grid gap-5 xl:grid-cols-2">
         {page.items.map((acc) => (
           <AccumulatorCard key={acc.id} acc={acc} />
         ))}
@@ -56,12 +56,11 @@ export default async function AccumulatorsPage({
   const statuses = ["", "pending", "locked", "settled", "void"]
 
   return (
-    <div className="flex flex-col gap-8 p-8">
-      <div>
-        <h1 className="text-xl font-semibold text-[var(--text-primary)]">Accumulators</h1>
-        <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          Core, Growth and Alpha value tickets, plus the guaranteed Daily Picks
-        </p>
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 sm:p-8">
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-5 shadow-[var(--surface-shadow)] sm:p-6">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--accent)]">Published research output</p>
+        <h1 className="mt-1 text-2xl font-semibold text-[var(--text-primary)]">Paper accumulators</h1>
+        <p className="mt-2 max-w-3xl text-sm text-[var(--text-secondary)]">Browse published Core, Growth and Alpha value tickets and the separate Daily Picks. Open any match to inspect the archived selection evidence.</p>
       </div>
 
       {/* Status filter */}
