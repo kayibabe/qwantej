@@ -96,6 +96,9 @@ class PipelineRun:
     value_gate_rejected: int = 0
     feature_errors: int = 0
     accumulators: list[str] = field(default_factory=list)  # "CORE", "GROWTH", "ALPHA"
+    daily_tickets: list[str] = field(default_factory=list)  # summaries of Daily Picks built
+    daily_tickets_today: int = 0
+    daily_shortfall: list[str] = field(default_factory=list)
     errors: int = 0
 
 
@@ -391,7 +394,8 @@ def _upcoming_unpredicted_fixtures(
     - or, in production only, their Competition.validated flag is False.
 
     Shadow forecasts intentionally include unvalidated leagues, but are stored
-    under ``research_mode=True`` and are never eligible for accumulators.
+    under ``research_mode=True`` and are never eligible for value
+    accumulators (only for the separately labelled Daily Picks line).
     """
     from sqlalchemy import select
 
@@ -929,6 +933,41 @@ def _run_accumulator_phase(
     return decision
 
 
+def _run_daily_ticket_phase(
+    run: PipelineRun,
+    engine: Any,
+    *,
+    now: datetime,
+    target: int,
+    build_hour_utc: int,
+    dry_run: bool,
+) -> None:
+    """Top up today's Daily Pick tickets (see backend.services.daily_tickets)."""
+    from backend.core.db import session_scope
+    from backend.services.daily_tickets import ensure_daily_tickets
+
+    try:
+        with session_scope(engine) as session:
+            result = ensure_daily_tickets(
+                session, now=now, target=target, build_hour_utc=build_hour_utc
+            )
+            run.daily_tickets = [
+                f"{t.product.value.replace('_', ' ').upper()}: "
+                f"{len(t.legs)} legs @ {float(t.combined_odds):.2f}"
+                for t in result.tickets
+            ]
+            run.daily_tickets_today = result.total_today
+            # The shortfall persists hour after hour until the slate improves;
+            # alert every six hours from the build hour, not every run.
+            if result.shortfall and (now.hour - build_hour_utc) % 6 == 0:
+                run.daily_shortfall = [p.value for p in result.shortfall]
+            if dry_run:
+                session.rollback()
+    except Exception:
+        log.exception("signal_pipeline: daily ticket phase failed")
+        run.errors += 1
+
+
 # ---------------------------------------------------------------------------
 # Notifications
 # ---------------------------------------------------------------------------
@@ -968,8 +1007,20 @@ def _notify(run: PipelineRun, decision: Any | None) -> None:
             body_lines.extend(tickets)
         else:
             body_lines.append("No qualifying accumulator today.")
+        if run.daily_tickets:
+            body_lines.append("Daily Picks (not value-qualified, paper):")
+            body_lines.extend(f"  {line}" for line in run.daily_tickets)
+        if run.daily_shortfall:
+            body_lines.append(
+                f"DAILY PICK SHORTFALL: {', '.join(run.daily_shortfall)} "
+                f"({run.daily_tickets_today} built today)"
+            )
 
-        level = NotificationLevel.ERROR if run.errors else NotificationLevel.INFO
+        level = (
+            NotificationLevel.ERROR
+            if run.errors or run.daily_shortfall
+            else NotificationLevel.INFO
+        )
         notifier.send(
             Notification(
                 event=NotificationEvent.SETTLEMENT_BATCH_DONE,
@@ -1096,18 +1147,29 @@ def run_once(
         log.exception("signal_pipeline: fatal error in pipeline run")
         run.errors += 1
 
+    # Daily Picks run in their own transaction after forecasts are committed,
+    # so a failure here can never roll back archived predictions.
+    if not shadow and settings.daily_ticket_minimum > 0:
+        _run_daily_ticket_phase(
+            run, engine, now=now, target=settings.daily_ticket_minimum,
+            build_hour_utc=settings.daily_ticket_build_hour_utc, dry_run=dry_run,
+        )
+
     if not dry_run:
         _notify(run, decision)
 
     log.info(
         "signal_pipeline: run complete — fixtures=%d published=%d archived=%d "
-        "shadow=%d gate_rejected=%d feature_errors=%d errors=%d",
+        "shadow=%d gate_rejected=%d feature_errors=%d daily_built=%d "
+        "daily_today=%d errors=%d",
         run.fixtures_evaluated,
         run.predictions_published,
         run.predictions_archived,
         run.shadow_predictions_archived,
         run.value_gate_rejected,
         run.feature_errors,
+        len(run.daily_tickets),
+        run.daily_tickets_today,
         run.errors,
     )
     return run

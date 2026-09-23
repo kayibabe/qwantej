@@ -80,6 +80,7 @@ export interface AccumulatorLegOut {
 export interface AccumulatorOut {
   id: string
   product: string
+  policy_version?: string | null
   status: string
   combined_odds: number
   conservative_joint_probability: number

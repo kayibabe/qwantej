@@ -16,9 +16,10 @@ calendar year of their start (e.g. the 2026/27 season → season=2026).
 season's leagues from the API. The managed scheduler ingests a deterministic,
 bounded batch each hour so its full rotation completes in about one day
 without bursting the provider. ``Competition.validated`` remains the hard
-public-signal and paper-ticket gate. Unvalidated leagues may be forecast in a
-separate ``research_mode`` archive only, where they cannot be published,
-selected, or staked.
+public-signal and value-ticket gate. Unvalidated leagues may be forecast in a
+separate ``research_mode`` archive only, where they cannot be published as
+signals, selected for value tickets, or staked; the only consumer outside
+research is the labelled, unstaked Daily Picks line (ACCUMULATOR_POLICY.md).
 
 Quota management
 ----------------
