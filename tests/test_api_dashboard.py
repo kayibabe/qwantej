@@ -132,6 +132,10 @@ def test_today_status_exposes_research_coverage_without_treating_it_as_validated
         assert body["checked_leagues"] == []
         assert body["observed_leagues"] == ["Research League"]
         assert body["observed_fixture_count"] == 1
+        assert body["detail"] == (
+            "1 scheduled fixture record observed in research coverage; "
+            "no validated-league fixture or price observation is available for this date."
+        )
     finally:
         app.dependency_overrides.clear()
 
@@ -209,8 +213,12 @@ def test_today_status_scopes_to_requested_date() -> None:
         assert yesterday_response.status_code == 200
         yesterday_body = yesterday_response.json()
         assert yesterday_body["date"] == yesterday_local.date().isoformat()
-        assert yesterday_body["status"] == "collecting"
-        assert yesterday_body["label"] == "Collecting prices"
+        assert yesterday_body["status"] == "no_ticket_recorded"
+        assert yesterday_body["label"] == "No paper ticket recorded"
+        assert yesterday_body["detail"] == (
+            "No paper ticket was published for this date. 1 currently stored "
+            "scheduled fixture record appears in research coverage."
+        )
     finally:
         app.dependency_overrides.clear()
 

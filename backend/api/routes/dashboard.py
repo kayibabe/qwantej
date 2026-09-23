@@ -129,11 +129,26 @@ def today_status(
             else freshness.replace(tzinfo=UTC)
         )
     freshness_age = now - freshness if freshness is not None else None
+    is_past_date = day_start_local.date() < now.astimezone(PRODUCT_DAY_ZONE).date()
     if tickets:
         status, label, detail = (
             "qualified",
             "Ticket available",
             f"{tickets} paper ticket{'s' if tickets != 1 else ''} qualified.",
+        )
+    elif is_past_date:
+        status, label, detail = (
+            "no_ticket_recorded",
+            "No paper ticket recorded",
+            (
+                f"No paper ticket was published for this date. "
+                f"{observed_fixture_count} currently stored scheduled fixture "
+                f"record{'s' if observed_fixture_count != 1 else ''} "
+                f"{'appear' if observed_fixture_count != 1 else 'appears'} in research coverage."
+                if observed_fixture_count
+                else "No paper ticket was published for this date, and no scheduled "
+                "fixture records are currently stored for it."
+            ),
         )
     elif upcoming and freshness is None:
         status, label, detail = (
@@ -161,7 +176,14 @@ def today_status(
         status, label, detail = (
             "collecting",
             "Collecting data",
-            "No current fixture or price observations are available yet.",
+            (
+                f"{observed_fixture_count} scheduled fixture "
+                f"record{'s' if observed_fixture_count != 1 else ''} observed in "
+                "research coverage; no validated-league fixture or price "
+                "observation is available for this date."
+                if observed_fixture_count
+                else "No current fixture or price observations are available yet."
+            ),
         )
     else:
         status, label, detail = (

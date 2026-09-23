@@ -102,7 +102,7 @@ export interface AccumulatorPage {
 }
 
 export interface TodayStatus {
-  status: "qualified" | "no_qualifying_combination" | "collecting" | "stale" | "no_upcoming_data"
+  status: "qualified" | "no_qualifying_combination" | "collecting" | "stale" | "no_upcoming_data" | "no_ticket_recorded"
   label: string
   detail: string
   date: string
