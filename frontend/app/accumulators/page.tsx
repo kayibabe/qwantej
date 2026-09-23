@@ -60,7 +60,7 @@ export default async function AccumulatorsPage({
       <div>
         <h1 className="text-xl font-semibold text-[var(--text-primary)]">Accumulators</h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          Core, Growth and Alpha accumulator tickets
+          Core, Growth and Alpha value tickets, plus the guaranteed Daily Picks
         </p>
       </div>
 

@@ -37,6 +37,8 @@ class AccumulatorOut(BaseModel):
 
     id: uuid.UUID
     product: str
+    # Which policy/ladder rung built the ticket (e.g. "daily-last-resort-v1").
+    policy_version: str | None = None
     status: str
     combined_odds: float
     conservative_joint_probability: float

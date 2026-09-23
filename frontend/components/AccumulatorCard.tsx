@@ -53,10 +53,22 @@ function priceSourceLabel(leg: AccumulatorLegOut): string {
   return "Price source unavailable"
 }
 
+// Daily Picks ("daily_safe" etc.) are a guaranteed daily product line built
+// without the Value Gate; they must never be presented as value tickets.
+function isDailyPick(product: string): boolean {
+  return product.toLowerCase().startsWith("daily_")
+}
+
 export default function AccumulatorCard({ acc }: { acc: AccumulatorOut }) {
-  const product = acc.product.toUpperCase()
-  const accentColor = PRODUCT_COLOR[product] ?? "var(--border)"
-  const labelClass = PRODUCT_LABEL_CLASS[product] ?? "text-[var(--text-secondary)]"
+  const daily = isDailyPick(acc.product)
+  // Built at the last-resort rung on a thin slate: the product name alone
+  // (e.g. "SAFE") would overstate it, so say so explicitly.
+  const fallback = daily && (acc.policy_version ?? "").startsWith("daily-last-resort")
+  const product = acc.product.toUpperCase().replace(/_/g, " ")
+  const accentColor = daily ? "var(--daily)" : PRODUCT_COLOR[product] ?? "var(--border)"
+  const labelClass = daily
+    ? "text-[var(--daily)]"
+    : PRODUCT_LABEL_CLASS[product] ?? "text-[var(--text-secondary)]"
   const statusStyle = STATUS_STYLE[acc.status] ?? "status-badge status-badge-development"
 
   return (
@@ -66,7 +78,7 @@ export default function AccumulatorCard({ acc }: { acc: AccumulatorOut }) {
     >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--bg-raised)] px-5 py-3">
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
           <span className={`text-xs font-bold uppercase tracking-widest shrink-0 ${labelClass}`}>
             {product} ACCA
           </span>
@@ -77,6 +89,18 @@ export default function AccumulatorCard({ acc }: { acc: AccumulatorOut }) {
           <span className="text-xs text-[var(--text-secondary)] shrink-0">
             {acc.legs.length} leg{acc.legs.length !== 1 ? "s" : ""}
           </span>
+          {daily && (
+            <span
+              className="shrink-0 rounded border border-[var(--border)] px-1.5 py-0.5 text-[10px] text-[var(--text-secondary)]"
+              title={
+                fallback
+                  ? "Thin slate: built with the widest fallback rules, so it may not match its usual risk profile. Not value-qualified; paper only; no stake is recommended."
+                  : "Built from the day's strongest forecasts without the Value Gate. Paper only; no stake is recommended."
+              }
+            >
+              Daily pick · {fallback ? "fallback build · " : ""}not value-qualified
+            </span>
+          )}
         </div>
         <span className={`shrink-0 ml-3 ${statusStyle}`}>
           {acc.status.toUpperCase()}
@@ -126,7 +150,7 @@ export default function AccumulatorCard({ acc }: { acc: AccumulatorOut }) {
                       {leg.edge >= 0 ? "+" : ""}{(leg.edge * 100).toFixed(1)}pp
                     </span>
                     <span className="text-[10px] text-[var(--text-muted)]">
-                      {pct(leg.conservative_probability)} model prob
+                      {pct(leg.conservative_probability)} {daily ? "est. prob" : "model prob"}
                     </span>
                   </div>
                 </div>

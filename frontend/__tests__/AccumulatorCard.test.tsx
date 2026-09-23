@@ -102,4 +102,33 @@ describe("AccumulatorCard", () => {
     render(<AccumulatorCard acc={growth} />)
     expect(screen.getByText(/GROWTH ACCA/i)).toBeInTheDocument()
   })
+
+  it("labels a Daily Pick as not value-qualified and shows no stake", () => {
+    const daily = { ...BASE, product: "daily_safe", stake: null, combined_odds: 2.05 }
+    render(<AccumulatorCard acc={daily} />)
+    expect(screen.getByText("DAILY SAFE ACCA")).toBeInTheDocument()
+    expect(screen.getByText(/not value-qualified/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/est\. prob/)).toHaveLength(2)
+    expect(screen.queryByText(/£/)).not.toBeInTheDocument()
+  })
+
+  it("flags a last-resort Daily Pick as a fallback build", () => {
+    const fallback = {
+      ...BASE, product: "daily_safe", stake: null, policy_version: "daily-last-resort-v1",
+    }
+    render(<AccumulatorCard acc={fallback} />)
+    expect(screen.getByText(/fallback build/i)).toBeInTheDocument()
+  })
+
+  it("does not flag a preferred-rung Daily Pick as fallback", () => {
+    const preferred = { ...BASE, product: "daily_safe", stake: null, policy_version: "daily-safe-v1" }
+    render(<AccumulatorCard acc={preferred} />)
+    expect(screen.queryByText(/fallback build/i)).not.toBeInTheDocument()
+  })
+
+  it("does not badge value products as Daily Picks", () => {
+    render(<AccumulatorCard acc={BASE} />)
+    expect(screen.queryByText(/not value-qualified/i)).not.toBeInTheDocument()
+    expect(screen.getAllByText(/model prob/)).toHaveLength(2)
+  })
 })

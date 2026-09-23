@@ -186,6 +186,11 @@ touching anything under model/ensemble/calibration/forecast code.
   live signals regardless of how many reliability snapshots they accumulate.
   To promote a new league to production, set `Competition.validated = True`
   for its row (a data migration is the correct path, not an ad-hoc UPDATE).
+  **Documented exception — Daily Picks** (owner decision 2026-09-23, see
+  `docs/ACCUMULATOR_POLICY.md`): the separately labelled, paper-only,
+  unstaked `daily_*` tickets may use archived research-stream forecasts from
+  unvalidated leagues so the platform always publishes its daily minimum.
+  They never pass through, relax, or count towards the value products.
 
 ### Retrospective research evaluator
 
