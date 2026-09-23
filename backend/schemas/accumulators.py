@@ -28,6 +28,12 @@ class AccumulatorLegOut(BaseModel):
     away_team: str | None = None
     kickoff_utc: datetime | None = None
     competition_name: str | None = None
+    match_state: str = "pending"
+    fixture_status: str = "scheduled"
+    score: str | None = None
+    live_phase: str | None = None
+    elapsed_minutes: int | None = None
+    settlement_outcome: str | None = None
     # Price-freshness timestamp written at leg creation time.
     quote_captured_at: datetime | None = None
 
