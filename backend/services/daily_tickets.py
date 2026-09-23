@@ -8,7 +8,7 @@ next tick.
 Candidate legs are *archived* forecasts (production or research) for
 upcoming fixtures — never a probability computed here, so every leg keeps
 full forecast lineage (DEVELOPMENT.md §4 "every prediction is archived").
-Each leg is re-priced against the freshest coherent 1X2 bookmaker snapshot
+Each leg is re-priced against the freshest coherent bookmaker snapshot
 at build time, because the archived forecast's quote may be a day old.
 
 Persistence is fail-closed, mirroring ``backend.services.accumulator``:
@@ -53,9 +53,10 @@ from qwantej.markets.devig import devig
 
 log = logging.getLogger(__name__)
 
-_MARKET = "1X2"
-_SELECTION = "home"
-_SELECTIONS = ("home", "draw", "away")
+_MARKET_SELECTIONS = {
+    "1X2": ("home", "draw", "away"),
+    "BTTS": ("yes", "no"),
+}
 
 # Same ticket-level stress haircut the value products use (AccumulatorPolicy).
 STRESS_HAIRCUT = 0.05
@@ -179,10 +180,9 @@ def _products_published_today(session: Session, now: datetime) -> set[str]:
 def load_daily_candidates(
     session: Session, *, now: datetime, lookahead: timedelta
 ) -> list[DailyCandidate]:
-    """Archived home-win forecasts for upcoming fixtures, re-priced now.
+    """Archived supported-market forecasts for upcoming fixtures, re-priced now.
 
-    One forecast per fixture (production preferred over research, then the
-    latest). Fixtures already on any ticket are excluded, as are forecasts
+    Fixtures already on any ticket are excluded, as are forecasts
     below the DQS reject band or without a coherent fresh market snapshot.
     """
     fixtures_on_tickets = select(Prediction.fixture_id).where(
@@ -192,8 +192,7 @@ def load_daily_candidates(
         select(Prediction, Fixture)
         .join(Fixture, Prediction.fixture_id == Fixture.id)
         .where(
-            Prediction.market == _MARKET,
-            Prediction.selection == _SELECTION,
+            Prediction.market.in_(tuple(_MARKET_SELECTIONS)),
             Prediction.accumulator_id.is_(None),
             Prediction.calibrated_probability.is_not(None),
             Prediction.dqs >= MIN_DQS,
@@ -206,39 +205,44 @@ def load_daily_candidates(
             Fixture.id.not_in(fixtures_on_tickets),
         )
         .order_by(
-            Fixture.id,
             Prediction.research_mode,
             Prediction.prediction_timestamp.desc(),
             Prediction.id,
         )
     ).all()
 
-    chosen: dict[uuid.UUID, tuple[Prediction, Fixture]] = {}
+    chosen: dict[tuple[uuid.UUID, str, str], tuple[Prediction, Fixture]] = {}
     for prediction, fixture in rows:
-        chosen.setdefault(fixture.id, (prediction, fixture))
+        if (
+            prediction.selection in _MARKET_SELECTIONS[prediction.market]
+            and prediction.line is None
+        ):
+            key = (fixture.id, prediction.market, prediction.selection)
+            chosen.setdefault(key, (prediction, fixture))
     if not chosen:
         return []
 
-    snapshots = _market_snapshots(session, list(chosen), now=now)
+    snapshots = _market_snapshots(session, list({key[0] for key in chosen}), now=now)
     candidates: list[DailyCandidate] = []
-    for fixture_id, (prediction, fixture) in chosen.items():
-        snap = snapshots.get(fixture_id)
+    for (fixture_id, market, selection), (prediction, fixture) in chosen.items():
+        snap = snapshots.get((fixture_id, market, selection))
         if snap is None:
             continue
-        home_odds, fair_home, bookmaker, captured_at = snap
+        odds, fair_probability, bookmaker, captured_at = snap
         model_p = float(prediction.calibrated_probability)  # type: ignore[arg-type]
-        if not 0 < model_p < 1 or not 0 < fair_home < 1:
+        if not 0 < model_p < 1 or not 0 < fair_probability < 1:
             continue
         candidates.append(
             DailyCandidate(
                 prediction_id=str(prediction.id),
                 fixture_id=str(fixture.id),
                 league_id=str(fixture.competition_id),
-                selection=_SELECTION,
+                market=market,
+                selection=selection,
                 kickoff_utc=_utc(fixture.kickoff_utc),
                 model_probability=model_p,
-                market_probability=fair_home,
-                decimal_odds=home_odds,
+                market_probability=fair_probability,
+                decimal_odds=odds,
                 captured_at=captured_at,
                 dqs=float(prediction.dqs),  # type: ignore[arg-type]
                 bookmaker=bookmaker,
@@ -249,52 +253,52 @@ def load_daily_candidates(
 
 def _market_snapshots(
     session: Session, fixture_ids: list[uuid.UUID], *, now: datetime
-) -> dict[uuid.UUID, tuple[Decimal, float, str, datetime]]:
-    """Freshest coherent 1X2 snapshot per fixture → (home odds, fair home p, book, oldest ts).
+) -> dict[tuple[uuid.UUID, str, str], tuple[Decimal, float, str, datetime]]:
+    """Freshest coherent supported-market snapshots by fixture and selection.
 
-    Coherent = one bookmaker quoting all three outcomes within MAX_LEG_SPREAD,
+    Coherent = one bookmaker quoting every outcome within MAX_LEG_SPREAD,
     so the de-vig runs on a real market rather than a synthetic mix (same rule
     as the signal pipeline). Ties on freshness break on bookmaker name.
     """
     quotes = session.scalars(
         select(OddsQuote).where(
             OddsQuote.fixture_id.in_(fixture_ids),
-            OddsQuote.market == _MARKET,
-            OddsQuote.selection.in_(_SELECTIONS),
+            OddsQuote.market.in_(tuple(_MARKET_SELECTIONS)),
             OddsQuote.captured_at < now,
             OddsQuote.captured_at >= now - MAX_QUOTE_AGE,
         )
         .order_by(OddsQuote.captured_at.desc(), OddsQuote.id)
     )
-    latest: dict[uuid.UUID, dict[str, dict[str, OddsQuote]]] = defaultdict(
+    latest: dict[tuple[uuid.UUID, str], dict[str, dict[str, OddsQuote]]] = defaultdict(
         lambda: defaultdict(dict)
     )
     for q in quotes:
-        latest[q.fixture_id][q.bookmaker].setdefault(q.selection, q)
+        if q.line is None and q.selection in _MARKET_SELECTIONS[q.market]:
+            latest[(q.fixture_id, q.market)][q.bookmaker].setdefault(q.selection, q)
 
-    out: dict[uuid.UUID, tuple[Decimal, float, str, datetime]] = {}
-    for fixture_id, books in latest.items():
+    out: dict[tuple[uuid.UUID, str, str], tuple[Decimal, float, str, datetime]] = {}
+    for (fixture_id, market), books in latest.items():
+        selections = _MARKET_SELECTIONS[market]
         best: tuple[datetime, str] | None = None
         for bookmaker, sel_map in books.items():
-            if not all(s in sel_map for s in _SELECTIONS):
+            if not all(s in sel_map for s in selections):
                 continue
-            stamps = [_utc(sel_map[s].captured_at) for s in _SELECTIONS]
+            stamps = [_utc(sel_map[s].captured_at) for s in selections]
             if max(stamps) - min(stamps) > MAX_LEG_SPREAD:
                 continue
-            odds = [float(sel_map[s].decimal_odds) for s in _SELECTIONS]
+            odds = [float(sel_map[s].decimal_odds) for s in selections]
             try:
                 fair = devig(odds).fair
             except ValueError:
                 continue
-            rank = (_utc(sel_map["home"].captured_at), bookmaker)
+            rank = (max(stamps), bookmaker)
             if best is None or rank[0] > best[0] or (rank[0] == best[0] and rank[1] < best[1]):
                 best = rank
-                out[fixture_id] = (
-                    Decimal(str(sel_map["home"].decimal_odds)),
-                    fair[0],
-                    bookmaker,
-                    min(stamps),
-                )
+                for index, selection in enumerate(selections):
+                    out[(fixture_id, market, selection)] = (
+                        Decimal(str(sel_map[selection].decimal_odds)),
+                        fair[index], bookmaker, min(stamps),
+                    )
     return out
 
 
@@ -385,7 +389,7 @@ def _persist(session: Session, tickets: list[DailyTicket], *, now: datetime) -> 
                     fixture_id=prediction.fixture_id,
                     leg_index=index,
                     league_id=leg.league_id,
-                    market_family=_MARKET,
+                    market_family=leg.market,
                     selection=leg.selection,
                     decimal_odds=float(leg.decimal_odds),
                     conservative_probability=leg.estimated_probability,

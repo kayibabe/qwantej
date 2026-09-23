@@ -56,6 +56,7 @@ def _cand(
         prediction_id=str(uuid.UUID(int=i + 1)),
         fixture_id=f"fx-{i:03d}",
         league_id=league or f"L{i % 6}",
+        market="1X2",
         selection="home",
         kickoff_utc=kickoff or NOW + timedelta(hours=6),
         model_probability=max(0.01, min(0.99, market_p + model_delta)),
@@ -219,7 +220,7 @@ def test_empty_pool_is_full_shortfall() -> None:
 )
 def test_candidate_validation_rejects_bad_inputs(overrides) -> None:
     base = dict(
-        prediction_id="p", fixture_id="f", league_id="l", selection="home",
+        prediction_id="p", fixture_id="f", league_id="l", market="1X2", selection="home",
         kickoff_utc=NOW + timedelta(hours=3), model_probability=0.6,
         market_probability=0.58, decimal_odds=Decimal("1.60"),
         captured_at=NOW - timedelta(minutes=5), dqs=80.0,
@@ -289,14 +290,15 @@ def _seed_slate(
     return out
 
 
-def _add_prediction(session, fixture, home_odds, research_mode, dqs) -> Prediction:
+def _add_prediction(session, fixture, home_odds, research_mode, dqs, *,
+                    market="1X2", selection="home") -> Prediction:
     p = min(0.93, 0.93 / float(home_odds))
     prediction = Prediction(
         fixture_id=fixture.id,
         prediction_timestamp=NOW - timedelta(hours=20),
         decision_as_of=NOW - timedelta(hours=20),
-        market="1X2",
-        selection="home",
+        market=market,
+        selection=selection,
         ensemble_probability=p,
         calibrated_probability=p,
         conservative_probability=max(0.001, p - 0.05),
@@ -425,6 +427,72 @@ def test_production_forecast_preferred_over_research_for_same_fixture(session) -
     [cand] = load_daily_candidates(session, now=NOW, lookahead=timedelta(hours=30))
     assert cand.prediction_id == str(production_pred.id)
     assert cand.prediction_id != str(research_pred.id)
+
+
+def test_archived_draw_away_and_btts_are_repriced_from_complete_markets(session) -> None:
+    pairs = _seed_slate(session, prices=["1.50", "1.60", "1.70"], leagues=3)
+    draw_fixture, away_fixture, btts_fixture = (pair[0] for pair in pairs)
+    draw = _add_prediction(session, draw_fixture, Decimal("3.50"), False, 80.0,
+                           selection="draw")
+    away = _add_prediction(session, away_fixture, Decimal("2.80"), False, 80.0,
+                           selection="away")
+    btts = _add_prediction(session, btts_fixture, Decimal("1.80"), False, 80.0,
+                           market="BTTS", selection="yes")
+    for selection, odds in (("yes", "1.80"), ("no", "2.05")):
+        session.add(OddsQuote(
+            fixture_id=btts_fixture.id, bookmaker="Book", market="BTTS",
+            selection=selection, decimal_odds=Decimal(odds),
+            captured_at=NOW - timedelta(minutes=15), source="test",
+        ))
+    session.flush()
+
+    candidates = load_daily_candidates(session, now=NOW, lookahead=timedelta(hours=30))
+    by_prediction = {c.prediction_id: c for c in candidates}
+    assert by_prediction[str(draw.id)].market == "1X2"
+    assert by_prediction[str(draw.id)].selection == "draw"
+    assert by_prediction[str(away.id)].selection == "away"
+    assert by_prediction[str(btts.id)].market == "BTTS"
+    assert by_prediction[str(btts.id)].selection == "yes"
+    assert by_prediction[str(btts.id)].decimal_odds == Decimal("1.80")
+
+
+def test_incomplete_or_mixed_bookmaker_btts_is_excluded(session) -> None:
+    [(fixture, _)] = _seed_slate(session, prices=["1.50"], leagues=1)
+    prediction = _add_prediction(session, fixture, Decimal("1.80"), False, 80.0,
+                                 market="BTTS", selection="yes")
+    for bookmaker, selection in (("Book A", "yes"), ("Book B", "no")):
+        session.add(OddsQuote(
+            fixture_id=fixture.id, bookmaker=bookmaker, market="BTTS",
+            selection=selection, decimal_odds=Decimal("1.90"),
+            captured_at=NOW - timedelta(minutes=15), source="test",
+        ))
+    session.flush()
+    candidates = load_daily_candidates(session, now=NOW, lookahead=timedelta(hours=30))
+    assert str(prediction.id) not in {c.prediction_id for c in candidates}
+
+
+def test_daily_ticket_persists_archived_btts_market(session) -> None:
+    pairs = _seed_slate(session, prices=["1.50", "1.60"], leagues=2)
+    fixture, home_prediction = pairs[0]
+    # Keep the second fixture's home forecast, but leave this fixture with BTTS only.
+    session.delete(home_prediction)
+    btts = _add_prediction(session, fixture, Decimal("1.80"), False, 80.0,
+                           market="BTTS", selection="yes")
+    for selection, odds in (("yes", "1.80"), ("no", "2.05")):
+        session.add(OddsQuote(
+            fixture_id=fixture.id, bookmaker="Book", market="BTTS",
+            selection=selection, decimal_odds=Decimal(odds),
+            captured_at=NOW - timedelta(minutes=15), source="test",
+        ))
+    session.flush()
+
+    run = ensure_daily_tickets(session, now=NOW, target=1)
+    assert len(run.created) == 1
+    assert run.created[0].paper_only is True
+    leg = session.scalars(select(AccumulatorLeg).where(
+        AccumulatorLeg.prediction_id == btts.id
+    )).one()
+    assert (leg.market_family, leg.selection) == ("BTTS", "yes")
 
 
 def test_fixture_already_on_a_ticket_is_not_reused(session) -> None:

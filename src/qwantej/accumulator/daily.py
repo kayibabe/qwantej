@@ -70,6 +70,7 @@ class DailyCandidate:
     prediction_id: str
     fixture_id: str
     league_id: str
+    market: str
     selection: str
     kickoff_utc: datetime
     model_probability: float
@@ -84,6 +85,7 @@ class DailyCandidate:
             ("prediction_id", self.prediction_id),
             ("fixture_id", self.fixture_id),
             ("league_id", self.league_id),
+            ("market", self.market),
             ("selection", self.selection),
         ):
             if not isinstance(value, str) or not value.strip():
@@ -307,8 +309,8 @@ def build_daily_tickets(
     )
 
 
-def _rank_key(c: DailyCandidate) -> tuple[float, str]:
-    return (-c.estimated_probability, c.fixture_id)
+def _rank_key(c: DailyCandidate) -> tuple[float, str, str, str, str]:
+    return (-c.estimated_probability, c.fixture_id, c.market, c.selection, c.prediction_id)
 
 
 def _eligible(c: DailyCandidate, level: DailyTicketLevel, as_of: datetime) -> bool:

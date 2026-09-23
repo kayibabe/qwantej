@@ -40,6 +40,10 @@ tops the day up:
 - Legs come only from **archived** forecasts (production preferred, research
   stream otherwise — so unvalidated leagues *can* appear here, never on a
   value ticket), re-priced against the freshest coherent bookmaker snapshot.
+  The pull accepts archived 1X2 home/draw/away and BTTS yes/no forecasts with
+  complete same-bookmaker quotes. It does not synthesize missing forecasts or
+  force market diversity; the live signal pipeline currently archives home 1X2.
+  Totals remain excluded because the ticket leg does not retain a totals line.
   DQS < 60 (framework REJECT band) is never used. One leg per fixture across
   all tickets; a prediction backs at most one ticket.
 - Built once per UTC day from `DAILY_TICKET_BUILD_HOUR_UTC` (default 06),
