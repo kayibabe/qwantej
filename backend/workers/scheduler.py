@@ -46,6 +46,7 @@ _STOP = threading.Event()
 
 _DEFAULT_INGEST_INTERVAL_PRODUCTION = 3600
 _DEFAULT_INGEST_INTERVAL_ALL = 3600
+_LIVE_TICKET_FIXTURE_REFRESH_INTERVAL = 120
 
 
 def _all_leagues_enabled(cli_requested: bool) -> bool:
@@ -174,6 +175,35 @@ def _settlement_run() -> None:
         run_settlement(session)
 
 
+def _live_ticket_fixture_refresh_run() -> None:
+    """Keep ticketed fixture status and scores fresh during match windows."""
+    from backend.core.config import get_settings
+    from backend.core.db import session_scope
+    from backend.services.api_football_client import ApiFootballClient
+    from backend.services.api_football_ingestion import refresh_tracked_accumulator_fixtures
+
+    settings = get_settings()
+    if not settings.api_football_key.strip():
+        log.warning("scheduler: live fixture refresh skipped; API_FOOTBALL_KEY is not set")
+        return
+
+    now = datetime.now(UTC)
+    client = ApiFootballClient.from_settings(settings)
+    with session_scope() as session:
+        summary = refresh_tracked_accumulator_fixtures(
+            session,
+            client,
+            now=now,
+            captured_at=now,
+        )
+    log.info(
+        "scheduler: live fixture refresh complete — updated=%d snapshots=%d requests_remaining=%s",
+        summary.fixtures_updated,
+        summary.fixture_snapshots_created,
+        client.last_requests_remaining,
+    )
+
+
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -273,6 +303,8 @@ def main() -> None:
 
     workers = [
         ("ingestion",       ingestion_run,         ingest_interval,      0),
+        ("live-ticket-fixture-refresh", _live_ticket_fixture_refresh_run,
+         _LIVE_TICKET_FIXTURE_REFRESH_INTERVAL, 20),
         ("paper-ticket-pipeline" if paper_ticket_pipeline_enabled else "shadow-signal-pipeline",
          partial(
              _signal_pipeline_run,

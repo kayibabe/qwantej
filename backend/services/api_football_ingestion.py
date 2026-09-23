@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, TypeVar
 
@@ -13,6 +13,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.models import (
+    Accumulator,
+    AccumulatorLeg,
     AuditActor,
     AuditEvent,
     AuditEventType,
@@ -27,6 +29,7 @@ from backend.models import (
     StatsSnapshot,
     StatsSubjectType,
     Team,
+    TicketStatus,
 )
 from backend.services.api_football_client import ApiFootballClient
 from qwantej.fixtures import ApiFootballFixture, ApiFootballOddsQuote, parse_fixture, parse_odds
@@ -146,6 +149,67 @@ def ingest_fixtures(
 ) -> IngestionSummary:
     with session.begin_nested():
         return _ingest_fixtures(session, payloads, captured_at=captured_at)
+
+
+def refresh_tracked_accumulator_fixtures(
+    session: Session,
+    client: ApiFootballClient,
+    *,
+    now: datetime,
+    captured_at: datetime,
+) -> IngestionSummary:
+    """Refresh provider snapshots for ticketed matches near kickoff.
+
+    The broad research ingestion rotates leagues hourly, which is too sparse
+    for live score display. This targeted path uses API-Football's batched
+    fixture-ID lookup and only polls legs on unresolved pending/locked tickets.
+    """
+    _require_aware(now, "now")
+    _require_aware(captured_at, "captured_at")
+    earliest_kickoff = now.astimezone(UTC) - timedelta(hours=6)
+    latest_kickoff = now.astimezone(UTC) + timedelta(minutes=15)
+    external_ids = list(
+        session.scalars(
+            select(SourceMapping.external_id)
+            .join(Provider, Provider.id == SourceMapping.provider_id)
+            .join(Fixture, Fixture.id == SourceMapping.canonical_id)
+            .join(AccumulatorLeg, AccumulatorLeg.fixture_id == Fixture.id)
+            .join(Accumulator, Accumulator.id == AccumulatorLeg.accumulator_id)
+            .where(
+                Provider.name == PROVIDER_NAME,
+                SourceMapping.entity_type == EntityType.FIXTURE,
+                Fixture.status.in_([FixtureStatus.SCHEDULED, FixtureStatus.LIVE]),
+                Fixture.kickoff_utc >= earliest_kickoff,
+                Fixture.kickoff_utc <= latest_kickoff,
+                Accumulator.status.in_([TicketStatus.PENDING, TicketStatus.LOCKED]),
+            )
+            .distinct()
+            .order_by(SourceMapping.external_id)
+        ).all()
+    )
+    if not external_ids:
+        return IngestionSummary()
+
+    totals = {
+        "fixtures_created": 0,
+        "fixtures_updated": 0,
+        "fixture_snapshots_created": 0,
+    }
+    for offset in range(0, len(external_ids), 20):
+        batch = external_ids[offset : offset + 20]
+        requested_ids = set(batch)
+        payloads = client.fixtures(ids="-".join(batch))
+        tracked_payloads = [
+            payload
+            for payload in payloads
+            if isinstance(payload.get("fixture"), dict)
+            and str(payload["fixture"].get("id")) in requested_ids
+        ]
+        summary = ingest_fixtures(session, tracked_payloads, captured_at=captured_at)
+        totals["fixtures_created"] += summary.fixtures_created
+        totals["fixtures_updated"] += summary.fixtures_updated
+        totals["fixture_snapshots_created"] += summary.fixture_snapshots_created
+    return IngestionSummary(**totals)
 
 
 def _ingest_fixtures(

@@ -3,6 +3,7 @@ import { fetchAccumulators, fetchTodayStatus } from "@/lib/api"
 import { addDaysIso, fmtDate, fmtDatetime, fmtIsoDate, isValidIsoDate, todayIsoDate } from "@/lib/format"
 import AccumulatorCard from "@/components/AccumulatorCard"
 import DateJumpForm from "@/components/DateJumpForm"
+import LiveMatchRefresh from "@/components/LiveMatchRefresh"
 
 export const metadata: Metadata = { title: "Today" }
 
@@ -38,6 +39,7 @@ export default async function DashboardPage({
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-8">
+      <LiveMatchRefresh />
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">Qwantej / {isToday ? "Today" : fmtIsoDate(selectedDate)}</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">{isToday ? "Today's paper tickets" : `Paper tickets for ${fmtIsoDate(selectedDate)}`}</h1>
