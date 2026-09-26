@@ -219,10 +219,14 @@ def _unique_ids(values: Sequence[uuid.UUID], name: str) -> tuple[uuid.UUID, ...]
     return tuple(sorted(ids, key=str))
 
 
-def _load_rows(session: Session, model: type[Any], ids: Sequence[uuid.UUID], label: str):
+def _load_rows(
+    session: Session, model: type[Any], ids: Sequence[uuid.UUID], label: str
+) -> tuple[Any, ...]:
     if not ids:
         return ()
-    rows = tuple(session.scalars(select(model).where(model.id.in_(ids))).all())
+    rows: tuple[Any, ...] = tuple(
+        session.scalars(select(model).where(model.id.in_(ids))).all()
+    )
     found = {row.id for row in rows}
     missing = sorted(str(value) for value in set(ids) - found)
     if missing:

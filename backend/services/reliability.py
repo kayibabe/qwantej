@@ -205,6 +205,10 @@ def query_reliability_observations(
     _name_to_ids: dict[str, set[uuid.UUID]] = {}
 
     for settlement, prediction, competition in session.execute(stmt):
+        # SQL filters above enforce both values; assert them locally so the
+        # archive cannot accidentally emit a partially specified observation.
+        assert settlement.taken_odds is not None
+        assert prediction.calibrated_probability is not None
         competition_class = f"tier-{competition.tier}" if competition.tier else "tier-1"
         competition_id_map[competition.name] = competition.id
         _name_to_ids.setdefault(competition.name, set()).add(competition.id)

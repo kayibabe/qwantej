@@ -103,12 +103,12 @@ def _evaluate_equity(
     balance = Decimal(0)
     peak_balance = Decimal(0)
     for entry_type, amount in rows:
-        amount = Decimal(str(amount))
-        balance += amount
+        entry_amount = Decimal(str(amount))
+        balance += entry_amount
         if entry_type in _EXTERNAL_FLOWS:
             # Buy/sell units at the current NAV — no change in performance.
             if nav > 0:
-                units += amount / nav
+                units += entry_amount / nav
             if units <= 0:
                 # Account fully redeemed: re-base performance tracking.
                 units = Decimal(0)
