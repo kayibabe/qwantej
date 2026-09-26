@@ -5,12 +5,12 @@ import { usePathname } from "next/navigation"
 import NavIcon from "@/components/NavIcon"
 
 const links = [
-  { href: "/", label: "Dashboard", icon: "dashboard" as const },
-  { href: "/accumulators", label: "Accumulators", icon: "accumulators" as const },
-  { href: "/predictions", label: "Predictions", icon: "predictions" as const },
-  { href: "/settlements", label: "Settlements", icon: "settlements" as const },
-  { href: "/performance", label: "Performance", icon: "performance" as const },
-  { href: "/models", label: "Models", icon: "models" as const },
+  { href: "/", label: "Daily tickets", icon: "dashboard" as const, group: "Workspace" },
+  { href: "/accumulators", label: "Ticket archive", icon: "accumulators" as const, group: "Workspace" },
+  { href: "/predictions", label: "Forecasts", icon: "predictions" as const, group: "Workspace" },
+  { href: "/performance", label: "Analytics", icon: "performance" as const, group: "Research" },
+  { href: "/models", label: "Models", icon: "models" as const, group: "Research" },
+  { href: "/settlements", label: "Settlements", icon: "settlements" as const, group: "Operations" },
 ]
 
 export default function Nav() {
@@ -21,10 +21,9 @@ export default function Nav() {
       className="flex flex-col gap-1 px-3 py-4"
       aria-label="Primary navigation"
     >
-      <span className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-        Workspace
-      </span>
-      {links.map(({ href, label, icon }) => {
+      {["Workspace", "Research", "Operations"].map((group) => <div key={group} className="nav-group">
+        <span className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">{group}</span>
+      {links.filter((link) => link.group === group).map(({ href, label, icon }) => {
         const active = pathname === href
         return (
           <Link
@@ -44,7 +43,7 @@ export default function Nav() {
             {label}
           </Link>
         )
-      })}
+      })}</div>)}
     </nav>
   )
 }
