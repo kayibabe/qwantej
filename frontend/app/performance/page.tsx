@@ -40,6 +40,17 @@ function SegmentRow({ name, report }: { name: string; report: KPIReportOut }) {
   </div>
 }
 
+const DAILY_ACCAS = [
+  { product: "daily_bold", label: "DAILY BOLD ACCA" },
+  { product: "daily_balanced", label: "DAILY BALANCED ACCA" },
+  { product: "daily_safe", label: "DAILY SAFE ACCA" },
+] as const
+
+function DailyAccaRow({ label, report }: { label: string; report: KPIReportOut | undefined }) {
+  if (!report) return <div className="grid gap-3 border-t border-[var(--border-subtle)] py-4 sm:grid-cols-[minmax(180px,1.7fr)_repeat(3,minmax(90px,1fr))] sm:items-center"><span className="text-sm font-semibold text-[var(--text-primary)]">{label}</span><p className="sm:col-span-3 text-sm text-[var(--text-secondary)]">No settled immutable tickets yet.</p></div>
+  return <SegmentRow name={label} report={report} />
+}
+
 function isDate(value: string | undefined) {
   return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value))
 }
@@ -53,9 +64,10 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
   const requestedSince = typeof params.since === "string" && isDate(params.since) ? params.since : undefined
   const subjectType = params.subject_type === "accumulator" ? "accumulator" : "prediction"
   const since = requestedSince ? `${requestedSince}T00:00:00Z` : undefined
-  const [report, segmentResponse] = await Promise.all([
+  const [report, segmentResponse, dailyAccaResponse] = await Promise.all([
     fetchPerformanceReport({ subject_type: subjectType, since }).catch(() => null),
     subjectType === "prediction" ? fetchPerformanceSegments({ by: "model_version", subject_type: subjectType, since }).catch(() => null) : Promise.resolve(null),
+    fetchPerformanceSegments({ by: "product", subject_type: "accumulator", since }).catch(() => null),
   ])
 
   if (!report) return <div className="mx-auto w-full max-w-7xl p-5 sm:p-8"><section className="rounded-xl border border-[var(--loss)] bg-[var(--bg-surface)] p-5 text-sm text-[var(--loss)]">Performance evidence is temporarily unavailable. No result is inferred while the report cannot be loaded.</section></div>
@@ -90,6 +102,12 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
     <section className="grid gap-5 xl:grid-cols-[minmax(0,1.8fr)_minmax(300px,.9fr)]">
       <article className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-[var(--surface-shadow)]"><p className="text-xs font-semibold uppercase tracking-[.14em] text-[var(--accent)]">Portfolio lens</p><div className="mt-2 flex items-baseline justify-between gap-3"><h2 className="text-lg font-semibold text-[var(--text-primary)]">{subjectType === "prediction" ? "By model version" : "Ticket evidence"}</h2><span className="text-xs text-[var(--text-muted)]">Latest effective settlement version</span></div>{segmentRows.length ? <div className="mt-5">{segmentRows.map(([name, row]) => <SegmentRow key={name} name={name} report={row} />)}</div> : <p className="mt-5 rounded-lg bg-[var(--bg-raised)] p-4 text-sm text-[var(--text-secondary)]">No model-version breakdown is available for this evidence scope.</p>}</article>
       <aside className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-[var(--surface-shadow)]"><p className="text-xs font-semibold uppercase tracking-[.14em] text-[var(--accent)]">Interpretation</p><h2 className="mt-2 text-lg font-semibold text-[var(--text-primary)]">Evidence quality</h2><div className="mt-5 space-y-4"><EvidenceLine label="Settlement coverage" detail="Effective records with a settled outcome." value={coverage === null ? "—" : pct(coverage)} /><EvidenceLine label="Calibration sample" detail="Settled selections used for scoring." value={String(calibrationCount)} /><EvidenceLine label="Uncertainty" detail="Small samples make ROI and hit rate unstable." value={report.n_settled < 30 ? "High" : "Monitor"} /></div><p className="mt-5 border-t border-[var(--border-subtle)] pt-4 text-sm leading-6 text-[var(--text-secondary)]">Read calibration, settlement coverage, and drawdown alongside headline returns. This report describes historical evidence; it does not promise future outcomes.</p></aside>
+    </section>
+
+    <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-[var(--surface-shadow)]" aria-label="Daily accumulator analysis">
+      <p className="text-xs font-semibold uppercase tracking-[.14em] text-[var(--accent)]">Daily ACCA analysis</p>
+      <div className="mt-2 flex flex-wrap items-baseline justify-between gap-3"><h2 className="text-lg font-semibold text-[var(--text-primary)]">Settled ticket evidence by Daily ACCA</h2><span className="text-xs text-[var(--text-muted)]">Immutable ticket outcomes only</span></div>
+      <div className="mt-5">{DAILY_ACCAS.map(({ product, label }) => <DailyAccaRow key={product} label={label} report={dailyAccaResponse?.segments[product]} />)}</div>
     </section>
 
     {report.calibration_bins && report.calibration_bins.length > 0 && <section aria-label="Calibration curve"><p className="mb-3 text-xs font-semibold uppercase tracking-[.14em] text-[var(--accent)]">Reliability diagram</p><CalibrationCurveChart bins={report.calibration_bins} /></section>}
