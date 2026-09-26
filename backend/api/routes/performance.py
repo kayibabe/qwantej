@@ -19,7 +19,7 @@ router = APIRouter(
 )
 
 _VALID_SUBJECT_TYPES = {"prediction", "accumulator"}
-_VALID_SEGMENTS = {"market", "league", "model_version"}
+_VALID_SEGMENTS = {"market", "league", "model_version", "product"}
 
 
 @router.get("/report", response_model=KPIReportOut)
@@ -69,6 +69,10 @@ def get_performance_segments(
     since: Annotated[datetime | None, Query()] = None,
 ) -> PerformanceSegmentsOut:
     """Return KPI reports broken down by a segmentation dimension.
+
+    ``by=product`` is available for accumulator evidence and uses the immutable
+    stored accumulator product (for example ``daily_safe``), never a label
+    derived from current configuration.
 
     - ``by`` — ``market``, ``league``, or ``model_version`` (default: ``market``)
     - ``subject_type`` — ``prediction`` (default) or ``accumulator``

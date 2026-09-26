@@ -23,6 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.models import (
+    Accumulator,
     Competition,
     Fixture,
     Prediction,
@@ -55,6 +56,7 @@ def _build_observation(
     market: str | None,
     league: str | None,
     model_version: str | None,
+    product: str | None = None,
 ) -> PerformanceObservation:
     return PerformanceObservation(
         outcome=_OUTCOME_MAP[row.outcome],
@@ -76,6 +78,7 @@ def _build_observation(
         market=market,
         league=league,
         model_version=model_version,
+        product=product,
     )
 
 
@@ -156,9 +159,15 @@ def query_performance_observations(
             for row in rows
         ]
 
-    # Accumulator path: no join to predictions/fixtures.
+    # Accumulator path: join only the immutable ticket product for product-level
+    # reporting. Prediction, fixture, and model data remain unavailable here.
     stmt_acca = (
-        select(Settlement)
+        select(Settlement, Accumulator.product.label("acca_product"))
+        .join(
+            Accumulator,
+            (Settlement.subject_id == Accumulator.id)
+            & (Settlement.subject_type == "accumulator"),
+        )
         .where(
             Settlement.subject_type == subject_type,
             Settlement.id.not_in(superseded_ids_subq),
@@ -171,8 +180,14 @@ def query_performance_observations(
         stmt_acca = stmt_acca.where(Settlement.settled_at >= since)
 
     return [
-        _build_observation(row, market=None, league=None, model_version=None)
-        for row in session.scalars(stmt_acca)
+        _build_observation(
+            row.Settlement,
+            market=None,
+            league=None,
+            model_version=None,
+            product=row.acca_product,
+        )
+        for row in session.execute(stmt_acca)
     ]
 
 
@@ -211,6 +226,9 @@ def performance_by_segment(
     limit: int | None = None,
 ) -> dict[str, KPIReport]:
     """Compute KPIs segmented by market, league, or model_version.
+
+    Accumulator reports also support ``by="product"`` using the immutable
+    product stored on each published ticket.
 
     Args:
         session: open SQLAlchemy session.

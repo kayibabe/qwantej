@@ -84,7 +84,7 @@ export function fetchPerformanceReport(params?: {
 }
 
 export function fetchPerformanceSegments(params: {
-  by: "market" | "league" | "model_version"
+  by: "market" | "league" | "model_version" | "product"
   subject_type?: string
   since?: string
 }): Promise<PerformanceSegmentsOut> {
