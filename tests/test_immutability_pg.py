@@ -254,8 +254,12 @@ class TestCalibrationModelArtifactImmutable:
         "TRUNCATE experiments",
         "TRUNCATE selection_candidates",
         "TRUNCATE reliability_snapshots CASCADE",
-        "TRUNCATE bankroll_ledger_entries",
+        # CASCADE: real_bet_settlements references the ledger; the cascade
+        # must still be stopped by the append-only trigger.
+        "TRUNCATE bankroll_ledger_entries CASCADE",
         "TRUNCATE risk_state_snapshots",
+        "TRUNCATE real_bets CASCADE",
+        "TRUNCATE real_bet_settlements",
         "TRUNCATE odds_quotes CASCADE",
         "TRUNCATE stats_snapshots CASCADE",
         "TRUNCATE feature_snapshots CASCADE",
