@@ -9,6 +9,7 @@ import type {
   SettlementSummary,
   TodayStatus,
 } from "./types"
+import type { AccumulatorResultsOut, ResultsGranularity } from "./types"
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:8000"
@@ -102,4 +103,12 @@ export function fetchModels(params?: {
 
 export function fetchModel(id: string): Promise<ModelRegistryDetailOut> {
   return apiFetch(`/models/${id}`)
+}
+
+export function fetchAccumulatorResults(params: {
+  granularity: ResultsGranularity
+  product?: string
+  limit?: number
+}): Promise<AccumulatorResultsOut> {
+  return apiFetch("/performance/accumulator-results", params)
 }

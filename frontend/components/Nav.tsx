@@ -7,6 +7,7 @@ import NavIcon from "@/components/NavIcon"
 const links = [
   { href: "/", label: "Daily tickets", icon: "dashboard" as const, group: "Workspace" },
   { href: "/accumulators", label: "Ticket archive", icon: "accumulators" as const, group: "Workspace" },
+  { href: "/accumulators/results", label: "Ticket results", icon: "results" as const, group: "Workspace" },
   { href: "/predictions", label: "Forecasts", icon: "predictions" as const, group: "Workspace" },
   { href: "/performance", label: "Analytics", icon: "performance" as const, group: "Research" },
   { href: "/models", label: "Models", icon: "models" as const, group: "Research" },

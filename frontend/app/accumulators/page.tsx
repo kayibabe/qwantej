@@ -63,6 +63,9 @@ export default async function AccumulatorsPage({
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--accent)]">Published research output</p>
         <h1 className="mt-1 text-2xl font-semibold text-[var(--text-primary)]">Paper accumulators</h1>
         <p className="mt-2 max-w-3xl text-sm text-[var(--text-secondary)]">Browse published Core, Growth and Alpha value tickets and the separate Daily Picks. Open any match to inspect the archived selection evidence.</p>
+        <a href="/accumulators/results" className="mt-3 inline-block text-xs font-semibold text-[var(--accent)] hover:underline">
+          See which ticket types won, by year, month and day →
+        </a>
       </div>
 
       {/* Status filter */}
