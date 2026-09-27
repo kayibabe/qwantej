@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google"
 import Link from "next/link"
 import Nav from "@/components/Nav"
 import ThemeToggle from "@/components/ThemeToggle"
+import WorkspaceHeader from "@/components/WorkspaceHeader"
 import "./globals.css"
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] })
@@ -44,8 +45,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           </div>
         </header>
         {/* Sidebar */}
-        <aside className="hidden w-56 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--bg-surface)] md:flex">
-          <div className="flex min-h-28 items-center justify-center border-b border-[var(--border)] px-4 py-3">
+        <aside className="hidden w-[268px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--bg-surface)] md:flex">
+          <div className="flex min-h-28 items-center border-b border-[var(--border)] px-5 py-3">
             <img src="/qwantej-brand-light.png" alt="Qwantej — Intelligence Beyond Numbers" className="brand-lockup" />
           </div>
           <Nav />
@@ -55,7 +56,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         </aside>
 
         {/* Main */}
-        <main className="flex flex-1 flex-col overflow-auto">{children}</main>
+        <main className="flex flex-1 flex-col overflow-auto"><WorkspaceHeader />{children}</main>
       </body>
     </html>
   )

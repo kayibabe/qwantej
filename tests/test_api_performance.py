@@ -13,6 +13,7 @@ from sqlalchemy.pool import StaticPool
 from backend.api.deps import get_db
 from backend.main import app
 from backend.models import (
+    Accumulator,
     Base,
     Competition,
     Fixture,
@@ -20,6 +21,7 @@ from backend.models import (
     Prediction,
     Season,
     Team,
+    TicketStatus,
 )
 from backend.models.settlements import Settlement, SettlementOutcome
 
@@ -81,6 +83,21 @@ def client():
         seed.add_all([p1, p2])
         seed.flush()
 
+        daily_safe = Accumulator(
+            product="daily_safe",
+            optimiser_version="daily-safe-v1",
+            policy_version="daily-safe-v1",
+            combined_odds=2.10,
+            conservative_joint_probability=0.52,
+            stressed_joint_probability=0.45,
+            objective_score=0.50,
+            dependence_penalty_applied=0.0,
+            published_at=KICKOFF - timedelta(hours=1),
+            status=TicketStatus.SETTLED,
+        )
+        seed.add(daily_safe)
+        seed.flush()
+
         seed.add_all([
             Settlement(
                 subject_type="prediction",
@@ -103,6 +120,13 @@ def client():
                 brier_contribution=0.20,
                 log_loss_contribution=0.80,
                 clv=-0.02,
+            ),
+            Settlement(
+                subject_type="accumulator",
+                subject_id=daily_safe.id,
+                outcome=SettlementOutcome.WIN,
+                settled_at=NOW,
+                taken_odds=2.10,
             ),
         ])
         seed.commit()
@@ -213,6 +237,12 @@ class TestPerformanceSegments:
     def test_segments_by_model_version(self, client: TestClient) -> None:
         data = client.get("/performance/segments?by=model_version").json()
         assert "(unknown)" in data["segments"]
+
+    def test_accumulator_segments_by_product(self, client: TestClient) -> None:
+        data = client.get(
+            "/performance/segments?by=product&subject_type=accumulator"
+        ).json()
+        assert data["segments"]["daily_safe"]["n_wins"] == 1
 
     def test_invalid_by_422(self, client: TestClient) -> None:
         r = client.get("/performance/segments?by=bookmaker")

@@ -159,6 +159,11 @@ export interface KPIReportOut {
   calibration_bins: CalibrationBinOut[] | null
 }
 
+export interface PerformanceSegmentsOut {
+  by: string
+  segments: Record<string, KPIReportOut>
+}
+
 export interface ModelRunOut {
   id: string
   model_id: string

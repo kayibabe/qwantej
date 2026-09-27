@@ -87,6 +87,7 @@ def _obs(
     market: str | None = None,
     league: str | None = None,
     model_version: str | None = None,
+    product: str | None = None,
 ) -> PerformanceObservation:
     return PerformanceObservation(
         outcome=outcome,
@@ -100,6 +101,7 @@ def _obs(
         market=market,
         league=league,
         model_version=model_version,
+        product=product,
     )
 
 
@@ -310,6 +312,16 @@ class TestSegmentKpis:
         result = segment_kpis(obs, by="model_version")
         assert result["v1"].n_settled == 3
         assert result["v2"].n_settled == 1
+
+    def test_segment_by_accumulator_product(self) -> None:
+        obs = [
+            _obs("win", product="daily_safe"),
+            _obs("loss", product="daily_balanced"),
+            _obs("win", product="daily_safe"),
+        ]
+        result = segment_kpis(obs, by="product")
+        assert result["daily_safe"].n_wins == 2
+        assert result["daily_balanced"].n_losses == 1
 
     def test_segment_unknown_placed_in_bucket(self) -> None:
         obs = [

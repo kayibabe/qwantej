@@ -68,6 +68,7 @@ class PerformanceObservation:
     market: str | None = None
     league: str | None = None
     model_version: str | None = None
+    product: str | None = None
 
     def __post_init__(self) -> None:
         if self.outcome not in _VALID_OUTCOMES:
@@ -318,7 +319,7 @@ def segment_kpis(
     Raises:
         ValueError: if *by* is not a recognised segmentation dimension.
     """
-    valid_by = {"market", "league", "model_version"}
+    valid_by = {"market", "league", "model_version", "product"}
     if by not in valid_by:
         raise ValueError(f"by must be one of {sorted(valid_by)}, got {by!r}")
 
