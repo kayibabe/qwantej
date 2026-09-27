@@ -71,6 +71,10 @@ class Settings(BaseSettings):
     # the day's European fixtures). A later restart still builds immediately.
     daily_ticket_build_hour_utc: int = Field(default=6, ge=0, le=23)
 
+    # Real-money tracking: the single ISO 4217 currency of the owner's
+    # bankroll. Every recorded real bet must be in this currency.
+    real_money_currency: str = Field(default="MWK", pattern=r"^[A-Z]{3}$")
+
     # Notifications
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""

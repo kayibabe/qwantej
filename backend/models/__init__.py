@@ -30,6 +30,7 @@ from backend.models.fixtures import Competition, Fixture, FixtureStatus, Season,
 from backend.models.odds import OddsQuote
 from backend.models.predictions import Prediction
 from backend.models.providers import EntityType, Provider, SourceMapping
+from backend.models.real_bets import RealBet, RealBetOutcome, RealBetSettlement
 from backend.models.registry import (
     ModelFamily,
     ModelRegistry,
@@ -97,4 +98,8 @@ __all__ = [
     "Settlement",
     "SettlementOutcome",
     "TicketStatus",
+    # Real-money bets on published tickets, kept apart from the paper archive
+    "RealBet",
+    "RealBetOutcome",
+    "RealBetSettlement",
 ]

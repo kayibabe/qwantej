@@ -24,6 +24,7 @@ from backend.api.routes import (
     models,
     performance,
     predictions,
+    real_bets,
     settlements,
 )
 from backend.core.config import Settings, get_settings
@@ -130,6 +131,7 @@ def create_app() -> FastAPI:
     application.include_router(models.router)
     application.include_router(audit.router)
     application.include_router(dashboard.router)
+    application.include_router(real_bets.router)
 
     return application
 

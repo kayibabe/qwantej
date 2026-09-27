@@ -260,6 +260,37 @@ enforce `available_bankroll ≤ current_bankroll`, `available_bankroll ≥ 0`,
 drawdown. A unique account/cutoff/policy key prevents ambiguous duplicates.
 Database triggers forbid UPDATE, DELETE and TRUNCATE.
 
+### `real_bets` (immutable real-money placements)
+
+What the owner actually staked at a bookmaker on a published ticket. Kept
+strictly apart from the paper archive: tickets stay `paper_only`, and paper and
+real-money results are never blended. `id`, `account`, `accumulator_id` (FK —
+the whole published ticket; partial tickets are not allowed), `bookmaker`,
+optional `bookmaker_reference` (slip id), `currency` (the account's single ISO
+4217 currency, setting `REAL_MONEY_CURRENCY`, default MWK), `stake` (> 0),
+`taken_odds` (> 1; compare with `accumulators.combined_odds` for slippage),
+`placed_at`, optional `notes`, optional `idempotency_key`, `created_at`.
+Service rules: placed after the ticket was published, strictly before its
+earliest leg kickoff, never in the future; the stake must fit the *available*
+bankroll (ledger balance minus stakes on open bets). `(account, bookmaker,
+bookmaker_reference)` and `(account, idempotency_key)` are unique. A stake is
+not a ledger entry — open exposure is the sum of stakes on unsettled bets.
+Database triggers forbid UPDATE, DELETE and TRUNCATE.
+
+### `real_bet_settlements` (append-only bookmaker outcomes)
+
+`id`, `real_bet_id`, `outcome` (enum `real_bet_outcome`: won, lost, void,
+cashed_out), `payout` (total returned incl. stake — the bookmaker's figure is
+authoritative), `settled_at` (bookmaker time), optional `supersedes_id`,
+optional `reason`, `ledger_entry_id`, `created_at`. Payout must match the
+outcome (lost → 0, void → stake, won → more than stake). Each settlement posts
+its profit/loss (`payout − stake`) to `bankroll_ledger_entries` as one
+`settlement` entry dated when recorded (the ledger is chronological); a void
+posts nothing. A correction is a new row that supersedes the current one, needs
+a reason, and posts only the *change* in profit/loss. A partial unique index
+allows one original settlement per bet and `supersedes_id` is unique, so the
+history is a single chain. Database triggers forbid UPDATE, DELETE and TRUNCATE.
+
 ### `audit_events` (immutable, append-only)
 
 `id`, `event_type` (enum `audit_event_type`: model_promoted, model_retired,
