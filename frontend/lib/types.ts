@@ -264,6 +264,8 @@ export interface AccumulatorProductResultOut {
   pending: number
   total: number
   win_rate: number | null
+  /** Summed flat one-unit profit of the decided tickets. */
+  profit_units?: number
 }
 
 export interface AccumulatorPeriodResultOut {

@@ -1,7 +1,8 @@
 import Link from "next/link"
 import { Suspense } from "react"
 import { fetchAccumulatorResults } from "@/lib/api"
-import { periodLabel, productColor, productLabel, productRank } from "@/lib/tickets"
+import { periodLabel, productColor, productLabel, productRank, ticketArchiveHref } from "@/lib/tickets"
+import SortableTable from "@/components/SortableTable"
 import type { AccumulatorPeriodResultOut, AccumulatorProductResultOut, ResultsGranularity } from "@/lib/types"
 
 const VIEWS: { value: ResultsGranularity; label: string; limit: number; caption: string }[] = [
@@ -114,43 +115,49 @@ async function ResultsTable({ view }: { view: (typeof VIEWS)[number] }) {
       </section>
 
       <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
-        <table className="w-full text-sm">
-          <caption className="sr-only">
-            Accumulator tickets won and lost per product, grouped by {view.label.toLowerCase()} (Africa/Blantyre publication date)
-          </caption>
-          <thead className="bg-[var(--bg-surface)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
-            <tr>
-              <th scope="col" className="px-4 py-2 text-left">{view.label}</th>
-              <th scope="col" className="px-4 py-2 text-left">Won</th>
-              {products.map((p) => (
-                <th key={p} scope="col" className="whitespace-nowrap px-4 py-2 text-right" style={{ color: productColor(p) }}>
-                  {productLabel(p)}
+        <SortableTable
+          caption={`Accumulator tickets won and lost per product, grouped by ${view.label.toLowerCase()} (Africa/Blantyre publication date)`}
+          theadClassName="bg-[var(--bg-surface)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]"
+          tbodyClassName="bg-[var(--bg)]"
+          columns={[
+            { key: "period", label: view.label, className: "px-4 py-2 font-medium" },
+            { key: "won", label: "Won", className: "px-4 py-2 font-medium" },
+            ...products.map((p) => ({
+              key: p,
+              label: productLabel(p),
+              align: "right" as const,
+              className: "whitespace-nowrap px-4 py-2 font-medium",
+              style: { color: productColor(p) },
+            })),
+          ]}
+          rows={data.periods.map((period) => {
+            const byProduct = new Map(period.products.map((t) => [t.product, t]))
+            return {
+              key: period.period,
+              className: "border-t border-[var(--border)] hover:bg-[var(--bg-raised)]",
+              // Product columns sort by tickets won; "Won" by all wins in the period.
+              values: [
+                period.period,
+                period.products.reduce((n, t) => n + t.won, 0),
+                ...products.map((p) => byProduct.get(p)?.won ?? null),
+              ],
+              cells: <>
+                <th scope="row" className="whitespace-nowrap px-4 py-2 text-left font-mono text-xs font-medium">
+                  <Link
+                    href={ticketArchiveHref(view.value, period.period)}
+                    className="text-[var(--accent)] hover:underline"
+                  >
+                    <time dateTime={period.period}>{periodLabel(period.period, view.value)}</time>
+                  </Link>
                 </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="bg-[var(--bg)]">
-            {data.periods.map((period) => {
-              const byProduct = new Map(period.products.map((t) => [t.product, t]))
-              return (
-                <tr key={period.period} className="border-t border-[var(--border)] hover:bg-[var(--bg-raised)]">
-                  <th scope="row" className="whitespace-nowrap px-4 py-2 text-left font-mono text-xs font-medium">
-                    <Link
-                      href={`/accumulators?${view.value === "day" ? "date" : view.value}=${period.period}`}
-                      className="text-[var(--accent)] hover:underline"
-                    >
-                      <time dateTime={period.period}>{periodLabel(period.period, view.value)}</time>
-                    </Link>
-                  </th>
-                  <td className="min-w-[14rem] px-4 py-2"><WinnerChips period={period} /></td>
-                  {products.map((p) => (
-                    <td key={p} className="whitespace-nowrap px-4 py-2 text-right"><ResultCell t={byProduct.get(p)} /></td>
-                  ))}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+                <td className="min-w-[14rem] px-4 py-2"><WinnerChips period={period} /></td>
+                {products.map((p) => (
+                  <td key={p} className="whitespace-nowrap px-4 py-2 text-right"><ResultCell t={byProduct.get(p)} /></td>
+                ))}
+              </>,
+            }
+          })}
+        />
       </div>
       {data.total_periods > data.periods.length && (
         <p className="text-xs text-[var(--text-muted)]">

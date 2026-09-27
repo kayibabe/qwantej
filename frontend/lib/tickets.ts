@@ -83,6 +83,51 @@ export function periodLabel(period: string, granularity: ResultsGranularity): st
   })
 }
 
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+
+/**
+ * "Thursday, 24 September 2026" — the ticket archive's day heading. Built by
+ * hand, not with Intl, so server and browser render identical text (their
+ * ICU data disagree on the comma) and hydration never mismatches.
+ */
+export function longDayLabel(day: string): string {
+  const [y, m, d] = day.split("-").map(Number)
+  const weekday = WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]
+  return `${weekday}, ${d} ${MONTHS[m - 1]} ${y}`
+}
+
+/** Product day (YYYY-MM-DD, Africa/Blantyre) an ISO timestamp falls on. */
+export function productDay(iso: string): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Blantyre" }).format(new Date(iso))
+}
+
+/** Element id of a period's group on the Tickets page, e.g. "day-2026-09-24". */
+export function periodAnchor(granularity: ResultsGranularity, period: string): string {
+  return `${granularity}-${period}`
+}
+
+/** Link to a period on the Tickets page: opens its group and scrolls to it. */
+export function ticketArchiveHref(granularity: ResultsGranularity, period: string): string {
+  const param = granularity === "day" ? "date" : granularity
+  return `/accumulators?${param}=${period}#${periodAnchor(granularity, period)}`
+}
+
+/**
+ * The month the Tickets page opens with its tickets loaded: the requested
+ * day's or month's own month, the latest month of a requested year, otherwise
+ * the latest month with tickets. `months` is newest first.
+ */
+export function focusMonth(
+  request: { year?: string; month?: string; date?: string },
+  months: readonly string[],
+): string | undefined {
+  if (request.date) return request.date.slice(0, 7)
+  if (request.month) return request.month
+  if (request.year) return months.find((m) => m.startsWith(`${request.year}-`))
+  return months[0]
+}
+
 export interface PeriodSummary {
   period: string
   won: number
@@ -92,6 +137,8 @@ export interface PeriodSummary {
   total: number
   /** Won over decided (won + lost); null until one is decided. */
   winRate: number | null
+  /** Flat one-unit P&L of the decided tickets; null if the API did not send it. */
+  profit: number | null
 }
 
 /** Collapse a period's per-product tallies into one row. */
@@ -106,11 +153,13 @@ export function summarisePeriod(period: AccumulatorPeriodResultOut): PeriodSumma
     { won: 0, lost: 0, void: 0, pending: 0 },
   )
   const decided = t.won + t.lost
+  const hasProfit = period.products.length > 0 && period.products.every((p) => typeof p.profit_units === "number")
   return {
     period: period.period,
     ...t,
     total: t.won + t.lost + t.void + t.pending,
     winRate: decided ? t.won / decided : null,
+    profit: hasProfit ? period.products.reduce((sum, p) => sum + (p.profit_units as number), 0) : null,
   }
 }
 

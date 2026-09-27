@@ -77,16 +77,16 @@ async function PredictionsTable({
     <>
       <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] shadow-[var(--surface-shadow)]">
         <table className="w-full text-sm">
-          <caption className="sr-only">Priced forecasts, newest first unless sorted</caption>
+          <caption className="sr-only">Priced forecasts, newest first unless sorted. Column headers sort the table; Match sorts by kickoff time.</caption>
           <thead className="border-b border-[var(--border)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
             <tr>
-              <th scope="col" className="px-4 py-2 text-left font-medium">Match</th>
+              <SortableHeader label="Match" sortKey="kickoff_utc" />
               <SortableHeader label="Pick" sortKey="selection" />
               <SortableHeader label="Odds" sortKey="executable_odds" align="right" />
               <SortableHeader label="Model prob." sortKey="conservative_probability" align="right" />
               <SortableHeader label="EV" sortKey="expected_value" align="right" />
-              <th scope="col" className="hidden px-4 py-2 text-right font-medium md:table-cell"><abbr title="Quality score" className="no-underline">QSS</abbr></th>
-              <th scope="col" className="px-4 py-2 text-right font-medium">Result</th>
+              <SortableHeader label="QSS" sortKey="qss" align="right" className="hidden px-4 py-2 font-medium md:table-cell" />
+              <SortableHeader label="Result" sortKey="outcome" align="right" />
             </tr>
           </thead>
           <tbody>
