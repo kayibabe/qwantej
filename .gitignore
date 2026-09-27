@@ -36,3 +36,6 @@ logs/
 # Claude Code local session state
 .claude/
 tmp/
+
+# Rule-test extracts and reports contain archive data
+scripts/rule_test/out/
