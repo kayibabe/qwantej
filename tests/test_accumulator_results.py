@@ -33,6 +33,7 @@ from backend.models.settlements import Settlement, SettlementOutcome, TicketStat
 from qwantej.performance.accumulator_results import (
     TicketRecord,
     derive_ticket_result,
+    flat_unit_profit,
     period_key,
     tally_by_period,
 )
@@ -113,6 +114,37 @@ def test_tally_groups_by_period_and_product_newest_first():
 
 def test_tally_of_nothing_is_empty():
     assert tally_by_period([], "year") == []
+
+
+@pytest.mark.parametrize(
+    ("result", "odds", "expected"),
+    [("won", 3.5, 2.5), ("lost", 3.5, -1.0), ("void", None, 0.0), ("pending", None, None)],
+)
+def test_flat_unit_profit(result, odds, expected):
+    profit = flat_unit_profit(result, odds)
+    assert profit is None if expected is None else profit == pytest.approx(expected)
+
+
+def test_flat_unit_profit_needs_odds_for_a_win():
+    with pytest.raises(ValueError, match="settlement odds"):
+        flat_unit_profit("won", None)
+
+
+def test_tally_sums_profit_of_decided_tickets_only():
+    d = datetime(2026, 9, 6, 8, tzinfo=UTC)
+    records = [
+        TicketRecord("core", d, "won", 2.5),
+        TicketRecord("core", d, "lost", -1.0),
+        TicketRecord("core", d, "void", 0.0),
+        TicketRecord("core", d, "pending"),  # no profit yet
+        TicketRecord("alpha", d, "lost", -1.0),
+    ]
+    by_product = {t.product: t for t in tally_by_period(records, "day")[0].products}
+    assert by_product["core"].profit_units == pytest.approx(1.5)
+    assert by_product["alpha"].profit_units == pytest.approx(-1.0)
+    # Records built without a profit (older callers) still tally to zero.
+    legacy = tally_by_period([TicketRecord("core", d, "won")], "day")
+    assert legacy[0].products[0].profit_units == 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -303,6 +335,24 @@ def test_monthly_and_yearly_results(client):
     y2026 = _products(years["periods"][0])
     assert y2026["daily_safe"]["won"] == 1 and y2026["daily_safe"]["lost"] == 1
     assert y2026["daily_safe"]["win_rate"] == pytest.approx(0.5)
+
+
+def test_period_profit_is_flat_unit_pnl_of_decided_tickets(client):
+    """Every leg is priced 1.8; void legs drop out of a win, pending adds nothing."""
+    days = client.get("/performance/accumulator-results").json()["periods"]
+    sep7, sep6, aug31, dec31 = (_products(p) for p in days)
+    assert sep6["core"]["profit_units"] == pytest.approx((1.8**3 - 1) - 1)  # won + lost
+    assert sep6["daily_safe"]["profit_units"] == pytest.approx(0.8)  # void leg dropped
+    assert sep6["growth"]["profit_units"] == 0.0  # voided ticket
+    assert sep7["core"]["profit_units"] == 0.0  # still pending
+    assert sep7["daily_safe"]["profit_units"] == pytest.approx(-1.0)
+    assert aug31["alpha"]["profit_units"] == pytest.approx(1.8**2 - 1)  # corrected win
+    assert dec31["core"]["profit_units"] == 0.0
+
+    years = client.get(
+        "/performance/accumulator-results", params={"granularity": "year"}
+    ).json()["periods"]
+    assert _products(years[0])["daily_safe"]["profit_units"] == pytest.approx(0.8 - 1)
 
 
 def test_filters_and_limit(client):

@@ -6,7 +6,7 @@ import uuid
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import InstrumentedAttribute, selectinload
 
 from backend.api.deps import DbDep
@@ -18,10 +18,16 @@ router = APIRouter(prefix="/predictions", tags=["predictions"], dependencies=[Re
 
 _MAX_LIMIT = 200
 
+_SUPERSEDED_SETTLEMENTS = (
+    select(Settlement.supersedes_id).where(Settlement.supersedes_id.is_not(None))
+)
+
 # Allowlist of client-sortable columns. Never interpolate a client-supplied
 # column name into order_by — Literal + this map is what keeps `sort` from
-# becoming an arbitrary-column (or SQL injection) vector.
-_SORT_COLUMNS: dict[str, InstrumentedAttribute] = {
+# becoming an arbitrary-column (or SQL injection) vector. The match kickoff
+# and the effective settlement outcome are correlated subqueries so sorting
+# by them never changes which rows (or how many) the page contains.
+_SORT_COLUMNS: dict[str, InstrumentedAttribute | ColumnElement] = {
     "prediction_timestamp": Prediction.prediction_timestamp,
     "market": Prediction.market,
     "selection": Prediction.selection,
@@ -30,6 +36,22 @@ _SORT_COLUMNS: dict[str, InstrumentedAttribute] = {
     "expected_value": Prediction.expected_value,
     "qss": Prediction.qss,
     "dqs": Prediction.dqs,
+    "kickoff_utc": (
+        select(Fixture.kickoff_utc)
+        .where(Fixture.id == Prediction.fixture_id)
+        .scalar_subquery()
+    ),
+    "outcome": (
+        select(Settlement.outcome)
+        .where(
+            Settlement.subject_type == "prediction",
+            Settlement.subject_id == Prediction.id,
+            Settlement.id.not_in(_SUPERSEDED_SETTLEMENTS),
+        )
+        .order_by(Settlement.settled_at.desc(), Settlement.id.desc())
+        .limit(1)
+        .scalar_subquery()
+    ),
 }
 SortField = Literal[
     "prediction_timestamp",
@@ -40,6 +62,8 @@ SortField = Literal[
     "expected_value",
     "qss",
     "dqs",
+    "kickoff_utc",
+    "outcome",
 ]
 SortDir = Literal["asc", "desc"]
 

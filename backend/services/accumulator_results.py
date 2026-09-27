@@ -23,7 +23,9 @@ from qwantej.performance.accumulator_results import (
     PeriodTally,
     TicketRecord,
     derive_ticket_result,
+    flat_unit_profit,
     tally_by_period,
+    ticket_settlement_odds,
 )
 
 
@@ -73,17 +75,22 @@ def accumulator_ticket_records(
     leg_outcomes = effective_leg_outcomes(
         session, {leg.prediction_id for t in tickets for leg in t.legs}
     )
-    return [
-        TicketRecord(
-            product=t.product,
-            published_at=t.published_at,
-            result=derive_ticket_result(
-                [leg_outcomes.get(leg.prediction_id) for leg in t.legs],
-                ticket_voided=t.status == TicketStatus.VOID,
-            ),
+    records = []
+    for t in tickets:
+        legs = [(leg_outcomes.get(leg.prediction_id), float(leg.decimal_odds)) for leg in t.legs]
+        result = derive_ticket_result(
+            [outcome for outcome, _ in legs],
+            ticket_voided=t.status == TicketStatus.VOID,
         )
-        for t in tickets
-    ]
+        records.append(
+            TicketRecord(
+                product=t.product,
+                published_at=t.published_at,
+                result=result,
+                profit_units=flat_unit_profit(result, ticket_settlement_odds(legs, result)),
+            )
+        )
+    return records
 
 
 def accumulator_results_by_period(

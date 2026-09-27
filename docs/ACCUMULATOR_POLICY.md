@@ -167,6 +167,12 @@ shared by the settlement worker, the ticket archive
   drop out, the standard bookmaker treatment);
 - a ticket whose own status is `void` is **void**.
 
+Both also report the flat one-unit P&L from `flat_unit_profit` (same
+module): settlement odds − 1 for a win, −1 for a loss, 0 for a void, nothing
+while pending. The results calendar sums it per product and period
+(`profit_units`), which is the P&L shown on each year, month and day heading
+of the *Tickets* page.
+
 **Automatic ticket settlement** (`backend/services/ticket_settlement.py`,
 run by the settlement worker every pass). The moment a ticket's result is
 decided — the first lost leg, or every leg settled — the worker appends an

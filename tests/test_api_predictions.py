@@ -13,6 +13,7 @@ from sqlalchemy.pool import StaticPool
 from backend.api.deps import get_db
 from backend.main import app
 from backend.models import Base, Competition, Fixture, FixtureStatus, Prediction, Season, Team
+from backend.models.settlements import Settlement, SettlementOutcome
 
 NOW = datetime(2026, 9, 7, 18, 0, tzinfo=UTC)
 KICKOFF = NOW - timedelta(hours=3)
@@ -191,6 +192,74 @@ class TestSortPredictions:
         odds = [item["executable_odds"] for item in r.json()["items"]]
         assert odds[-1] is None
         assert odds[0] == max(o for o in odds if o is not None)
+
+
+    def test_sort_by_match_kickoff(self, seeded_client) -> None:
+        """'Match' sorts by the fixture's kickoff, not the forecast timestamp."""
+        client, fixture_id, _ = seeded_client
+        gen = app.dependency_overrides[get_db]()
+        db = next(gen)
+        try:
+            base = db.get(Fixture, fixture_id)
+            later = Fixture(
+                competition_id=base.competition_id,
+                season_id=base.season_id,
+                home_team_id=base.away_team_id,
+                away_team_id=base.home_team_id,
+                kickoff_utc=KICKOFF + timedelta(days=2),
+                status=FixtureStatus.SCHEDULED,
+            )
+            db.add(later)
+            db.flush()
+            # Oldest forecast, but for the latest match.
+            db.add(Prediction(
+                fixture_id=later.id,
+                prediction_timestamp=KICKOFF - timedelta(days=5),
+                decision_as_of=KICKOFF - timedelta(days=5),
+                market="OU",
+                selection="over",
+                conservative_probability=0.5,
+                executable_odds=2.0,
+            ))
+            db.commit()
+        finally:
+            gen.close()
+
+        desc = client.get("/predictions", params={"sort": "kickoff_utc", "dir": "desc"}).json()
+        assert desc["items"][0]["market"] == "OU"
+        asc = client.get("/predictions", params={"sort": "kickoff_utc", "dir": "asc"}).json()
+        assert asc["items"][-1]["market"] == "OU"
+        assert asc["total"] == 3  # sorting never changes the row count
+
+    def test_sort_by_result_uses_effective_outcome_open_last(self, seeded_client) -> None:
+        client, _, p1_id = seeded_client
+        gen = app.dependency_overrides[get_db]()
+        db = next(gen)
+        try:
+            p2 = db.query(Prediction).filter(Prediction.market == "BTTS").one()
+            original = Settlement(
+                subject_type="prediction", subject_id=p1_id,
+                outcome=SettlementOutcome.LOSS, settled_at=NOW,
+            )
+            db.add(original)
+            db.flush()
+            # The correction is the effective result: p1 is a win.
+            db.add(Settlement(
+                subject_type="prediction", subject_id=p1_id,
+                outcome=SettlementOutcome.WIN, settled_at=NOW + timedelta(minutes=5),
+                supersedes_id=original.id,
+            ))
+            db.commit()
+            p2_id = p2.id
+        finally:
+            gen.close()
+
+        for direction in ("asc", "desc"):
+            items = client.get(
+                "/predictions", params={"sort": "outcome", "dir": direction}
+            ).json()["items"]
+            assert [i["id"] for i in items] == [str(p1_id), str(p2_id)]  # open (NULL) last
+            assert items[0]["outcome"] == "win"
 
 
 class TestGetPrediction:
