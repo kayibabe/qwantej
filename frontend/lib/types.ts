@@ -153,7 +153,7 @@ export interface KPIReportOut {
   total_stake: number | null
   total_profit: number | null
   // Risk
-  max_drawdown: number | null
+  max_drawdown: number | null // stake units, not a fraction
   volatility: number | null
   // Reliability diagram
   calibration_bins: CalibrationBinOut[] | null

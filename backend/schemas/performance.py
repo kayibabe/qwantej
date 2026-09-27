@@ -49,7 +49,7 @@ class KPIReportOut(BaseModel):
     total_profit: float | None
 
     # Risk
-    max_drawdown: float | None
+    max_drawdown: float | None  # stake units (peak-to-trough of cumulative P/L), not a fraction
     volatility: float | None
 
     # Reliability diagram
