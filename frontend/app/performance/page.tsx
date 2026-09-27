@@ -1,6 +1,9 @@
 import type { Metadata } from "next"
+import Link from "next/link"
 import { fetchPerformanceReport, fetchPerformanceSegments } from "@/lib/api"
 import CalibrationCurveChart from "@/components/CalibrationCurveChart"
+import ResultsByPeriod from "@/components/performance/ResultsByPeriod"
+import SettlementLog from "@/components/performance/SettlementLog"
 import type { KPIReportOut } from "@/lib/types"
 
 export const metadata: Metadata = { title: "Performance" }
@@ -59,8 +62,48 @@ function EvidenceLine({ label, detail, value }: { label: string; detail: string;
   return <div className="flex items-start justify-between gap-4 border-b border-[var(--border-subtle)] pb-4 last:border-0 last:pb-0"><div><p className="text-sm font-semibold text-[var(--text-primary)]">{label}</p><p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">{detail}</p></div><strong className="shrink-0 text-sm text-[var(--accent)]">{value}</strong></div>
 }
 
-export default async function PerformancePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+type SearchParams = Record<string, string | string[] | undefined>
+
+// The former Ticket results and Settlements pages live here as tabs; their old
+// URLs redirect to these tabs (see next.config.ts).
+const TABS = [
+  { value: "overview", label: "Overview" },
+  { value: "periods", label: "By period" },
+  { value: "settlements", label: "Settlement log" },
+] as const
+
+function PerformanceTabs({ active }: { active: (typeof TABS)[number]["value"] }) {
+  return <nav aria-label="Performance views" className="flex flex-wrap gap-1 border-b border-[var(--border)]">
+    {TABS.map((t) => {
+      const current = t.value === active
+      return <Link
+        key={t.value}
+        href={t.value === "overview" ? "/performance" : `/performance?tab=${t.value}`}
+        aria-current={current ? "page" : undefined}
+        className={[
+          "-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]",
+          current
+            ? "border-[var(--accent)] text-[var(--accent)]"
+            : "border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
+        ].join(" ")}
+      >{t.label}</Link>
+    })}
+  </nav>
+}
+
+export default async function PerformancePage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = await searchParams
+  const tab = TABS.find((t) => t.value === params.tab)?.value ?? "overview"
+
+  return <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 p-5 sm:p-8">
+    <PerformanceTabs active={tab} />
+    {tab === "periods" ? <ResultsByPeriod by={typeof params.by === "string" ? params.by : undefined} />
+      : tab === "settlements" ? <SettlementLog sp={params} />
+      : <Overview params={params} />}
+  </div>
+}
+
+async function Overview({ params }: { params: SearchParams }) {
   const requestedSince = typeof params.since === "string" && isDate(params.since) ? params.since : undefined
   const subjectType = params.subject_type === "accumulator" ? "accumulator" : "prediction"
   const since = requestedSince ? `${requestedSince}T00:00:00Z` : undefined
@@ -70,13 +113,13 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
     fetchPerformanceSegments({ by: "product", subject_type: "accumulator", since }).catch(() => null),
   ])
 
-  if (!report) return <div className="mx-auto w-full max-w-7xl p-5 sm:p-8"><section className="rounded-xl border border-[var(--loss)] bg-[var(--bg-surface)] p-5 text-sm text-[var(--loss)]">Performance evidence is temporarily unavailable. No result is inferred while the report cannot be loaded.</section></div>
+  if (!report) return <section className="rounded-xl border border-[var(--loss)] bg-[var(--bg-surface)] p-5 text-sm text-[var(--loss)]">Performance evidence is temporarily unavailable. No result is inferred while the report cannot be loaded.</section>
 
   const segmentRows = Object.entries(segmentResponse?.segments ?? {}).sort(([, a], [, b]) => b.n_settled - a.n_settled)
   const coverage = report.n_total > 0 ? report.n_settled / report.n_total : null
   const calibrationCount = report.calibration_bins?.reduce((total, bin) => total + bin.count, 0) ?? 0
 
-  return <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 p-5 sm:p-8">
+  return <>
     <form method="get" className="flex flex-wrap items-end gap-3 border-b border-[var(--border)] pb-4" aria-label="Performance evidence scope">
       <div className="mr-1"><p className="text-lg font-medium text-[var(--text-primary)]">Scope</p></div>
       <label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">From<input type="date" name="since" defaultValue={requestedSince} className="h-11 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]" /></label>
@@ -111,5 +154,5 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
     </section>
 
     {report.calibration_bins && report.calibration_bins.length > 0 && <section aria-label="Calibration curve"><p className="mb-3 text-xs font-semibold uppercase tracking-[.14em] text-[var(--accent)]">Reliability diagram</p><CalibrationCurveChart bins={report.calibration_bins} /></section>}
-  </div>
+  </>
 }

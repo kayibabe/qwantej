@@ -265,6 +265,68 @@ class TestListAccumulators:
         assert data["total"] == 1
         assert data["items"][0]["status"] == "pending"
 
+    def test_filter_by_product_day(self, seeded_client) -> None:
+        client, _, _ = seeded_client
+        r = client.get("/accumulators", params={"date": "2026-09-07"})
+        assert r.status_code == 200
+        assert r.json()["total"] == 2
+        r = client.get("/accumulators", params={"date": "2026-09-06"})
+        assert r.status_code == 200
+        assert r.json()["total"] == 0
+
+    def test_invalid_date_is_rejected(self, seeded_client) -> None:
+        client, _, _ = seeded_client
+        r = client.get("/accumulators", params={"date": "2026-13-40"})
+        assert r.status_code == 422
+
+    def test_product_day_uses_blantyre_midnight_not_utc(self) -> None:
+        """A ticket at 22:30 UTC is published on the *next* Africa/Blantyre day."""
+        engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        Base.metadata.create_all(engine)
+        factory = sessionmaker(bind=engine, expire_on_commit=False)
+
+        def _override():
+            with factory() as s:
+                yield s
+
+        def _ticket(published_at: datetime) -> Accumulator:
+            return Accumulator(
+                product="Core",
+                optimiser_version="v1",
+                policy_version="v1",
+                combined_odds=2.0,
+                conservative_joint_probability=0.5,
+                stressed_joint_probability=0.45,
+                objective_score=0.5,
+                dependence_penalty_applied=0,
+                published_at=published_at,
+                status=TicketStatus.PENDING,
+            )
+
+        with factory() as seed:
+            seed.add_all([
+                _ticket(datetime(2026, 9, 7, 21, 59, tzinfo=UTC)),  # 23:59 CAT, 7 Sep
+                _ticket(datetime(2026, 9, 7, 22, 30, tzinfo=UTC)),  # 00:30 CAT, 8 Sep
+            ])
+            seed.commit()
+
+        app.dependency_overrides[get_db] = _override
+        try:
+            with TestClient(app) as client:
+                sep7 = client.get("/accumulators", params={"date": "2026-09-07"}).json()
+                sep8 = client.get("/accumulators", params={"date": "2026-09-08"}).json()
+        finally:
+            app.dependency_overrides.clear()
+
+        assert sep7["total"] == 1
+        assert sep7["items"][0]["published_at"].startswith("2026-09-07T21:59")
+        assert sep8["total"] == 1
+        assert sep8["items"][0]["published_at"].startswith("2026-09-07T22:30")
+
     def test_legs_included(self, seeded_client) -> None:
         client, acca1_id, _ = seeded_client
         r = client.get("/accumulators", params={"status": "pending"})

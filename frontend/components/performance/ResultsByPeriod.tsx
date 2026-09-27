@@ -1,10 +1,7 @@
-import type { Metadata } from "next"
 import Link from "next/link"
 import { Suspense } from "react"
 import { fetchAccumulatorResults } from "@/lib/api"
 import type { AccumulatorPeriodResultOut, AccumulatorProductResultOut, ResultsGranularity } from "@/lib/types"
-
-export const metadata: Metadata = { title: "Accumulator results" }
 
 const VIEWS: { value: ResultsGranularity; label: string; limit: number; caption: string }[] = [
   { value: "day", label: "Day", limit: 31, caption: "last 31 days with tickets" },
@@ -192,28 +189,17 @@ async function ResultsTable({ view }: { view: (typeof VIEWS)[number] }) {
   )
 }
 
-export default async function AccumulatorResultsPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>
-}) {
-  const sp = await searchParams
-  const view = VIEWS.find((v) => v.value === sp.by) ?? VIEWS[0]
+/** "By period" tab of the Performance page: which ticket types won, by day, month or year. */
+export default function ResultsByPeriod({ by }: { by: string | undefined }) {
+  const view = VIEWS.find((v) => v.value === by) ?? VIEWS[0]
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 sm:p-8">
-      <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-5 shadow-[var(--surface-shadow)] sm:p-6">
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--accent)]">Ticket outcomes</p>
-        <h1 className="mt-1 text-2xl font-semibold text-[var(--text-primary)]">Accumulator results</h1>
-        <p className="mt-2 max-w-3xl text-sm text-[var(--text-secondary)]">
-          Which accumulator types won, by year, month and day. Tickets are grouped by UTC publication date. A ticket is
-          lost as soon as any leg loses, and won once every leg is settled with no losses (void legs drop out). Daily
-          Picks are a separate, paper-only line and are not value-qualified.
-        </p>
-        <Link href="/accumulators" className="mt-3 inline-block text-xs font-semibold text-[var(--accent)] hover:underline">
-          ← Back to the ticket archive
-        </Link>
-      </div>
+    <div className="flex flex-col gap-6">
+      <p className="max-w-3xl text-sm text-[var(--text-secondary)]">
+        Which accumulator types won, by year, month and day. Tickets are grouped by UTC publication date. A ticket is
+        lost as soon as any leg loses, and won once every leg is settled with no losses (void legs drop out). Daily
+        Picks are a separate, paper-only line and are not value-qualified.
+      </p>
 
       <nav aria-label="Group results by" className="flex flex-wrap gap-2">
         {VIEWS.map((v) => {
@@ -221,7 +207,7 @@ export default async function AccumulatorResultsPage({
           return (
             <Link
               key={v.value}
-              href={`?by=${v.value}`}
+              href={`?tab=periods&by=${v.value}`}
               aria-current={active ? "page" : undefined}
               className={[
                 "rounded border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]",
