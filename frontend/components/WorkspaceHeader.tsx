@@ -4,12 +4,11 @@ import { usePathname, useRouter } from "next/navigation"
 import ThemeToggle from "@/components/ThemeToggle"
 
 const pageContext: Record<string, { title: string; subtitle: string }> = {
-  "/": { title: "Daily research", subtitle: "Published paper tickets and source evidence" },
-  "/accumulators": { title: "Ticket archive", subtitle: "Immutable published accumulator history" },
-  "/predictions": { title: "Forecast explorer", subtitle: "Archived probability forecasts" },
-  "/performance": { title: "Performance", subtitle: "Calibration and settled-outcome evidence" },
-  "/models": { title: "Model registry", subtitle: "Versioned research models" },
-  "/settlements": { title: "Results", subtitle: "Settled and pending ticket outcomes" },
+  "/": { title: "Today", subtitle: "Published paper tickets and source evidence" },
+  "/accumulators": { title: "Tickets", subtitle: "Immutable published accumulator history" },
+  "/performance": { title: "Performance", subtitle: "Results, calibration and settlement evidence" },
+  "/predictions": { title: "Forecasts", subtitle: "Archived probability forecasts" },
+  "/models": { title: "Models", subtitle: "Versioned research models" },
 }
 
 export default function WorkspaceHeader() {

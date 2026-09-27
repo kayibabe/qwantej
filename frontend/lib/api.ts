@@ -66,6 +66,8 @@ export function fetchSettlementSummary(params?: {
 
 export function fetchAccumulators(params: {
   status?: string
+  /** Publication day (YYYY-MM-DD) in the Africa/Blantyre product time zone. */
+  date?: string
   limit?: number
   offset?: number
 }): Promise<AccumulatorPage> {

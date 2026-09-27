@@ -62,6 +62,17 @@ describe("fetchSettlementSummary", () => {
   })
 })
 
+describe("fetchAccumulators date filter", () => {
+  it("passes the product day to the server instead of filtering client-side", async () => {
+    mockFetch.mockReturnValueOnce(makeResponse({ items: [], total: 0, limit: 100, offset: 0 }))
+    await fetchAccumulators({ date: "2026-09-07", limit: 100 })
+    const url = new URL(mockFetch.mock.calls[0][0])
+    expect(url.pathname).toBe("/accumulators")
+    expect(url.searchParams.get("date")).toBe("2026-09-07")
+    expect(url.searchParams.get("limit")).toBe("100")
+  })
+})
+
 describe("fetchSettlements", () => {
   it("passes outcome filter", async () => {
     mockFetch.mockReturnValueOnce(makeResponse({ items: [], total: 0, limit: 50, offset: 0 }))

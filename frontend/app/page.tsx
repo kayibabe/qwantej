@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import { fetchAccumulators, fetchTodayStatus } from "@/lib/api"
-import { addDaysIso, fmtDate, fmtDatetime, fmtIsoDate, isValidIsoDate, todayIsoDate } from "@/lib/format"
+import { addDaysIso, fmtDatetime, fmtIsoDate, isValidIsoDate, todayIsoDate } from "@/lib/format"
 import AccumulatorCard from "@/components/AccumulatorCard"
 import DateJumpForm from "@/components/DateJumpForm"
 import LiveMatchRefresh from "@/components/LiveMatchRefresh"
@@ -29,11 +29,9 @@ export default async function DashboardPage({
 
   const [today, accPage] = await Promise.all([
     fetchTodayStatus(selectedDate).catch(() => null),
-    fetchAccumulators({ limit: 100 }).catch(() => null),
+    fetchAccumulators({ date: selectedDate, limit: 100 }).catch(() => null),
   ])
-  const dateAccumulators = accPage
-    ? accPage.items.filter((acc) => fmtDate(acc.published_at) === fmtIsoDate(selectedDate))
-    : []
+  const dateAccumulators = accPage?.items ?? []
   const statusClass = STATUS_STYLES[today?.status ?? ""] ?? STATUS_STYLES.collecting
   const observedLeagueCount = today ? new Set(today.observed_leagues).size : 0
 

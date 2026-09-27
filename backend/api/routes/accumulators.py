@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from datetime import date as _date
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
@@ -11,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from backend.api.deps import DbDep
+from backend.api.routes.dashboard import PRODUCT_DAY_ZONE
 from backend.core.security import RequireApiKey
 from backend.models import (
     Accumulator,
@@ -162,16 +164,28 @@ def _snapshot_is_overdue(snapshot: StatsSnapshot, kickoff_utc: datetime) -> bool
 def list_accumulators(
     db: DbDep,
     status: Annotated[str | None, Query(max_length=20)] = None,
+    date: Annotated[
+        _date | None,
+        Query(description="Product day (YYYY-MM-DD, Africa/Blantyre) the ticket was published on"),
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> AccumulatorPage:
     """Return a page of accumulator tickets (newest published first) with legs.
 
-    Optional filter: ``status`` — ``pending``, ``locked``, ``settled``, ``void``
+    Optional filters: ``status`` — ``pending``, ``locked``, ``settled``, ``void``;
+    ``date`` — publication day in the product time zone, matching
+    ``/dashboard/today`` so a day's tickets are never cut off by pagination.
     """
     base_stmt = select(Accumulator)
     if status is not None:
         base_stmt = base_stmt.where(Accumulator.status == status)
+    if date is not None:
+        day_start_local = datetime.combine(date, datetime.min.time(), tzinfo=PRODUCT_DAY_ZONE)
+        base_stmt = base_stmt.where(
+            Accumulator.published_at >= day_start_local.astimezone(UTC),
+            Accumulator.published_at < (day_start_local + timedelta(days=1)).astimezone(UTC),
+        )
 
     total: int = db.scalar(
         select(func.count()).select_from(base_stmt.subquery())

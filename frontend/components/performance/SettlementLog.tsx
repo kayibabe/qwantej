@@ -1,4 +1,3 @@
-import type { Metadata } from "next"
 import { Suspense } from "react"
 import { fetchSettlements, fetchSettlementSummary } from "@/lib/api"
 import { fmtDate } from "@/lib/format"
@@ -6,8 +5,6 @@ import type { SettlementOut } from "@/lib/types"
 import StatTile from "@/components/StatTile"
 import Pagination from "@/components/Pagination"
 import SortableHeader from "@/components/SortableHeader"
-
-export const metadata: Metadata = { title: "Settlements" }
 
 const LIMIT = 50
 
@@ -93,6 +90,7 @@ async function SettlementsTable({
     <>
       <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
         <table className="w-full text-sm">
+          <caption className="sr-only">Effective settlement records, {subjectType} evidence</caption>
           <thead className="bg-[var(--bg-surface)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
             <tr>
               {COLUMNS.map((c) => (
@@ -112,12 +110,25 @@ async function SettlementsTable({
   )
 }
 
-export default async function SettlementsPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>
-}) {
-  const sp = await searchParams
+function FilterLink({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
+  return (
+    <a
+      href={href}
+      aria-current={active ? "true" : undefined}
+      className={[
+        "rounded px-3 py-1 text-xs font-medium border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]",
+        active
+          ? "bg-[var(--accent)] border-[var(--accent)] text-white"
+          : "border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-raised)]",
+      ].join(" ")}
+    >
+      {children}
+    </a>
+  )
+}
+
+/** "Settlement log" tab of the Performance page: the raw, effective settlement records. */
+export default async function SettlementLog({ sp }: { sp: Record<string, string | string[] | undefined> }) {
   const outcome = typeof sp.outcome === "string" ? sp.outcome : undefined
   const subjectType = typeof sp.type === "string" ? sp.type : "prediction"
   const sort = typeof sp.sort === "string" ? sp.sort : undefined
@@ -130,33 +141,19 @@ export default async function SettlementsPage({
   const outcomes = ["", "win", "loss", "void", "push"]
 
   return (
-    <div className="flex flex-col gap-6 p-8">
-      <div>
-        <h1 className="text-xl font-semibold text-[var(--text-primary)]">Settlements</h1>
-        <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          Effective (non-superseded) settlement records
-        </p>
-      </div>
+    <div className="flex flex-col gap-6">
+      <p className="text-sm text-[var(--text-secondary)]">
+        Effective (non-superseded) settlement records, one row per settled selection or ticket.
+      </p>
 
-      {/* Subject type toggle */}
-      <div className="flex gap-2">
+      <nav aria-label="Settlement evidence type" className="flex gap-2">
         {["prediction", "accumulator"].map((t) => (
-          <a
-            key={t}
-            href={`?type=${t}&offset=0${sortQuery}`}
-            className={[
-              "rounded px-3 py-1 text-xs font-medium border transition-colors capitalize",
-              subjectType === t
-                ? "bg-[var(--accent)] border-[var(--accent)] text-white"
-                : "border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-raised)]",
-            ].join(" ")}
-          >
-            {t}
-          </a>
+          <FilterLink key={t} href={`?tab=settlements&type=${t}&offset=0${sortQuery}`} active={subjectType === t}>
+            {t.charAt(0).toUpperCase() + t.slice(1)}
+          </FilterLink>
         ))}
-      </div>
+      </nav>
 
-      {/* Summary tiles */}
       {summary && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <StatTile
@@ -187,27 +184,17 @@ export default async function SettlementsPage({
         </div>
       )}
 
-      {/* Outcome filter */}
-      <div className="flex gap-2 flex-wrap">
-        {outcomes.map((o) => {
-          const label = o === "" ? "All outcomes" : o.charAt(0).toUpperCase() + o.slice(1)
-          const active = (outcome ?? "") === o
-          return (
-            <a
-              key={o}
-              href={`?type=${subjectType}${o ? `&outcome=${o}` : ""}&offset=0${sortQuery}`}
-              className={[
-                "rounded px-3 py-1 text-xs font-medium border transition-colors",
-                active
-                  ? "bg-[var(--accent)] border-[var(--accent)] text-white"
-                  : "border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-raised)]",
-              ].join(" ")}
-            >
-              {label}
-            </a>
-          )
-        })}
-      </div>
+      <nav aria-label="Filter by outcome" className="flex gap-2 flex-wrap">
+        {outcomes.map((o) => (
+          <FilterLink
+            key={o}
+            href={`?tab=settlements&type=${subjectType}${o ? `&outcome=${o}` : ""}&offset=0${sortQuery}`}
+            active={(outcome ?? "") === o}
+          >
+            {o === "" ? "All outcomes" : o.charAt(0).toUpperCase() + o.slice(1)}
+          </FilterLink>
+        ))}
+      </nav>
 
       <Suspense
         key={`${subjectType}-${outcome}-${sort}-${dir}-${offset}`}

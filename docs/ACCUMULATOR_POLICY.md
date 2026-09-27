@@ -152,8 +152,9 @@ preserve a stale "value" label.
 ## Ticket results by product and period
 
 Tickets are never settled as a whole — only their legs' predictions are.
-`GET /performance/accumulator-results` (UI: *Ticket results*,
-`/accumulators/results`) derives each ticket's result from its legs'
+`GET /performance/accumulator-results` (UI: *Performance → By period*,
+`/performance?tab=periods`; the old `/accumulators/results` URL redirects
+there) derives each ticket's result from its legs'
 effective (non-superseded) settlements
 (`src/qwantej/performance/accumulator_results.py`):
 
