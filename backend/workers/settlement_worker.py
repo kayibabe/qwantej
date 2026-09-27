@@ -27,7 +27,7 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -43,6 +43,7 @@ from backend.models import (
 from backend.models import (
     SettlementOutcome as OrmSettlementOutcome,
 )
+from backend.services.api_football_ingestion import TRACKED_FIXTURE_LOOKBACK
 from backend.services.performance import performance_report
 from backend.services.reliability import rebuild_reliability_snapshots
 from backend.services.settlement import (
@@ -51,13 +52,18 @@ from backend.services.settlement import (
     resolve_outcome,
     settle_prediction,
 )
+from backend.services.ticket_settlement import TicketSettlementRun, settle_decided_tickets
 from qwantej.notifications.types import Notification, NotificationEvent, NotificationLevel
 from qwantej.performance.drift import detect_calibration_drift, detect_execution_drift
 from qwantej.settlement.types import SettlementOutcome as EngineOutcome
 
 log = logging.getLogger(__name__)
 
-_LOOKBACK_DAYS = 7
+# Must cover the whole window in which open tickets' fixtures are polled for
+# results: a result that arrives late in that window would otherwise mark the
+# fixture finished yet never settle it.  The query stays cheap because it only
+# matches fixtures that still have unsettled predictions.
+_LOOKBACK = TRACKED_FIXTURE_LOOKBACK
 _DRIFT_MIN_SAMPLES = 30
 _RESULT_SOURCE = "api-football"
 
@@ -88,6 +94,7 @@ class FixtureBatch:
 class WorkerRun:
     started_at: datetime
     batches: list[FixtureBatch] = field(default_factory=list)
+    tickets: TicketSettlementRun = field(default_factory=TicketSettlementRun)
     drift_checked: bool = False
 
     @property
@@ -96,7 +103,7 @@ class WorkerRun:
 
     @property
     def total_errors(self) -> int:
-        return sum(len(b.errors) for b in self.batches)
+        return sum(len(b.errors) for b in self.batches) + len(self.tickets.errors)
 
 
 # ---------------------------------------------------------------------------
@@ -106,7 +113,12 @@ class WorkerRun:
 def _finished_fixtures_with_predictions(
     session: Session, *, since: datetime
 ) -> list[Fixture]:
-    """Return FINISHED fixtures that have at least one unsettled prediction."""
+    """Return FINISHED or CANCELLED fixtures with at least one unsettled prediction.
+
+    Cancelled (incl. abandoned) fixtures are included so their predictions
+    settle as void; otherwise every ticket containing one would stay pending
+    forever.
+    """
     settled_ids = (
         select(Settlement.subject_id)
         .where(
@@ -122,7 +134,7 @@ def _finished_fixtures_with_predictions(
     stmt = (
         select(Fixture)
         .where(
-            Fixture.status == FixtureStatus.FINISHED,
+            Fixture.status.in_([FixtureStatus.FINISHED, FixtureStatus.CANCELLED]),
             Fixture.kickoff_utc >= since,
             Fixture.id.in_(has_unsettled),
         )
@@ -199,7 +211,7 @@ def run_settlement(session: Session, *, now: datetime | None = None) -> WorkerRu
     See module docstring for session-commit contract.
     """
     now = now or datetime.now(UTC)
-    since = now - timedelta(days=_LOOKBACK_DAYS)
+    since = now - _LOOKBACK
     run = WorkerRun(started_at=now)
 
     fixtures = _finished_fixtures_with_predictions(session, since=since)
@@ -210,8 +222,32 @@ def run_settlement(session: Session, *, now: datetime | None = None) -> WorkerRu
         run.batches.append(batch)
         predictions = _unsettled_predictions(session, fixture.id)
 
+        cancelled = fixture.status is FixtureStatus.CANCELLED
         for prediction in predictions:
             line = float(prediction.line) if prediction.line is not None else None
+
+            if cancelled:
+                try:
+                    with session.begin_nested():
+                        settle_prediction(
+                            session,
+                            prediction,
+                            outcome=EngineOutcome.VOID,
+                            settled_at=now,
+                            result_source=_RESULT_SOURCE,
+                            reason_codes=["FIXTURE_CANCELLED"],
+                        )
+                    batch.settled += 1
+                except IntegrityError as exc:
+                    if not any(m in str(exc).lower() for m in _SETTLEMENT_UNIQUE_MARKERS):
+                        raise
+                    batch.skipped_already_settled += 1
+                except SettlementError as exc:
+                    if "already settled" in str(exc):
+                        batch.skipped_already_settled += 1
+                    else:
+                        batch.errors.append(f"prediction {prediction.id}: {exc}")
+                continue
 
             try:
                 outcome = resolve_outcome(
@@ -290,6 +326,18 @@ def run_settlement(session: Session, *, now: datetime | None = None) -> WorkerRu
         )
         for err in batch.errors:
             log.error("settlement_worker: %s", err)
+
+    # Tickets are decided from the leg settlements just written; run every
+    # time (not only when legs settled) so a missed or failed pass catches up.
+    # Isolated in a savepoint: a ticket-settlement failure is reported but
+    # must never roll back the selection settlements written above.
+    try:
+        with session.begin_nested():
+            run.tickets = settle_decided_tickets(session, now=now)
+            session.flush()
+    except Exception as exc:  # noqa: BLE001
+        log.exception("settlement_worker: ticket settlement failed")
+        run.tickets = TicketSettlementRun(errors=[f"ticket settlement failed: {exc}"])
 
     # Post-run drift detection (logging only; no automated action here).
     probs, outcomes, clv_vals = _drift_inputs(session)
@@ -396,7 +444,8 @@ def _notify_run(run: WorkerRun) -> None:
 
         level = NotificationLevel.ERROR if run.total_errors else NotificationLevel.INFO
         body = (
-            f"Settled: {run.total_settled} | "
+            f"Selections settled: {run.total_settled} | "
+            f"Tickets settled: {run.tickets.settled} | "
             f"Fixtures: {len(run.batches)} | "
             f"Errors: {run.total_errors}"
         )

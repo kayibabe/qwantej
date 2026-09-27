@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 
 from backend.api.deps import DbDep
+from backend.api.routes.dashboard import PRODUCT_DAY_ZONE
 from backend.core.security import RequireApiKey
 from backend.schemas.performance import (
     AccumulatorPeriodResultOut,
@@ -17,7 +18,11 @@ from backend.schemas.performance import (
     PerformanceSegmentsOut,
 )
 from backend.services.accumulator_results import accumulator_results_by_period
-from backend.services.performance import performance_by_segment, performance_report
+from backend.services.performance import (
+    awaiting_settlement_count,
+    performance_by_segment,
+    performance_report,
+)
 from qwantej.performance.accumulator_results import GRANULARITIES
 
 router = APIRouter(
@@ -66,7 +71,12 @@ def get_performance_report(
         since=since,
         market=market,
     )
-    return KPIReportOut(**report.__dict__)
+    return KPIReportOut(
+        **report.__dict__,
+        n_awaiting=awaiting_settlement_count(
+            db, subject_type=subject_type, now=datetime.now(UTC)
+        ),
+    )
 
 
 @router.get("/segments", response_model=PerformanceSegmentsOut)
@@ -123,7 +133,9 @@ def get_accumulator_results(
     """Return which accumulator products won, grouped by year, month or day.
 
     - ``granularity`` — ``year``, ``month`` or ``day`` (default ``day``);
-      periods are the ticket's UTC publication date
+      periods are the ticket's publication date in the Africa/Blantyre
+      product day, the same calendar as ``/dashboard/today`` and
+      ``/accumulators?date=``
     - ``since`` / ``until`` — publication window ``[since, until)``
     - ``product`` — restrict to one product (e.g. ``core``, ``daily_safe``)
     - ``limit`` — most recent periods returned (newest first)
@@ -147,6 +159,7 @@ def get_accumulator_results(
         since=since,
         until=until,
         product=product,
+        tz=PRODUCT_DAY_ZONE,
     )
     return AccumulatorResultsOut(
         granularity=granularity,

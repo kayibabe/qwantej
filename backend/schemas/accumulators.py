@@ -56,6 +56,13 @@ class AccumulatorOut(BaseModel):
     risk_policy_version: str | None
     legs: list[AccumulatorLegOut]
     created_at: datetime
+    # Derived from the legs' settlements with the same rule the settlement
+    # worker uses: won / lost / void / pending.
+    result: str = "pending"
+    # Decimal odds the decided ticket settles at (void legs drop out of a win).
+    settlement_odds: float | None = None
+    # Profit on a flat one-unit stake: odds - 1 won, -1 lost, 0 void.
+    profit_units: float | None = None
 
 
 class AccumulatorPage(BaseModel):

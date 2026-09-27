@@ -214,9 +214,9 @@ def test_today_status_scopes_to_requested_date() -> None:
         yesterday_body = yesterday_response.json()
         assert yesterday_body["date"] == yesterday_local.date().isoformat()
         assert yesterday_body["status"] == "no_ticket_recorded"
-        assert yesterday_body["label"] == "No paper ticket recorded"
+        assert yesterday_body["label"] == "No ticket recorded"
         assert yesterday_body["detail"] == (
-            "No paper ticket was published for this date. 1 currently stored "
+            "No ticket was published for this date. 1 currently stored "
             "scheduled fixture record appears in research coverage."
         )
     finally:

@@ -55,7 +55,7 @@ def today_status(
     )
     # Coverage is deliberately broader than publication scope.  Research
     # leagues are visible to users as collected fixtures, while only the
-    # validated list above can enter inference or a paper ticket.
+    # validated list above can enter inference or a published ticket.
     observed_leagues = list(
         db.scalars(
             select(Competition.name)
@@ -100,7 +100,6 @@ def today_status(
             select(func.count())
             .select_from(Accumulator)
             .where(
-                Accumulator.paper_only.is_(True),
                 Accumulator.published_at >= day_start,
                 Accumulator.published_at < day_end,
             )
@@ -134,19 +133,19 @@ def today_status(
         status, label, detail = (
             "qualified",
             "Ticket available",
-            f"{tickets} paper ticket{'s' if tickets != 1 else ''} qualified.",
+            f"{tickets} ticket{'s' if tickets != 1 else ''} qualified.",
         )
     elif is_past_date:
         status, label, detail = (
             "no_ticket_recorded",
-            "No paper ticket recorded",
+            "No ticket recorded",
             (
-                f"No paper ticket was published for this date. "
+                f"No ticket was published for this date. "
                 f"{observed_fixture_count} currently stored scheduled fixture "
                 f"record{'s' if observed_fixture_count != 1 else ''} "
                 f"{'appear' if observed_fixture_count != 1 else 'appears'} in research coverage."
                 if observed_fixture_count
-                else "No paper ticket was published for this date, and no scheduled "
+                else "No ticket was published for this date, and no scheduled "
                 "fixture records are currently stored for it."
             ),
         )

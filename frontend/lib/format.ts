@@ -1,9 +1,23 @@
 /**
- * Currency symbol for the UI.
- * Set NEXT_PUBLIC_CURRENCY_SYMBOL in the environment to override.
+ * Currency prefix for the UI. Defaults to the bankroll currency the backend
+ * keeps (REAL_MONEY_CURRENCY=MWK); set NEXT_PUBLIC_CURRENCY_SYMBOL to override.
  */
 export const CURRENCY_SYMBOL =
-  process.env.NEXT_PUBLIC_CURRENCY_SYMBOL ?? "£"
+  process.env.NEXT_PUBLIC_CURRENCY_SYMBOL ?? "MWK "
+
+/** Signed stake-unit amount, e.g. "+1.85 u" / "−1.00 u". */
+export function fmtUnits(value: number | null | undefined, decimals = 2): string {
+  if (value === null || value === undefined) return "—"
+  const sign = value > 0 ? "+" : value < 0 ? "−" : ""
+  return `${sign}${Math.abs(value).toFixed(decimals)} u`
+}
+
+/** Signed percentage from a fraction, e.g. 0.125 → "+12.5%". */
+export function fmtSignedPct(value: number | null | undefined, decimals = 1): string {
+  if (value === null || value === undefined) return "—"
+  const sign = value > 0 ? "+" : value < 0 ? "−" : ""
+  return `${sign}${Math.abs(value * 100).toFixed(decimals)}%`
+}
 
 /** Qwantej operates in CAT (UTC+2). All stored timestamps are UTC ISO strings. */
 const TZ = "Africa/Blantyre"

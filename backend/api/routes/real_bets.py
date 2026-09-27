@@ -27,6 +27,7 @@ from backend.schemas.real_bets import (
     RealBetIn,
     RealBetOut,
     RealBetPage,
+    RealBetResultsOut,
     RealBetSettlementIn,
     RealBetSettlementOut,
 )
@@ -143,6 +144,13 @@ def get_real_bets(
 ) -> RealBetPage:
     rows, total = svc.list_real_bets(db, status=status_filter, limit=limit, offset=offset)
     return RealBetPage(items=[_serialize(b) for b in rows], total=total, limit=limit, offset=offset)
+
+
+@router.get("/real-bets/summary", response_model=RealBetResultsOut)
+def get_real_bet_results(db: DbDep) -> RealBetResultsOut:
+    """Realised P&L and ROI over every settled real bet."""
+    r = svc.real_bet_results(db)
+    return RealBetResultsOut(**r.__dict__, roi=r.roi)
 
 
 @router.get("/real-bets/{bet_id}", response_model=RealBetOut)

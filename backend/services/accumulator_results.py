@@ -11,7 +11,7 @@ Read-only: nothing is written to the database.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime, tzinfo
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -27,7 +27,7 @@ from qwantej.performance.accumulator_results import (
 )
 
 
-def _effective_leg_outcomes(
+def effective_leg_outcomes(
     session: Session, prediction_ids: set[uuid.UUID]
 ) -> dict[uuid.UUID, str]:
     """Map prediction id -> outcome of its effective (latest, uncorrected) settlement."""
@@ -70,7 +70,7 @@ def accumulator_ticket_records(
         stmt = stmt.where(Accumulator.product == product)
     tickets = list(session.scalars(stmt))
 
-    leg_outcomes = _effective_leg_outcomes(
+    leg_outcomes = effective_leg_outcomes(
         session, {leg.prediction_id for t in tickets for leg in t.legs}
     )
     return [
@@ -93,9 +93,10 @@ def accumulator_results_by_period(
     since: datetime | None = None,
     until: datetime | None = None,
     product: str | None = None,
+    tz: tzinfo = UTC,
 ) -> list[PeriodTally]:
-    """Ticket results per product, grouped by UTC publication year/month/day."""
+    """Ticket results per product, grouped by publication year/month/day in *tz*."""
     records = accumulator_ticket_records(
         session, since=since, until=until, product=product
     )
-    return tally_by_period(records, granularity)
+    return tally_by_period(records, granularity, tz)

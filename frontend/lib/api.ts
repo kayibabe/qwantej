@@ -1,4 +1,5 @@
 import type {
+  AccumulatorOut,
   AccumulatorPage,
   KPIReportOut,
   ModelRegistryDetailOut,
@@ -9,7 +10,12 @@ import type {
   SettlementSummary,
   TodayStatus,
 } from "./types"
-import type { AccumulatorResultsOut, ResultsGranularity } from "./types"
+import type {
+  AccumulatorResultsOut,
+  BankrollSummaryOut,
+  RealBetResultsOut,
+  ResultsGranularity,
+} from "./types"
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:8000"
@@ -39,12 +45,27 @@ async function apiFetch<T>(path: string, params?: Record<string, string | number
 export function fetchPredictions(params: {
   fixture_id?: string
   market?: string
+  /** Only forecasts that carry a bookmaker price. */
+  priced_only?: boolean
   sort?: string
   dir?: "asc" | "desc"
   limit?: number
   offset?: number
 }): Promise<PredictionPage> {
-  return apiFetch("/predictions", params as Record<string, string | number | undefined>)
+  const { priced_only, ...rest } = params
+  return apiFetch("/predictions", {
+    ...(rest as Record<string, string | number | undefined>),
+    priced_only: priced_only === undefined ? undefined : String(priced_only),
+  })
+}
+
+/** Markets that have at least one priced forecast. */
+export function fetchPricedMarkets(): Promise<string[]> {
+  return apiFetch("/predictions/markets")
+}
+
+export function fetchAccumulator(id: string): Promise<AccumulatorOut> {
+  return apiFetch(`/accumulators/${encodeURIComponent(id)}`)
 }
 
 export function fetchSettlements(params: {
@@ -107,9 +128,20 @@ export function fetchModel(id: string): Promise<ModelRegistryDetailOut> {
   return apiFetch(`/models/${id}`)
 }
 
+export function fetchBankroll(): Promise<BankrollSummaryOut> {
+  return apiFetch("/bankroll")
+}
+
+export function fetchRealBetResults(): Promise<RealBetResultsOut> {
+  return apiFetch("/real-bets/summary")
+}
+
 export function fetchAccumulatorResults(params: {
   granularity: ResultsGranularity
   product?: string
+  /** Publication window [since, until), ISO-8601 with offset. */
+  since?: string
+  until?: string
   limit?: number
 }): Promise<AccumulatorResultsOut> {
   return apiFetch("/performance/accumulator-results", params)

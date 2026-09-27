@@ -425,3 +425,48 @@ class TestApi:
             "outcome": "lost", "payout": "0", "settled_at": NOW.isoformat(),
         })
         assert r.status_code == 404
+
+
+# --------------------------------------------------------------------------
+# Realised results summary
+# --------------------------------------------------------------------------
+
+class TestRealBetResults:
+    def test_summary_counts_outcomes_and_excludes_void_from_turnover(self, session) -> None:
+        _deposit(session, "20000")
+        won = _bet(session, _ticket(session), stake="2000", taken_odds="3.00")
+        lost = _bet(session, _ticket(session), stake="1000")
+        void = _bet(session, _ticket(session), stake="500")
+        _bet(session, _ticket(session), stake="700")  # still open
+        settled_at = NOW - timedelta(minutes=5)
+        svc.settle_real_bet(session, bet_id=won.id, outcome=RealBetOutcome.WON,
+                            payout="6000", settled_at=settled_at, now=NOW)
+        svc.settle_real_bet(session, bet_id=lost.id, outcome=RealBetOutcome.LOST,
+                            payout="0", settled_at=settled_at, now=NOW)
+        svc.settle_real_bet(session, bet_id=void.id, outcome=RealBetOutcome.VOID,
+                            payout="500", settled_at=settled_at, now=NOW)
+
+        r = svc.real_bet_results(session)
+        assert (r.n_bets, r.n_open, r.n_won, r.n_lost, r.n_void) == (4, 1, 1, 1, 1)
+        assert r.settled_stake == Decimal("3000")
+        assert r.settled_profit == Decimal("3000")  # +4000 won, -1000 lost, 0 void
+        assert r.roi == Decimal("1")
+
+    def test_summary_without_bets_has_no_roi(self, session) -> None:
+        r = svc.real_bet_results(session)
+        assert (r.n_bets, r.settled_stake, r.roi) == (0, Decimal("0"), None)
+
+    def test_summary_endpoint(self, factory) -> None:
+        def _override():
+            with factory() as s:
+                yield s
+
+        app.dependency_overrides[get_db] = _override
+        try:
+            with TestClient(app) as c:
+                body = c.get("/real-bets/summary").json()
+        finally:
+            app.dependency_overrides.pop(get_db, None)
+        assert body["currency"] == "MWK"
+        assert body["n_bets"] == 0
+        assert body["roi"] is None

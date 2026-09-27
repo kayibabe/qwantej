@@ -49,6 +49,19 @@ describe("fetchPredictions", () => {
     mockFetch.mockReturnValueOnce(makeResponse(null, false, 500))
     await expect(fetchPredictions({})).rejects.toThrow("/predictions failed")
   })
+
+  it("asks the server for priced forecasts only", async () => {
+    mockFetch.mockReturnValueOnce(makeResponse({ items: [], total: 0, limit: 50, offset: 0 }))
+    await fetchPredictions({ priced_only: true })
+    const url = new URL(mockFetch.mock.calls[0][0])
+    expect(url.searchParams.get("priced_only")).toBe("true")
+  })
+
+  it("omits priced_only when not requested", async () => {
+    mockFetch.mockReturnValueOnce(makeResponse({ items: [], total: 0, limit: 50, offset: 0 }))
+    await fetchPredictions({})
+    expect(new URL(mockFetch.mock.calls[0][0]).searchParams.has("priced_only")).toBe(false)
+  })
 })
 
 describe("fetchSettlementSummary", () => {

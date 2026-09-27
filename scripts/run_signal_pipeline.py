@@ -990,7 +990,7 @@ def _notify(run: PipelineRun, decision: Any | None) -> None:
                     stake = (
                         f"  stake={pd.stake_decision.recommended_stake:.2f}"
                         if pd.stake_decision and pd.stake_decision.recommended_stake
-                        else "  stake=paper"
+                        else ""
                     )
                     tickets.append(
                         f"  {pd.product.value.upper()}: "
@@ -1008,7 +1008,7 @@ def _notify(run: PipelineRun, decision: Any | None) -> None:
         else:
             body_lines.append("No qualifying accumulator today.")
         if run.daily_tickets:
-            body_lines.append("Daily Picks (not value-qualified, paper):")
+            body_lines.append("Daily Picks (not value-qualified):")
             body_lines.extend(f"  {line}" for line in run.daily_tickets)
         if run.daily_shortfall:
             body_lines.append(

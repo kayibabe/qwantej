@@ -471,6 +471,130 @@ def test_overdue_unresolved_ticket_keeps_refreshing_with_backoff(session: Sessio
     assert client.requested == [{"ids": "1001"}]
 
 
+def test_old_open_ticket_is_still_polled_at_a_slow_cadence(session: Session) -> None:
+    # Regression: a 3-day lookback stranded any open ticket whose result the
+    # feed published late, leaving it "pending" forever.
+    ingest_fixtures(session, [_fixture_payload()], captured_at=NOW)
+    fixture = session.scalar(select(Fixture))
+    assert fixture is not None
+    prediction = Prediction(
+        fixture_id=fixture.id, prediction_timestamp=NOW, decision_as_of=NOW,
+        market="1X2", selection="home", conservative_probability=0.6, executable_odds=1.8,
+    )
+    accumulator = Accumulator(
+        product="Core", optimiser_version="v1", policy_version="v1", combined_odds=2.0,
+        conservative_joint_probability=0.6, stressed_joint_probability=0.5,
+        objective_score=0.5, dependence_penalty_applied=0, published_at=NOW,
+        status=TicketStatus.PENDING,
+    )
+    session.add_all([prediction, accumulator])
+    session.flush()
+    session.add(AccumulatorLeg(
+        accumulator_id=accumulator.id, prediction_id=prediction.id, leg_index=0,
+        fixture_id=fixture.id, league_id="39", market_family="1X2", selection="home",
+        decimal_odds=1.8, conservative_probability=0.6, edge=0.1, qss=80,
+    ))
+    session.flush()
+
+    class StubClient:
+        def __init__(self) -> None:
+            self.requested: list[dict[str, str]] = []
+
+        def fixtures(self, **parameters):
+            self.requested.append(parameters)
+            return (_fixture_payload(status="FT", home_goals=2, away_goals=0),)
+
+    client = StubClient()
+    ten_days_on = KICKOFF + timedelta(days=10)
+    summary = refresh_tracked_accumulator_fixtures(
+        session, client, now=ten_days_on, captured_at=ten_days_on,  # type: ignore[arg-type]
+    )
+    assert client.requested == [{"ids": "1001"}]
+    assert summary.fixtures_updated == 1
+    assert fixture.status is FixtureStatus.FINISHED
+
+
+def test_postponed_fixture_on_an_open_ticket_is_re_polled(session: Session) -> None:
+    # Regression: postponed fixtures were never re-polled, so a match that was
+    # rescheduled and played left its ticket pending forever.
+    ingest_fixtures(session, [_fixture_payload(status="PST")], captured_at=NOW)
+    fixture = session.scalar(select(Fixture))
+    assert fixture is not None and fixture.status is FixtureStatus.POSTPONED
+    prediction = Prediction(
+        fixture_id=fixture.id, prediction_timestamp=NOW, decision_as_of=NOW,
+        market="1X2", selection="home", conservative_probability=0.6, executable_odds=1.8,
+    )
+    accumulator = Accumulator(
+        product="Core", optimiser_version="v1", policy_version="v1", combined_odds=2.0,
+        conservative_joint_probability=0.6, stressed_joint_probability=0.5,
+        objective_score=0.5, dependence_penalty_applied=0, published_at=NOW,
+        status=TicketStatus.PENDING,
+    )
+    session.add_all([prediction, accumulator])
+    session.flush()
+    session.add(AccumulatorLeg(
+        accumulator_id=accumulator.id, prediction_id=prediction.id, leg_index=0,
+        fixture_id=fixture.id, league_id="39", market_family="1X2", selection="home",
+        decimal_odds=1.8, conservative_probability=0.6, edge=0.1, qss=80,
+    ))
+    session.flush()
+
+    class StubClient:
+        def __init__(self) -> None:
+            self.requested: list[dict[str, str]] = []
+
+        def fixtures(self, **parameters):
+            self.requested.append(parameters)
+            return (_fixture_payload(status="FT", home_goals=1, away_goals=0),)
+
+    client = StubClient()
+    later = KICKOFF + timedelta(days=2)
+    refresh_tracked_accumulator_fixtures(session, client, now=later, captured_at=later)  # type: ignore[arg-type]
+    assert client.requested == [{"ids": "1001"}]
+    assert fixture.status is FixtureStatus.FINISHED
+
+
+def test_stale_open_ticket_uses_six_hour_backoff(session: Session) -> None:
+    ingest_fixtures(session, [_fixture_payload()], captured_at=KICKOFF + timedelta(days=2))
+    fixture = session.scalar(select(Fixture))
+    assert fixture is not None
+    prediction = Prediction(
+        fixture_id=fixture.id, prediction_timestamp=NOW, decision_as_of=NOW,
+        market="1X2", selection="home", conservative_probability=0.6, executable_odds=1.8,
+    )
+    accumulator = Accumulator(
+        product="Core", optimiser_version="v1", policy_version="v1", combined_odds=2.0,
+        conservative_joint_probability=0.6, stressed_joint_probability=0.5,
+        objective_score=0.5, dependence_penalty_applied=0, published_at=NOW,
+        status=TicketStatus.PENDING,
+    )
+    session.add_all([prediction, accumulator])
+    session.flush()
+    session.add(AccumulatorLeg(
+        accumulator_id=accumulator.id, prediction_id=prediction.id, leg_index=0,
+        fixture_id=fixture.id, league_id="39", market_family="1X2", selection="home",
+        decimal_odds=1.8, conservative_probability=0.6, edge=0.1, qss=80,
+    ))
+    session.flush()
+
+    class StubClient:
+        def __init__(self) -> None:
+            self.requested: list[dict[str, str]] = []
+
+        def fixtures(self, **parameters):
+            self.requested.append(parameters)
+            return ()
+
+    client = StubClient()
+    # Last snapshot was at kickoff + 2 days; 5 hours later is inside the 6 h backoff.
+    soon = KICKOFF + timedelta(days=2, hours=5)
+    refresh_tracked_accumulator_fixtures(session, client, now=soon, captured_at=soon)  # type: ignore[arg-type]
+    assert client.requested == []
+    later = KICKOFF + timedelta(days=2, hours=6, minutes=1)
+    refresh_tracked_accumulator_fixtures(session, client, now=later, captured_at=later)  # type: ignore[arg-type]
+    assert client.requested == [{"ids": "1001"}]
+
+
 def test_finished_fixture_ignores_later_non_final_provider_status(session: Session) -> None:
     finished = _fixture_payload(status="FT", home_goals=1, away_goals=0)
     ingest_fixtures(session, [finished], captured_at=NOW)

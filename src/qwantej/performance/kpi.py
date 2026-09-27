@@ -45,7 +45,8 @@ class PerformanceObservation:
         taken_probability: P_cons used at decision time (for calibration
             metrics: ECE, slope/intercept, BSS); None if not recorded.
         taken_odds: decimal odds at which the bet was taken (> 1).
-        stake: actual stake (> 0); None for paper-mode observations.
+        stake: actual stake (> 0); None when no stake was recorded (the
+            report then uses a flat one-unit stake per priced bet).
         profit_loss: signed P/L; None when stake is None.
         clv: probability-space CLV (closing_implied − taken_implied).
         brier_contribution: pre-computed (p − outcome)² from the settlement
@@ -105,7 +106,11 @@ class KPIReport:
 
     Counts cover all observations including voids and pushes.
     Metrics requiring settled (win/loss) outcomes are None when no such
-    observations exist.  ROI/financial fields are None in paper mode.
+    observations exist.  Financial fields use the recorded stakes when every
+    contributing row carries one (``stake_basis="real"``); otherwise they fall
+    back to a flat one-unit stake on every priced win/loss
+    (``stake_basis="flat_unit"``), so ROI, P/L and drawdown always describe the
+    same bets.  They are None only when no priced win/loss exists.
     Calibration fields (ece, calibration_slope/intercept, brier_skill_score)
     are None when fewer than two observations carry taken_probability.
     """
@@ -135,7 +140,7 @@ class KPIReport:
     mean_clv: float | None           # mean CLV over rows with non-None CLV
     n_clv: int                       # number of observations with CLV data
 
-    # --- Financial (None in paper mode) ---
+    # --- Financial (see stake_basis) ---
     roi: float | None                # sum(profit_loss) / sum(stake); alias: yield
     total_stake: float | None        # sum(stake)
     total_profit: float | None       # sum(profit_loss)
@@ -146,6 +151,11 @@ class KPIReport:
 
     # --- Reliability diagram (None when calibration metrics unavailable) ---
     calibration_bins: tuple[CalibrationBin, ...] | None = None
+
+    # --- How the financial and risk fields were staked ---
+    # "real": recorded stakes; "flat_unit": one unit per priced win/loss;
+    # None: nothing priced was settled, so no financial figure exists.
+    stake_basis: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -170,7 +180,8 @@ def compute_kpis(observations: Sequence[PerformanceObservation]) -> KPIReport:
     clv_n = 0
     stake_sum: float | None = None
     pl_sum: float | None = None
-    unit_pl: list[float] = []   # ordered unit P/L for drawdown/volatility
+    unit_pl: list[float] = []   # ordered flat one-unit P/L (priced rows only)
+    unit_stakes = 0             # priced win/loss rows = units staked
     real_pl: list[float] = []   # ordered real P/L (staked mode)
 
     # For calibration metrics: (taken_probability, binary_outcome) pairs
@@ -215,13 +226,18 @@ def compute_kpis(observations: Sequence[PerformanceObservation]) -> KPIReport:
             pl_sum = (pl_sum or 0.0) + obs.profit_loss
             real_pl.append(obs.profit_loss)
 
-        # Unit P/L for drawdown/volatility when no real stakes
-        if obs.outcome == "win" and obs.taken_odds is not None:
-            unit_pl.append(obs.taken_odds - 1.0)
-        elif obs.outcome == "loss":
-            unit_pl.append(-1.0)
-        elif obs.outcome in ("void", "push"):
-            unit_pl.append(0.0)
+        # Flat one-unit P/L when no real stakes.  Only priced rows count: a
+        # forecast with no price was never a bet, and counting its losses
+        # (-1) while skipping its wins (unknown return) would bias P/L down.
+        if obs.taken_odds is not None:
+            if obs.outcome == "win":
+                unit_pl.append(obs.taken_odds - 1.0)
+                unit_stakes += 1
+            elif obs.outcome == "loss":
+                unit_pl.append(-1.0)
+                unit_stakes += 1
+            else:  # void / push: stake returned
+                unit_pl.append(0.0)
 
     n_settled = n_wins + n_losses
     n_total = n_settled + n_voids + n_pushes
@@ -263,13 +279,23 @@ def compute_kpis(observations: Sequence[PerformanceObservation]) -> KPIReport:
         except ValueError:
             pass  # not enough data for calibration bins
 
-    # --- ROI ---
+    # --- ROI: real stakes when recorded, else flat one unit per priced bet ---
+    stake_basis: str | None = None
+    if real_pl:
+        stake_basis = "real"
+        pl_sequence = real_pl
+    elif unit_stakes > 0:
+        stake_basis = "flat_unit"
+        stake_sum = float(unit_stakes)
+        pl_sum = sum(unit_pl)
+        pl_sequence = unit_pl
+    else:
+        pl_sequence = []
     roi: float | None = None
     if stake_sum is not None and stake_sum > 0 and pl_sum is not None:
         roi = pl_sum / stake_sum
 
-    # --- Drawdown and volatility ---
-    pl_sequence = real_pl if real_pl else unit_pl
+    # --- Drawdown and volatility (same P/L series as ROI) ---
     max_drawdown: float | None = _max_drawdown(pl_sequence) if pl_sequence else None
     volatility: float | None = _sample_std(pl_sequence) if len(pl_sequence) >= 2 else None
 
@@ -297,6 +323,7 @@ def compute_kpis(observations: Sequence[PerformanceObservation]) -> KPIReport:
         calibration_bins=calibration_bins,
         max_drawdown=max_drawdown,
         volatility=volatility,
+        stake_basis=stake_basis,
     )
 
 

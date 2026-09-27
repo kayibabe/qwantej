@@ -217,12 +217,44 @@ class TestComputeKpisFinancial:
         assert r.total_profit == pytest.approx(-2.0)
         assert r.roi == pytest.approx(-2.0 / 20.0)
 
-    def test_roi_none_in_paper_mode(self) -> None:
-        obs = [_obs("win"), _obs("loss")]
+    def test_real_stakes_report_real_basis(self) -> None:
+        r = compute_kpis([_obs("win", stake=10.0, profit_loss=8.0)])
+        assert r.stake_basis == "real"
+
+    def test_flat_unit_roi_without_recorded_stakes(self) -> None:
+        # One unit per priced bet: win @2.50 → +1.50, loss → -1, void → 0
+        # (stake returned, not counted as turnover).
+        obs = [
+            _obs("win", taken_odds=2.5),
+            _obs("loss", taken_odds=1.8),
+            _obs("void", taken_odds=1.9),
+        ]
         r = compute_kpis(obs)
+        assert r.stake_basis == "flat_unit"
+        assert r.total_stake == pytest.approx(2.0)
+        assert r.total_profit == pytest.approx(0.5)
+        assert r.roi == pytest.approx(0.25)
+
+    def test_financials_none_when_nothing_priced(self) -> None:
+        r = compute_kpis([_obs("win", taken_odds=None), _obs("loss", taken_odds=None)])
+        assert r.stake_basis is None
         assert r.roi is None
         assert r.total_stake is None
         assert r.total_profit is None
+        assert r.max_drawdown is None
+
+    def test_unpriced_loss_does_not_bias_flat_pl(self) -> None:
+        # Regression: an unpriced loss used to add -1 to the unit P/L series
+        # while an unpriced win added nothing, dragging drawdown down.
+        obs = [
+            _obs("win", taken_odds=2.0),
+            _obs("loss", taken_odds=None),
+            _obs("loss", taken_odds=None),
+        ]
+        r = compute_kpis(obs)
+        assert r.total_stake == pytest.approx(1.0)
+        assert r.total_profit == pytest.approx(1.0)
+        assert r.max_drawdown == pytest.approx(0.0)
 
     def test_financial_fields_accumulate(self) -> None:
         obs = [
@@ -250,8 +282,8 @@ class TestComputeKpisDrawdown:
         # peak=1, trough=-1 → drawdown=2
         obs = [
             _obs("win", taken_odds=2.0),
-            _obs("loss", taken_odds=None),
-            _obs("loss", taken_odds=None),
+            _obs("loss", taken_odds=2.0),
+            _obs("loss", taken_odds=2.0),
         ]
         r = compute_kpis(obs)
         assert r.max_drawdown == pytest.approx(2.0)

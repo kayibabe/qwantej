@@ -1,57 +1,56 @@
 import type { Metadata } from "next"
 import { Suspense } from "react"
-import { fetchPredictions } from "@/lib/api"
-import { fmtDate } from "@/lib/format"
+import { fetchPredictions, fetchPricedMarkets } from "@/lib/api"
+import { fmtDatetime } from "@/lib/format"
+import { marketLabel, selectionLabel } from "@/lib/forecasts"
 import type { PredictionOut } from "@/lib/types"
 import Pagination from "@/components/Pagination"
 import SortableHeader from "@/components/SortableHeader"
 
-export const metadata: Metadata = { title: "Predictions" }
+export const metadata: Metadata = { title: "Forecasts" }
 
 const LIMIT = 50
 
-function outcomeColor(ev: number | null) {
+const OUTCOME: Record<string, { label: string; cls: string }> = {
+  win: { label: "WON", cls: "text-[var(--win)] border-[var(--win)]/40 bg-[var(--win)]/10" },
+  loss: { label: "LOST", cls: "text-[var(--loss)] border-[var(--loss)]/40 bg-[var(--loss)]/10" },
+  void: { label: "VOID", cls: "text-[var(--void)] border-[var(--void)]/40 bg-[var(--void)]/10" },
+  push: { label: "PUSH", cls: "text-[var(--void)] border-[var(--void)]/40 bg-[var(--void)]/10" },
+}
+
+function evTone(ev: number | null) {
   if (ev === null) return "text-[var(--text-muted)]"
   return ev > 0 ? "text-[var(--win)]" : "text-[var(--loss)]"
 }
 
 function PredictionRow({ p }: { p: PredictionOut }) {
+  const outcome = p.outcome ? OUTCOME[p.outcome] : undefined
   return (
-    <tr className="border-b border-[var(--border)] hover:bg-[var(--bg-raised)] transition-colors">
-      <td className="px-4 py-2 text-xs text-[var(--text-muted)] font-mono">
-        {fmtDate(p.prediction_timestamp)}
+    <tr className="border-t border-[var(--border-subtle)] transition-colors hover:bg-[var(--bg-raised)]">
+      <td className="px-4 py-3">
+        <p className="text-sm font-semibold text-[var(--text-primary)]">{p.home_team && p.away_team ? `${p.home_team} vs ${p.away_team}` : "Match unavailable"}</p>
+        <p className="text-xs text-[var(--text-muted)]">{[p.competition_name, p.kickoff_utc ? fmtDatetime(p.kickoff_utc) : null].filter(Boolean).join(" · ")}</p>
       </td>
-      <td className="px-4 py-2 text-sm font-medium">{p.market}</td>
-      <td className="px-4 py-2 text-sm">{p.selection}</td>
-      <td className="px-4 py-2 text-xs font-mono text-right text-[var(--text-secondary)]">
+      <td className="px-4 py-3">
+        <p className="text-sm text-[var(--text-primary)]">{selectionLabel(p)}</p>
+        <p className="text-xs text-[var(--text-muted)]">{marketLabel(p.market)}{p.bookmaker ? ` · ${p.bookmaker}` : ""}</p>
+      </td>
+      <td className="px-4 py-3 text-right font-mono text-sm text-[var(--text-primary)]">{p.executable_odds?.toFixed(2) ?? "—"}</td>
+      <td className="px-4 py-3 text-right font-mono text-xs text-[var(--text-secondary)]">
         {p.conservative_probability !== null ? `${(p.conservative_probability * 100).toFixed(1)}%` : "—"}
       </td>
-      <td className="px-4 py-2 text-xs font-mono text-right text-[var(--text-secondary)]">
-        {p.executable_odds?.toFixed(2) ?? "—"}
+      <td className={`px-4 py-3 text-right font-mono text-xs ${evTone(p.expected_value)}`}>
+        {p.expected_value !== null ? `${p.expected_value > 0 ? "+" : ""}${(p.expected_value * 100).toFixed(1)}%` : "—"}
       </td>
-      <td className={`px-4 py-2 text-xs font-mono text-right ${outcomeColor(p.expected_value)}`}>
-        {p.expected_value !== null ? `${(p.expected_value * 100).toFixed(1)}%` : "—"}
-      </td>
-      <td className="px-4 py-2 text-xs font-mono text-right text-[var(--text-secondary)]">
-        {p.qss?.toFixed(0) ?? "—"}
-      </td>
-      <td className="px-4 py-2 text-xs font-mono text-right text-[var(--text-secondary)]">
-        {p.dqs?.toFixed(0) ?? "—"}
+      <td className="hidden px-4 py-3 text-right font-mono text-xs text-[var(--text-secondary)] md:table-cell">{p.qss?.toFixed(0) ?? "—"}</td>
+      <td className="px-4 py-3 text-right">
+        {outcome
+          ? <span className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-bold tracking-wide ${outcome.cls}`}>{outcome.label}</span>
+          : <span className="text-xs text-[var(--text-muted)]">Open</span>}
       </td>
     </tr>
   )
 }
-
-const COLUMNS: { label: string; sortKey: string; align: "left" | "right" }[] = [
-  { label: "Date", sortKey: "prediction_timestamp", align: "left" },
-  { label: "Market", sortKey: "market", align: "left" },
-  { label: "Selection", sortKey: "selection", align: "left" },
-  { label: "Cons. prob.", sortKey: "conservative_probability", align: "right" },
-  { label: "Odds", sortKey: "executable_odds", align: "right" },
-  { label: "EV", sortKey: "expected_value", align: "right" },
-  { label: "QSS", sortKey: "qss", align: "right" },
-  { label: "DQS", sortKey: "dqs", align: "right" },
-]
 
 async function PredictionsTable({
   market,
@@ -64,28 +63,33 @@ async function PredictionsTable({
   dir: "asc" | "desc" | undefined
   offset: number
 }) {
-  const page = await fetchPredictions({ market, sort, dir, limit: LIMIT, offset }).catch(() => null)
+  const page = await fetchPredictions({ market, sort, dir, limit: LIMIT, offset, priced_only: true }).catch(() => null)
 
   if (!page) {
-    return <p className="text-sm text-[var(--loss)]">Could not load predictions.</p>
+    return <p className="text-sm text-[var(--loss)]">Could not load forecasts.</p>
   }
 
   if (page.items.length === 0) {
-    return <p className="text-sm text-[var(--text-muted)]">No predictions match this filter.</p>
+    return <p className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-surface)] p-6 text-sm text-[var(--text-secondary)]">No priced forecasts match this filter.</p>
   }
 
   return (
     <>
-      <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
+      <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] shadow-[var(--surface-shadow)]">
         <table className="w-full text-sm">
-          <thead className="bg-[var(--bg-surface)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
+          <caption className="sr-only">Priced forecasts, newest first unless sorted</caption>
+          <thead className="border-b border-[var(--border)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
             <tr>
-              {COLUMNS.map((c) => (
-                <SortableHeader key={c.sortKey} label={c.label} sortKey={c.sortKey} align={c.align} />
-              ))}
+              <th scope="col" className="px-4 py-2 text-left font-medium">Match</th>
+              <SortableHeader label="Pick" sortKey="selection" />
+              <SortableHeader label="Odds" sortKey="executable_odds" align="right" />
+              <SortableHeader label="Model prob." sortKey="conservative_probability" align="right" />
+              <SortableHeader label="EV" sortKey="expected_value" align="right" />
+              <th scope="col" className="hidden px-4 py-2 text-right font-medium md:table-cell"><abbr title="Quality score" className="no-underline">QSS</abbr></th>
+              <th scope="col" className="px-4 py-2 text-right font-medium">Result</th>
             </tr>
           </thead>
-          <tbody className="bg-[var(--bg)]">
+          <tbody>
             {page.items.map((p) => (
               <PredictionRow key={p.id} p={p} />
             ))}
@@ -97,8 +101,6 @@ async function PredictionsTable({
   )
 }
 
-const MARKETS = ["", "1X2", "BTTS", "Over 1.5", "Over 2.5", "Under 2.5", "Under 3.5", "1X", "X2"]
-
 export default async function PredictionsPage({
   searchParams,
 }: {
@@ -108,43 +110,44 @@ export default async function PredictionsPage({
   const market = typeof sp.market === "string" ? sp.market : undefined
   const sort = typeof sp.sort === "string" ? sp.sort : undefined
   const dir = sp.dir === "asc" ? "asc" : sp.dir === "desc" ? "desc" : undefined
-  const offset = Number(sp.offset ?? 0)
+  const offset = Math.max(0, Number(sp.offset ?? 0) || 0)
+  const markets = await fetchPricedMarkets().catch(() => [] as string[])
 
   return (
-    <div className="flex flex-col gap-6 p-8">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 p-4 sm:p-8">
       <div>
-        <h1 className="text-xl font-semibold text-[var(--text-primary)]">Predictions</h1>
-        <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          Immutable prediction archive, newest first
+        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Forecasts</h1>
+        <p className="mt-1 max-w-3xl text-sm text-[var(--text-secondary)]">
+          Every archived forecast that had a bookmaker price, with the match it was for and how it settled.
+          Forecasts without odds are hidden: they could not have been bet.
         </p>
       </div>
 
-      {/* Market filter */}
-      <div className="flex gap-2 flex-wrap">
-        {MARKETS.map((m) => {
-          const label = m === "" ? "All markets" : m
+      <nav aria-label="Filter by market" className="flex flex-wrap gap-2">
+        {["", ...markets].map((m) => {
           const active = (market ?? "") === m
           const sortQuery = sort ? `&sort=${encodeURIComponent(sort)}&dir=${dir ?? "desc"}` : ""
           return (
             <a
-              key={m}
+              key={m || "all"}
               href={`?${m ? `market=${encodeURIComponent(m)}&` : ""}offset=0${sortQuery}`}
+              aria-current={active ? "page" : undefined}
               className={[
-                "rounded px-3 py-1 text-xs font-medium border transition-colors",
+                "rounded border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]",
                 active
-                  ? "bg-[var(--accent)] border-[var(--accent)] text-white"
+                  ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--bg-surface)]"
                   : "border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-raised)]",
               ].join(" ")}
             >
-              {label}
+              {m ? marketLabel(m) : "All markets"}
             </a>
           )
         })}
-      </div>
+      </nav>
 
       <Suspense
         key={`${market}-${sort}-${dir}-${offset}`}
-        fallback={<p className="text-sm text-[var(--text-muted)] animate-pulse">Loading…</p>}
+        fallback={<p className="animate-pulse text-sm text-[var(--text-muted)]">Loading…</p>}
       >
         <PredictionsTable market={market} sort={sort} dir={dir} offset={offset} />
       </Suspense>

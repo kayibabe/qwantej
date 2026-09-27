@@ -23,7 +23,9 @@ from backend.models import (
     StatsSnapshot,
 )
 from backend.models.fixtures import Fixture
+from backend.models.settlements import TicketStatus
 from backend.schemas.accumulators import AccumulatorLegOut, AccumulatorOut, AccumulatorPage
+from qwantej.performance.accumulator_results import derive_ticket_result, ticket_settlement_odds
 
 router = APIRouter(prefix="/accumulators", tags=["accumulators"], dependencies=[RequireApiKey])
 
@@ -52,11 +54,19 @@ def _leg_display_data(
         if snap.fixture_id is not None:
             latest_snapshot.setdefault(snap.fixture_id, snap)
 
+    # Effective settlements only (superseded corrections excluded) — the same
+    # rule the ticket settlement worker applies, so result and card agree.
+    superseded = (
+        select(Settlement.supersedes_id)
+        .where(Settlement.supersedes_id.is_not(None))
+        .scalar_subquery()
+    )
     settlements = db.scalars(
         select(Settlement)
         .where(
             Settlement.subject_type == "prediction",
             Settlement.subject_id.in_(prediction_ids),
+            Settlement.id.not_in(superseded),
         )
         .order_by(Settlement.settled_at.desc(), Settlement.id.desc())
     ).all()
@@ -243,13 +253,30 @@ def get_accumulator(
     return _serialize_accumulator(row, display_data)
 
 
+def _ticket_result(
+    row: Accumulator, display_data: dict[uuid.UUID, dict[str, object]]
+) -> dict[str, object]:
+    legs = [
+        (display_data[leg.id]["settlement_outcome"], float(leg.decimal_odds))
+        for leg in row.legs
+    ]
+    result = derive_ticket_result(
+        [outcome for outcome, _ in legs],  # type: ignore[misc]
+        ticket_voided=row.status == TicketStatus.VOID,
+    )
+    odds = ticket_settlement_odds(legs, result)  # type: ignore[arg-type]
+    profit = {"won": (odds or 1.0) - 1.0, "lost": -1.0, "void": 0.0}.get(result)
+    return {"result": result, "settlement_odds": odds, "profit_units": profit}
+
+
 def _serialize_accumulator(
     row: Accumulator, display_data: dict[uuid.UUID, dict[str, object]]
 ) -> AccumulatorOut:
     archived = AccumulatorOut.model_validate(row)
     return AccumulatorOut(
         **{
-            **archived.model_dump(exclude={"legs"}),
+            **archived.model_dump(exclude={"legs", "result", "settlement_odds", "profit_units"}),
+            **_ticket_result(row, display_data),
             "legs": [
                 {
                     **AccumulatorLegOut.model_validate(leg, from_attributes=True).model_dump(),

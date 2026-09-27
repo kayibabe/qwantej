@@ -44,7 +44,14 @@ PROVIDER_BASE_URL = "https://v3.football.api-sports.io"
 _LIVE_FIXTURE_REFRESH_INTERVAL = timedelta(minutes=2)
 _OVERDUE_FIXTURE_REFRESH_INTERVAL = timedelta(minutes=15)
 _OVERDUE_FIXTURE_THRESHOLD = timedelta(hours=3)
-_TRACKED_FIXTURE_LOOKBACK = timedelta(days=3)
+# Only legs of still-open tickets are polled, and a ticket leaves that set as
+# soon as it settles.  A fixture the feed still reports unresolved long after
+# kickoff is re-polled rarely (every _STALE_FIXTURE_REFRESH_INTERVAL) rather
+# than dropped, so no open ticket is stranded; the lookback is only a sanity
+# cap on genuinely abandoned rows.
+TRACKED_FIXTURE_LOOKBACK = timedelta(days=60)
+_STALE_FIXTURE_THRESHOLD = timedelta(days=1)
+_STALE_FIXTURE_REFRESH_INTERVAL = timedelta(hours=6)
 
 # These are the only API-Football competitions that have passed the current
 # production validation policy.  Keep the allow-list beside canonical mapping:
@@ -173,7 +180,7 @@ def refresh_tracked_accumulator_fixtures(
     _require_aware(now, "now")
     _require_aware(captured_at, "captured_at")
     now_utc = now.astimezone(UTC)
-    earliest_kickoff = now_utc - _TRACKED_FIXTURE_LOOKBACK
+    earliest_kickoff = now_utc - TRACKED_FIXTURE_LOOKBACK
     latest_kickoff = now.astimezone(UTC) + timedelta(minutes=15)
     latest_snapshot_at = (
         select(func.max(StatsSnapshot.as_of_timestamp))
@@ -199,7 +206,11 @@ def refresh_tracked_accumulator_fixtures(
             .where(
                 Provider.name == PROVIDER_NAME,
                 SourceMapping.entity_type == EntityType.FIXTURE,
-                Fixture.status.in_([FixtureStatus.SCHEDULED, FixtureStatus.LIVE]),
+                # POSTPONED too: a postponed match is usually rescheduled and
+                # played; without re-polling, its ticket would stay pending.
+                Fixture.status.in_(
+                    [FixtureStatus.SCHEDULED, FixtureStatus.LIVE, FixtureStatus.POSTPONED]
+                ),
                 Fixture.kickoff_utc >= earliest_kickoff,
                 Fixture.kickoff_utc <= latest_kickoff,
                 Accumulator.status.in_([TicketStatus.PENDING, TicketStatus.LOCKED]),
@@ -211,12 +222,13 @@ def refresh_tracked_accumulator_fixtures(
     external_ids: list[str] = []
     for row in candidates:
         kickoff = _as_utc(row.kickoff_utc)
-        overdue = now_utc - kickoff >= _OVERDUE_FIXTURE_THRESHOLD
-        refresh_interval = (
-            _OVERDUE_FIXTURE_REFRESH_INTERVAL
-            if overdue and row.status is FixtureStatus.SCHEDULED
-            else _LIVE_FIXTURE_REFRESH_INTERVAL
-        )
+        since_kickoff = now_utc - kickoff
+        if since_kickoff >= _STALE_FIXTURE_THRESHOLD:
+            refresh_interval = _STALE_FIXTURE_REFRESH_INTERVAL
+        elif since_kickoff >= _OVERDUE_FIXTURE_THRESHOLD and row.status is FixtureStatus.SCHEDULED:
+            refresh_interval = _OVERDUE_FIXTURE_REFRESH_INTERVAL
+        else:
+            refresh_interval = _LIVE_FIXTURE_REFRESH_INTERVAL
         if row.latest_snapshot_at is not None:
             last_snapshot_at = _as_utc(row.latest_snapshot_at)
             if now_utc - last_snapshot_at < refresh_interval:

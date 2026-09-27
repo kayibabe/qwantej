@@ -1,8 +1,8 @@
 """Ticket-level accumulator results, tallied by product and calendar period.
 
-Accumulator tickets are never settled as a whole: only their legs'
-predictions receive ``Settlement`` rows.  A ticket's result is therefore
-*derived* from its legs' effective settlement outcomes:
+A ticket's result is always *derived* from its legs' effective settlement
+outcomes; the settlement worker records that derived result as the ticket's
+own ``Settlement`` row the moment it is decided:
 
 - any leg lost                        -> ``lost`` (even while others are open)
 - otherwise any leg still unsettled   -> ``pending``
@@ -12,19 +12,21 @@ predictions receive ``Settlement`` rows.  A ticket's result is therefore
 
 A ticket whose own status is ``void`` is ``void`` regardless of its legs.
 
-Results are grouped by the ticket's **publication date in UTC** — the same
-calendar the Daily Picks builder uses for "one set of tickets per day" —
-at year (``2026``), month (``2026-09``) or day (``2026-09-27``) granularity.
+Results are grouped by the ticket's publication date in a caller-chosen time
+zone (UTC by default; the API uses the Africa/Blantyre product day so every
+page agrees on which day a ticket belongs to) at year (``2026``), month
+(``2026-09``) or day (``2026-09-27``) granularity.
 
 Pure functions only; no database access.
 """
 
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, tzinfo
 from typing import Literal
 
 TicketResult = Literal["won", "lost", "void", "pending"]
@@ -61,14 +63,35 @@ def derive_ticket_result(
     return "won"
 
 
-def period_key(ts: datetime, granularity: Granularity) -> str:
-    """Return the UTC calendar bucket label for *ts*.
+def ticket_settlement_odds(
+    legs: Sequence[tuple[str | None, float]], result: TicketResult
+) -> float | None:
+    """Decimal odds a decided ticket is settled at, one unit staked.
+
+    ``legs`` holds ``(outcome, decimal_odds)`` per leg.  A won ticket pays the
+    product of its *winning* legs' odds (void/push legs drop out, the
+    standard bookmaker treatment); a lost ticket is recorded at its full
+    published price.  Void and pending tickets have no settlement price.
+    """
+    if result == "won":
+        odds = [price for outcome, price in legs if outcome == _LEG_WIN]
+    elif result == "lost":
+        odds = [price for _, price in legs]
+    else:
+        return None
+    if not odds or any(price <= 1 for price in odds):
+        raise ValueError("a decided ticket needs leg odds greater than 1")
+    return math.prod(odds)
+
+
+def period_key(ts: datetime, granularity: Granularity, tz: tzinfo = UTC) -> str:
+    """Return the calendar bucket label for *ts* in time zone *tz*.
 
     Naive datetimes are treated as UTC (SQLite test databases drop tzinfo).
     """
     if ts.tzinfo is None:
         ts = ts.replace(tzinfo=UTC)
-    ts = ts.astimezone(UTC)
+    ts = ts.astimezone(tz)
     if granularity == "year":
         return f"{ts.year:04d}"
     if granularity == "month":
@@ -117,7 +140,7 @@ class PeriodTally:
 
 
 def tally_by_period(
-    records: Iterable[TicketRecord], granularity: Granularity
+    records: Iterable[TicketRecord], granularity: Granularity, tz: tzinfo = UTC
 ) -> list[PeriodTally]:
     """Group ticket results by period and product.
 
@@ -130,7 +153,7 @@ def tally_by_period(
         lambda: defaultdict(lambda: {"won": 0, "lost": 0, "void": 0, "pending": 0})
     )
     for record in records:
-        key = period_key(record.published_at, granularity)
+        key = period_key(record.published_at, granularity, tz)
         counts[key][record.product][record.result] += 1
 
     return [

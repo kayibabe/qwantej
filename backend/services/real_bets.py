@@ -455,6 +455,58 @@ def settle_real_bet(
     return settlement
 
 
+@dataclass(frozen=True)
+class RealBetResults:
+    """Realised results over every settled real bet (effective settlements)."""
+
+    currency: str
+    n_bets: int
+    n_open: int
+    n_won: int
+    n_lost: int
+    n_void: int
+    n_cashed_out: int
+    settled_stake: Decimal
+    settled_profit: Decimal
+
+    @property
+    def roi(self) -> Decimal | None:
+        """Profit over stake of settled bets; void bets return their stake."""
+        return self.settled_profit / self.settled_stake if self.settled_stake else None
+
+
+def real_bet_results(session: Session, account: str = DEFAULT_ACCOUNT) -> RealBetResults:
+    bets = session.scalars(
+        select(RealBet)
+        .where(RealBet.account == account)
+        .options(selectinload(RealBet.settlements))
+    ).all()
+    counts = dict.fromkeys(RealBetOutcome, 0)
+    stake_total = Decimal(0)
+    profit_total = Decimal(0)
+    n_open = 0
+    for bet in bets:
+        current = effective_settlement(bet)
+        if current is None:
+            n_open += 1
+            continue
+        counts[current.outcome] += 1
+        if current.outcome is not RealBetOutcome.VOID:
+            stake_total += _money(bet.stake)
+        profit_total += _money(current.payout) - _money(bet.stake)
+    return RealBetResults(
+        currency=get_settings().real_money_currency,
+        n_bets=len(bets),
+        n_open=n_open,
+        n_won=counts[RealBetOutcome.WON],
+        n_lost=counts[RealBetOutcome.LOST],
+        n_void=counts[RealBetOutcome.VOID],
+        n_cashed_out=counts[RealBetOutcome.CASHED_OUT],
+        settled_stake=_money(stake_total),
+        settled_profit=_money(profit_total),
+    )
+
+
 def list_real_bets(
     session: Session,
     *,
@@ -493,6 +545,7 @@ __all__ = [
     "list_real_bets",
     "open_exposure",
     "place_real_bet",
+    "real_bet_results",
     "record_cash_flow",
     "settle_real_bet",
 ]

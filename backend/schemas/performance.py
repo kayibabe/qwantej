@@ -55,6 +55,14 @@ class KPIReportOut(BaseModel):
     # Reliability diagram
     calibration_bins: list[CalibrationBinOut] | None = None
 
+    # "real" (recorded stakes), "flat_unit" (one unit per priced bet) or None
+    # when nothing priced has settled.  Tells the UI which unit P/L is in.
+    stake_basis: str | None = None
+
+    # Subjects whose matches have kicked off but which have no settlement yet
+    # (open tickets / unsettled selections).  Only set on /performance/report.
+    n_awaiting: int | None = None
+
 
 class PerformanceSegmentsOut(BaseModel):
     """KPI reports keyed by segment value."""

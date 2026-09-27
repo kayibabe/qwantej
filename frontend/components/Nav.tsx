@@ -23,7 +23,7 @@ export default function Nav() {
       {["Workspace", "Research"].map((group) => <div key={group} className="nav-group">
         <span className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">{group}</span>
       {links.filter((link) => link.group === group).map(({ href, label, icon }) => {
-        const active = pathname === href
+        const active = pathname === href || (href !== "/" && pathname.startsWith(`${href}/`))
         return (
           <Link
             key={href}

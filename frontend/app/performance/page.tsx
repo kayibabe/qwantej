@@ -1,65 +1,41 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { fetchPerformanceReport, fetchPerformanceSegments } from "@/lib/api"
+import {
+  fetchBankroll,
+  fetchPerformanceReport,
+  fetchPerformanceSegments,
+  fetchRealBetResults,
+} from "@/lib/api"
+import { fmtSignedPct, fmtUnits } from "@/lib/format"
+import { productColor, productLabel, productRank } from "@/lib/tickets"
 import CalibrationCurveChart from "@/components/CalibrationCurveChart"
 import ResultsByPeriod from "@/components/performance/ResultsByPeriod"
 import SettlementLog from "@/components/performance/SettlementLog"
-import type { KPIReportOut } from "@/lib/types"
+import type { BankrollSummaryOut, KPIReportOut, RealBetResultsOut } from "@/lib/types"
 
 export const metadata: Metadata = { title: "Performance" }
 
-function pct(value: number | null, decimals = 1) {
-  return value === null ? "—" : `${(value * 100).toFixed(decimals)}%`
+function pct(value: number | null | undefined, decimals = 1) {
+  return value === null || value === undefined ? "—" : `${(value * 100).toFixed(decimals)}%`
 }
 
-function units(value: number | null) {
-  if (value === null) return "—"
-  return `${value >= 0 ? "+" : ""}${value.toFixed(2)} units`
-}
-
-function metricTone(value: number | null) {
-  if (value === null || value === 0) return "text-[var(--text-primary)]"
+function tone(value: number | null | undefined) {
+  if (value === null || value === undefined || value === 0) return "text-[var(--text-primary)]"
   return value > 0 ? "text-[var(--win)]" : "text-[var(--loss)]"
 }
 
-function MetricCard({ label, value, sub, tone }: { label: string; value: string; sub: string; tone?: string }) {
+function money(value: string, currency: string) {
+  const n = Number(value)
+  const sign = n > 0 ? "+" : n < 0 ? "−" : ""
+  return `${sign}${currency} ${Math.abs(n).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+}
+
+function MetricCard({ label, value, sub, valueTone }: { label: string; value: string; sub: string; valueTone?: string }) {
   return <article className="rounded-xl border border-[var(--border)] border-l-[3px] border-l-[var(--accent)] bg-[var(--bg-surface)] px-5 py-4 shadow-[var(--surface-shadow)]">
     <p className="text-xs font-semibold uppercase tracking-[.12em] text-[var(--text-muted)]">{label}</p>
-    <p className={`mt-2 text-2xl font-semibold tracking-tight ${tone ?? "text-[var(--text-primary)]"}`}>{value}</p>
+    <p className={`mt-2 text-2xl font-semibold tracking-tight ${valueTone ?? "text-[var(--text-primary)]"}`}>{value}</p>
     <p className="mt-1 text-xs text-[var(--text-secondary)]">{sub}</p>
   </article>
-}
-
-function EvidenceValue({ label, value, tone }: { label: string; value: string; tone?: string }) {
-  return <div><p className="text-xs text-[var(--text-muted)]">{label}</p><p className={`mt-1 text-sm font-semibold ${tone ?? "text-[var(--text-primary)]"}`}>{value}</p></div>
-}
-
-function SegmentRow({ name, report }: { name: string; report: KPIReportOut }) {
-  return <div className="grid gap-3 border-t border-[var(--border-subtle)] py-4 sm:grid-cols-[minmax(180px,1.7fr)_repeat(3,minmax(90px,1fr))] sm:items-center">
-    <div><span className="inline-flex rounded bg-[var(--accent-soft)] px-2 py-1 text-xs font-semibold text-[var(--accent)]">{name}</span><p className="mt-1 text-xs text-[var(--text-secondary)]">{report.n_wins}/{report.n_settled} won</p></div>
-    <EvidenceValue label="Hit rate" value={pct(report.hit_rate)} />
-    <EvidenceValue label="ROI" value={pct(report.roi)} tone={metricTone(report.roi)} />
-    <EvidenceValue label="P&amp;L" value={units(report.total_profit)} tone={metricTone(report.total_profit)} />
-  </div>
-}
-
-const DAILY_ACCAS = [
-  { product: "daily_bold", label: "DAILY BOLD ACCA" },
-  { product: "daily_balanced", label: "DAILY BALANCED ACCA" },
-  { product: "daily_safe", label: "DAILY SAFE ACCA" },
-] as const
-
-function DailyAccaRow({ label, report }: { label: string; report: KPIReportOut | undefined }) {
-  if (!report) return <div className="grid gap-3 border-t border-[var(--border-subtle)] py-4 sm:grid-cols-[minmax(180px,1.7fr)_repeat(3,minmax(90px,1fr))] sm:items-center"><span className="text-sm font-semibold text-[var(--text-primary)]">{label}</span><p className="sm:col-span-3 text-sm text-[var(--text-secondary)]">No settled immutable tickets yet.</p></div>
-  return <SegmentRow name={label} report={report} />
-}
-
-function isDate(value: string | undefined) {
-  return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value))
-}
-
-function EvidenceLine({ label, detail, value }: { label: string; detail: string; value: string }) {
-  return <div className="flex items-start justify-between gap-4 border-b border-[var(--border-subtle)] pb-4 last:border-0 last:pb-0"><div><p className="text-sm font-semibold text-[var(--text-primary)]">{label}</p><p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">{detail}</p></div><strong className="shrink-0 text-sm text-[var(--accent)]">{value}</strong></div>
 }
 
 type SearchParams = Record<string, string | string[] | undefined>
@@ -103,58 +79,155 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
   </div>
 }
 
+function isDate(value: string | undefined) {
+  return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value))
+}
+
+/** One row per segment: record, hit rate vs break-even, average odds, ROI, P&L. */
+function SegmentTable({ caption, rows, nameHeader, colorFor, labelFor }: {
+  caption: string
+  rows: [string, KPIReportOut][]
+  nameHeader: string
+  colorFor?: (name: string) => string
+  labelFor?: (name: string) => string
+}) {
+  return <div className="overflow-x-auto">
+    <table className="w-full text-sm">
+      <caption className="sr-only">{caption}</caption>
+      <thead className="border-b border-[var(--border)] text-xs uppercase tracking-wider text-[var(--text-muted)]">
+        <tr>
+          <th scope="col" className="py-2 pr-4 text-left font-semibold">{nameHeader}</th>
+          <th scope="col" className="px-3 py-2 text-right font-semibold">Won–lost</th>
+          <th scope="col" className="px-3 py-2 text-right font-semibold">Hit rate</th>
+          <th scope="col" className="hidden px-3 py-2 text-right font-semibold md:table-cell">Break-even</th>
+          <th scope="col" className="hidden px-3 py-2 text-right font-semibold sm:table-cell">Avg odds</th>
+          <th scope="col" className="px-3 py-2 text-right font-semibold">ROI</th>
+          <th scope="col" className="py-2 pl-3 text-right font-semibold">P&amp;L</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(([name, r]) => <tr key={name} className="border-t border-[var(--border-subtle)]">
+          <th scope="row" className="py-3 pr-4 text-left font-semibold" style={colorFor ? { color: colorFor(name) } : undefined}>{labelFor ? labelFor(name) : name}</th>
+          <td className="px-3 py-3 text-right font-mono">{r.n_wins}–{r.n_losses}{r.n_voids + r.n_pushes ? <span className="text-[var(--text-muted)]"> ({r.n_voids + r.n_pushes} void)</span> : null}</td>
+          <td className="px-3 py-3 text-right font-mono">{pct(r.hit_rate)}</td>
+          <td className="hidden px-3 py-3 text-right font-mono text-[var(--text-muted)] md:table-cell">{pct(r.break_even_hit_rate)}</td>
+          <td className="hidden px-3 py-3 text-right font-mono sm:table-cell">{r.average_odds?.toFixed(2) ?? "—"}</td>
+          <td className={`px-3 py-3 text-right font-mono font-semibold ${tone(r.roi)}`}>{fmtSignedPct(r.roi)}</td>
+          <td className={`py-3 pl-3 text-right font-mono ${tone(r.total_profit)}`}>{fmtUnits(r.total_profit)}</td>
+        </tr>)}
+      </tbody>
+    </table>
+  </div>
+}
+
+function RealMoney({ bankroll, results }: { bankroll: BankrollSummaryOut | null; results: RealBetResultsOut | null }) {
+  if (!bankroll && !results) return null
+  const currency = results?.currency ?? bankroll?.currency ?? "MWK"
+  const roi = results?.roi == null ? null : Number(results.roi)
+  const profit = results ? Number(results.settled_profit) : null
+  return <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-[var(--surface-shadow)]" aria-labelledby="real-money-heading">
+    <p className="text-xs font-semibold uppercase tracking-[.14em] text-[var(--accent)]">Real money</p>
+    <div className="mt-2 flex flex-wrap items-baseline justify-between gap-3">
+      <h2 id="real-money-heading" className="text-lg font-semibold text-[var(--text-primary)]">Bets you placed, in {currency}</h2>
+      <span className="text-xs text-[var(--text-muted)]">Bookmaker payouts are authoritative</span>
+    </div>
+    {results && results.n_bets === 0
+      ? <p className="mt-4 rounded-lg bg-[var(--bg-raised)] p-4 text-sm text-[var(--text-secondary)]">No real-money bets are recorded yet. Once you record a bet on a published ticket and settle it, its actual profit and ROI appear here next to the model&apos;s 1-unit figures.</p>
+      : <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {bankroll && <div><p className="text-xs text-[var(--text-muted)]">Bankroll balance</p><p className="mt-1 text-xl font-semibold text-[var(--text-primary)]">{money(bankroll.balance, currency).replace(/^\+/, "")}</p><p className="text-xs text-[var(--text-secondary)]">{money(bankroll.available, currency).replace(/^\+/, "")} available · {bankroll.open_bets} open</p></div>}
+        {results && <div><p className="text-xs text-[var(--text-muted)]">Net profit</p><p className={`mt-1 text-xl font-semibold ${tone(profit)}`}>{money(results.settled_profit, currency)}</p><p className="text-xs text-[var(--text-secondary)]">on {money(results.settled_stake, currency).replace(/^\+/, "")} settled stakes</p></div>}
+        {results && <div><p className="text-xs text-[var(--text-muted)]">ROI</p><p className={`mt-1 text-xl font-semibold ${tone(roi)}`}>{fmtSignedPct(roi)}</p><p className="text-xs text-[var(--text-secondary)]">Voids excluded from turnover</p></div>}
+        {results && <div><p className="text-xs text-[var(--text-muted)]">Record</p><p className="mt-1 text-xl font-semibold text-[var(--text-primary)]">{results.n_won}W – {results.n_lost}L</p><p className="text-xs text-[var(--text-secondary)]">{results.n_void} void{results.n_cashed_out ? ` · ${results.n_cashed_out} cashed out` : ""} · {results.n_open} open</p></div>}
+      </div>}
+  </section>
+}
+
 async function Overview({ params }: { params: SearchParams }) {
   const requestedSince = typeof params.since === "string" && isDate(params.since) ? params.since : undefined
-  const subjectType = params.subject_type === "accumulator" ? "accumulator" : "prediction"
-  const since = requestedSince ? `${requestedSince}T00:00:00Z` : undefined
-  const [report, segmentResponse, dailyAccaResponse] = await Promise.all([
+  // Tickets are what gets published and bet on, so they are the default lens.
+  const subjectType = params.subject_type === "prediction" ? "prediction" : "accumulator"
+  const tickets = subjectType === "accumulator"
+  const since = requestedSince ? `${requestedSince}T00:00:00+02:00` : undefined
+  const [report, primarySegments, modelSegments, bankroll, realResults] = await Promise.all([
     fetchPerformanceReport({ subject_type: subjectType, since }).catch(() => null),
-    subjectType === "prediction" ? fetchPerformanceSegments({ by: "model_version", subject_type: subjectType, since }).catch(() => null) : Promise.resolve(null),
-    fetchPerformanceSegments({ by: "product", subject_type: "accumulator", since }).catch(() => null),
+    fetchPerformanceSegments({ by: tickets ? "product" : "market", subject_type: subjectType, since }).catch(() => null),
+    tickets ? Promise.resolve(null) : fetchPerformanceSegments({ by: "model_version", subject_type: subjectType, since }).catch(() => null),
+    fetchBankroll().catch(() => null),
+    fetchRealBetResults().catch(() => null),
   ])
 
   if (!report) return <section className="rounded-xl border border-[var(--loss)] bg-[var(--bg-surface)] p-5 text-sm text-[var(--loss)]">Performance evidence is temporarily unavailable. No result is inferred while the report cannot be loaded.</section>
 
-  const segmentRows = Object.entries(segmentResponse?.segments ?? {}).sort(([, a], [, b]) => b.n_settled - a.n_settled)
-  const coverage = report.n_total > 0 ? report.n_settled / report.n_total : null
+  const noun = tickets ? "ticket" : "selection"
+  const decided = report.n_wins + report.n_losses
+  const voids = report.n_voids + report.n_pushes
+  const awaiting = report.n_awaiting ?? 0
+  const flat = report.stake_basis === "flat_unit"
+  const segmentRows = Object.entries(primarySegments?.segments ?? {}).sort(([a, ra], [b, rb]) =>
+    tickets ? productRank(a) - productRank(b) || a.localeCompare(b) : rb.n_settled - ra.n_settled)
+  const modelRows = Object.entries(modelSegments?.segments ?? {}).sort(([, a], [, b]) => b.n_settled - a.n_settled)
   const calibrationCount = report.calibration_bins?.reduce((total, bin) => total + bin.count, 0) ?? 0
 
   return <>
-    <form method="get" className="flex flex-wrap items-end gap-3 border-b border-[var(--border)] pb-4" aria-label="Performance evidence scope">
-      <div className="mr-1"><p className="text-lg font-medium text-[var(--text-primary)]">Scope</p></div>
-      <label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">From<input type="date" name="since" defaultValue={requestedSince} className="h-11 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]" /></label>
-      <label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">Evidence<select name="subject_type" defaultValue={subjectType} className="h-11 min-w-44 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]"><option value="prediction">Prediction selections</option><option value="accumulator">Accumulator tickets</option></select></label>
-      <button type="submit" className="h-11 rounded-lg border border-[var(--accent)] bg-[var(--accent)] px-4 text-sm font-semibold text-white hover:bg-[var(--accent-hover)]">Apply</button>
-      <p className="mb-2 text-sm text-[var(--text-secondary)] sm:ml-auto">Applies to effective, immutable settlement records.</p>
+    <form method="get" className="flex flex-wrap items-end gap-3 border-b border-[var(--border)] pb-4" aria-label="Performance scope">
+      <label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">Show<select name="subject_type" defaultValue={subjectType} className="h-11 min-w-48 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]"><option value="accumulator">Accumulator tickets</option><option value="prediction">Individual forecasts</option></select></label>
+      <label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">Settled from<input type="date" name="since" defaultValue={requestedSince} className="h-11 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]" /></label>
+      <button type="submit" className="h-11 rounded-lg border border-[var(--accent)] bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--bg-surface)] hover:bg-[var(--accent-hover)]">Apply</button>
     </form>
 
-    <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#9ecfbd] bg-[#f2fbf7] px-4 py-3 text-sm text-[#176044]" aria-label="Evidence status">
-      <span className="font-semibold"><span className="mr-2 inline-block h-2.5 w-2.5 rounded-full bg-[var(--win)]" />Settlement evidence available</span>
-      <span>{report.n_settled} of {report.n_total} records settled{coverage !== null ? ` · ${(coverage * 100).toFixed(1)}% coverage` : ""}</span>
+    <section
+      className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm ${awaiting > 0 ? "border-[var(--void)]/50 bg-[var(--void)]/10" : "border-[var(--border)] bg-[var(--bg-surface)]"} text-[var(--text-primary)]`}
+      aria-label="Settlement status"
+    >
+      <span className="font-semibold">
+        <span className={`mr-2 inline-block h-2.5 w-2.5 rounded-full ${decided ? "bg-[var(--win)]" : "bg-[var(--text-muted)]"}`} aria-hidden="true" />
+        {decided || voids ? `${decided} ${noun}${decided === 1 ? "" : "s"} decided (${report.n_wins} won, ${report.n_losses} lost)${voids ? ` · ${voids} void` : ""}` : `No settled ${noun}s yet`}
+      </span>
+      <span className="text-[var(--text-secondary)]">
+        {awaiting > 0 ? `${awaiting} ${noun}${awaiting === 1 ? "" : "s"} kicked off and awaiting a result` : "Nothing is waiting for a result"}
+      </span>
     </section>
 
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6" aria-label="Headline performance evidence">
-      <MetricCard label="Net P&amp;L" value={units(report.total_profit)} sub={`${report.total_stake?.toFixed(2) ?? "—"} units staked`} tone={metricTone(report.total_profit)} />
-      <MetricCard label="ROI / yield" value={pct(report.roi)} sub="Settled stakes only" tone={metricTone(report.roi)} />
-      <MetricCard label="Hit rate" value={pct(report.hit_rate)} sub={report.break_even_hit_rate === null ? "Break-even unavailable" : `Break-even ${pct(report.break_even_hit_rate)}`} />
-      {/* max_drawdown is peak-to-trough of cumulative P/L in stake units, not a
-          bankroll fraction, so it gets no percentage-based loss threshold. */}
-      <MetricCard label="Max drawdown" value={report.max_drawdown === null ? "—" : `${report.max_drawdown.toFixed(2)} units`} sub="Peak-to-trough of cumulative P&amp;L" />
-      <MetricCard label="Brier score" value={report.brier_score?.toFixed(3) ?? "—"} sub="Lower is better" />
-      <MetricCard label="Calibration error" value={report.ece?.toFixed(3) ?? "—"} sub={`${calibrationCount} settled selections`} />
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6" aria-label="Headline results">
+      <MetricCard label="Net P&amp;L" value={fmtUnits(report.total_profit)} sub={report.total_stake === null ? `No priced ${noun} settled yet` : `${report.total_stake.toFixed(0)} unit${report.total_stake === 1 ? "" : "s"} staked${flat ? ` · 1 unit per ${noun}` : ""}`} valueTone={tone(report.total_profit)} />
+      <MetricCard label="ROI / yield" value={fmtSignedPct(report.roi)} sub="Profit ÷ stake; voids refunded" valueTone={tone(report.roi)} />
+      <MetricCard label="Hit rate" value={pct(report.hit_rate)} sub={report.break_even_hit_rate === null ? "Break-even unavailable" : `Break-even ${pct(report.break_even_hit_rate)} at these odds`} valueTone={report.hit_rate !== null && report.break_even_hit_rate !== null ? tone(report.hit_rate - report.break_even_hit_rate) : undefined} />
+      <MetricCard label="Average odds" value={report.average_odds?.toFixed(2) ?? "—"} sub={`Decided ${noun}s`} />
+      <MetricCard label="Max drawdown" value={report.max_drawdown === null ? "—" : `${report.max_drawdown.toFixed(2)} u`} sub="Worst peak-to-trough run" />
+      <MetricCard label="Brier score" value={report.brier_score?.toFixed(3) ?? "—"} sub={calibrationCount ? `Lower is better · ${calibrationCount} scored` : "Lower is better"} />
     </section>
 
-    <section className="grid gap-5 xl:grid-cols-[minmax(0,1.8fr)_minmax(300px,.9fr)]">
-      <article className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-[var(--surface-shadow)]"><p className="text-xs font-semibold uppercase tracking-[.14em] text-[var(--accent)]">Portfolio lens</p><div className="mt-2 flex items-baseline justify-between gap-3"><h2 className="text-lg font-semibold text-[var(--text-primary)]">{subjectType === "prediction" ? "By model version" : "Ticket evidence"}</h2><span className="text-xs text-[var(--text-muted)]">Latest effective settlement version</span></div>{segmentRows.length ? <div className="mt-5">{segmentRows.map(([name, row]) => <SegmentRow key={name} name={name} report={row} />)}</div> : <p className="mt-5 rounded-lg bg-[var(--bg-raised)] p-4 text-sm text-[var(--text-secondary)]">No model-version breakdown is available for this evidence scope.</p>}</article>
-      <aside className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-[var(--surface-shadow)]"><p className="text-xs font-semibold uppercase tracking-[.14em] text-[var(--accent)]">Interpretation</p><h2 className="mt-2 text-lg font-semibold text-[var(--text-primary)]">Evidence quality</h2><div className="mt-5 space-y-4"><EvidenceLine label="Settlement coverage" detail="Effective records with a settled outcome." value={coverage === null ? "—" : pct(coverage)} /><EvidenceLine label="Calibration sample" detail="Settled selections used for scoring." value={String(calibrationCount)} /><EvidenceLine label="Uncertainty" detail="Small samples make ROI and hit rate unstable." value={report.n_settled < 30 ? "High" : "Monitor"} /></div><p className="mt-5 border-t border-[var(--border-subtle)] pt-4 text-sm leading-6 text-[var(--text-secondary)]">Read calibration, settlement coverage, and drawdown alongside headline returns. This report describes historical evidence; it does not promise future outcomes.</p></aside>
+    <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-[var(--surface-shadow)]" aria-labelledby="segment-heading">
+      <p className="text-xs font-semibold uppercase tracking-[.14em] text-[var(--accent)]">{tickets ? "By ticket type" : "By market"}</p>
+      <div className="mt-2 flex flex-wrap items-baseline justify-between gap-3">
+        <h2 id="segment-heading" className="text-lg font-semibold text-[var(--text-primary)]">{tickets ? "Which accumulator types are making money" : "Which markets the forecasts beat"}</h2>
+        <span className="text-xs text-[var(--text-muted)]">{flat ? `Flat 1-unit stake per ${noun}` : "Recorded stakes"}</span>
+      </div>
+      {segmentRows.length
+        ? <div className="mt-4"><SegmentTable caption={tickets ? "Results by accumulator type" : "Results by market"} nameHeader={tickets ? "Ticket type" : "Market"} rows={segmentRows} colorFor={tickets ? productColor : undefined} labelFor={tickets ? (p) => productLabel(p) : undefined} /></div>
+        : <p className="mt-4 rounded-lg bg-[var(--bg-raised)] p-4 text-sm text-[var(--text-secondary)]">No {noun} has been settled in this scope yet{awaiting ? `; ${awaiting} ${awaiting === 1 ? "is" : "are"} awaiting a result` : ""}.</p>}
+      {tickets && <p className="mt-4 text-xs text-[var(--text-muted)]">Daily Picks are built without the value gate; compare them with Core, Growth and Alpha rather than adding them together. <Link href="/performance?tab=periods" className="font-semibold text-[var(--accent)] hover:underline">See results by day, month and year →</Link></p>}
     </section>
 
-    <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-[var(--surface-shadow)]" aria-label="Daily accumulator analysis">
-      <p className="text-xs font-semibold uppercase tracking-[.14em] text-[var(--accent)]">Daily ACCA analysis</p>
-      <div className="mt-2 flex flex-wrap items-baseline justify-between gap-3"><h2 className="text-lg font-semibold text-[var(--text-primary)]">Settled ticket evidence by Daily ACCA</h2><span className="text-xs text-[var(--text-muted)]">Immutable ticket outcomes only</span></div>
-      <div className="mt-5">{DAILY_ACCAS.map(({ product, label }) => <DailyAccaRow key={product} label={label} report={dailyAccaResponse?.segments[product]} />)}</div>
+    {!tickets && modelRows.length > 0 && <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-[var(--surface-shadow)]" aria-labelledby="model-heading">
+      <p className="text-xs font-semibold uppercase tracking-[.14em] text-[var(--accent)]">By model version</p>
+      <h2 id="model-heading" className="mt-2 text-lg font-semibold text-[var(--text-primary)]">Which model version produced these forecasts</h2>
+      <div className="mt-4"><SegmentTable caption="Results by model version" nameHeader="Model version" rows={modelRows} /></div>
+      <p className="mt-4 text-xs text-[var(--text-muted)]">Versions are listed on the <Link href="/models" className="font-semibold text-[var(--accent)] hover:underline">Models</Link> page.</p>
+    </section>}
+
+    <RealMoney bankroll={bankroll} results={realResults} />
+
+    <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-[var(--surface-shadow)]" aria-labelledby="reading-heading">
+      <h2 id="reading-heading" className="text-base font-semibold text-[var(--text-primary)]">How to read these numbers</h2>
+      <ul className="mt-3 grid gap-2 text-sm leading-6 text-[var(--text-secondary)] md:grid-cols-2">
+        <li><strong className="text-[var(--text-primary)]">1-unit figures</strong> assume the same stake on every {noun} at the archived price, so types can be compared fairly. Your actual money is in the Real money panel.</li>
+        <li><strong className="text-[var(--text-primary)]">Hit rate vs break-even:</strong> a type is profitable when it wins more often than its odds require.</li>
+        <li><strong className="text-[var(--text-primary)]">Tickets settle automatically</strong> as soon as the result is certain: one lost leg loses the ticket immediately; a win needs every leg settled.</li>
+        <li><strong className="text-[var(--text-primary)]">Sample size:</strong> {decided < 30 ? `only ${decided} decided so far, so ROI and hit rate can still swing a lot.` : `${decided} decided; keep watching drawdown alongside ROI.`}</li>
+      </ul>
     </section>
 
-    {report.calibration_bins && report.calibration_bins.length > 0 && <section aria-label="Calibration curve"><p className="mb-3 text-xs font-semibold uppercase tracking-[.14em] text-[var(--accent)]">Reliability diagram</p><CalibrationCurveChart bins={report.calibration_bins} /></section>}
+    {report.calibration_bins && report.calibration_bins.length > 0 && <section aria-label="Calibration curve"><p className="mb-3 text-xs font-semibold uppercase tracking-[.14em] text-[var(--accent)]">Reliability diagram · predicted vs actual win rate</p><CalibrationCurveChart bins={report.calibration_bins} /></section>}
   </>
 }

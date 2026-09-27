@@ -34,8 +34,9 @@ tops the day up:
 | DAILY BOLD | 4–5 legs, 6.00–15.00, legs 1.35–3.20, maximise expected return | 3–5 legs, 4.50–20.00 | same shared last resort |
 | Max quote age | 3 h | 8 h | 26 h |
 
-- **Not value-qualified**, labelled as such in the UI; **paper-only**, **never
-  staked**. Leg probability is the model's calibrated probability shrunk 50/50
+- **Not value-qualified**, labelled as such in the UI; the system recommends
+  **no stake** for them (real money you choose to place is recorded separately
+  as a real bet). Leg probability is the model's calibrated probability shrunk 50/50
   towards the de-vigged market (`MODEL_WEIGHT`, research default).
 - Legs come only from **archived** forecasts (production preferred, research
   stream otherwise — so unvalidated leagues *can* appear here, never on a
@@ -52,8 +53,9 @@ tops the day up:
 - Every ticket records the rung it was built at (`policy_version`). A day the
   slate cannot support even the last resort is a logged **SHORTFALL** with a
   Telegram alert — never a silently invented ticket.
-- Daily Picks must be excluded from value-product KPIs and from any future
-  ticket-settlement ROI claims for CORE/GROWTH/ALPHA (filter `daily_*`).
+- Daily Picks must be excluded from value-product KPIs and from
+  ticket-settlement ROI claims for CORE/GROWTH/ALPHA (filter `daily_*`); the
+  Performance page reports every product on its own row for this reason.
 
 ## Initial policy thresholds (research defaults — must be backtested)
 
@@ -149,14 +151,15 @@ preserve a stale "value" label.
   rewritten; a conflicting settled result requires the governed correction
   path.
 
-## Ticket results by product and period
+## Ticket settlement and results by product and period
 
-Tickets are never settled as a whole — only their legs' predictions are.
-`GET /performance/accumulator-results` (UI: *Performance → By period*,
-`/performance?tab=periods`; the old `/accumulators/results` URL redirects
-there) derives each ticket's result from its legs'
-effective (non-superseded) settlements
-(`src/qwantej/performance/accumulator_results.py`):
+A ticket's result is always derived from its legs' effective
+(non-superseded) settlements with one rule,
+`derive_ticket_result` in `src/qwantej/performance/accumulator_results.py`,
+shared by the settlement worker, the ticket archive
+(`GET /accumulators` → `result`) and the results calendar
+(`GET /performance/accumulator-results`; UI: *Tickets* and
+*Performance → By period*):
 
 - any leg lost → **lost** (even while other legs are still open);
 - otherwise any leg unsettled → **pending**;
@@ -164,11 +167,43 @@ effective (non-superseded) settlements
   drop out, the standard bookmaker treatment);
 - a ticket whose own status is `void` is **void**.
 
-Results are counted per product and grouped by the ticket's **UTC
-publication date** at year / month / day granularity. Win rate is
-won ÷ (won + lost). Daily Picks are reported as their own products
-(`daily_pick: true`) and never merged into the value products' counts.
-This is a hit-count view only — it makes no ROI claim.
+**Automatic ticket settlement** (`backend/services/ticket_settlement.py`,
+run by the settlement worker every pass). The moment a ticket's result is
+decided — the first lost leg, or every leg settled — the worker appends an
+`accumulator` `Settlement` row and moves the ticket's status to `settled`:
+
+- settlement price: a won ticket pays the product of its **winning** legs'
+  odds (void/push legs drop out); a lost ticket is recorded at its full
+  published odds; a void ticket has no price;
+- `taken_probability` is the ticket's conservative joint probability, so
+  ticket Brier scores are measurable;
+- settlements stay append-only: if a leg settlement is later corrected and
+  the derived result or price changes (within 30 days of publication), a
+  correcting row supersedes the previous ticket settlement
+  (`LEG_SETTLEMENT_CORRECTED`);
+- status `void` stays reserved for administratively voided tickets; a
+  ticket whose legs all voided is `settled` with a `void` outcome.
+
+Legs on **cancelled or abandoned** fixtures settle as void
+(`FIXTURE_CANCELLED`) so their tickets can close. The worker settles any
+finished fixture up to 30 days back, and open tickets' fixtures are polled
+for results for up to 60 days (every 2 min live, every 15 min once overdue,
+every 6 h after a day), so a late result from the feed is never stranded.
+
+**ROI.** With no recorded stakes, KPIs use a **flat one-unit stake** per
+priced ticket or selection (`stake_basis: "flat_unit"`): win = odds − 1,
+loss = −1, void = 0 and excluded from turnover. ROI, P&L, drawdown and
+volatility all use that one series. Unpriced rows are excluded from every
+financial figure. Real money placed on tickets is tracked separately in
+the bankroll currency (`/real-bets`, `/real-bets/summary`) and shown on
+the Performance page beside the 1-unit figures.
+
+Results are counted per product and grouped by the ticket's publication
+date in the **Africa/Blantyre product day** — the same calendar as the
+Today page and `/accumulators?date=` — at year / month / day granularity.
+Win rate is won ÷ (won + lost). Daily Picks are reported as their own
+products (`daily_pick: true`) and never merged into the value products'
+counts.
 
 ## Candidate funnel (framework §28)
 
