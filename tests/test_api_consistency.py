@@ -91,6 +91,7 @@ def client():
         seed.commit()
 
     with TestClient(app) as c:
+        c.session_factory = factory  # type: ignore[attr-defined]
         yield c
     app.dependency_overrides.pop(get_db, None)
     engine.dispose()
@@ -136,3 +137,23 @@ def test_calendar_and_day_archive_use_the_same_product_day(client) -> None:
     assert period["products"][0]["won"] == 1
     assert client.get("/accumulators", params={"date": "2026-09-07"}).json()["total"] == 1
     assert client.get("/accumulators", params={"date": "2026-09-06"}).json()["total"] == 0
+
+
+def test_ticket_card_uses_the_effective_leg_settlement_not_the_latest_row(client) -> None:
+    # A correction supersedes the original leg result.  Even when the
+    # correction carries an earlier settled_at, the card must follow the
+    # supersession chain, exactly as the settlement worker does.
+    from backend.models import Settlement, SettlementOutcome
+
+    with client.session_factory() as s:
+        leg = s.query(AccumulatorLeg).one()
+        original = s.query(Settlement).filter_by(subject_id=leg.prediction_id).one()
+        s.add(Settlement(
+            subject_type="prediction", subject_id=original.subject_id,
+            outcome=SettlementOutcome.LOSS, settled_at=original.settled_at - timedelta(minutes=1),
+            supersedes_id=original.id, reason_codes=["CORRECTION"],
+        ))
+        s.commit()
+    [ticket] = client.get("/accumulators").json()["items"]
+    assert ticket["legs"][0]["settlement_outcome"] == "loss"
+    assert ticket["result"] == "lost"

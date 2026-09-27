@@ -54,11 +54,19 @@ def _leg_display_data(
         if snap.fixture_id is not None:
             latest_snapshot.setdefault(snap.fixture_id, snap)
 
+    # Effective settlements only (superseded corrections excluded) — the same
+    # rule the ticket settlement worker applies, so result and card agree.
+    superseded = (
+        select(Settlement.supersedes_id)
+        .where(Settlement.supersedes_id.is_not(None))
+        .scalar_subquery()
+    )
     settlements = db.scalars(
         select(Settlement)
         .where(
             Settlement.subject_type == "prediction",
             Settlement.subject_id.in_(prediction_ids),
+            Settlement.id.not_in(superseded),
         )
         .order_by(Settlement.settled_at.desc(), Settlement.id.desc())
     ).all()

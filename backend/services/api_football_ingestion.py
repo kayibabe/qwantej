@@ -49,7 +49,7 @@ _OVERDUE_FIXTURE_THRESHOLD = timedelta(hours=3)
 # kickoff is re-polled rarely (every _STALE_FIXTURE_REFRESH_INTERVAL) rather
 # than dropped, so no open ticket is stranded; the lookback is only a sanity
 # cap on genuinely abandoned rows.
-_TRACKED_FIXTURE_LOOKBACK = timedelta(days=60)
+TRACKED_FIXTURE_LOOKBACK = timedelta(days=60)
 _STALE_FIXTURE_THRESHOLD = timedelta(days=1)
 _STALE_FIXTURE_REFRESH_INTERVAL = timedelta(hours=6)
 
@@ -180,7 +180,7 @@ def refresh_tracked_accumulator_fixtures(
     _require_aware(now, "now")
     _require_aware(captured_at, "captured_at")
     now_utc = now.astimezone(UTC)
-    earliest_kickoff = now_utc - _TRACKED_FIXTURE_LOOKBACK
+    earliest_kickoff = now_utc - TRACKED_FIXTURE_LOOKBACK
     latest_kickoff = now.astimezone(UTC) + timedelta(minutes=15)
     latest_snapshot_at = (
         select(func.max(StatsSnapshot.as_of_timestamp))
@@ -206,7 +206,11 @@ def refresh_tracked_accumulator_fixtures(
             .where(
                 Provider.name == PROVIDER_NAME,
                 SourceMapping.entity_type == EntityType.FIXTURE,
-                Fixture.status.in_([FixtureStatus.SCHEDULED, FixtureStatus.LIVE]),
+                # POSTPONED too: a postponed match is usually rescheduled and
+                # played; without re-polling, its ticket would stay pending.
+                Fixture.status.in_(
+                    [FixtureStatus.SCHEDULED, FixtureStatus.LIVE, FixtureStatus.POSTPONED]
+                ),
                 Fixture.kickoff_utc >= earliest_kickoff,
                 Fixture.kickoff_utc <= latest_kickoff,
                 Accumulator.status.in_([TicketStatus.PENDING, TicketStatus.LOCKED]),

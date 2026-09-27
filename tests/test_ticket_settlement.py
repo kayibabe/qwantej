@@ -5,6 +5,7 @@ from __future__ import annotations
 import itertools
 import uuid
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 import pytest
 from sqlalchemy import create_engine, select
@@ -25,7 +26,11 @@ from backend.models import (
 )
 from backend.models.settlements import TicketStatus
 from backend.services.performance import performance_report
-from backend.services.ticket_settlement import settle_decided_tickets
+from backend.services.ticket_settlement import (
+    _same_price,
+    _storable_price,
+    settle_decided_tickets,
+)
 from backend.workers.settlement_worker import run_settlement
 from qwantej.performance.accumulator_results import ticket_settlement_odds
 
@@ -285,3 +290,66 @@ class TestWorkerSettlesTickets:
         run = run_settlement(session, now=NOW + timedelta(days=10))
         assert run.total_settled == 1
         assert ticket.status is TicketStatus.SETTLED
+
+
+# ---------------------------------------------------------------------------
+# Review regressions
+# ---------------------------------------------------------------------------
+
+class TestReviewRegressions:
+    def test_half_way_price_rounds_once_and_never_self_corrects(
+        self, session: Session
+    ) -> None:
+        # 1.05 × 1.05 = 1.1025: a half-way value that float rounding and the
+        # database's NUMERIC rounding can disagree on.  Rounding once, half-up,
+        # must store 1.103 and a rerun must find nothing to correct.
+        seed = _Seeder(session)
+        ticket, _ = seed.ticket(["win", "win"], odds=1.05)
+        settle_decided_tickets(session, now=NOW)
+        for minutes in (15, 30, 45):
+            run = settle_decided_tickets(session, now=NOW + timedelta(minutes=minutes))
+            assert run.corrected == 0
+        [row] = _ticket_rows(session, ticket)
+        assert Decimal(str(row.taken_odds)) == Decimal("1.103")
+
+    @pytest.mark.parametrize(
+        ("stored", "odds", "same"),
+        [
+            (1.103, 1.1025, True),
+            ("1.102", 1.1025, False),
+            # 1.01 × 1.05 = 1.0605 exactly, but float rounding gives 1.060 while
+            # Postgres stores 1.061 — the case that self-corrected every pass
+            # on real Postgres before the fix.
+            ("1.061", 1.01 * 1.05, True),
+            (None, None, True),
+            (2.0, None, False),
+        ],
+    )
+    def test_price_comparison_uses_the_stored_rounding(self, stored, odds, same) -> None:
+        assert _same_price(stored, _storable_price(odds)) is same
+
+    def test_result_arriving_late_in_the_polling_window_still_settles(
+        self, session: Session
+    ) -> None:
+        # Fixtures are polled for up to 60 days; settlement must reach as far.
+        seed = _Seeder(session)
+        ticket, _ = seed.ticket([None])
+        run = run_settlement(session, now=KICKOFF + timedelta(days=45))
+        assert run.total_settled == 1
+        assert ticket.status is TicketStatus.SETTLED
+
+    def test_ticket_settlement_failure_keeps_leg_settlements(
+        self, session: Session, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        seed = _Seeder(session)
+        _, legs = seed.ticket([None])
+
+        def _boom(*_args, **_kwargs):
+            raise RuntimeError("simulated ticket settlement bug")
+
+        monkeypatch.setattr("backend.workers.settlement_worker.settle_decided_tickets", _boom)
+        run = run_settlement(session, now=NOW)
+        assert run.total_settled == 1
+        assert run.tickets.errors == ["ticket settlement failed: simulated ticket settlement bug"]
+        leg_row = session.scalar(select(Settlement).where(Settlement.subject_id == legs[0]))
+        assert leg_row is not None

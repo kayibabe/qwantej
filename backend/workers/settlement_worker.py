@@ -27,7 +27,7 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -43,6 +43,7 @@ from backend.models import (
 from backend.models import (
     SettlementOutcome as OrmSettlementOutcome,
 )
+from backend.services.api_football_ingestion import TRACKED_FIXTURE_LOOKBACK
 from backend.services.performance import performance_report
 from backend.services.reliability import rebuild_reliability_snapshots
 from backend.services.settlement import (
@@ -58,10 +59,11 @@ from qwantej.settlement.types import SettlementOutcome as EngineOutcome
 
 log = logging.getLogger(__name__)
 
-# Wide enough that a fixture whose result arrived late (stale provider feed,
-# manual verified-result import) still gets settled; the query stays cheap
-# because it only matches fixtures that still have unsettled predictions.
-_LOOKBACK_DAYS = 30
+# Must cover the whole window in which open tickets' fixtures are polled for
+# results: a result that arrives late in that window would otherwise mark the
+# fixture finished yet never settle it.  The query stays cheap because it only
+# matches fixtures that still have unsettled predictions.
+_LOOKBACK = TRACKED_FIXTURE_LOOKBACK
 _DRIFT_MIN_SAMPLES = 30
 _RESULT_SOURCE = "api-football"
 
@@ -209,7 +211,7 @@ def run_settlement(session: Session, *, now: datetime | None = None) -> WorkerRu
     See module docstring for session-commit contract.
     """
     now = now or datetime.now(UTC)
-    since = now - timedelta(days=_LOOKBACK_DAYS)
+    since = now - _LOOKBACK
     run = WorkerRun(started_at=now)
 
     fixtures = _finished_fixtures_with_predictions(session, since=since)
@@ -236,6 +238,10 @@ def run_settlement(session: Session, *, now: datetime | None = None) -> WorkerRu
                             reason_codes=["FIXTURE_CANCELLED"],
                         )
                     batch.settled += 1
+                except IntegrityError as exc:
+                    if not any(m in str(exc).lower() for m in _SETTLEMENT_UNIQUE_MARKERS):
+                        raise
+                    batch.skipped_already_settled += 1
                 except SettlementError as exc:
                     if "already settled" in str(exc):
                         batch.skipped_already_settled += 1
@@ -323,8 +329,15 @@ def run_settlement(session: Session, *, now: datetime | None = None) -> WorkerRu
 
     # Tickets are decided from the leg settlements just written; run every
     # time (not only when legs settled) so a missed or failed pass catches up.
-    run.tickets = settle_decided_tickets(session, now=now)
-    session.flush()
+    # Isolated in a savepoint: a ticket-settlement failure is reported but
+    # must never roll back the selection settlements written above.
+    try:
+        with session.begin_nested():
+            run.tickets = settle_decided_tickets(session, now=now)
+            session.flush()
+    except Exception as exc:  # noqa: BLE001
+        log.exception("settlement_worker: ticket settlement failed")
+        run.tickets = TicketSettlementRun(errors=[f"ticket settlement failed: {exc}"])
 
     # Post-run drift detection (logging only; no automated action here).
     probs, outcomes, clv_vals = _drift_inputs(session)

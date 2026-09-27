@@ -26,6 +26,7 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
@@ -50,6 +51,7 @@ RESULT_SOURCE = "derived:leg-settlements"
 CORRECTION_WINDOW = timedelta(days=30)
 # settlements.taken_odds is NUMERIC(8, 3).
 _MAX_STORABLE_ODDS = 99999.999
+_PRICE_QUANTUM = Decimal("0.001")
 
 _ENGINE_OUTCOME = {
     "won": EngineOutcome.WIN,
@@ -102,10 +104,24 @@ def _effective_ticket_settlements(
     return current
 
 
-def _same_price(stored: float | None, odds: float | None) -> bool:
-    if stored is None or odds is None:
-        return stored is None and odds is None
-    return abs(float(stored) - round(odds, 3)) < 5e-4
+def _storable_price(odds: float | None) -> Decimal | None:
+    """Round once, exactly as stored (NUMERIC(8, 3), half-up).
+
+    Rounding here — rather than letting the database round a float — keeps
+    the stored value and the value it is later compared against identical.
+    Otherwise a half-way product such as 1.05 × 1.05 = 1.1025 can round one
+    way in Postgres and the other in Python, and every pass would append a
+    spurious correction.
+    """
+    if odds is None:
+        return None
+    return Decimal(repr(odds)).quantize(_PRICE_QUANTUM, rounding=ROUND_HALF_UP)
+
+
+def _same_price(stored: object, price: Decimal | None) -> bool:
+    if stored is None or price is None:
+        return stored is None and price is None
+    return Decimal(str(stored)).quantize(_PRICE_QUANTUM, rounding=ROUND_HALF_UP) == price
 
 
 def settle_decided_tickets(session: Session, *, now: datetime) -> TicketSettlementRun:
@@ -147,8 +163,9 @@ def settle_decided_tickets(session: Session, *, now: datetime) -> TicketSettleme
         except ValueError as exc:
             run.errors.append(f"ticket {ticket.id}: {exc}")
             continue
-        if odds is not None and odds > _MAX_STORABLE_ODDS:
-            run.errors.append(f"ticket {ticket.id}: settlement odds {odds:.3f} exceed storage")
+        price = _storable_price(odds)
+        if price is not None and price > Decimal(str(_MAX_STORABLE_ODDS)):
+            run.errors.append(f"ticket {ticket.id}: settlement odds {price} exceed storage")
             continue
 
         outcome = _ENGINE_OUTCOME[result]
@@ -156,7 +173,7 @@ def settle_decided_tickets(session: Session, *, now: datetime) -> TicketSettleme
         if (
             existing is not None
             and existing.outcome == _ORM_OUTCOME[outcome]
-            and _same_price(existing.taken_odds, odds)
+            and _same_price(existing.taken_odds, price)
         ):
             if ticket.status is not TicketStatus.SETTLED:
                 ticket.status = TicketStatus.SETTLED
@@ -168,7 +185,7 @@ def settle_decided_tickets(session: Session, *, now: datetime) -> TicketSettleme
             outcome=outcome,
             settled_at=now,
             taken_probability=float(ticket.conservative_joint_probability),
-            taken_odds=odds,
+            taken_odds=float(price) if price is not None else None,
             stake=float(ticket.stake) if ticket.stake is not None else None,
             result_source=RESULT_SOURCE,
             reason_codes=(
@@ -189,7 +206,7 @@ def settle_decided_tickets(session: Session, *, now: datetime) -> TicketSettleme
                         stake=metrics.stake,
                         gross_return=metrics.gross_return,
                         profit_loss=metrics.profit_loss,
-                        taken_odds=metrics.taken_odds,
+                        taken_odds=price,
                         taken_probability=metrics.taken_probability,
                         brier_contribution=metrics.brier_contribution,
                         log_loss_contribution=metrics.log_loss_contribution,
