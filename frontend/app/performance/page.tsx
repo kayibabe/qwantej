@@ -137,7 +137,9 @@ async function Overview({ params }: { params: SearchParams }) {
       <MetricCard label="Net P&amp;L" value={units(report.total_profit)} sub={`${report.total_stake?.toFixed(2) ?? "—"} units staked`} tone={metricTone(report.total_profit)} />
       <MetricCard label="ROI / yield" value={pct(report.roi)} sub="Settled stakes only" tone={metricTone(report.roi)} />
       <MetricCard label="Hit rate" value={pct(report.hit_rate)} sub={report.break_even_hit_rate === null ? "Break-even unavailable" : `Break-even ${pct(report.break_even_hit_rate)}`} />
-      <MetricCard label="Max drawdown" value={pct(report.max_drawdown)} sub="Peak-to-trough of settled returns" tone={report.max_drawdown && report.max_drawdown > 0.15 ? "text-[var(--loss)]" : undefined} />
+      {/* max_drawdown is peak-to-trough of cumulative P/L in stake units, not a
+          bankroll fraction, so it gets no percentage-based loss threshold. */}
+      <MetricCard label="Max drawdown" value={report.max_drawdown === null ? "—" : `${report.max_drawdown.toFixed(2)} units`} sub="Peak-to-trough of cumulative P&amp;L" />
       <MetricCard label="Brier score" value={report.brier_score?.toFixed(3) ?? "—"} sub="Lower is better" />
       <MetricCard label="Calibration error" value={report.ece?.toFixed(3) ?? "—"} sub={`${calibrationCount} settled selections`} />
     </section>
