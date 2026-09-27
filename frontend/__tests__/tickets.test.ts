@@ -1,7 +1,18 @@
 import { describe, expect, it } from "vitest"
 import { marketLabel, selectionLabel } from "@/lib/forecasts"
 import { fmtSignedPct, fmtUnits } from "@/lib/format"
-import { parsePeriod, periodLabel, periodWindow, productLabel, productRank, summarisePeriod } from "@/lib/tickets"
+import {
+  focusMonth,
+  longDayLabel,
+  parsePeriod,
+  periodLabel,
+  periodWindow,
+  productDay,
+  productLabel,
+  productRank,
+  summarisePeriod,
+  ticketArchiveHref,
+} from "@/lib/tickets"
 
 describe("periodWindow (Africa/Blantyre product day)", () => {
   it("spans a whole year", () => {
@@ -42,7 +53,19 @@ describe("summarisePeriod", () => {
         { product: "daily_safe", daily_pick: true, won: 2, lost: 0, void: 1, pending: 0, total: 3, win_rate: 1 },
       ],
     })
-    expect(s).toEqual({ period: "2026-09-23", won: 3, lost: 1, void: 1, pending: 2, total: 7, winRate: 0.75 })
+    // No profit_units from the API (older backend) → no P&L shown, never a fake 0.
+    expect(s).toEqual({ period: "2026-09-23", won: 3, lost: 1, void: 1, pending: 2, total: 7, winRate: 0.75, profit: null })
+  })
+
+  it("sums every product's flat 1-unit P&L", () => {
+    const s = summarisePeriod({
+      period: "2026-09",
+      products: [
+        { product: "core", daily_pick: false, won: 1, lost: 1, void: 0, pending: 0, total: 2, win_rate: 0.5, profit_units: 1.5 },
+        { product: "alpha", daily_pick: false, won: 0, lost: 2, void: 0, pending: 1, total: 3, win_rate: 0, profit_units: -2 },
+      ],
+    })
+    expect(s.profit).toBeCloseTo(-0.5)
   })
 
   it("has no win rate until something is decided", () => {
@@ -69,6 +92,37 @@ describe("labels", () => {
     expect(fmtUnits(null)).toBe("—")
     expect(fmtSignedPct(0.125)).toBe("+12.5%")
     expect(fmtSignedPct(-0.3)).toBe("−30.0%")
+  })
+})
+
+describe("ticket archive navigation", () => {
+  const months = ["2026-09", "2026-08", "2025-12"]
+
+  it("opens the requested day's or month's own month", () => {
+    expect(focusMonth({ date: "2026-08-14" }, months)).toBe("2026-08")
+    expect(focusMonth({ month: "2025-12" }, months)).toBe("2025-12")
+  })
+
+  it("opens a requested year's latest month, else the latest month overall", () => {
+    expect(focusMonth({ year: "2025" }, months)).toBe("2025-12")
+    expect(focusMonth({ year: "2024" }, months)).toBeUndefined()
+    expect(focusMonth({}, months)).toBe("2026-09")
+    expect(focusMonth({}, [])).toBeUndefined()
+  })
+
+  it("links to a period's group so the page opens and scrolls to it", () => {
+    expect(ticketArchiveHref("day", "2026-09-24")).toBe("/accumulators?date=2026-09-24#day-2026-09-24")
+    expect(ticketArchiveHref("month", "2026-09")).toBe("/accumulators?month=2026-09#month-2026-09")
+    expect(ticketArchiveHref("year", "2026")).toBe("/accumulators?year=2026#year-2026")
+  })
+
+  it("names days in full and buckets timestamps by Blantyre day", () => {
+    expect(longDayLabel("2026-09-24")).toBe("Thursday, 24 September 2026")
+    expect(longDayLabel("2026-01-01")).toBe("Thursday, 1 January 2026")
+    expect(longDayLabel("2028-02-29")).toBe("Tuesday, 29 February 2028")
+    // 22:30 UTC is already the next day in Africa/Blantyre (UTC+2).
+    expect(productDay("2026-09-23T22:30:00Z")).toBe("2026-09-24")
+    expect(productDay("2026-09-23T21:59:00Z")).toBe("2026-09-23")
   })
 })
 

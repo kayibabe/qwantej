@@ -25,6 +25,11 @@
   --status-primary: #1456a0;
   --status-secondary: #294c70;
   --status-muted: #52708e;
+  /* Solid result boxes on the Tickets page; each pair is ≥ 4.5:1. */
+  --result-won-bg: #047857;
+  --result-won-fg: #ffffff;
+  --result-lost-bg: #b91c1c;
+  --result-lost-fg: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -53,6 +58,10 @@
     --status-primary: #8cebf3;
     --status-secondary: #c6e5ec;
     --status-muted: #86a9b7;
+    --result-won-bg: #34d399;
+    --result-won-fg: #052e22;
+    --result-lost-bg: #f87171;
+    --result-lost-fg: #3b0909;
   }
 }
 
@@ -65,6 +74,7 @@
   --surface-shadow: 0 2px 8px rgba(15, 22, 41, .08), 0 1px 2px rgba(15, 22, 41, .04);
   --status-bg: #eef6ff; --status-border: #8bb8e8;
   --status-primary: #1456a0; --status-secondary: #294c70; --status-muted: #52708e;
+  --result-won-bg: #047857; --result-won-fg: #ffffff; --result-lost-bg: #b91c1c; --result-lost-fg: #ffffff;
 }
 
 :root[data-theme="dark"] {
@@ -76,6 +86,7 @@
   --surface-shadow: 0 4px 16px rgba(0, 0, 0, .4), 0 2px 4px rgba(0, 0, 0, .25);
   --status-bg: #102d43; --status-border: #247d9a;
   --status-primary: #8cebf3; --status-secondary: #c6e5ec; --status-muted: #86a9b7;
+  --result-won-bg: #34d399; --result-won-fg: #052e22; --result-lost-bg: #f87171; --result-lost-fg: #3b0909;
 }
 
 @theme inline {

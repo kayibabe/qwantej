@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, select
+from sqlalchemy.orm import InstrumentedAttribute
 
 from backend.api.deps import DbDep
 from backend.core.security import RequireApiKey
@@ -23,20 +24,50 @@ router = APIRouter(prefix="/models", tags=["models"], dependencies=[RequireApiKe
 
 _MAX_LIMIT = 100
 
+# Allowlist of client-sortable columns (same pattern as /predictions): the
+# Literal plus this map keeps `sort` from naming an arbitrary column.
+_SORT_COLUMNS: dict[str, InstrumentedAttribute] = {
+    "name": ModelRegistry.name,
+    "family": ModelRegistry.family,
+    "version": ModelRegistry.version,
+    "status": ModelRegistry.status,
+    "code_commit": ModelRegistry.code_commit,
+    "promoted_at": ModelRegistry.promoted_at,
+    "training_window_start": ModelRegistry.training_window_start,
+    "created_at": ModelRegistry.created_at,
+}
+SortField = Literal[
+    "name",
+    "family",
+    "version",
+    "status",
+    "code_commit",
+    "promoted_at",
+    "training_window_start",
+    "created_at",
+]
+SortDir = Literal["asc", "desc"]
+
 
 @router.get("", response_model=ModelRegistryPage)
 def list_models(
     db: DbDep,
     status: Annotated[str | None, Query()] = None,
     family: Annotated[str | None, Query(max_length=40)] = None,
+    sort: Annotated[SortField | None, Query()] = None,
+    direction: Annotated[SortDir, Query(alias="dir")] = "desc",
     limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> ModelRegistryPage:
-    """Return a page of model registry entries, newest first.
+    """Return a page of model registry entries, newest first by default.
 
     Optional filters:
     - ``status`` — ``development``, ``challenger``, ``champion``, or ``retired``
     - ``family`` — model family (e.g. ``poisson``, ``dixon_coles``, ``ensemble``)
+
+    Optional sort:
+    - ``sort`` — one of the allowlisted columns in ``_SORT_COLUMNS``
+    - ``dir`` — ``asc`` or ``desc`` (default ``desc``); ignored if ``sort`` is omitted
     """
     stmt = select(ModelRegistry)
     if status is not None:
@@ -59,9 +90,13 @@ def list_models(
             ) from None
 
     total: int = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    sort_column = _SORT_COLUMNS[sort] if sort else ModelRegistry.created_at
+    primary_order = sort_column.asc() if sort and direction == "asc" else sort_column.desc()
     rows = list(
         db.scalars(
-            stmt.order_by(ModelRegistry.created_at.desc(), ModelRegistry.id.desc())
+            # NULLS LAST either way (unpromoted models, missing commits), and
+            # id as a stable tiebreaker so pagination stays deterministic.
+            stmt.order_by(primary_order.nulls_last(), ModelRegistry.id.desc())
             .offset(offset)
             .limit(limit)
         )

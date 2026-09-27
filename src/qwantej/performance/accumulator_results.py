@@ -84,6 +84,23 @@ def ticket_settlement_odds(
     return math.prod(odds)
 
 
+def flat_unit_profit(result: TicketResult, settlement_odds: float | None) -> float | None:
+    """Profit on a flat one-unit stake: odds − 1 won, −1 lost, 0 void.
+
+    Pending tickets have no profit yet (``None``).  ``settlement_odds`` is
+    what :func:`ticket_settlement_odds` returns and is required for a win.
+    """
+    if result == "won":
+        if settlement_odds is None:
+            raise ValueError("a won ticket needs its settlement odds")
+        return settlement_odds - 1.0
+    if result == "lost":
+        return -1.0
+    if result == "void":
+        return 0.0
+    return None
+
+
 def period_key(ts: datetime, granularity: Granularity, tz: tzinfo = UTC) -> str:
     """Return the calendar bucket label for *ts* in time zone *tz*.
 
@@ -108,6 +125,8 @@ class TicketRecord:
     product: str
     published_at: datetime
     result: TicketResult
+    #: Flat one-unit profit (see :func:`flat_unit_profit`); None while pending.
+    profit_units: float | None = None
 
 
 @dataclass(frozen=True)
@@ -119,6 +138,8 @@ class ProductTally:
     lost: int
     void: int
     pending: int
+    #: Summed flat one-unit profit of the decided tickets.
+    profit_units: float = 0.0
 
     @property
     def total(self) -> int:
@@ -152,15 +173,18 @@ def tally_by_period(
     counts: dict[str, dict[str, dict[str, int]]] = defaultdict(
         lambda: defaultdict(lambda: {"won": 0, "lost": 0, "void": 0, "pending": 0})
     )
+    profits: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
     for record in records:
         key = period_key(record.published_at, granularity, tz)
         counts[key][record.product][record.result] += 1
+        if record.profit_units is not None:
+            profits[key][record.product] += record.profit_units
 
     return [
         PeriodTally(
             period=period,
             products=tuple(
-                ProductTally(product=product, **c)
+                ProductTally(product=product, **c, profit_units=profits[period][product])
                 for product, c in sorted(counts[period].items())
             ),
         )

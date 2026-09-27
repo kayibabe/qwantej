@@ -4,6 +4,7 @@ import { addDaysIso, fmtDatetime, fmtIsoDate, isValidIsoDate, todayIsoDate } fro
 import AccumulatorCard from "@/components/AccumulatorCard"
 import DateJumpForm from "@/components/DateJumpForm"
 import LiveMatchRefresh from "@/components/LiveMatchRefresh"
+import { ticketArchiveHref } from "@/lib/tickets"
 
 export const metadata: Metadata = { title: "Today" }
 
@@ -104,7 +105,7 @@ export default async function DashboardPage({
           <section aria-label="Tickets for this date">
             <div className="mb-4 flex items-end justify-between gap-4">
               <div><h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-secondary)]">{isToday ? "Today's" : fmtIsoDate(selectedDate)} tickets</h2><p className="mt-1 text-xs text-[var(--text-muted)]">Exact prices and sources are shown on every leg when archived.</p></div>
-              <a href={`/accumulators?date=${selectedDate}`} className="text-xs font-medium text-[var(--accent)] hover:underline">Open in ticket archive</a>
+              <a href={ticketArchiveHref("day", selectedDate)} className="text-xs font-medium text-[var(--accent)] hover:underline">Open in ticket archive</a>
             </div>
             {dateAccumulators.length ? <div className="flex flex-col gap-4">{dateAccumulators.map((acc) => <AccumulatorCard key={acc.id} acc={acc} />)}</div> : <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-surface)] p-6 text-sm text-[var(--text-secondary)] shadow-[var(--surface-shadow)]">No ticket is available to display for this date. The status above explains whether the system is still collecting or no combination qualified.</div>}
           </section>

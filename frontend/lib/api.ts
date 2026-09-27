@@ -89,10 +89,38 @@ export function fetchAccumulators(params: {
   status?: string
   /** Publication day (YYYY-MM-DD) in the Africa/Blantyre product time zone. */
   date?: string
+  /** Publication window [since, until), ISO-8601 with offset. */
+  since?: string
+  until?: string
   limit?: number
   offset?: number
 }): Promise<AccumulatorPage> {
   return apiFetch("/accumulators", params as Record<string, string | number | undefined>)
+}
+
+const ACCUMULATOR_PAGE_MAX = 100
+
+/**
+ * Every ticket matching the filters, paging through the API's 100-per-page
+ * cap (at most `maxPages` pages). `total` is the API's count, so a caller can
+ * tell whether `items` is complete.
+ */
+export async function fetchAllAccumulators(
+  params: { date?: string; since?: string; until?: string },
+  maxPages = 10,
+): Promise<{ items: AccumulatorOut[]; total: number }> {
+  const limit = ACCUMULATOR_PAGE_MAX
+  const first = await fetchAccumulators({ ...params, limit, offset: 0 })
+  const pages = Math.min(Math.ceil(first.total / limit), maxPages)
+  const rest = await Promise.all(
+    Array.from({ length: Math.max(0, pages - 1) }, (_, i) =>
+      fetchAccumulators({ ...params, limit, offset: (i + 1) * limit }),
+    ),
+  )
+  // A ticket published between page requests can shift a row onto two pages.
+  const byId = new Map<string, AccumulatorOut>()
+  for (const acc of [first, ...rest].flatMap((p) => p.items)) byId.set(acc.id, acc)
+  return { items: [...byId.values()], total: first.total }
 }
 
 export function fetchTodayStatus(date?: string): Promise<TodayStatus> {
@@ -118,6 +146,8 @@ export function fetchPerformanceSegments(params: {
 export function fetchModels(params?: {
   status?: string
   family?: string
+  sort?: string
+  dir?: "asc" | "desc"
   limit?: number
   offset?: number
 }): Promise<ModelRegistryPage> {

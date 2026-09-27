@@ -82,6 +82,8 @@ class AccumulatorProductResultOut(BaseModel):
     pending: int
     total: int
     win_rate: float | None
+    #: Summed flat one-unit profit of the decided tickets (0 when none).
+    profit_units: float = 0.0
 
 
 class AccumulatorPeriodResultOut(BaseModel):

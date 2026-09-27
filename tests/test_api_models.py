@@ -121,6 +121,35 @@ class TestListModels:
             assert field in item
 
 
+class TestSortModels:
+    def test_sort_by_name_both_directions(self, client: TestClient) -> None:
+        asc = [m["name"] for m in client.get("/models?sort=name&dir=asc").json()["items"]]
+        desc = [m["name"] for m in client.get("/models?sort=name&dir=desc").json()["items"]]
+        assert asc == ["elo-rating", "poisson-baseline"]
+        assert desc == list(reversed(asc))
+
+    def test_missing_values_sort_last_either_way(self, client: TestClient) -> None:
+        gen = app.dependency_overrides[get_db]()
+        db = next(gen)
+        try:
+            champion = db.query(ModelRegistry).filter_by(name="poisson-baseline").one()
+            champion.promoted_at = NOW
+            db.commit()
+        finally:
+            gen.close()
+        for direction in ("asc", "desc"):
+            items = client.get(f"/models?sort=promoted_at&dir={direction}").json()["items"]
+            assert [m["name"] for m in items] == ["poisson-baseline", "elo-rating"]
+
+    def test_sort_keeps_filters(self, client: TestClient) -> None:
+        data = client.get("/models?status=champion&sort=version&dir=asc").json()
+        assert data["total"] == 1
+
+    @pytest.mark.parametrize("query", ["sort=description", "sort=name&dir=sideways"])
+    def test_invalid_sort_422(self, client: TestClient, query: str) -> None:
+        assert client.get(f"/models?{query}").status_code == 422
+
+
 class TestGetModel:
     def test_returns_model_with_runs(self, client: TestClient) -> None:
         models = client.get("/models?status=champion").json()["items"]

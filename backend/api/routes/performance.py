@@ -177,6 +177,7 @@ def get_accumulator_results(
                         pending=t.pending,
                         total=t.total,
                         win_rate=t.win_rate,
+                        profit_units=t.profit_units,
                     )
                     for t in p.products
                 ],

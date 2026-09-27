@@ -11,6 +11,7 @@ import { productColor, productLabel, productRank } from "@/lib/tickets"
 import CalibrationCurveChart from "@/components/CalibrationCurveChart"
 import ResultsByPeriod from "@/components/performance/ResultsByPeriod"
 import SettlementLog from "@/components/performance/SettlementLog"
+import SortableTable, { type SortableColumn } from "@/components/SortableTable"
 import type { BankrollSummaryOut, KPIReportOut, RealBetResultsOut } from "@/lib/types"
 
 export const metadata: Metadata = { title: "Performance" }
@@ -91,32 +92,39 @@ function SegmentTable({ caption, rows, nameHeader, colorFor, labelFor }: {
   colorFor?: (name: string) => string
   labelFor?: (name: string) => string
 }) {
+  const columns: SortableColumn[] = [
+    { key: "name", label: nameHeader, className: "py-2 pr-4 font-semibold" },
+    { key: "record", label: "Won–lost", align: "right", className: "px-3 py-2 font-semibold" },
+    { key: "hit", label: "Hit rate", align: "right", className: "px-3 py-2 font-semibold" },
+    { key: "break_even", label: "Break-even", align: "right", className: "hidden px-3 py-2 font-semibold md:table-cell" },
+    { key: "odds", label: "Avg odds", align: "right", className: "hidden px-3 py-2 font-semibold sm:table-cell" },
+    { key: "roi", label: "ROI", align: "right", className: "px-3 py-2 font-semibold" },
+    { key: "pnl", label: "P&L", align: "right", className: "py-2 pl-3 font-semibold" },
+  ]
   return <div className="overflow-x-auto">
-    <table className="w-full text-sm">
-      <caption className="sr-only">{caption}</caption>
-      <thead className="border-b border-[var(--border)] text-xs uppercase tracking-wider text-[var(--text-muted)]">
-        <tr>
-          <th scope="col" className="py-2 pr-4 text-left font-semibold">{nameHeader}</th>
-          <th scope="col" className="px-3 py-2 text-right font-semibold">Won–lost</th>
-          <th scope="col" className="px-3 py-2 text-right font-semibold">Hit rate</th>
-          <th scope="col" className="hidden px-3 py-2 text-right font-semibold md:table-cell">Break-even</th>
-          <th scope="col" className="hidden px-3 py-2 text-right font-semibold sm:table-cell">Avg odds</th>
-          <th scope="col" className="px-3 py-2 text-right font-semibold">ROI</th>
-          <th scope="col" className="py-2 pl-3 text-right font-semibold">P&amp;L</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map(([name, r]) => <tr key={name} className="border-t border-[var(--border-subtle)]">
-          <th scope="row" className="py-3 pr-4 text-left font-semibold" style={colorFor ? { color: colorFor(name) } : undefined}>{labelFor ? labelFor(name) : name}</th>
-          <td className="px-3 py-3 text-right font-mono">{r.n_wins}–{r.n_losses}{r.n_voids + r.n_pushes ? <span className="text-[var(--text-muted)]"> ({r.n_voids + r.n_pushes} void)</span> : null}</td>
-          <td className="px-3 py-3 text-right font-mono">{pct(r.hit_rate)}</td>
-          <td className="hidden px-3 py-3 text-right font-mono text-[var(--text-muted)] md:table-cell">{pct(r.break_even_hit_rate)}</td>
-          <td className="hidden px-3 py-3 text-right font-mono sm:table-cell">{r.average_odds?.toFixed(2) ?? "—"}</td>
-          <td className={`px-3 py-3 text-right font-mono font-semibold ${tone(r.roi)}`}>{fmtSignedPct(r.roi)}</td>
-          <td className={`py-3 pl-3 text-right font-mono ${tone(r.total_profit)}`}>{fmtUnits(r.total_profit)}</td>
-        </tr>)}
-      </tbody>
-    </table>
+    <SortableTable
+      caption={caption}
+      columns={columns}
+      theadClassName="border-b border-[var(--border)] text-xs uppercase tracking-wider text-[var(--text-muted)]"
+      rows={rows.map(([name, r]) => {
+        const label = labelFor ? labelFor(name) : name
+        return {
+          key: name,
+          className: "border-t border-[var(--border-subtle)]",
+          // Won–lost sorts by wins; ties keep the table's own order.
+          values: [label, r.n_wins, r.hit_rate, r.break_even_hit_rate, r.average_odds, r.roi, r.total_profit],
+          cells: <>
+            <th scope="row" className="py-3 pr-4 text-left font-semibold" style={colorFor ? { color: colorFor(name) } : undefined}>{label}</th>
+            <td className="px-3 py-3 text-right font-mono">{r.n_wins}–{r.n_losses}{r.n_voids + r.n_pushes ? <span className="text-[var(--text-muted)]"> ({r.n_voids + r.n_pushes} void)</span> : null}</td>
+            <td className="px-3 py-3 text-right font-mono">{pct(r.hit_rate)}</td>
+            <td className="hidden px-3 py-3 text-right font-mono text-[var(--text-muted)] md:table-cell">{pct(r.break_even_hit_rate)}</td>
+            <td className="hidden px-3 py-3 text-right font-mono sm:table-cell">{r.average_odds?.toFixed(2) ?? "—"}</td>
+            <td className={`px-3 py-3 text-right font-mono font-semibold ${tone(r.roi)}`}>{fmtSignedPct(r.roi)}</td>
+            <td className={`py-3 pl-3 text-right font-mono ${tone(r.total_profit)}`}>{fmtUnits(r.total_profit)}</td>
+          </>,
+        }
+      })}
+    />
   </div>
 }
 

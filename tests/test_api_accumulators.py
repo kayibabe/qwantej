@@ -274,6 +274,23 @@ class TestListAccumulators:
         assert r.status_code == 200
         assert r.json()["total"] == 0
 
+    def test_filter_by_publication_window(self, seeded_client) -> None:
+        client, _, _ = seeded_client
+        month = {"since": "2026-09-01T00:00:00+02:00", "until": "2026-10-01T00:00:00+02:00"}
+        assert client.get("/accumulators", params=month).json()["total"] == 2
+        after = {"since": "2026-09-08T00:00:00+02:00"}
+        assert client.get("/accumulators", params=after).json()["total"] == 0
+        before = {"until": "2026-09-07T00:00:00+02:00"}
+        assert client.get("/accumulators", params=before).json()["total"] == 0
+
+    def test_inverted_publication_window_is_rejected(self, seeded_client) -> None:
+        client, _, _ = seeded_client
+        r = client.get(
+            "/accumulators",
+            params={"since": "2026-10-01T00:00:00Z", "until": "2026-09-01T00:00:00Z"},
+        )
+        assert r.status_code == 422
+
     def test_invalid_date_is_rejected(self, seeded_client) -> None:
         client, _, _ = seeded_client
         r = client.get("/accumulators", params={"date": "2026-13-40"})

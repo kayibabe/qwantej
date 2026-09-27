@@ -25,7 +25,11 @@ from backend.models import (
 from backend.models.fixtures import Fixture
 from backend.models.settlements import TicketStatus
 from backend.schemas.accumulators import AccumulatorLegOut, AccumulatorOut, AccumulatorPage
-from qwantej.performance.accumulator_results import derive_ticket_result, ticket_settlement_odds
+from qwantej.performance.accumulator_results import (
+    derive_ticket_result,
+    flat_unit_profit,
+    ticket_settlement_odds,
+)
 
 router = APIRouter(prefix="/accumulators", tags=["accumulators"], dependencies=[RequireApiKey])
 
@@ -178,6 +182,8 @@ def list_accumulators(
         _date | None,
         Query(description="Product day (YYYY-MM-DD, Africa/Blantyre) the ticket was published on"),
     ] = None,
+    since: Annotated[datetime | None, Query(description="Published at or after (ISO-8601)")] = None,
+    until: Annotated[datetime | None, Query(description="Published before (ISO-8601)")] = None,
     limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> AccumulatorPage:
@@ -185,11 +191,19 @@ def list_accumulators(
 
     Optional filters: ``status`` — ``pending``, ``locked``, ``settled``, ``void``;
     ``date`` — publication day in the product time zone, matching
-    ``/dashboard/today`` so a day's tickets are never cut off by pagination.
+    ``/dashboard/today`` so a day's tickets are never cut off by pagination;
+    ``since`` / ``until`` — publication window ``[since, until)``, e.g. a whole
+    product-day month for the ticket archive.
     """
+    if since is not None and until is not None and since >= until:
+        raise HTTPException(status_code=422, detail="since must be before until")
     base_stmt = select(Accumulator)
     if status is not None:
         base_stmt = base_stmt.where(Accumulator.status == status)
+    if since is not None:
+        base_stmt = base_stmt.where(Accumulator.published_at >= since)
+    if until is not None:
+        base_stmt = base_stmt.where(Accumulator.published_at < until)
     if date is not None:
         day_start_local = datetime.combine(date, datetime.min.time(), tzinfo=PRODUCT_DAY_ZONE)
         base_stmt = base_stmt.where(
@@ -265,8 +279,11 @@ def _ticket_result(
         ticket_voided=row.status == TicketStatus.VOID,
     )
     odds = ticket_settlement_odds(legs, result)  # type: ignore[arg-type]
-    profit = {"won": (odds or 1.0) - 1.0, "lost": -1.0, "void": 0.0}.get(result)
-    return {"result": result, "settlement_odds": odds, "profit_units": profit}
+    return {
+        "result": result,
+        "settlement_odds": odds,
+        "profit_units": flat_unit_profit(result, odds),
+    }
 
 
 def _serialize_accumulator(
