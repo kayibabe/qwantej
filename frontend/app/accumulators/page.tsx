@@ -44,6 +44,7 @@ function groupTicketsByDay(tickets: AccumulatorOut[]): Map<string, AccumulatorOu
 }
 
 async function TicketTree({ request }: { request: Request }) {
+  const refreshToken = crypto.randomUUID()
   const [years, months, days] = await Promise.all([
     fetchAccumulatorResults({ granularity: "year", limit: PERIOD_LIMIT }),
     fetchAccumulatorResults({ granularity: "month", limit: PERIOD_LIMIT }),
@@ -92,7 +93,7 @@ async function TicketTree({ request }: { request: Request }) {
                     <div className="flex flex-col gap-3 pt-3 sm:pl-3">
                       {monthDays.length ? monthDays.map((d) => {
                         const initial = isFocus && focusByDay ? focusByDay.get(d.period) ?? [] : null
-                        return <DayGroup key={d.period} summary={summarisePeriod(d)} initialTickets={initial} defaultOpen={initial !== null} />
+                        return <DayGroup key={d.period} summary={summarisePeriod(d)} initialTickets={initial} defaultOpen={initial !== null} refreshToken={refreshToken} />
                       }) : (
                         <p className="px-1 text-sm text-[var(--text-secondary)]">
                           <Link href={ticketArchiveHref("month", m.period)} className="font-semibold text-[var(--accent)] hover:underline">Open {periodLabel(m.period, "month")}</Link> to list its days.

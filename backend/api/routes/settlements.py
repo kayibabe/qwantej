@@ -13,6 +13,7 @@ from backend.core.security import RequireApiKey
 from backend.models import Settlement
 from backend.models import SettlementOutcome as OrmOutcome
 from backend.schemas.settlements import SettlementOut, SettlementPage, SettlementSummary
+from backend.services.settlement_queries import reopened_settlement_ids
 
 router = APIRouter(prefix="/settlements", tags=["settlements"], dependencies=[RequireApiKey])
 
@@ -45,7 +46,8 @@ def _effective_stmt(subject_type: str):
     """Base statement for effective (non-superseded) settlements of *subject_type*.
 
     A row is "effective" when its id has not been named in another row's
-    supersedes_id, i.e. it has not been replaced by a correction.
+    supersedes_id and it has not been withdrawn by a ticket reopening audit
+    event. Both kinds of historical row are retained unchanged.
     """
     superseded_ids = select(Settlement.supersedes_id).where(
         Settlement.supersedes_id.is_not(None)
@@ -55,6 +57,7 @@ def _effective_stmt(subject_type: str):
         .where(
             Settlement.subject_type == subject_type,
             Settlement.id.not_in(superseded_ids),
+            Settlement.id.not_in(reopened_settlement_ids()),
         )
     )
 

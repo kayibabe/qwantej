@@ -35,6 +35,7 @@ from backend.models import (
 from backend.models import SettlementOutcome as OrmOutcome
 from backend.models.registry import ModelRegistry
 from backend.models.settlements import TicketStatus
+from backend.services.settlement_queries import reopened_settlement_ids
 from qwantej.performance.kpi import (
     KPIReport,
     PerformanceObservation,
@@ -109,6 +110,7 @@ def query_performance_observations(
 
     Superseded rows (original settlements that have been corrected) are
     excluded; only the effective (latest) settlement per subject is returned.
+    Ticket settlements withdrawn by reopening audit events are also excluded.
 
     For predictions the query joins Prediction, Fixture, Competition, and
     ModelRegistry to populate market, league, and model_version segments.
@@ -174,6 +176,7 @@ def query_performance_observations(
         .where(
             Settlement.subject_type == subject_type,
             Settlement.id.not_in(superseded_ids_subq),
+            Settlement.id.not_in(reopened_settlement_ids()),
         )
         .order_by(Settlement.settled_at, Settlement.id)
     )

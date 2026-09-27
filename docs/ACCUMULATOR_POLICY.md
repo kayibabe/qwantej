@@ -184,15 +184,25 @@ decided — the first lost leg, or every leg settled — the worker appends an
 - `taken_probability` is the ticket's conservative joint probability, so
   ticket Brier scores are measurable;
 - settlements stay append-only: if a leg settlement is later corrected and
-  the derived result or price changes (within 30 days of publication), a
+  the derived result or price changes (regardless of publication age), a
   correcting row supersedes the previous ticket settlement
   (`LEG_SETTLEMENT_CORRECTED`);
+- if a leg correction makes a previously decided ticket pending, the worker
+  appends a `ticket_reopened` audit event targeting the previous settlement
+  and returns the lifecycle status to `pending`. Performance and settlement
+  reports exclude that annotated row, without deleting or modifying it.
+  The next decision appends a superseding settlement even if the ticket
+  loses again. This uses the existing audit schema; no migration is needed;
+- worker passes lock tickets in publication/id order to serialize reopening
+  and settlement corrections. Every non-administratively-voided ticket is
+  rechecked, including old tickets; archive growth therefore increases scan
+  cost, which should be monitored before introducing an incremental scan;
 - status `void` stays reserved for administratively voided tickets; a
   ticket whose legs all voided is `settled` with a `void` outcome.
 
 Legs on **cancelled or abandoned** fixtures settle as void
 (`FIXTURE_CANCELLED`) so their tickets can close. The worker settles any
-finished fixture up to 30 days back, and open tickets' fixtures are polled
+finished fixture up to 60 days back, and open tickets' fixtures are polled
 for results for up to 60 days (every 2 min live, every 15 min once overdue,
 every 6 h after a day), so a late result from the feed is never stranded.
 
@@ -210,6 +220,10 @@ Today page and `/accumulators?date=` — at year / month / day granularity.
 Win rate is won ÷ (won + lost). Daily Picks are reported as their own
 products (`daily_pick: true`) and never merged into the value products'
 counts.
+
+Expanded days outside the initially loaded month refresh with each server
+page refresh. Old responses are discarded if a newer refresh has started;
+failed reloads show a retry action instead of stale ticket results.
 
 ## Candidate funnel (framework §28)
 

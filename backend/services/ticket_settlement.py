@@ -12,6 +12,12 @@ On a decision this service appends one ``Settlement`` row
 corrected and the derived ticket result or price changes, a correction row
 superseding the previous ticket settlement is appended instead.
 
+If a correction makes the ticket undecided, a ``ticket_reopened`` audit
+event withdraws the prior settlement from reporting and status returns to
+``pending``. The settlement is retained unchanged; the next decision
+supersedes it even if the outcome is again the same. Corrections have no
+publication-age cutoff. Ticket row locks serialize concurrent worker runs.
+
 ``TicketStatus.VOID`` is reserved for tickets voided administratively; a
 ticket whose legs all voided is ``settled`` with a ``void`` outcome, so a
 later leg correction can still move it.
@@ -25,17 +31,18 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
-from backend.models import Accumulator, Settlement
+from backend.models import Accumulator, AuditActor, AuditEvent, AuditEventType, Settlement
 from backend.models import SettlementOutcome as OrmOutcome
 from backend.models.settlements import TicketStatus
 from backend.services.accumulator_results import effective_leg_outcomes
+from backend.services.settlement_queries import TICKET_REOPENED
 from qwantej.performance.accumulator_results import (
     derive_ticket_result,
     ticket_settlement_odds,
@@ -46,9 +53,6 @@ from qwantej.settlement.types import SettlementOutcome as EngineOutcome
 log = logging.getLogger(__name__)
 
 RESULT_SOURCE = "derived:leg-settlements"
-# Settled tickets are re-checked for leg corrections for this long after
-# publication; older tickets are final.
-CORRECTION_WINDOW = timedelta(days=30)
 # settlements.taken_odds is NUMERIC(8, 3).
 _MAX_STORABLE_ODDS = 99999.999
 _PRICE_QUANTUM = Decimal("0.001")
@@ -74,6 +78,7 @@ _UNIQUE_MARKERS = (
 class TicketSettlementRun:
     settled: int = 0
     corrected: int = 0
+    reopened: int = 0
     still_pending: int = 0
     errors: list[str] = field(default_factory=list)
 
@@ -131,14 +136,14 @@ def settle_decided_tickets(session: Session, *, now: datetime) -> TicketSettleme
         session.scalars(
             select(Accumulator)
             .where(
-                or_(
-                    Accumulator.status.in_([TicketStatus.PENDING, TicketStatus.LOCKED]),
-                    (Accumulator.status == TicketStatus.SETTLED)
-                    & (Accumulator.published_at >= now - CORRECTION_WINDOW),
+                Accumulator.status.in_(
+                    [TicketStatus.PENDING, TicketStatus.LOCKED, TicketStatus.SETTLED]
                 )
             )
             .options(selectinload(Accumulator.legs))
             .order_by(Accumulator.published_at, Accumulator.id)
+            .with_for_update(of=Accumulator)
+            .execution_options(populate_existing=True)
         )
     )
     if not tickets:
@@ -157,6 +162,27 @@ def settle_decided_tickets(session: Session, *, now: datetime) -> TicketSettleme
         try:
             result = derive_ticket_result([outcome for outcome, _ in legs])
             if result == "pending":
+                existing = current.get(ticket.id)
+                if existing is not None and ticket.status == TicketStatus.SETTLED:
+                    with session.begin_nested():
+                        session.add(AuditEvent(
+                            event_type=AuditEventType.DATA_REVISION,
+                            actor=AuditActor.SYSTEM,
+                            actor_ref=RESULT_SOURCE,
+                            action=TICKET_REOPENED,
+                            entity_type="settlement",
+                            entity_id=existing.id,
+                            occurred_at=now,
+                            summary="Leg correction reopened an undecided ticket",
+                            payload={
+                                "ticket_id": str(ticket.id),
+                                "previous_outcome": existing.outcome.value,
+                                "reason_codes": ["LEG_SETTLEMENT_CORRECTED"],
+                            },
+                        ))
+                        ticket.status = TicketStatus.PENDING
+                        session.flush()
+                    run.reopened += 1
                 run.still_pending += 1
                 continue
             odds = ticket_settlement_odds(legs, result)
@@ -172,11 +198,10 @@ def settle_decided_tickets(session: Session, *, now: datetime) -> TicketSettleme
         existing = current.get(ticket.id)
         if (
             existing is not None
+            and ticket.status == TicketStatus.SETTLED
             and existing.outcome == _ORM_OUTCOME[outcome]
             and _same_price(existing.taken_odds, price)
         ):
-            if ticket.status is not TicketStatus.SETTLED:
-                ticket.status = TicketStatus.SETTLED
             continue
 
         metrics = _settle_engine(
@@ -228,8 +253,8 @@ def settle_decided_tickets(session: Session, *, now: datetime) -> TicketSettleme
             run.corrected += 1
 
     log.info(
-        "ticket_settlement: settled=%d corrected=%d pending=%d errors=%d",
-        run.settled, run.corrected, run.still_pending, len(run.errors),
+        "ticket_settlement: settled=%d corrected=%d reopened=%d pending=%d errors=%d",
+        run.settled, run.corrected, run.reopened, run.still_pending, len(run.errors),
     )
     for err in run.errors:
         log.error("ticket_settlement: %s", err)

@@ -67,12 +67,23 @@ class TestTicketSettlementOdds:
 # Service over a real session
 # ---------------------------------------------------------------------------
 
-@pytest.fixture()
-def session():
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
-    with Session(engine) as s:
-        yield s
+@pytest.fixture(params=["sqlite", "postgres"])
+def session(request):
+    from backend.core.config import get_settings
+
+    if request.param == "postgres":
+        url = get_settings().database_url
+        if not url.startswith("postgresql"):
+            pytest.skip("ticket correction integration requires migrated test Postgres")
+        engine = create_engine(url)
+    else:
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+    with engine.connect() as connection:
+        transaction = connection.begin()
+        with Session(connection) as s:
+            yield s
+        transaction.rollback()
     engine.dispose()
 
 
@@ -185,10 +196,13 @@ class TestSettleDecidedTickets:
         assert ticket.status is TicketStatus.SETTLED
 
     def test_undecided_ticket_stays_pending(self, session: Session) -> None:
+        # The Postgres concurrency suite commits its own pending ticket;
+        # assert this ticket's contribution without assuming an empty DB.
+        pending_before = settle_decided_tickets(session, now=NOW).still_pending
         seed = _Seeder(session)
         ticket, _ = seed.ticket(["win", None])
         run = settle_decided_tickets(session, now=NOW)
-        assert run.still_pending == 1
+        assert run.still_pending == pending_before + 1
         assert _ticket_rows(session, ticket) == []
         assert ticket.status is TicketStatus.PENDING
 
@@ -297,6 +311,56 @@ class TestWorkerSettlesTickets:
 # ---------------------------------------------------------------------------
 
 class TestReviewRegressions:
+    @pytest.mark.parametrize("age", [0, 31, 365])
+    def test_reopen_preserves_history_and_removes_loss_until_decided(self, session, age):
+        from backend.api.routes.settlements import get_settlement_summary
+        from backend.models import AuditEvent
+        from backend.services.accumulator_results import accumulator_ticket_records
+
+        seed = _Seeder(session)
+        ticket, legs = seed.ticket(["loss", None])
+        settle_decided_tickets(session, now=NOW)
+        [original] = _ticket_rows(session, ticket)
+        leg = session.scalar(select(Settlement).where(Settlement.subject_id == legs[0]))
+        seed.settle(legs[0], "win", supersedes=leg.id)
+        later = NOW + timedelta(days=age, minutes=15)
+        settle_decided_tickets(session, now=later)
+        assert ticket.status is TicketStatus.PENDING
+        assert accumulator_ticket_records(session)[0].result == "pending"
+        assert performance_report(session, subject_type="accumulator").n_settled == 0
+        assert get_settlement_summary(session, subject_type="accumulator").n_settled == 0
+        assert _ticket_rows(session, ticket) == [original]
+        assert original.outcome is SettlementOutcome.LOSS
+        events = list(session.scalars(select(AuditEvent)))
+        assert len(events) == 1
+        assert events[0].entity_id == original.id
+        settle_decided_tickets(session, now=later + timedelta(minutes=1))
+        assert len(list(session.scalars(select(AuditEvent)))) == 1
+
+        # Even a return to the same loss needs a new effective settlement.
+        seed.settle(legs[1], "loss")
+        settle_decided_tickets(session, now=later + timedelta(minutes=2))
+        first, last = _ticket_rows(session, ticket)
+        assert last.supersedes_id == first.id
+        assert performance_report(session, subject_type="accumulator").n_losses == 1
+        assert get_settlement_summary(session, subject_type="accumulator").n_losses == 1
+        settle_decided_tickets(session, now=later + timedelta(minutes=3))
+        assert len(_ticket_rows(session, ticket)) == 2
+
+    @pytest.mark.parametrize("age", [31, 365])
+    def test_old_ticket_correction_is_not_ignored(self, session, age):
+        seed = _Seeder(session)
+        ticket, legs = seed.ticket(["loss", "win"])
+        settle_decided_tickets(session, now=NOW)
+        leg = session.scalar(select(Settlement).where(Settlement.subject_id == legs[0]))
+        seed.settle(legs[0], "win", supersedes=leg.id)
+        run = settle_decided_tickets(session, now=NOW + timedelta(days=age))
+        assert run.corrected == 1
+        assert performance_report(session, subject_type="accumulator").n_wins == 1
+        first, last = _ticket_rows(session, ticket)
+        assert first.outcome is SettlementOutcome.LOSS
+        assert last.supersedes_id == first.id
+
     def test_half_way_price_rounds_once_and_never_self_corrects(
         self, session: Session
     ) -> None:

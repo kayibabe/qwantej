@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { loadDayTickets } from "@/app/accumulators/actions"
 import { longDayLabel, periodAnchor, type PeriodSummary } from "@/lib/tickets"
 import type { AccumulatorOut } from "@/lib/types"
@@ -10,38 +10,41 @@ import TicketRow from "@/components/tickets/TicketRow"
 /**
  * One product day on the Tickets page. Days of the month the page opened on
  * arrive with their tickets (and refresh with the page); any other day loads
- * its tickets the first time it is expanded.
+ * its tickets when expanded and on every server refresh while open.
  */
 export default function DayGroup({
   summary,
   initialTickets,
   defaultOpen,
+  refreshToken,
 }: {
   summary: PeriodSummary
   initialTickets: AccumulatorOut[] | null
   defaultOpen: boolean
+  refreshToken: string
 }) {
   const day = summary.period
   const [open, setOpen] = useState(defaultOpen)
-  const [loaded, setLoaded] = useState<AccumulatorOut[] | null>(null)
-  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle")
-  const tickets = initialTickets ?? loaded
+  const [retry, setRetry] = useState(0)
+  const revision = `${day}:${refreshToken}:${retry}`
+  const [loaded, setLoaded] = useState<{ revision: string; tickets: AccumulatorOut[] | null } | null>(null)
+  const current = loaded?.revision === revision ? loaded : null
+  const tickets = initialTickets ?? current?.tickets ?? null
+  const status = tickets ? "idle" : current ? "error" : "loading"
 
-  async function load() {
-    setStatus("loading")
-    const result = await loadDayTickets(day)
-    if (result) {
-      setLoaded(result)
-      setStatus("idle")
-    } else {
-      setStatus("error")
-    }
-  }
+  useEffect(() => {
+    if (!open || initialTickets !== null) return
+    let active = true
+    loadDayTickets(day).then(
+      (tickets) => { if (active) setLoaded({ revision, tickets }) },
+      () => { if (active) setLoaded({ revision, tickets: null }) },
+    )
+    return () => { active = false }
+  }, [day, revision, open, initialTickets])
 
   function onToggle(event: React.SyntheticEvent<HTMLDetailsElement>) {
     const nowOpen = event.currentTarget.open
     setOpen(nowOpen)
-    if (nowOpen && !tickets && status !== "loading") void load()
   }
 
   return (
@@ -62,7 +65,7 @@ export default function DayGroup({
         ) : status === "error" ? (
           <p className="flex flex-wrap items-center gap-3 rounded-lg border border-[var(--loss)]/50 p-4 text-sm text-[var(--text-secondary)]">
             <span>This day&apos;s tickets could not be loaded.</span>
-            <button type="button" onClick={() => void load()} className="rounded border border-[var(--border)] px-3 py-1 font-medium text-[var(--accent)] hover:bg-[var(--bg-raised)] focus-visible:outline-2 focus-visible:outline-[var(--accent)]">Try again</button>
+            <button type="button" onClick={() => setRetry((value) => value + 1)} className="rounded border border-[var(--border)] px-3 py-1 font-medium text-[var(--accent)] hover:bg-[var(--bg-raised)] focus-visible:outline-2 focus-visible:outline-[var(--accent)]">Try again</button>
           </p>
         ) : (
           <p className="animate-pulse p-4 text-sm text-[var(--text-muted)]">Loading tickets…</p>
