@@ -205,3 +205,27 @@ export interface ModelRegistryPage {
   limit: number
   offset: number
 }
+
+export type ResultsGranularity = "year" | "month" | "day"
+
+export interface AccumulatorProductResultOut {
+  product: string
+  daily_pick: boolean
+  won: number
+  lost: number
+  void: number
+  pending: number
+  total: number
+  win_rate: number | null
+}
+
+export interface AccumulatorPeriodResultOut {
+  period: string
+  products: AccumulatorProductResultOut[]
+}
+
+export interface AccumulatorResultsOut {
+  granularity: ResultsGranularity
+  periods: AccumulatorPeriodResultOut[]
+  total_periods: number
+}

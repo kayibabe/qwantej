@@ -1,4 +1,4 @@
-type NavIconName = "dashboard" | "accumulators" | "predictions" | "settlements" | "performance" | "models"
+type NavIconName = "dashboard" | "accumulators" | "predictions" | "settlements" | "performance" | "models" | "results"
 
 export default function NavIcon({ name }: { name: NavIconName }) {
   const common = {
@@ -40,6 +40,11 @@ export default function NavIcon({ name }: { name: NavIconName }) {
         <circle {...common} cx="5.5" cy="16" r="1.5" />
         <circle {...common} cx="18.5" cy="16" r="1.5" />
         <path {...common} d="m12 9V6M9.5 13.5l-2.8 1.7M14.5 13.5l2.8 1.7" />
+      </>}
+      {name === "results" && <>
+        <rect {...common} x="4" y="5" width="16" height="15" rx="1.5" />
+        <path {...common} d="M4 9.5h16M8.5 3v4M15.5 3v4" />
+        <path {...common} d="m9 14.5 2 2 4-4" />
       </>}
     </svg>
   )

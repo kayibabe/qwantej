@@ -7,6 +7,7 @@ import NavIcon from "@/components/NavIcon"
 const links = [
   { href: "/", label: "Dashboard", icon: "dashboard" as const },
   { href: "/accumulators", label: "Accumulators", icon: "accumulators" as const },
+  { href: "/accumulators/results", label: "Ticket results", icon: "results" as const },
   { href: "/predictions", label: "Predictions", icon: "predictions" as const },
   { href: "/settlements", label: "Settlements", icon: "settlements" as const },
   { href: "/performance", label: "Performance", icon: "performance" as const },

@@ -149,6 +149,26 @@ preserve a stale "value" label.
   rewritten; a conflicting settled result requires the governed correction
   path.
 
+## Ticket results by product and period
+
+Tickets are never settled as a whole — only their legs' predictions are.
+`GET /performance/accumulator-results` (UI: *Ticket results*,
+`/accumulators/results`) derives each ticket's result from its legs'
+effective (non-superseded) settlements
+(`src/qwantej/performance/accumulator_results.py`):
+
+- any leg lost → **lost** (even while other legs are still open);
+- otherwise any leg unsettled → **pending**;
+- otherwise every leg void/push → **void**; else → **won** (void/push legs
+  drop out, the standard bookmaker treatment);
+- a ticket whose own status is `void` is **void**.
+
+Results are counted per product and grouped by the ticket's **UTC
+publication date** at year / month / day granularity. Win rate is
+won ÷ (won + lost). Daily Picks are reported as their own products
+(`daily_pick: true`) and never merged into the value products' counts.
+This is a hit-count view only — it makes no ROI claim.
+
 ## Candidate funnel (framework §28)
 
 ```

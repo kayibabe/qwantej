@@ -61,3 +61,31 @@ class PerformanceSegmentsOut(BaseModel):
 
     by: str
     segments: dict[str, KPIReportOut]
+
+
+class AccumulatorProductResultOut(BaseModel):
+    """Ticket result counts for one product within one period."""
+
+    product: str
+    daily_pick: bool
+    won: int
+    lost: int
+    void: int
+    pending: int
+    total: int
+    win_rate: float | None
+
+
+class AccumulatorPeriodResultOut(BaseModel):
+    """All products' ticket results for one UTC calendar period."""
+
+    period: str
+    products: list[AccumulatorProductResultOut]
+
+
+class AccumulatorResultsOut(BaseModel):
+    """Accumulator ticket results grouped by year, month or day (UTC)."""
+
+    granularity: str
+    periods: list[AccumulatorPeriodResultOut]
+    total_periods: int
