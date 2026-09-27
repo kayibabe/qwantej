@@ -3,18 +3,13 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { fetchAccumulator } from "@/lib/api"
 import { fmtDatetime, fmtUnits } from "@/lib/format"
-import { RESULT_LABEL, periodLabel, productLabel, resultClass } from "@/lib/tickets"
+import { RESULT_LABEL, periodLabel, productDay, productLabel, resultClass, ticketArchiveHref } from "@/lib/tickets"
 import AccumulatorCard from "@/components/AccumulatorCard"
 import LiveMatchRefresh from "@/components/LiveMatchRefresh"
 
 export const metadata: Metadata = { title: "Ticket" }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-/** Product day (Africa/Blantyre) a ticket was published on, YYYY-MM-DD. */
-function productDay(iso: string): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Blantyre" }).format(new Date(iso))
-}
 
 export default async function TicketPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -40,13 +35,13 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 p-4 sm:p-8">
       <LiveMatchRefresh />
       <nav aria-label="Ticket archive location" className="flex flex-wrap items-center gap-1.5 text-sm">
-        <Link href="/accumulators" className="text-[var(--accent)] hover:underline">All years</Link>
+        <Link href="/accumulators" className="text-[var(--accent)] hover:underline">Tickets</Link>
         <span aria-hidden="true" className="text-[var(--text-muted)]">›</span>
-        <Link href={`/accumulators?year=${day.slice(0, 4)}`} className="text-[var(--accent)] hover:underline">{day.slice(0, 4)}</Link>
+        <Link href={ticketArchiveHref("year", day.slice(0, 4))} className="text-[var(--accent)] hover:underline">{day.slice(0, 4)}</Link>
         <span aria-hidden="true" className="text-[var(--text-muted)]">›</span>
-        <Link href={`/accumulators?month=${day.slice(0, 7)}`} className="text-[var(--accent)] hover:underline">{periodLabel(day.slice(0, 7), "month")}</Link>
+        <Link href={ticketArchiveHref("month", day.slice(0, 7))} className="text-[var(--accent)] hover:underline">{periodLabel(day.slice(0, 7), "month")}</Link>
         <span aria-hidden="true" className="text-[var(--text-muted)]">›</span>
-        <Link href={`/accumulators?date=${day}`} className="text-[var(--accent)] hover:underline">{periodLabel(day, "day")}</Link>
+        <Link href={ticketArchiveHref("day", day)} className="text-[var(--accent)] hover:underline">{periodLabel(day, "day")}</Link>
         <span aria-hidden="true" className="text-[var(--text-muted)]">›</span>
         <span aria-current="page" className="font-semibold text-[var(--text-primary)]">{productLabel(acc.product)} ticket</span>
       </nav>
