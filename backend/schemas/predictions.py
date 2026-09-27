@@ -25,6 +25,14 @@ class PredictionOut(BaseModel):
     qss: float | None
     dqs: float | None
     created_at: datetime
+    bookmaker: str | None = None
+    # Match context, from the prediction's fixture.
+    home_team: str | None = None
+    away_team: str | None = None
+    kickoff_utc: datetime | None = None
+    competition_name: str | None = None
+    # Effective settlement outcome (win/loss/void/push) once settled.
+    outcome: str | None = None
 
 
 class PredictionPage(BaseModel):

@@ -19,19 +19,22 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.models import (
     Accumulator,
+    AccumulatorLeg,
     Competition,
     Fixture,
+    FixtureStatus,
     Prediction,
     Season,
     Settlement,
 )
 from backend.models import SettlementOutcome as OrmOutcome
 from backend.models.registry import ModelRegistry
+from backend.models.settlements import TicketStatus
 from qwantej.performance.kpi import (
     KPIReport,
     PerformanceObservation,
@@ -215,6 +218,40 @@ def performance_report(
         limit=limit,
     )
     return compute_kpis(observations)
+
+
+def awaiting_settlement_count(
+    session: Session, *, subject_type: str = "prediction", now: datetime
+) -> int:
+    """Subjects whose first match has kicked off but that are not settled yet.
+
+    Tickets: open (pending/locked) tickets with at least one leg kicked off.
+    Selections: predictions on kicked-off fixtures with no settlement row.
+    A large or growing number here means results are not flowing in.
+    """
+    if subject_type == "accumulator":
+        started = (
+            select(AccumulatorLeg.accumulator_id)
+            .join(Fixture, Fixture.id == AccumulatorLeg.fixture_id)
+            .where(Fixture.kickoff_utc <= now)
+        )
+        stmt = select(func.count()).select_from(Accumulator).where(
+            Accumulator.status.in_([TicketStatus.PENDING, TicketStatus.LOCKED]),
+            Accumulator.id.in_(started),
+        )
+    else:
+        settled = select(Settlement.subject_id).where(Settlement.subject_type == "prediction")
+        stmt = (
+            select(func.count())
+            .select_from(Prediction)
+            .join(Fixture, Fixture.id == Prediction.fixture_id)
+            .where(
+                Fixture.kickoff_utc <= now,
+                Fixture.status.not_in([FixtureStatus.POSTPONED]),
+                Prediction.id.not_in(settled),
+            )
+        )
+    return int(session.scalar(stmt) or 0)
 
 
 def performance_by_segment(

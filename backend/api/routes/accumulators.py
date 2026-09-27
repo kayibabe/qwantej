@@ -23,7 +23,9 @@ from backend.models import (
     StatsSnapshot,
 )
 from backend.models.fixtures import Fixture
+from backend.models.settlements import TicketStatus
 from backend.schemas.accumulators import AccumulatorLegOut, AccumulatorOut, AccumulatorPage
+from qwantej.performance.accumulator_results import derive_ticket_result, ticket_settlement_odds
 
 router = APIRouter(prefix="/accumulators", tags=["accumulators"], dependencies=[RequireApiKey])
 
@@ -243,13 +245,30 @@ def get_accumulator(
     return _serialize_accumulator(row, display_data)
 
 
+def _ticket_result(
+    row: Accumulator, display_data: dict[uuid.UUID, dict[str, object]]
+) -> dict[str, object]:
+    legs = [
+        (display_data[leg.id]["settlement_outcome"], float(leg.decimal_odds))
+        for leg in row.legs
+    ]
+    result = derive_ticket_result(
+        [outcome for outcome, _ in legs],  # type: ignore[misc]
+        ticket_voided=row.status == TicketStatus.VOID,
+    )
+    odds = ticket_settlement_odds(legs, result)  # type: ignore[arg-type]
+    profit = {"won": (odds or 1.0) - 1.0, "lost": -1.0, "void": 0.0}.get(result)
+    return {"result": result, "settlement_odds": odds, "profit_units": profit}
+
+
 def _serialize_accumulator(
     row: Accumulator, display_data: dict[uuid.UUID, dict[str, object]]
 ) -> AccumulatorOut:
     archived = AccumulatorOut.model_validate(row)
     return AccumulatorOut(
         **{
-            **archived.model_dump(exclude={"legs"}),
+            **archived.model_dump(exclude={"legs", "result", "settlement_odds", "profit_units"}),
+            **_ticket_result(row, display_data),
             "legs": [
                 {
                     **AccumulatorLegOut.model_validate(leg, from_attributes=True).model_dump(),
