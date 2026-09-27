@@ -27,7 +27,7 @@ from qwantej.performance.accumulator_results import (
 )
 
 
-def _effective_leg_outcomes(
+def effective_leg_outcomes(
     session: Session, prediction_ids: set[uuid.UUID]
 ) -> dict[uuid.UUID, str]:
     """Map prediction id -> outcome of its effective (latest, uncorrected) settlement."""
@@ -70,7 +70,7 @@ def accumulator_ticket_records(
         stmt = stmt.where(Accumulator.product == product)
     tickets = list(session.scalars(stmt))
 
-    leg_outcomes = _effective_leg_outcomes(
+    leg_outcomes = effective_leg_outcomes(
         session, {leg.prediction_id for t in tickets for leg in t.legs}
     )
     return [

@@ -44,7 +44,10 @@ PROVIDER_BASE_URL = "https://v3.football.api-sports.io"
 _LIVE_FIXTURE_REFRESH_INTERVAL = timedelta(minutes=2)
 _OVERDUE_FIXTURE_REFRESH_INTERVAL = timedelta(minutes=15)
 _OVERDUE_FIXTURE_THRESHOLD = timedelta(hours=3)
-_TRACKED_FIXTURE_LOOKBACK = timedelta(days=3)
+# Only legs of still-open tickets are polled, and a ticket leaves that set as
+# soon as it settles, so a wide window costs little quota while ensuring a
+# result the feed published late is still picked up.
+_TRACKED_FIXTURE_LOOKBACK = timedelta(days=14)
 
 # These are the only API-Football competitions that have passed the current
 # production validation policy.  Keep the allow-list beside canonical mapping:
