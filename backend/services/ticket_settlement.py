@@ -102,7 +102,7 @@ def _effective_ticket_settlements(
     return current
 
 
-def _same_price(stored: object, odds: float | None) -> bool:
+def _same_price(stored: float | None, odds: float | None) -> bool:
     if stored is None or odds is None:
         return stored is None and odds is None
     return abs(float(stored) - round(odds, 3)) < 5e-4

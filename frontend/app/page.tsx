@@ -40,7 +40,7 @@ export default async function DashboardPage({
       <LiveMatchRefresh />
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">Qwantej / {isToday ? "Today" : fmtIsoDate(selectedDate)}</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">{isToday ? "Today's paper tickets" : `Paper tickets for ${fmtIsoDate(selectedDate)}`}</h1>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">{isToday ? "Today's tickets" : `Tickets for ${fmtIsoDate(selectedDate)}`}</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">Ticket availability and the data behind it, shown in Africa/Blantyre time.</p>
       </div>
 
@@ -101,10 +101,10 @@ export default async function DashboardPage({
             </div>
           </section>
 
-          <section aria-label="Paper tickets for this date">
+          <section aria-label="Tickets for this date">
             <div className="mb-4 flex items-end justify-between gap-4">
-              <div><h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-secondary)]">{isToday ? "Today's" : fmtIsoDate(selectedDate)} paper tickets</h2><p className="mt-1 text-xs text-[var(--text-muted)]">Exact prices and sources are shown on every leg when archived.</p></div>
-              <a href="/accumulators" className="text-xs font-medium text-[var(--accent)] hover:underline">View archive</a>
+              <div><h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-secondary)]">{isToday ? "Today's" : fmtIsoDate(selectedDate)} tickets</h2><p className="mt-1 text-xs text-[var(--text-muted)]">Exact prices and sources are shown on every leg when archived.</p></div>
+              <a href={`/accumulators?date=${selectedDate}`} className="text-xs font-medium text-[var(--accent)] hover:underline">Open in ticket archive</a>
             </div>
             {dateAccumulators.length ? <div className="flex flex-col gap-4">{dateAccumulators.map((acc) => <AccumulatorCard key={acc.id} acc={acc} />)}</div> : <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-surface)] p-6 text-sm text-[var(--text-secondary)] shadow-[var(--surface-shadow)]">No ticket is available to display for this date. The status above explains whether the system is still collecting or no combination qualified.</div>}
           </section>

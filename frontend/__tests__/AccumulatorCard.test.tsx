@@ -99,7 +99,7 @@ describe("AccumulatorCard", () => {
 
   it("renders stake", () => {
     render(<AccumulatorCard acc={BASE} />)
-    expect(screen.getByText(/£10\.00/)).toBeInTheDocument()
+    expect(screen.getByText(/MWK 10\.00/)).toBeInTheDocument()
   })
 
   it("renders fixture identity and executable price source", () => {
@@ -161,7 +161,7 @@ describe("AccumulatorCard", () => {
     expect(screen.getByText("DAILY SAFE ACCA")).toBeInTheDocument()
     expect(screen.getByText(/not value-qualified/i)).toBeInTheDocument()
     expect(screen.getAllByText(/est\. prob/)).toHaveLength(2)
-    expect(screen.queryByText(/£/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/MWK/)).not.toBeInTheDocument()
   })
 
   it("flags a last-resort Daily Pick as a fallback build", () => {
@@ -201,5 +201,27 @@ describe("AccumulatorCard", () => {
     fireEvent.click(screen.getByRole("button", { name: /View evidence for Home FC vs Away FC/ }))
     fireEvent.click(screen.getByRole("tab", { name: "Stats" }))
     expect(screen.getByText("Match statistics are not included in the published ticket archive.")).toBeInTheDocument()
+  })
+
+  it("shows the derived ticket result, not the lifecycle status", () => {
+    const won = { ...BASE, status: "settled", result: "won" as const, settlement_odds: 3.06, profit_units: 2.06 }
+    render(<AccumulatorCard acc={won} />)
+    expect(screen.getByLabelText("Ticket result: won")).toHaveTextContent("WON")
+    expect(screen.queryByText("SETTLED")).not.toBeInTheDocument()
+  })
+
+  it("shows LOST as soon as the ticket is lost", () => {
+    render(<AccumulatorCard acc={{ ...BASE, status: "settled", result: "lost" }} />)
+    expect(screen.getByLabelText("Ticket result: lost")).toHaveTextContent("LOST")
+  })
+
+  it("keeps an administratively voided ticket VOID", () => {
+    render(<AccumulatorCard acc={{ ...BASE, status: "void", result: "won" }} />)
+    expect(screen.getByLabelText("Ticket result: void")).toHaveTextContent("VOID")
+  })
+
+  it("does not describe tickets as paper", () => {
+    render(<AccumulatorCard acc={{ ...BASE, product: "daily_safe", stake: null }} />)
+    expect(document.body.innerHTML).not.toMatch(/paper/i)
   })
 })

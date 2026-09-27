@@ -125,8 +125,15 @@ export default async function ModelsPage({
     <div className="flex flex-col gap-8 p-8">
       <div>
         <h1 className="text-xl font-semibold text-[var(--text-primary)]">Models</h1>
-        <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          Model registry — champion, challenger, development and retired versions
+        <p className="mt-1 max-w-3xl text-sm text-[var(--text-secondary)]">
+          The audit record of every forecasting model version. Each forecast and ticket is stamped
+          with the version that produced it, so results can be traced to exact code and training
+          data. The <strong>champion</strong> produces today&apos;s forecasts; a <strong>challenger</strong> runs
+          alongside it and is only promoted if it beats the champion on settled results. Compare
+          versions on{" "}
+          <a href="/performance?subject_type=prediction" className="font-semibold text-[var(--accent)] hover:underline">
+            Performance → Individual forecasts
+          </a>.
         </p>
       </div>
 

@@ -45,9 +45,13 @@ _LIVE_FIXTURE_REFRESH_INTERVAL = timedelta(minutes=2)
 _OVERDUE_FIXTURE_REFRESH_INTERVAL = timedelta(minutes=15)
 _OVERDUE_FIXTURE_THRESHOLD = timedelta(hours=3)
 # Only legs of still-open tickets are polled, and a ticket leaves that set as
-# soon as it settles, so a wide window costs little quota while ensuring a
-# result the feed published late is still picked up.
-_TRACKED_FIXTURE_LOOKBACK = timedelta(days=14)
+# soon as it settles.  A fixture the feed still reports unresolved long after
+# kickoff is re-polled rarely (every _STALE_FIXTURE_REFRESH_INTERVAL) rather
+# than dropped, so no open ticket is stranded; the lookback is only a sanity
+# cap on genuinely abandoned rows.
+_TRACKED_FIXTURE_LOOKBACK = timedelta(days=60)
+_STALE_FIXTURE_THRESHOLD = timedelta(days=1)
+_STALE_FIXTURE_REFRESH_INTERVAL = timedelta(hours=6)
 
 # These are the only API-Football competitions that have passed the current
 # production validation policy.  Keep the allow-list beside canonical mapping:
@@ -214,12 +218,13 @@ def refresh_tracked_accumulator_fixtures(
     external_ids: list[str] = []
     for row in candidates:
         kickoff = _as_utc(row.kickoff_utc)
-        overdue = now_utc - kickoff >= _OVERDUE_FIXTURE_THRESHOLD
-        refresh_interval = (
-            _OVERDUE_FIXTURE_REFRESH_INTERVAL
-            if overdue and row.status is FixtureStatus.SCHEDULED
-            else _LIVE_FIXTURE_REFRESH_INTERVAL
-        )
+        since_kickoff = now_utc - kickoff
+        if since_kickoff >= _STALE_FIXTURE_THRESHOLD:
+            refresh_interval = _STALE_FIXTURE_REFRESH_INTERVAL
+        elif since_kickoff >= _OVERDUE_FIXTURE_THRESHOLD and row.status is FixtureStatus.SCHEDULED:
+            refresh_interval = _OVERDUE_FIXTURE_REFRESH_INTERVAL
+        else:
+            refresh_interval = _LIVE_FIXTURE_REFRESH_INTERVAL
         if row.latest_snapshot_at is not None:
             last_snapshot_at = _as_utc(row.latest_snapshot_at)
             if now_utc - last_snapshot_at < refresh_interval:

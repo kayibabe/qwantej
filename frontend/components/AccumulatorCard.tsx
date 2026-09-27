@@ -1,8 +1,9 @@
 "use client"
 
 import { useRef, useState } from "react"
-import type { AccumulatorLegOut, AccumulatorOut } from "@/lib/types"
+import type { AccumulatorLegOut, AccumulatorOut, TicketResult } from "@/lib/types"
 import { CURRENCY_SYMBOL, fmtDate, fmtDatetime } from "@/lib/format"
+import { RESULT_LABEL, isDailyPick, resultClass } from "@/lib/tickets"
 import SelectionEvidenceDialog from "@/components/SelectionEvidenceDialog"
 
 const PRODUCT_COLOR: Record<string, string> = {
@@ -15,13 +16,6 @@ const PRODUCT_LABEL_CLASS: Record<string, string> = {
   CORE: "text-[var(--core)]",
   GROWTH: "text-[var(--growth)]",
   ALPHA: "text-[var(--alpha)]",
-}
-
-const STATUS_STYLE: Record<string, string> = {
-  pending: "status-badge status-badge-pending",
-  locked: "status-badge status-badge-locked",
-  settled: "status-badge status-badge-settled",
-  void: "status-badge status-badge-void",
 }
 
 function pct(v: number) {
@@ -85,12 +79,6 @@ function matchStateClass(state: string): string {
   return "text-[var(--text-secondary)] border-[var(--border)] bg-[var(--bg-raised)]"
 }
 
-// Daily Picks ("daily_safe" etc.) are a guaranteed daily product line built
-// without the Value Gate; they must never be presented as value tickets.
-function isDailyPick(product: string): boolean {
-  return product.toLowerCase().startsWith("daily_")
-}
-
 export default function AccumulatorCard({ acc }: { acc: AccumulatorOut }) {
   const [selectedLeg, setSelectedLeg] = useState<AccumulatorLegOut | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
@@ -103,7 +91,9 @@ export default function AccumulatorCard({ acc }: { acc: AccumulatorOut }) {
   const labelClass = daily
     ? "text-[var(--daily)]"
     : PRODUCT_LABEL_CLASS[product] ?? "text-[var(--text-secondary)]"
-  const statusStyle = STATUS_STYLE[acc.status] ?? "status-badge status-badge-development"
+  // The ticket's outcome, derived from its legs exactly as settlement does.
+  // An administratively voided ticket reads VOID whatever its legs say.
+  const result: TicketResult = acc.status === "void" ? "void" : acc.result ?? "pending"
 
   return (
     <article
@@ -121,16 +111,19 @@ export default function AccumulatorCard({ acc }: { acc: AccumulatorOut }) {
               className="shrink-0 rounded border border-[var(--border)] px-1.5 py-0.5 text-[10px] text-[var(--text-secondary)]"
               title={
                 fallback
-                  ? "Thin slate: built with the widest fallback rules, so it may not match its usual risk profile. Not value-qualified; paper only; no stake is recommended."
-                  : "Built from the day's strongest forecasts without the Value Gate. Paper only; no stake is recommended."
+                  ? "Thin slate: built with the widest fallback rules, so it may not match its usual risk profile. Not value-qualified; no stake is recommended."
+                  : "Built from the day's strongest forecasts without the Value Gate. Not value-qualified; no stake is recommended."
               }
             >
               Daily pick · {fallback ? "fallback build · " : ""}not value-qualified
             </span>
           )}
         </div>
-        <span className={`shrink-0 ml-3 ${statusStyle}`}>
-          {acc.status.toUpperCase()}
+        <span
+          className={`shrink-0 ml-3 rounded border px-2 py-0.5 text-xs font-bold tracking-wide ${resultClass(result)}`}
+          aria-label={`Ticket result: ${RESULT_LABEL[result].toLowerCase()}`}
+        >
+          {RESULT_LABEL[result]}
         </span>
       </div>
 

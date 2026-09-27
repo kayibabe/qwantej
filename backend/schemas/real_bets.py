@@ -103,6 +103,21 @@ class RealBetOut(BaseModel):
     history: list[RealBetSettlementOut]
 
 
+class RealBetResultsOut(BaseModel):
+    """Realised results of real-money bets, in the bankroll currency."""
+
+    currency: str
+    n_bets: int
+    n_open: int
+    n_won: int
+    n_lost: int
+    n_void: int
+    n_cashed_out: int
+    settled_stake: Decimal  # stakes on settled bets except voids (refunded)
+    settled_profit: Decimal
+    roi: Decimal | None
+
+
 class RealBetPage(BaseModel):
     items: list[RealBetOut]
     total: int

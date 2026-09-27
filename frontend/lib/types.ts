@@ -13,6 +13,13 @@ export interface PredictionOut {
   qss: number | null
   dqs: number | null
   created_at: string
+  bookmaker?: string | null
+  home_team?: string | null
+  away_team?: string | null
+  kickoff_utc?: string | null
+  competition_name?: string | null
+  /** Effective settlement outcome once settled: win / loss / void / push. */
+  outcome?: string | null
 }
 
 export interface PredictionPage {
@@ -98,7 +105,15 @@ export interface AccumulatorOut {
   risk_policy_version: string | null
   legs: AccumulatorLegOut[]
   created_at: string
+  /** Derived from leg settlements with the same rule the settlement worker uses. */
+  result?: TicketResult
+  /** Decimal odds the decided ticket settles at (void legs drop out of a win). */
+  settlement_odds?: number | null
+  /** Profit on a flat one-unit stake: odds − 1 won, −1 lost, 0 void. */
+  profit_units?: number | null
 }
+
+export type TicketResult = "won" | "lost" | "void" | "pending"
 
 export interface AccumulatorPage {
   items: AccumulatorOut[]
@@ -157,6 +172,10 @@ export interface KPIReportOut {
   volatility: number | null
   // Reliability diagram
   calibration_bins: CalibrationBinOut[] | null
+  /** "real" = recorded stakes; "flat_unit" = 1 unit per priced bet; null = nothing priced settled. */
+  stake_basis?: "real" | "flat_unit" | null
+  /** Kicked off but not settled yet (only on /performance/report). */
+  n_awaiting?: number | null
 }
 
 export interface PerformanceSegmentsOut {
@@ -209,6 +228,29 @@ export interface ModelRegistryPage {
   total: number
   limit: number
   offset: number
+}
+
+// Real money: amounts are exact decimal strings from the API.
+export interface BankrollSummaryOut {
+  account: string
+  currency: string
+  balance: string
+  open_exposure: string
+  available: string
+  open_bets: number
+}
+
+export interface RealBetResultsOut {
+  currency: string
+  n_bets: number
+  n_open: number
+  n_won: number
+  n_lost: number
+  n_void: number
+  n_cashed_out: number
+  settled_stake: string
+  settled_profit: string
+  roi: string | null
 }
 
 export type ResultsGranularity = "year" | "month" | "day"

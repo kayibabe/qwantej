@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { Suspense } from "react"
 import { fetchAccumulatorResults } from "@/lib/api"
+import { periodLabel, productColor, productLabel, productRank } from "@/lib/tickets"
 import type { AccumulatorPeriodResultOut, AccumulatorProductResultOut, ResultsGranularity } from "@/lib/types"
 
 const VIEWS: { value: ResultsGranularity; label: string; limit: number; caption: string }[] = [
@@ -8,40 +9,6 @@ const VIEWS: { value: ResultsGranularity; label: string; limit: number; caption:
   { value: "month", label: "Month", limit: 24, caption: "last 24 months with tickets" },
   { value: "year", label: "Year", limit: 10, caption: "last 10 years with tickets" },
 ]
-
-// Value products first, then the separate Daily Picks line, then anything new.
-const PRODUCT_ORDER = ["core", "growth", "alpha", "daily_safe", "daily_balanced", "daily_bold"]
-
-function productRank(product: string): number {
-  const i = PRODUCT_ORDER.indexOf(product.toLowerCase())
-  return i === -1 ? PRODUCT_ORDER.length : i
-}
-
-function productLabel(product: string): string {
-  return product
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-    .join(" ")
-}
-
-function productColor(product: string): string {
-  const p = product.toLowerCase()
-  if (p.startsWith("daily_")) return "var(--daily)"
-  if (p === "core" || p === "growth" || p === "alpha") return `var(--${p})`
-  return "var(--text-secondary)"
-}
-
-function periodLabel(period: string, granularity: ResultsGranularity): string {
-  if (granularity === "year") return period
-  const [y, m, d] = period.split("-").map(Number)
-  const date = new Date(Date.UTC(y, m - 1, d ?? 1))
-  return date.toLocaleDateString("en-GB", {
-    timeZone: "UTC",
-    ...(granularity === "day" ? { weekday: "short", day: "numeric" } : {}),
-    month: "short",
-    year: "numeric",
-  })
-}
 
 function pct(v: number | null): string {
   return v === null ? "—" : `${(v * 100).toFixed(0)}%`
@@ -149,7 +116,7 @@ async function ResultsTable({ view }: { view: (typeof VIEWS)[number] }) {
       <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
         <table className="w-full text-sm">
           <caption className="sr-only">
-            Accumulator tickets won and lost per product, grouped by {view.label.toLowerCase()} (UTC publication date)
+            Accumulator tickets won and lost per product, grouped by {view.label.toLowerCase()} (Africa/Blantyre publication date)
           </caption>
           <thead className="bg-[var(--bg-surface)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
             <tr>
@@ -167,8 +134,13 @@ async function ResultsTable({ view }: { view: (typeof VIEWS)[number] }) {
               const byProduct = new Map(period.products.map((t) => [t.product, t]))
               return (
                 <tr key={period.period} className="border-t border-[var(--border)] hover:bg-[var(--bg-raised)]">
-                  <th scope="row" className="whitespace-nowrap px-4 py-2 text-left font-mono text-xs font-medium text-[var(--text-primary)]">
-                    <time dateTime={period.period}>{periodLabel(period.period, view.value)}</time>
+                  <th scope="row" className="whitespace-nowrap px-4 py-2 text-left font-mono text-xs font-medium">
+                    <Link
+                      href={`/accumulators?${view.value === "day" ? "date" : view.value}=${period.period}`}
+                      className="text-[var(--accent)] hover:underline"
+                    >
+                      <time dateTime={period.period}>{periodLabel(period.period, view.value)}</time>
+                    </Link>
                   </th>
                   <td className="min-w-[14rem] px-4 py-2"><WinnerChips period={period} /></td>
                   {products.map((p) => (
@@ -196,9 +168,10 @@ export default function ResultsByPeriod({ by }: { by: string | undefined }) {
   return (
     <div className="flex flex-col gap-6">
       <p className="max-w-3xl text-sm text-[var(--text-secondary)]">
-        Which accumulator types won, by year, month and day. Tickets are grouped by UTC publication date. A ticket is
-        lost as soon as any leg loses, and won once every leg is settled with no losses (void legs drop out). Daily
-        Picks are a separate, paper-only line and are not value-qualified.
+        Which accumulator types won, by year, month and day. Tickets are grouped by publication day in Africa/Blantyre
+        time, the same calendar as the Today and Tickets pages. A ticket is lost as soon as any leg loses, and won once
+        every leg is settled with no losses (void legs drop out). Daily Picks are a separate line and are not
+        value-qualified.
       </p>
 
       <nav aria-label="Group results by" className="flex flex-wrap gap-2">
@@ -212,7 +185,7 @@ export default function ResultsByPeriod({ by }: { by: string | undefined }) {
               className={[
                 "rounded border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]",
                 active
-                  ? "border-[var(--accent)] bg-[var(--accent)] text-white"
+                  ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--bg-surface)]"
                   : "border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-raised)]",
               ].join(" ")}
             >
