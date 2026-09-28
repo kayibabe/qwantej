@@ -14,6 +14,7 @@ from backend.api.deps import DbDep
 from backend.core.security import RequireApiKey
 from backend.models import Accumulator, Competition, Fixture, FixtureStatus, OddsQuote
 from backend.schemas.dashboard import TodayStatusOut
+from qwantej.accumulator.daily import RETIRED_PRODUCTS
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"], dependencies=[RequireApiKey])
 PRODUCT_DAY_ZONE = ZoneInfo("Africa/Blantyre")
@@ -102,6 +103,7 @@ def today_status(
             .where(
                 Accumulator.published_at >= day_start,
                 Accumulator.published_at < day_end,
+                Accumulator.product.not_in(RETIRED_PRODUCTS),
             )
         )
         or 0

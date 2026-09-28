@@ -52,15 +52,19 @@ MAX_COMBINATIONS = 250_000
 class DailyProduct(StrEnum):
     SAFE = "daily_safe"
     BALANCED = "daily_balanced"
-    BOLD = "daily_bold"
 
 
 # Build order matters: SAFE takes the strongest legs first.
 DAILY_PRODUCTS: tuple[DailyProduct, ...] = (
     DailyProduct.SAFE,
     DailyProduct.BALANCED,
-    DailyProduct.BOLD,
 )
+
+# Withdrawn products (owner decision 2026-09-28). They are never built again,
+# and their already-archived tickets — kept because the archive is
+# append-only — are excluded from every ticket listing, count and
+# performance report.
+RETIRED_PRODUCTS: frozenset[str] = frozenset({"daily_bold"})
 
 
 @dataclass(frozen=True)
@@ -216,26 +220,6 @@ DAILY_LADDERS: dict[DailyProduct, tuple[DailyTicketLevel, ...]] = {
             min_combined_odds=Decimal("2.50"), max_combined_odds=Decimal("8.00"),
             min_leg_odds=Decimal("1.15"), max_leg_odds=Decimal("2.80"),
             min_leg_probability=0.38, max_model_deficit=0.12,
-            max_legs_per_league=2, maximise="expected_return",
-            max_quote_age=_RELAXED_QUOTE_AGE,
-        ),
-        _LAST_RESORT,
-    ),
-    DailyProduct.BOLD: (
-        DailyTicketLevel(
-            version="daily-bold-v1",
-            min_legs=4, max_legs=5,
-            min_combined_odds=Decimal("6.00"), max_combined_odds=Decimal("15.00"),
-            min_leg_odds=Decimal("1.35"), max_leg_odds=Decimal("3.20"),
-            min_leg_probability=0.33, max_model_deficit=0.08,
-            max_legs_per_league=2, maximise="expected_return",
-        ),
-        DailyTicketLevel(
-            version="daily-bold-relaxed-v1",
-            min_legs=3, max_legs=5,
-            min_combined_odds=Decimal("4.50"), max_combined_odds=Decimal("20.00"),
-            min_leg_odds=Decimal("1.20"), max_leg_odds=Decimal("4.00"),
-            min_leg_probability=0.28, max_model_deficit=0.12,
             max_legs_per_league=2, maximise="expected_return",
             max_quote_age=_RELAXED_QUOTE_AGE,
         ),

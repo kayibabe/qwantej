@@ -82,8 +82,8 @@ describe("labels", () => {
   })
 
   it("orders value products before Daily Picks", () => {
-    const sorted = ["daily_bold", "unknown", "core", "daily_safe", "alpha"].sort((a, b) => productRank(a) - productRank(b))
-    expect(sorted).toEqual(["core", "alpha", "daily_safe", "daily_bold", "unknown"])
+    const sorted = ["daily_balanced", "unknown", "core", "daily_safe", "alpha"].sort((a, b) => productRank(a) - productRank(b))
+    expect(sorted).toEqual(["core", "alpha", "daily_safe", "daily_balanced", "unknown"])
   })
 
   it("formats signed units and percentages", () => {
