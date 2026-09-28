@@ -10,6 +10,15 @@ import SortableHeader from "@/components/SortableHeader"
 export const metadata: Metadata = { title: "Forecasts" }
 
 const LIMIT = 50
+type Scope = "all" | "production" | "research" | "awaiting" | "overdue"
+
+const SCOPE_OPTIONS: { value: Scope; label: string; description: string }[] = [
+  { value: "production", label: "Published production", description: "Gate-passed forecasts used for production signals" },
+  { value: "awaiting", label: "Awaiting settlement", description: "Future fixtures without an effective result" },
+  { value: "overdue", label: "Settlement overdue", description: "Past kickoffs without an effective result" },
+  { value: "research", label: "Research", description: "Research-mode forecasts kept outside production" },
+  { value: "all", label: "All archived", description: "Every priced forecast, including rejected rows" },
+]
 
 const OUTCOME: Record<string, { label: string; cls: string }> = {
   win: { label: "WON", cls: "text-[var(--win)] border-[var(--win)]/40 bg-[var(--win)]/10" },
@@ -81,16 +90,18 @@ function PredictionRow({ p }: { p: PredictionOut }) {
 
 async function PredictionsTable({
   market,
+  scope,
   sort,
   dir,
   offset,
 }: {
   market: string | undefined
+  scope: Scope
   sort: string | undefined
   dir: "asc" | "desc" | undefined
   offset: number
 }) {
-  const page = await fetchPredictions({ market, sort, dir, limit: LIMIT, offset, priced_only: true }).catch(() => null)
+  const page = await fetchPredictions({ market, scope, sort, dir, limit: LIMIT, offset, priced_only: true }).catch(() => null)
 
   if (!page) {
     return <p className="text-sm text-[var(--loss)]">Could not load forecasts.</p>
@@ -137,6 +148,10 @@ export default async function PredictionsPage({
 }) {
   const sp = await searchParams
   const market = typeof sp.market === "string" ? sp.market : undefined
+  const requestedScope = typeof sp.scope === "string" ? sp.scope : undefined
+  const scope: Scope = SCOPE_OPTIONS.some((option) => option.value === requestedScope)
+    ? requestedScope as Scope
+    : "production"
   const sort = typeof sp.sort === "string" ? sp.sort : undefined
   const dir = sp.dir === "asc" ? "asc" : sp.dir === "desc" ? "desc" : undefined
   const offset = Math.max(0, Number(sp.offset ?? 0) || 0)
@@ -147,19 +162,41 @@ export default async function PredictionsPage({
       <div>
         <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Forecasts</h1>
         <p className="mt-1 max-w-3xl text-sm text-[var(--text-secondary)]">
-          Every archived forecast that had a bookmaker price, with the match it was for and how it settled.
-          Forecasts without odds are hidden: they could not have been bet. Research and gate status show whether a row is audit evidence or a value-qualified signal; overdue settlements need a fixture refresh.
+          Archived forecasts with bookmaker prices, separated by operational purpose. Start with production forecasts,
+          then open the research or full archive views when you need audit evidence. Forecasts without odds remain hidden because they could not have been bet.
         </p>
       </div>
 
-      <nav aria-label="Filter by market" className="flex flex-wrap gap-2">
+      <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 shadow-[var(--surface-shadow)]" aria-labelledby="forecast-scope-heading">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <div>
+            <h2 id="forecast-scope-heading" className="text-sm font-semibold text-[var(--text-primary)]">Choose a forecast view</h2>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">{SCOPE_OPTIONS.find((option) => option.value === scope)?.description}</p>
+          </div>
+          <span className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">{scope === "all" ? "Audit archive" : scope}</span>
+        </div>
+        <nav aria-label="Forecast scope" className="mt-3 flex flex-wrap gap-2">
+          {SCOPE_OPTIONS.map((option) => {
+            const active = scope === option.value
+            const params = new URLSearchParams({ scope: option.value, offset: "0" })
+            if (market) params.set("market", market)
+            if (sort) { params.set("sort", sort); params.set("dir", dir ?? "desc") }
+            return <a key={option.value} href={`?${params.toString()}`} aria-current={active ? "page" : undefined} className={["rounded border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]", active ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--bg-surface)]" : "border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-raised)]"].join(" ")}>{option.label}</a>
+          })}
+        </nav>
+      </section>
+
+      <nav aria-label="Filter by market" className="flex flex-wrap items-center gap-2">
+        <span className="mr-1 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Market</span>
         {["", ...markets].map((m) => {
           const active = (market ?? "") === m
-          const sortQuery = sort ? `&sort=${encodeURIComponent(sort)}&dir=${dir ?? "desc"}` : ""
+          const params = new URLSearchParams({ scope, offset: "0" })
+          if (m) params.set("market", m)
+          if (sort) { params.set("sort", sort); params.set("dir", dir ?? "desc") }
           return (
             <a
               key={m || "all"}
-              href={`?${m ? `market=${encodeURIComponent(m)}&` : ""}offset=0${sortQuery}`}
+              href={`?${params.toString()}`}
               aria-current={active ? "page" : undefined}
               className={[
                 "rounded border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]",
@@ -175,10 +212,10 @@ export default async function PredictionsPage({
       </nav>
 
       <Suspense
-        key={`${market}-${sort}-${dir}-${offset}`}
+        key={`${market}-${scope}-${sort}-${dir}-${offset}`}
         fallback={<p className="animate-pulse text-sm text-[var(--text-muted)]">Loading…</p>}
       >
-        <PredictionsTable market={market} sort={sort} dir={dir} offset={offset} />
+        <PredictionsTable market={market} scope={scope} sort={sort} dir={dir} offset={offset} />
       </Suspense>
     </div>
   )

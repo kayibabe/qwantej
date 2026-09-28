@@ -45,6 +45,7 @@ async function apiFetch<T>(path: string, params?: Record<string, string | number
 export function fetchPredictions(params: {
   fixture_id?: string
   market?: string
+  scope?: "all" | "production" | "research" | "awaiting" | "overdue"
   /** Only forecasts that carry a bookmaker price. */
   priced_only?: boolean
   sort?: string

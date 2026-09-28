@@ -22,7 +22,7 @@ export default function WorkspaceHeader() {
     <header className="workspace-header">
       <div className="workspace-research-status">
         <span className="workspace-status-dot" aria-hidden="true" />
-        <span>Live results</span>
+        <span>Data context</span>
         <span className="workspace-theme"><ThemeToggle /></span>
       </div>
       <div className="workspace-context" aria-live="polite"><strong>{context.title}</strong><span>{context.subtitle}</span></div>

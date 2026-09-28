@@ -88,8 +88,19 @@ export default async function DashboardPage({
             </div>
           </section>
 
-          <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-5 shadow-[var(--surface-shadow)] sm:p-6" aria-label="Run details">
-            <h2 className="text-base font-semibold text-[var(--text-primary)]">Run details</h2>
+          <section aria-label="Tickets for this date">
+            <div className="mb-4 flex items-end justify-between gap-4">
+              <div><h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-secondary)]">{isToday ? "Today's" : fmtIsoDate(selectedDate)} tickets</h2><p className="mt-1 text-xs text-[var(--text-muted)]">Exact prices and sources are shown on every leg when archived.</p></div>
+              <a href={ticketArchiveHref("day", selectedDate)} className="text-xs font-medium text-[var(--accent)] hover:underline">Open in ticket archive</a>
+            </div>
+            {dateAccumulators.length ? <div className="flex flex-col gap-4">{dateAccumulators.map((acc) => <AccumulatorCard key={acc.id} acc={acc} />)}</div> : <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-surface)] p-6 text-sm text-[var(--text-secondary)] shadow-[var(--surface-shadow)]">No ticket is available to display for this date. The status above explains whether the system is still collecting or no combination qualified.</div>}
+          </section>
+
+          <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-5 shadow-[var(--surface-shadow)] sm:p-6" aria-label="Data freshness and run details">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-base font-semibold text-[var(--text-primary)]">Data freshness &amp; run details</h2>
+              <span className="text-xs text-[var(--text-muted)]">Operational context for this date</span>
+            </div>
             <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               <div><p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Latest validated-league price observation</p><p className="mt-1 text-sm text-[var(--text-primary)]">{today.data_freshness_utc ? fmtDatetime(today.data_freshness_utc) : "None recorded for this date"}</p></div>
               <div><p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Next scheduled run</p><p className="mt-1 text-sm text-[var(--text-primary)]">{today.next_run_utc ? fmtDatetime(today.next_run_utc) : "Not currently reported"}</p></div>
@@ -100,14 +111,6 @@ export default async function DashboardPage({
               <p className="mt-1 text-sm text-[var(--text-primary)]">{today.observed_fixture_count ? `${today.observed_fixture_count} scheduled fixtures observed across ${observedLeagueCount} ${observedLeagueCount === 1 ? "league" : "leagues"}` : "No scheduled fixtures observed"}</p>
               {observedLeagueCount > 0 && <details className="mt-2 text-sm text-[var(--text-secondary)]"><summary className="w-fit cursor-pointer font-medium text-[var(--accent)] hover:underline">View observed leagues</summary><p className="mt-2 max-w-3xl leading-6">{today.observed_leagues.join(", ")}</p></details>}
             </div>
-          </section>
-
-          <section aria-label="Tickets for this date">
-            <div className="mb-4 flex items-end justify-between gap-4">
-              <div><h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-secondary)]">{isToday ? "Today's" : fmtIsoDate(selectedDate)} tickets</h2><p className="mt-1 text-xs text-[var(--text-muted)]">Exact prices and sources are shown on every leg when archived.</p></div>
-              <a href={ticketArchiveHref("day", selectedDate)} className="text-xs font-medium text-[var(--accent)] hover:underline">Open in ticket archive</a>
-            </div>
-            {dateAccumulators.length ? <div className="flex flex-col gap-4">{dateAccumulators.map((acc) => <AccumulatorCard key={acc.id} acc={acc} />)}</div> : <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-surface)] p-6 text-sm text-[var(--text-secondary)] shadow-[var(--surface-shadow)]">No ticket is available to display for this date. The status above explains whether the system is still collecting or no combination qualified.</div>}
           </section>
         </>
       )}

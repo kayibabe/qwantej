@@ -67,6 +67,16 @@ SortField = Literal[
     "outcome",
 ]
 SortDir = Literal["asc", "desc"]
+PredictionScope = Literal["all", "production", "research", "awaiting", "overdue"]
+
+
+def _effective_settlement_exists() -> ColumnElement[bool]:
+    """Correlated check for a non-superseded prediction settlement."""
+    return select(Settlement.id).where(
+        Settlement.subject_type == "prediction",
+        Settlement.subject_id == Prediction.id,
+        Settlement.id.not_in(_SUPERSEDED_SETTLEMENTS),
+    ).exists()
 
 
 def _serialize(rows: list[Prediction], db: DbDep) -> list[PredictionOut]:
@@ -155,6 +165,7 @@ def list_predictions(
     fixture_id: Annotated[uuid.UUID | None, Query()] = None,
     market: Annotated[str | None, Query(max_length=40)] = None,
     priced_only: Annotated[bool, Query()] = False,
+    scope: Annotated[PredictionScope, Query()] = "all",
     sort: Annotated[SortField | None, Query()] = None,
     direction: Annotated[SortDir, Query(alias="dir")] = "desc",
     limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 50,
@@ -166,6 +177,7 @@ def list_predictions(
     - ``fixture_id`` — restrict to one fixture
     - ``market`` — restrict to one market (case-sensitive; e.g. ``1X2``)
     - ``priced_only`` — only forecasts with a bookmaker price (``executable_odds``)
+    - ``scope`` — ``production``, ``research``, ``awaiting``, ``overdue``, or ``all``
 
     Optional sort:
     - ``sort`` — one of the allowlisted columns in ``_SORT_COLUMNS``
@@ -178,6 +190,20 @@ def list_predictions(
         stmt = stmt.where(Prediction.market == market)
     if priced_only:
         stmt = stmt.where(Prediction.executable_odds.is_not(None))
+    if scope == "production":
+        stmt = stmt.where(
+            Prediction.research_mode.is_(False),
+            Prediction.gate_passed.is_(True),
+        )
+    elif scope == "research":
+        stmt = stmt.where(Prediction.research_mode.is_(True))
+    elif scope in {"awaiting", "overdue"}:
+        now = datetime.now(UTC)
+        kickoff = select(Fixture.kickoff_utc).where(
+            Fixture.id == Prediction.fixture_id
+        ).scalar_subquery()
+        stmt = stmt.where(~_effective_settlement_exists())
+        stmt = stmt.where(kickoff > now if scope == "awaiting" else kickoff <= now)
 
     total: int = db.scalar(
         select(func.count()).select_from(stmt.subquery())

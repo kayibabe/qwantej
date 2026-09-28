@@ -135,6 +135,27 @@ class TestListPredictions:
         assert data["total"] == 1
         assert data["items"][0]["market"] == "1X2"
 
+    def test_scope_filters_preserve_production_research_and_overdue_boundaries(self, seeded_client) -> None:
+        client, _, _ = seeded_client
+
+        production = client.get("/predictions", params={"scope": "production"}).json()
+        assert production["total"] == 1
+        assert production["items"][0]["research_mode"] is False
+
+        research = client.get("/predictions", params={"scope": "research"}).json()
+        assert research["total"] == 1
+        assert research["items"][0]["research_mode"] is True
+
+        overdue = client.get("/predictions", params={"scope": "overdue"}).json()
+        assert overdue["total"] == 2
+        assert all(item["settlement_overdue"] for item in overdue["items"])
+
+    def test_scope_awaiting_excludes_past_unsettled_forecasts(self, seeded_client) -> None:
+        client, _, _ = seeded_client
+        response = client.get("/predictions", params={"scope": "awaiting"})
+        assert response.status_code == 200
+        assert response.json()["total"] == 0
+
     def test_pagination_limit(self, seeded_client) -> None:
         client, _, _ = seeded_client
         r = client.get("/predictions", params={"limit": 1, "offset": 0})

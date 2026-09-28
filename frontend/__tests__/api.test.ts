@@ -57,6 +57,14 @@ describe("fetchPredictions", () => {
     expect(url.searchParams.get("priced_only")).toBe("true")
   })
 
+  it("passes the forecast scope to the server", async () => {
+    mockFetch.mockReturnValueOnce(makeResponse({ items: [], total: 0, limit: 50, offset: 0 }))
+    await fetchPredictions({ scope: "overdue", priced_only: true })
+    const url = new URL(mockFetch.mock.calls[0][0])
+    expect(url.searchParams.get("scope")).toBe("overdue")
+    expect(url.searchParams.get("priced_only")).toBe("true")
+  })
+
   it("omits priced_only when not requested", async () => {
     mockFetch.mockReturnValueOnce(makeResponse({ items: [], total: 0, limit: 50, offset: 0 }))
     await fetchPredictions({})
