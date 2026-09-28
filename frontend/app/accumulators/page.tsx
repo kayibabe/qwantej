@@ -73,7 +73,11 @@ async function TicketTree({ request }: { request: Request }) {
   return (
     <div className="flex flex-col gap-4">
       <ScrollToHash />
-      <TicketStakeSimulator periods={years.periods} />
+      <TicketStakeSimulator
+        periods={{ year: years.periods, month: months.periods, day: dayPeriods }}
+        initialScope={focus ? { granularity: "month", period: focus } : undefined}
+        initialTickets={complete ? focusTickets.items : null}
+      />
       {years.periods.map((y) => {
         const yearMonths = months.periods.filter((m) => m.period.startsWith(`${y.period}-`))
         return (

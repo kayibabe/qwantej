@@ -176,6 +176,23 @@ export function simulateTicketStake(
   }
 }
 
+/** Replay one hypothetical stake against the selected immutable ticket rows. */
+export function simulateTicketRows(
+  tickets: readonly { result?: string; profit_units?: number | null }[],
+  stakePerTicket: number,
+): TicketStakeSimulation | null {
+  if (!Number.isFinite(stakePerTicket) || stakePerTicket <= 0) return null
+  let settledTickets = 0
+  let flatUnitProfit = 0
+  for (const ticket of tickets) {
+    if (ticket.result !== "won" && ticket.result !== "lost") continue
+    if (typeof ticket.profit_units !== "number") return null
+    settledTickets += 1
+    flatUnitProfit += ticket.profit_units
+  }
+  return { settledTickets, flatUnitProfit, roi: settledTickets ? flatUnitProfit / settledTickets : null }
+}
+
 /** Collapse a period's per-product tallies into one row. */
 export function summarisePeriod(period: AccumulatorPeriodResultOut): PeriodSummary {
   const t = period.products.reduce(

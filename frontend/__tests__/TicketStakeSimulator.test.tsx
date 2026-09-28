@@ -1,15 +1,22 @@
 import { fireEvent, render, screen } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
 import TicketStakeSimulator from "@/components/tickets/TicketStakeSimulator"
+import type { AccumulatorOut } from "@/lib/types"
 
-const periods = [{
+const period = {
   period: "2026",
   products: [{ product: "core", daily_pick: false, won: 2, lost: 1, void: 1, pending: 2, total: 6, win_rate: 2 / 3, profit_units: 1.5 }],
-}]
+}
+const tickets = [
+  { id: "won", product: "core", combined_odds: 3.5, result: "won", profit_units: 2.5 },
+  { id: "won-2", product: "core", combined_odds: 2, result: "won", profit_units: 0 },
+  { id: "lost", product: "core", combined_odds: 2, result: "lost", profit_units: -1 },
+  { id: "void", product: "core", combined_odds: 2, result: "void", profit_units: 0 },
+] as AccumulatorOut[]
 
 describe("TicketStakeSimulator", () => {
   it("shows an archived flat-stake P&L replay without including void or pending tickets", () => {
-    render(<TicketStakeSimulator periods={periods} />)
+    render(<TicketStakeSimulator periods={{ year: [period], month: [period], day: [period] }} initialScope={{ granularity: "year", period: "2026" }} initialTickets={tickets} />)
     fireEvent.change(screen.getByLabelText("Simulated stake per ticket"), { target: { value: "100" } })
 
     expect(screen.getByText("Settled tickets")).toBeInTheDocument()
@@ -18,5 +25,9 @@ describe("TicketStakeSimulator", () => {
     expect(screen.getByText("+MWK 150")).toBeInTheDocument()
     expect(screen.getByText("+50.0%")).toBeInTheDocument()
     expect(screen.getByText(/not a recommended stake and is not saved/i)).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText("Tickets"), { target: { value: "won" } })
+    expect(screen.getByText("MWK 100")).toBeInTheDocument()
+    expect(screen.getByText("+MWK 250")).toBeInTheDocument()
   })
 })
