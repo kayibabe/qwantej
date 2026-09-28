@@ -72,3 +72,37 @@ Add `--include-research` for the secondary view that includes shadow rows.
   negative ROI points to price or calibration problems, not an edge.
 
 Tests: `pytest tests/test_rule_test.py`.
+
+## Model vs market vs outcome
+
+`model_vs_market.py` reads the same extract and asks a different question:
+how do the model's probabilities compare with the de-vigged market's, judged
+against what actually happened? It grades every forecast from the final score
+with the production grader, so unsettled shadow forecasts count too.
+
+```powershell
+.venv\Scripts\python.exe scripts\rule_test\model_vs_market.py scripts\rule_test\out\prod.csv --label "production" --out scripts\rule_test\out\prod_model_vs_market.md
+```
+
+It needs the repository (it imports `backend.services.settlement`) and
+pandas/numpy from `.venv`, so run it locally on the extract, not in the
+container.
+
+What the report contains:
+
+- **Market price coherence:** for each market, the stored fair probabilities
+  over a complete selection set must sum to 1 (1X2, BTTS, totals) or 2
+  (Double Chance). A market that misses by more than 0.05 is marked
+  **INCOHERENT** and left out of the headline comparison.
+- **Live and research/shadow sections**, never pooled. Research rows with a
+  decision time after kickoff are counted but kept.
+- **Probability layers:** Brier, log loss, ECE and hit rate for the ensemble,
+  calibrated and conservative layers, the de-vigged market and raw 1/odds.
+- **Paired Brier:** model minus market on shared rows (negative means the
+  model is better), with a 95% interval that resamples whole fixtures.
+- **Per market:** paired Brier and a model-vs-market disagreement table with
+  flat-stake ROI, so one market cannot distort another.
+- **Calibration tables**, and breakdowns by market/selection, value-gate
+  result and league, each with the same evidence labels as above.
+
+Tests: `pytest tests/test_model_vs_market.py`.
