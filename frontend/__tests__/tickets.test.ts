@@ -10,6 +10,7 @@ import {
   productDay,
   productLabel,
   productRank,
+  simulateTicketStake,
   summarisePeriod,
   ticketArchiveHref,
 } from "@/lib/tickets"
@@ -71,6 +72,25 @@ describe("summarisePeriod", () => {
   it("has no win rate until something is decided", () => {
     const s = summarisePeriod({ period: "2026", products: [{ product: "core", daily_pick: false, won: 0, lost: 0, void: 0, pending: 3, total: 3, win_rate: null }] })
     expect(s.winRate).toBeNull()
+  })
+})
+
+describe("simulateTicketStake", () => {
+  const periods = [{
+    period: "2026",
+    products: [
+      { product: "core", daily_pick: false, won: 2, lost: 1, void: 1, pending: 3, total: 7, win_rate: 2 / 3, profit_units: 1.5 },
+      { product: "daily_safe", daily_pick: true, won: 0, lost: 1, void: 0, pending: 0, total: 1, win_rate: 0, profit_units: -1 },
+    ],
+  }]
+
+  it("uses one hypothetical stake for every priced win/loss, excluding voids and pending tickets", () => {
+    expect(simulateTicketStake(periods, 100)).toEqual({ settledTickets: 4, flatUnitProfit: 0.5, roi: 0.125 })
+  })
+
+  it("rejects non-positive stakes and incomplete historical P&L", () => {
+    expect(simulateTicketStake(periods, 0)).toBeNull()
+    expect(simulateTicketStake([{ ...periods[0], products: [{ ...periods[0].products[0], profit_units: undefined }] }], 100)).toBeNull()
   })
 })
 

@@ -17,6 +17,7 @@ import LiveMatchRefresh from "@/components/LiveMatchRefresh"
 import DayGroup from "@/components/tickets/DayGroup"
 import GroupSummary, { Chevron } from "@/components/tickets/GroupSummary"
 import ScrollToHash from "@/components/tickets/ScrollToHash"
+import TicketStakeSimulator from "@/components/tickets/TicketStakeSimulator"
 
 export const metadata: Metadata = { title: "Tickets" }
 
@@ -72,6 +73,7 @@ async function TicketTree({ request }: { request: Request }) {
   return (
     <div className="flex flex-col gap-4">
       <ScrollToHash />
+      <TicketStakeSimulator periods={years.periods} />
       {years.periods.map((y) => {
         const yearMonths = months.periods.filter((m) => m.period.startsWith(`${y.period}-`))
         return (

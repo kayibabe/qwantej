@@ -141,6 +141,41 @@ export interface PeriodSummary {
   profit: number | null
 }
 
+/**
+ * A read-only replay of the archive at one hypothetical flat stake per
+ * priced, decided ticket. Void and pending tickets do not contribute a stake
+ * or P&L, matching the performance report's flat-unit convention.
+ */
+export interface TicketStakeSimulation {
+  settledTickets: number
+  flatUnitProfit: number
+  roi: number | null
+}
+
+export function simulateTicketStake(
+  periods: readonly AccumulatorPeriodResultOut[],
+  stakePerTicket: number,
+): TicketStakeSimulation | null {
+  if (!Number.isFinite(stakePerTicket) || stakePerTicket <= 0) return null
+
+  let settledTickets = 0
+  let flatUnitProfit = 0
+  for (const period of periods) {
+    for (const product of period.products) {
+      // An older API response without the immutable flat-unit result cannot
+      // support an honest monetary replay.
+      if (typeof product.profit_units !== "number") return null
+      settledTickets += product.won + product.lost
+      flatUnitProfit += product.profit_units
+    }
+  }
+  return {
+    settledTickets,
+    flatUnitProfit,
+    roi: settledTickets ? flatUnitProfit / settledTickets : null,
+  }
+}
+
 /** Collapse a period's per-product tallies into one row. */
 export function summarisePeriod(period: AccumulatorPeriodResultOut): PeriodSummary {
   const t = period.products.reduce(
