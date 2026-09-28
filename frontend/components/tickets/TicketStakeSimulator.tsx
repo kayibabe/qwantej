@@ -35,7 +35,9 @@ export default function TicketStakeSimulator({ periods, initialScope, initialTic
   const [loading, setLoading] = useState(initialTickets === null)
 
   const options = periods[granularity]
-  const selectedTickets = tickets?.filter((ticket) => ticketId === "all" || ticket.id === ticketId) ?? []
+  const selectedTickets = tickets?.filter((ticket) =>
+    ticketId === "all" || ticket.product === ticketId
+  ) ?? []
   const stake = value === "" ? null : Number(value)
   const simulation = stake === null || tickets === null ? null : simulateTicketRows(selectedTickets, stake)
   const invalid = value !== "" && simulation === null && tickets !== null
@@ -89,8 +91,9 @@ export default function TicketStakeSimulator({ periods, initialScope, initialTic
           <label className="grid min-w-0 gap-1 text-sm font-semibold text-[var(--text-secondary)]">
             Tickets
             <select value={ticketId} onChange={(event) => setTicketId(event.target.value)} disabled={loading || tickets === null} className="h-10 min-w-0 max-w-full rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 font-normal text-[var(--text-primary)] focus-visible:outline-2 focus-visible:outline-[var(--accent)]">
-              <option value="all">All tickets</option>
-              {tickets?.map((ticket, index) => <option key={ticket.id} value={ticket.id}>Ticket {index + 1} · {ticket.product} · {ticket.combined_odds.toFixed(2)} odds</option>)}
+              <option value="all">All ACCA tickets</option>
+              <option value="daily_balanced">Daily Balanced ACCA</option>
+              <option value="daily_safe">Daily Safe ACCA</option>
             </select>
           </label>
         </div>
