@@ -1,20 +1,25 @@
 # Railway configuration for the Qwantej backend (FastAPI API service).
 #
-# The PostgreSQL database lives on Neon, not Railway — set DATABASE_URL
-# to the Neon pooled connection string in the Railway service's Variables tab.
+# The PostgreSQL database is a Railway-managed Postgres service ("Postgres")
+# in the same Railway project — set DATABASE_URL to a variable reference in
+# the Railway service's Variables tab, not a copy-pasted connection string:
+#   postgresql+psycopg://${{Postgres.PGUSER}}:${{Postgres.PGPASSWORD}}@${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/${{Postgres.PGDATABASE}}
 #
-# TWO Railway services are required (both pointing at this GitHub repo):
+# FOUR Railway services are required, all in the same project:
 #
-#   1. qwantej-api    — web process (this file)
+#   1. qwantej-api       — web process (this file)
 #   2. qwantej-scheduler — worker process (same repo, different start command)
+#   3. qwantej-frontend  — Next.js app (frontend/railway.toml)
+#   4. Postgres          — the database itself (Railway's Postgres template)
 #
 # For the scheduler service, set the start command in the Railway dashboard to:
 #   python -m backend.workers.scheduler
 # (or Railway will pick up the "worker" entry from the Procfile).
 #
-# IMPORTANT: disable "deploy on push" for both services in the Railway
-# dashboard to preserve the manual-deploy governance rule (DEVELOPMENT.md §6).
-# Only trigger a deploy after CI is green and migrations have been applied.
+# IMPORTANT: disable "deploy on push" for qwantej-api, qwantej-scheduler, and
+# qwantej-frontend in the Railway dashboard to preserve the manual-deploy
+# governance rule (DEVELOPMENT.md §6). Only trigger a deploy after CI is
+# green and migrations have been applied.
 
 [build]
 builder = "nixpacks"
