@@ -10,9 +10,10 @@ from sqlalchemy.orm import InstrumentedAttribute
 
 from backend.api.deps import DbDep
 from backend.core.security import RequireApiKey
-from backend.models import Settlement
+from backend.models import Accumulator, Settlement
 from backend.models import SettlementOutcome as OrmOutcome
 from backend.schemas.settlements import SettlementOut, SettlementPage, SettlementSummary
+from qwantej.accumulator.daily import RETIRED_PRODUCTS
 
 router = APIRouter(prefix="/settlements", tags=["settlements"], dependencies=[RequireApiKey])
 
@@ -45,16 +46,21 @@ def _effective_stmt(subject_type: str):
     """Base statement for effective (non-superseded) settlements of *subject_type*.
 
     A row is "effective" when its id has not been named in another row's
-    supersedes_id, i.e. it has not been replaced by a correction.
+    supersedes_id, i.e. it has not been replaced by a correction. Settlements
+    of retired-product tickets are excluded.
     """
     superseded_ids = select(Settlement.supersedes_id).where(
         Settlement.supersedes_id.is_not(None)
+    )
+    retired_tickets = select(Accumulator.id).where(
+        Accumulator.product.in_(RETIRED_PRODUCTS)
     )
     return (
         select(Settlement)
         .where(
             Settlement.subject_type == subject_type,
             Settlement.id.not_in(superseded_ids),
+            Settlement.subject_id.not_in(retired_tickets),
         )
     )
 

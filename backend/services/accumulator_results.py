@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from backend.models import Accumulator, Settlement
 from backend.models.settlements import TicketStatus
+from qwantej.accumulator.daily import RETIRED_PRODUCTS
 from qwantej.performance.accumulator_results import (
     Granularity,
     PeriodTally,
@@ -63,7 +64,11 @@ def accumulator_ticket_records(
     product: str | None = None,
 ) -> list[TicketRecord]:
     """Return every ticket published in ``[since, until)`` with its derived result."""
-    stmt = select(Accumulator).options(selectinload(Accumulator.legs))
+    stmt = (
+        select(Accumulator)
+        .where(Accumulator.product.not_in(RETIRED_PRODUCTS))
+        .options(selectinload(Accumulator.legs))
+    )
     if since is not None:
         stmt = stmt.where(Accumulator.published_at >= since)
     if until is not None:

@@ -9,7 +9,7 @@ import type { AccumulatorPeriodResultOut, ResultsGranularity, TicketResult } fro
 const PRODUCT_DAY_OFFSET = "+02:00"
 
 // Value products first, then the separate Daily Picks line, then anything new.
-const PRODUCT_ORDER = ["core", "growth", "alpha", "daily_safe", "daily_balanced", "daily_bold"]
+const PRODUCT_ORDER = ["core", "growth", "alpha", "daily_safe", "daily_balanced"]
 
 export function productRank(product: string): number {
   const i = PRODUCT_ORDER.indexOf(product.toLowerCase())

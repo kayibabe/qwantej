@@ -25,6 +25,7 @@ from backend.models import (
 from backend.models.fixtures import Fixture
 from backend.models.settlements import TicketStatus
 from backend.schemas.accumulators import AccumulatorLegOut, AccumulatorOut, AccumulatorPage
+from qwantej.accumulator.daily import RETIRED_PRODUCTS
 from qwantej.performance.accumulator_results import (
     derive_ticket_result,
     flat_unit_profit,
@@ -197,7 +198,7 @@ def list_accumulators(
     """
     if since is not None and until is not None and since >= until:
         raise HTTPException(status_code=422, detail="since must be before until")
-    base_stmt = select(Accumulator)
+    base_stmt = select(Accumulator).where(Accumulator.product.not_in(RETIRED_PRODUCTS))
     if status is not None:
         base_stmt = base_stmt.where(Accumulator.status == status)
     if since is not None:
@@ -257,7 +258,10 @@ def get_accumulator(
     )
     row = db.scalar(
         select(Accumulator)
-        .where(Accumulator.id == accumulator_id)
+        .where(
+            Accumulator.id == accumulator_id,
+            Accumulator.product.not_in(RETIRED_PRODUCTS),
+        )
         .options(_leg_load)
     )
     if row is None:

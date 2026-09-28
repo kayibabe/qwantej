@@ -35,6 +35,7 @@ from backend.models import (
 from backend.models import SettlementOutcome as OrmOutcome
 from backend.models.registry import ModelRegistry
 from backend.models.settlements import TicketStatus
+from qwantej.accumulator.daily import RETIRED_PRODUCTS
 from qwantej.performance.kpi import (
     KPIReport,
     PerformanceObservation,
@@ -174,6 +175,7 @@ def query_performance_observations(
         .where(
             Settlement.subject_type == subject_type,
             Settlement.id.not_in(superseded_ids_subq),
+            Accumulator.product.not_in(RETIRED_PRODUCTS),
         )
         .order_by(Settlement.settled_at, Settlement.id)
     )
@@ -238,6 +240,7 @@ def awaiting_settlement_count(
         stmt = select(func.count()).select_from(Accumulator).where(
             Accumulator.status.in_([TicketStatus.PENDING, TicketStatus.LOCKED]),
             Accumulator.id.in_(started),
+            Accumulator.product.not_in(RETIRED_PRODUCTS),
         )
     else:
         settled = select(Settlement.subject_id).where(Settlement.subject_type == "prediction")

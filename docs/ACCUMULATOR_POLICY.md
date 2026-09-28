@@ -20,19 +20,22 @@ Daily Picks line below, not by these products.
 
 ## Daily Picks — guaranteed minimum (separate product line)
 
-Owner decision (2026-09-23): the platform publishes **at least three tickets
-per UTC day**. The value products above stay exactly as strict as before —
-their thresholds are never relaxed to fill the quota. Instead, a separate
-**Daily Picks** line (`daily_safe`, `daily_balanced`, `daily_bold`;
-`src/qwantej/accumulator/daily.py`, `backend/services/daily_tickets.py`)
-tops the day up:
+Owner decision (2026-09-23, amended 2026-09-28): the platform publishes **at
+least two Daily Pick tickets per UTC day**. The value products above stay
+exactly as strict as before — their thresholds are never relaxed to fill the
+quota. Instead, a separate **Daily Picks** line (`daily_safe`,
+`daily_balanced`; `src/qwantej/accumulator/daily.py`,
+`backend/services/daily_tickets.py`) tops the day up:
 
 | Product | Preferred shape (rung 0) | Relaxed (rung 1) | Last resort (rung 2) |
 | --- | --- | --- | --- |
 | DAILY SAFE | 2–3 legs, 1.80–3.50, legs 1.15–1.80, maximise hit probability | 2–3 legs, 1.60–4.50 | 2–5 legs, 1.25–30.00, any leg 1.03–6.00 |
 | DAILY BALANCED | 3–4 legs, 3.00–6.00, legs 1.25–2.30, maximise expected return | 2–4 legs, 2.50–8.00 | same shared last resort |
-| DAILY BOLD | 4–5 legs, 6.00–15.00, legs 1.35–3.20, maximise expected return | 3–5 legs, 4.50–20.00 | same shared last resort |
 | Max quote age | 3 h | 8 h | 26 h |
+
+A third Daily Pick product was withdrawn on 2026-09-28. It is no longer
+built, and its archived tickets are excluded from every ticket listing,
+count and performance report (`RETIRED_PRODUCTS` in `daily.py`).
 
 - **Not value-qualified**, labelled as such in the UI; the system recommends
   **no stake** for them (real money you choose to place is recorded separately

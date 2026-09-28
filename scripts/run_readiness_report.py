@@ -30,6 +30,7 @@ from backend.models.predictions import Prediction  # noqa: E402
 from backend.models.registry import ModelRegistry, ModelStatus  # noqa: E402
 from backend.models.reliability import ReliabilitySnapshot  # noqa: E402
 from backend.models.settlements import Accumulator, Settlement  # noqa: E402
+from qwantej.accumulator.daily import RETIRED_PRODUCTS  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -215,7 +216,10 @@ def collect_evidence(session: Any) -> ReadinessEvidence:
     champion_calibrators = _count(session, select(func.count()).select_from(CalibrationModel).where(
         CalibrationModel.status == CalibrationStatus.CHAMPION
     ))
-    accumulator_count = _count(session, select(func.count()).select_from(Accumulator))
+    accumulator_count = _count(session, select(func.count()).select_from(Accumulator).where(
+        Accumulator.product.not_in(RETIRED_PRODUCTS)
+    ))
+    # Deliberately unfiltered: no live (non-paper) ticket of any product may exist.
     live_accumulators = _count(session, select(func.count()).select_from(Accumulator).where(
         Accumulator.paper_only.is_(False)
     ))

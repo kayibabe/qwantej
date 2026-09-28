@@ -29,6 +29,7 @@ from backend.services.daily_tickets import ensure_daily_tickets, load_daily_cand
 from qwantej.accumulator.daily import (
     DAILY_LADDERS,
     DAILY_PRODUCTS,
+    RETIRED_PRODUCTS,
     DailyCandidate,
     DailyProduct,
     build_daily_tickets,
@@ -95,13 +96,21 @@ def _assert_ticket_invariants(result) -> None:
         assert t.expected_return == pytest.approx(joint * float(odds))
 
 
-def test_rich_slate_builds_all_three_products_at_preferred_rung() -> None:
+def test_rich_slate_builds_every_product_at_preferred_rung() -> None:
     result = build_daily_tickets(_rich_pool(), as_of=NOW)
 
     assert [t.product for t in result.tickets] == list(DAILY_PRODUCTS)
     assert result.shortfall == ()
     assert all(t.rung == 0 for t in result.tickets)
     _assert_ticket_invariants(result)
+
+
+def test_retired_products_are_never_built() -> None:
+    assert {p.value for p in DAILY_PRODUCTS} == {"daily_safe", "daily_balanced"}
+    assert RETIRED_PRODUCTS.isdisjoint(p.value for p in DailyProduct)
+    assert RETIRED_PRODUCTS.isdisjoint(p.value for p in DAILY_LADDERS)
+    result = build_daily_tickets(_rich_pool(), as_of=NOW)
+    assert RETIRED_PRODUCTS.isdisjoint(t.product.value for t in result.tickets)
 
 
 def test_safe_ticket_maximises_joint_probability() -> None:
@@ -143,11 +152,11 @@ def test_model_disagreement_filters_preferred_rung_only() -> None:
     _assert_ticket_invariants(result)
 
 
-def test_thin_slate_falls_back_but_still_delivers_three_tickets() -> None:
+def test_thin_slate_falls_back_but_still_delivers_every_ticket() -> None:
     # Six fixtures, prices outside most preferred leg bands.
     pool = [_cand(i, p) for i, p in enumerate(["1.08", "1.09", "3.40", "3.60", "4.50", "5.50"])]
     result = build_daily_tickets(pool, as_of=NOW)
-    assert len(result.tickets) == 3
+    assert len(result.tickets) == len(DAILY_PRODUCTS)
     assert result.shortfall == ()
     assert any(t.rung > 0 for t in result.tickets)
     _assert_ticket_invariants(result)
@@ -158,21 +167,21 @@ def test_impossible_slate_reports_shortfall_instead_of_inventing_legs() -> None:
     result = build_daily_tickets(pool, as_of=NOW)
     built = len(result.tickets)
     assert built >= 1
-    assert built + len(result.shortfall) == 3
+    assert built + len(result.shortfall) == len(DAILY_PRODUCTS)
     assert len(result.shortfall) >= 1
     _assert_ticket_invariants(result)
 
 
 def test_earlier_products_do_not_starve_later_ones() -> None:
-    # Regression (review finding 1): greedy SAFE(2 legs) + BALANCED(3 legs)
-    # consumed 5 of 6 legs and left BOLD short, although three disjoint
-    # tickets were possible.
+    # Regression (review finding 1): a greedy SAFE ticket at its preferred
+    # rung needs 3 of these 4 short-priced legs (no pair reaches 1.80) and
+    # would leave BALANCED short, although two disjoint tickets are possible.
     pool = [
         _cand(i, p, league=f"L{i}")
-        for i, p in enumerate(["1.40", "1.45", "1.50", "1.55", "1.60", "1.65"])
+        for i, p in enumerate(["1.25", "1.28", "1.30", "1.33"])
     ]
     result = build_daily_tickets(pool, as_of=NOW)
-    assert len(result.tickets) == 3, result.shortfall
+    assert len(result.tickets) == len(DAILY_PRODUCTS), result.shortfall
     assert result.shortfall == ()
     _assert_ticket_invariants(result)
 
@@ -188,12 +197,12 @@ def test_quote_freshness_is_relaxed_rung_by_rung() -> None:
     five_hours = [_cand(i, p, captured=NOW - timedelta(hours=5))
                   for i, p in enumerate(_rich_pool_prices())]
     result = build_daily_tickets(five_hours, as_of=NOW)
-    assert len(result.tickets) == 3
+    assert len(result.tickets) == len(DAILY_PRODUCTS)
     assert all(t.rung >= 1 for t in result.tickets), "5h-old prices must not reach rung 0"
     day_old = [_cand(i, p, captured=NOW - timedelta(hours=20))
                for i, p in enumerate(_rich_pool_prices())]
     result = build_daily_tickets(day_old, as_of=NOW)
-    assert len(result.tickets) == 3
+    assert len(result.tickets) == len(DAILY_PRODUCTS)
     assert all(t.level_version == "daily-last-resort-v1" for t in result.tickets)
 
 
@@ -328,14 +337,14 @@ def _add_market(session, fixture, home_odds: Decimal, *, captured: datetime,
         ))
 
 
-def test_ensure_creates_three_paper_unstaked_tickets_with_lineage(session) -> None:
+def test_ensure_creates_one_paper_unstaked_ticket_per_product_with_lineage(session) -> None:
     _seed_slate(session)
 
     run = ensure_daily_tickets(session, now=NOW)
     session.flush()
 
     assert run.shortfall == []
-    assert len(run.created) == 3 and run.total_today == 3
+    assert len(run.created) == len(DAILY_PRODUCTS) == run.total_today
     accs = session.scalars(select(Accumulator)).all()
     assert sorted(a.product for a in accs) == sorted(p.value for p in DAILY_PRODUCTS)
     for acc in accs:
@@ -356,18 +365,18 @@ def test_ensure_is_idempotent_within_a_utc_day(session) -> None:
     first = ensure_daily_tickets(session, now=NOW)
     session.flush()
     second = ensure_daily_tickets(session, now=NOW + timedelta(hours=5))
-    assert len(first.created) == 3
-    assert second.created == [] and second.existing_today == 3
-    assert len(session.scalars(select(Accumulator)).all()) == 3
+    assert len(first.created) == len(DAILY_PRODUCTS)
+    assert second.created == [] and second.existing_today == len(DAILY_PRODUCTS)
+    assert len(session.scalars(select(Accumulator)).all()) == len(DAILY_PRODUCTS)
 
 
 def test_ensure_builds_only_missing_products(session) -> None:
     _seed_slate(session)
     ensure_daily_tickets(session, now=NOW, target=1)
     session.flush()
-    run = ensure_daily_tickets(session, now=NOW + timedelta(minutes=5), target=3)
+    run = ensure_daily_tickets(session, now=NOW + timedelta(minutes=5), target=len(DAILY_PRODUCTS))
     assert run.existing_today == 1
-    assert sorted(t.product for t in run.tickets) == [DailyProduct.BALANCED, DailyProduct.BOLD]
+    assert sorted(t.product for t in run.tickets) == [DailyProduct.BALANCED]
     products = [a.product for a in session.scalars(select(Accumulator))]
     assert sorted(products) == sorted(p.value for p in DAILY_PRODUCTS)
 
@@ -384,7 +393,7 @@ def test_next_day_gets_a_fresh_set(session) -> None:
     )
     run = ensure_daily_tickets(session, now=tomorrow)
     assert run.existing_today == 0
-    assert len(run.created) == 3
+    assert len(run.created) == len(DAILY_PRODUCTS)
 
 
 def test_target_zero_is_a_no_op(session) -> None:
@@ -513,7 +522,7 @@ def test_fallback_lookahead_used_when_today_is_thin(session) -> None:
     _seed_slate(session, prices=_HOME_PRICES[:12], kickoff=NOW + timedelta(hours=50))
     run = ensure_daily_tickets(session, now=NOW)
     assert run.shortfall == []
-    assert len(run.created) == 3
+    assert len(run.created) == len(DAILY_PRODUCTS)
 
 
 def test_shortfall_is_reported_when_nothing_is_priced(session) -> None:
@@ -529,7 +538,7 @@ def test_nothing_is_built_before_the_build_hour(session) -> None:
     run = ensure_daily_tickets(session, now=early, build_hour_utc=6)
     assert run.created == [] and run.shortfall == []
     later = ensure_daily_tickets(session, now=NOW, build_hour_utc=6)  # 09:30 UTC
-    assert len(later.created) == 3
+    assert len(later.created) == len(DAILY_PRODUCTS)
 
 
 def test_forecasts_made_after_the_cutoff_are_not_used(session) -> None:
