@@ -20,6 +20,12 @@ export interface PredictionOut {
   competition_name?: string | null
   /** Effective settlement outcome once settled: win / loss / void / push. */
   outcome?: string | null
+  /** Archived audit boundary: research rows cannot be treated as live signals. */
+  research_mode: boolean
+  gate_passed: boolean
+  model_version_label: string | null
+  /** Kickoff passed without an effective settlement; requires data refresh. */
+  settlement_overdue: boolean
 }
 
 export interface PredictionPage {

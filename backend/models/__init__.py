@@ -48,6 +48,7 @@ from backend.models.settlements import (
     TicketStatus,
 )
 from backend.models.stats import StatsSnapshot, StatsSubjectType
+from backend.models.ticket_queue import TicketSettlementQueue
 
 __all__ = [
     "Base",
@@ -98,6 +99,7 @@ __all__ = [
     "Settlement",
     "SettlementOutcome",
     "TicketStatus",
+    "TicketSettlementQueue",
     # Real-money bets on published tickets, kept apart from the paper archive
     "RealBet",
     "RealBetOutcome",

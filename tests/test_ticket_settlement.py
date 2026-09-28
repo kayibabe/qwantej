@@ -311,6 +311,28 @@ class TestWorkerSettlesTickets:
 # ---------------------------------------------------------------------------
 
 class TestReviewRegressions:
+    def test_reconciliation_does_not_reload_unchanged_archive(self, session, monkeypatch):
+        import backend.services.ticket_settlement as service
+
+        seed = _Seeder(session)
+        ticket, legs = seed.ticket(["loss", "win"])
+        settle_decided_tickets(session, now=NOW)
+        calls = []
+        original = service.effective_leg_outcomes
+
+        def capture(db, ids):
+            calls.append(ids)
+            return original(db, ids)
+
+        monkeypatch.setattr(service, "effective_leg_outcomes", capture)
+        settle_decided_tickets(session, now=NOW + timedelta(days=365))
+        assert calls == []
+        old = session.scalar(select(Settlement).where(Settlement.subject_id == legs[0]))
+        seed.settle(legs[0], "win", supersedes=old.id)
+        run = settle_decided_tickets(session, now=NOW + timedelta(days=366))
+        assert run.corrected == 1
+        assert calls == [set(legs)]
+
     @pytest.mark.parametrize("age", [0, 31, 365])
     def test_reopen_preserves_history_and_removes_loss_until_decided(self, session, age):
         from backend.api.routes.settlements import get_settlement_summary

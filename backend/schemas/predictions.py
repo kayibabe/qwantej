@@ -33,6 +33,14 @@ class PredictionOut(BaseModel):
     competition_name: str | None = None
     # Effective settlement outcome (win/loss/void/push) once settled.
     outcome: str | None = None
+    # Audit context displayed by the Forecasts archive. These are decision-time
+    # fields, not a claim about the model's current lifecycle state.
+    research_mode: bool = False
+    gate_passed: bool = True
+    model_version_label: str | None = None
+    # An unset result after kickoff needs investigation; it is not an upcoming
+    # forecast merely because the fixture status has not yet been refreshed.
+    settlement_overdue: bool = False
 
 
 class PredictionPage(BaseModel):

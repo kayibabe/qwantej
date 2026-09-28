@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Query
@@ -88,6 +89,7 @@ def _serialize(rows: list[Prediction], db: DbDep) -> list[PredictionOut]:
             .order_by(Settlement.settled_at.desc())
         ):
             outcomes.setdefault(subject_id, outcome.value)
+    now = datetime.now(UTC)
     items = []
     for r in rows:
         fixture = r.fixture
@@ -101,10 +103,37 @@ def _serialize(rows: list[Prediction], db: DbDep) -> list[PredictionOut]:
                         fixture.competition.name if fixture and fixture.competition else None
                     ),
                     "outcome": outcomes.get(r.id),
+                    "model_version_label": _model_version_label(r),
+                    "settlement_overdue": _settlement_overdue(
+                        fixture, outcomes.get(r.id), now
+                    ),
                 }
             )
         )
     return items
+
+
+def _model_version_label(prediction: Prediction) -> str | None:
+    """Return the immutable registry identity stamped on this forecast."""
+    model = prediction.model_version
+    if model is None:
+        return None
+    return f"{model.name} {model.version}"
+
+
+def _settlement_overdue(
+    fixture: Fixture | None, outcome: str | None, now: datetime
+) -> bool:
+    """True only for an un-settled forecast whose kickoff has already passed."""
+    if fixture is None or outcome is not None:
+        return False
+    kickoff = fixture.kickoff_utc
+    if kickoff.tzinfo is None or kickoff.utcoffset() is None:
+        # SQLite test round-trips can lose offset data; project timestamps are UTC.
+        kickoff = kickoff.replace(tzinfo=UTC)
+    else:
+        kickoff = kickoff.astimezone(UTC)
+    return kickoff <= now
 
 
 @router.get("/markets", response_model=list[str])
@@ -170,7 +199,8 @@ def list_predictions(
                     selectinload(Fixture.home_team),
                     selectinload(Fixture.away_team),
                     selectinload(Fixture.competition),
-                )
+                ),
+                selectinload(Prediction.model_version),
             )
             .order_by(primary_order, Prediction.id.desc())
             .offset(offset)
@@ -194,4 +224,4 @@ def get_prediction(
     row = db.get(Prediction, prediction_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Prediction not found")
-    return PredictionOut.model_validate(row)
+    return _serialize([row], db)[0]

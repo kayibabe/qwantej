@@ -23,6 +23,25 @@ function evTone(ev: number | null) {
   return ev > 0 ? "text-[var(--win)]" : "text-[var(--loss)]"
 }
 
+function AuditBadges({ p }: { p: PredictionOut }) {
+  return (
+    <div className="flex flex-wrap justify-end gap-1 text-[10px] font-semibold tracking-wide">
+      <span className={p.research_mode
+        ? "rounded border border-[var(--void)]/40 bg-[var(--void)]/10 px-1.5 py-0.5 text-[var(--void)]"
+        : "rounded border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-1.5 py-0.5 text-[var(--accent)]"}
+      >
+        {p.research_mode ? "RESEARCH" : "PRODUCTION"}
+      </span>
+      <span className={p.gate_passed
+        ? "rounded border border-[var(--win)]/40 bg-[var(--win)]/10 px-1.5 py-0.5 text-[var(--win)]"
+        : "rounded border border-[var(--loss)]/40 bg-[var(--loss)]/10 px-1.5 py-0.5 text-[var(--loss)]"}
+      >
+        {p.gate_passed ? "GATE PASSED" : "GATE REJECTED"}
+      </span>
+    </div>
+  )
+}
+
 function PredictionRow({ p }: { p: PredictionOut }) {
   const outcome = p.outcome ? OUTCOME[p.outcome] : undefined
   return (
@@ -35,6 +54,11 @@ function PredictionRow({ p }: { p: PredictionOut }) {
         <p className="text-sm text-[var(--text-primary)]">{selectionLabel(p)}</p>
         <p className="text-xs text-[var(--text-muted)]">{marketLabel(p.market)}{p.bookmaker ? ` · ${p.bookmaker}` : ""}</p>
       </td>
+      <td className="hidden px-4 py-3 lg:table-cell">
+        <p className="max-w-48 truncate text-xs text-[var(--text-secondary)]" title={p.model_version_label ?? undefined}>
+          {p.model_version_label ?? "Model lineage unavailable"}
+        </p>
+      </td>
       <td className="px-4 py-3 text-right font-mono text-sm text-[var(--text-primary)]">{p.executable_odds?.toFixed(2) ?? "—"}</td>
       <td className="px-4 py-3 text-right font-mono text-xs text-[var(--text-secondary)]">
         {p.conservative_probability !== null ? `${(p.conservative_probability * 100).toFixed(1)}%` : "—"}
@@ -43,10 +67,13 @@ function PredictionRow({ p }: { p: PredictionOut }) {
         {p.expected_value !== null ? `${p.expected_value > 0 ? "+" : ""}${(p.expected_value * 100).toFixed(1)}%` : "—"}
       </td>
       <td className="hidden px-4 py-3 text-right font-mono text-xs text-[var(--text-secondary)] md:table-cell">{p.qss?.toFixed(0) ?? "—"}</td>
+      <td className="hidden px-4 py-3 text-right md:table-cell"><AuditBadges p={p} /></td>
       <td className="px-4 py-3 text-right">
         {outcome
           ? <span className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-bold tracking-wide ${outcome.cls}`}>{outcome.label}</span>
-          : <span className="text-xs text-[var(--text-muted)]">Open</span>}
+          : p.settlement_overdue
+            ? <span title="Kickoff has passed but no effective settlement is recorded." className="inline-flex rounded border border-[var(--loss)]/40 bg-[var(--loss)]/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-[var(--loss)]">SETTLEMENT OVERDUE</span>
+            : <span className="text-xs text-[var(--text-muted)]">Open</span>}
       </td>
     </tr>
   )
@@ -82,10 +109,12 @@ async function PredictionsTable({
             <tr>
               <SortableHeader label="Match" sortKey="kickoff_utc" />
               <SortableHeader label="Pick" sortKey="selection" />
+              <th scope="col" className="hidden px-4 py-2 text-left font-medium lg:table-cell">Model version</th>
               <SortableHeader label="Odds" sortKey="executable_odds" align="right" />
               <SortableHeader label="Model prob." sortKey="conservative_probability" align="right" />
               <SortableHeader label="EV" sortKey="expected_value" align="right" />
               <SortableHeader label="QSS" sortKey="qss" align="right" className="hidden px-4 py-2 font-medium md:table-cell" />
+              <th scope="col" className="hidden px-4 py-2 text-right font-medium md:table-cell">Audit</th>
               <SortableHeader label="Result" sortKey="outcome" align="right" />
             </tr>
           </thead>
@@ -119,7 +148,7 @@ export default async function PredictionsPage({
         <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Forecasts</h1>
         <p className="mt-1 max-w-3xl text-sm text-[var(--text-secondary)]">
           Every archived forecast that had a bookmaker price, with the match it was for and how it settled.
-          Forecasts without odds are hidden: they could not have been bet.
+          Forecasts without odds are hidden: they could not have been bet. Research and gate status show whether a row is audit evidence or a value-qualified signal; overdue settlements need a fixture refresh.
         </p>
       </div>
 

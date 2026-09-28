@@ -12,7 +12,18 @@ from sqlalchemy.pool import StaticPool
 
 from backend.api.deps import get_db
 from backend.main import app
-from backend.models import Base, Competition, Fixture, FixtureStatus, Prediction, Season, Team
+from backend.models import (
+    Base,
+    Competition,
+    Fixture,
+    FixtureStatus,
+    ModelFamily,
+    ModelRegistry,
+    ModelStatus,
+    Prediction,
+    Season,
+    Team,
+)
 from backend.models.settlements import Settlement, SettlementOutcome
 
 NOW = datetime(2026, 9, 7, 18, 0, tzinfo=UTC)
@@ -52,6 +63,14 @@ def seeded_client():
         )
         seed.add_all([comp, ssn, home, away, fixture])
         seed.flush()
+        model = ModelRegistry(
+            family=ModelFamily.ENSEMBLE,
+            name="test-ensemble",
+            version="1.0.0",
+            status=ModelStatus.CHAMPION,
+        )
+        seed.add(model)
+        seed.flush()
 
         p1 = Prediction(
             fixture_id=fixture.id,
@@ -59,8 +78,11 @@ def seeded_client():
             decision_as_of=KICKOFF - timedelta(hours=1),
             market="1X2",
             selection="home",
+            model_version_id=model.id,
             conservative_probability=0.62,
             executable_odds=1.85,
+            research_mode=True,
+            gate_passed=False,
         )
         p2 = Prediction(
             fixture_id=fixture.id,
@@ -90,6 +112,14 @@ class TestListPredictions:
         data = r.json()
         assert data["total"] == 2
         assert len(data["items"]) == 2
+
+    def test_exposes_archive_audit_context_and_overdue_settlement(self, seeded_client) -> None:
+        client, _, _ = seeded_client
+        item = client.get("/predictions").json()["items"][0]
+        assert item["research_mode"] is True
+        assert item["gate_passed"] is False
+        assert item["settlement_overdue"] is True
+        assert item["model_version_label"] == "test-ensemble 1.0.0"
 
     def test_filter_by_fixture_id(self, seeded_client) -> None:
         client, fixture_id, _ = seeded_client
@@ -271,6 +301,8 @@ class TestGetPrediction:
         assert data["id"] == str(p1_id)
         assert data["market"] == "1X2"
         assert data["selection"] == "home"
+        assert data["research_mode"] is True
+        assert data["settlement_overdue"] is True
 
     def test_404_for_unknown_id(self, seeded_client) -> None:
         import uuid
