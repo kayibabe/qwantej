@@ -94,6 +94,7 @@ export default function TicketStakeSimulator({ periods, initialScope, initialTic
               <option value="all">All ACCA tickets</option>
               <option value="daily_balanced">Daily Balanced ACCA</option>
               <option value="daily_safe">Daily Safe ACCA</option>
+              <option value="daily_bold">Daily Bold ACCA</option>
             </select>
           </label>
         </div>

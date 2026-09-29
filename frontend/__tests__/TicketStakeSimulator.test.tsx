@@ -30,4 +30,21 @@ describe("TicketStakeSimulator", () => {
     expect(screen.getByText("MWK 100")).toBeInTheDocument()
     expect(screen.getByText("+MWK 250")).toBeInTheDocument()
   })
+
+  it("offers Daily Bold ACCA and filters the replay to bold tickets", () => {
+    const boldTickets = [
+      ...tickets,
+      { id: "bold-won", product: "daily_bold", combined_odds: 4, result: "won", profit_units: 3 },
+    ] as AccumulatorOut[]
+    render(<TicketStakeSimulator periods={{ year: [period], month: [period], day: [period] }} initialScope={{ granularity: "year", period: "2026" }} initialTickets={boldTickets} />)
+
+    const selector = screen.getByLabelText("Tickets")
+    expect(screen.getByRole("option", { name: "Daily Bold ACCA" })).toBeInTheDocument()
+    fireEvent.change(selector, { target: { value: "daily_bold" } })
+    fireEvent.change(screen.getByLabelText("Simulated stake per ticket"), { target: { value: "100" } })
+
+    expect(screen.getByText("Settled tickets")).toBeInTheDocument()
+    expect(screen.getByText("MWK 100")).toBeInTheDocument()
+    expect(screen.getByText("+MWK 300")).toBeInTheDocument()
+  })
 })
