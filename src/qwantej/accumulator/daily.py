@@ -1,11 +1,11 @@
-"""Daily Picks: a guaranteed minimum of paper tickets per day.
+"""Daily Picks: paper tickets built inside explicit product odds bands.
 
 The value-qualified products (CORE/GROWTH/ALPHA, see ``decision.py``) are
 allowed to publish nothing — ``NO QUALIFIED ACCA`` is an expected result and
 their thresholds must never be lowered to force a ticket
 (ACCUMULATOR_POLICY.md). Daily Picks are a *separate, explicitly labelled*
-product line that always publishes the best tickets the day's slate allows,
-so the product never goes silent. They are:
+product line that attempts one ticket per product when the day's slate
+supports its target band. They are:
 
 - **Not value-qualified.** A Daily Pick leg need not pass the Value Gate. The
   ticket is ranked on a shrunk probability estimate (model blended with the
@@ -15,11 +15,10 @@ so the product never goes silent. They are:
 - **Kept out of value-product KPIs** by their distinct ``daily_*`` product
   labels.
 
-Each product walks a relaxation ladder: rung 0 is the preferred shape, later
-rungs widen the leg/odds bands, and the last rung is a shared last resort
-that only requires two legs from distinct fixtures. Every ticket records the
-rung (``level_version``) it was built at, so a "forced" ticket is always
-distinguishable from a preferred one in the archive.
+Each product has one publishable target band. If the day's slate cannot
+support that band's shape and quality constraints, the product is reported
+as a shortfall rather than silently publishing a lower-odds fallback. This
+keeps the product name truthful: DAILY SAFE is never a sub-3.00 ticket.
 
 Pure module — no I/O. The service layer supplies candidates and persists.
 """
@@ -34,7 +33,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 
-DAILY_BUILDER_VERSION = "daily-ticket-v1"
+DAILY_BUILDER_VERSION = "daily-ticket-v2-target-bands"
 
 # Weight on the model probability when blending with the de-vigged market
 # probability. The market is the stronger single estimator for heavily traded
@@ -134,13 +133,13 @@ class DailyTicketLevel:
     max_leg_odds: Decimal
     min_leg_probability: float
     # Exclude legs where the model is below the market by more than this;
-    # ``None`` disables the check (last-resort rung only).
+    # ``None`` disables the check.
     max_model_deficit: float | None
     max_legs_per_league: int
     maximise: str  # "probability" or "expected_return"
     # Research leagues are re-priced about once a day by the ingestion
-    # rotation, so freshness is relaxed rung by rung rather than failing the
-    # whole slate. The leg's quote timestamp is always persisted and shown.
+    # rotation. Strict freshness is required for a publishable Daily ACCA;
+    # the leg's quote timestamp is always persisted and shown.
     max_quote_age: timedelta = timedelta(hours=3)
 
     def __post_init__(self) -> None:
@@ -160,86 +159,38 @@ class DailyTicketLevel:
             raise ValueError("max_quote_age must be positive")
 
 
-_RELAXED_QUOTE_AGE = timedelta(hours=8)
-LAST_RESORT_QUOTE_AGE = timedelta(hours=26)
-
-# Up to five legs and a 1.25 floor so even a slate of only heavy favourites
-# (1.05 ** 5 = 1.276) still yields a ticket.
-_LAST_RESORT = DailyTicketLevel(
-    version="daily-last-resort-v1",
-    min_legs=2,
-    max_legs=5,
-    min_combined_odds=Decimal("1.25"),
-    max_combined_odds=Decimal("30.00"),
-    min_leg_odds=Decimal("1.03"),
-    max_leg_odds=Decimal("6.00"),
-    min_leg_probability=0.15,
-    max_model_deficit=None,
-    max_legs_per_league=3,
-    maximise="probability",
-    max_quote_age=LAST_RESORT_QUOTE_AGE,
-)
+MAX_DAILY_QUOTE_AGE = timedelta(hours=3)
 
 DAILY_LADDERS: dict[DailyProduct, tuple[DailyTicketLevel, ...]] = {
     DailyProduct.SAFE: (
         DailyTicketLevel(
             version="daily-safe-v1",
             min_legs=2, max_legs=3,
-            min_combined_odds=Decimal("1.80"), max_combined_odds=Decimal("3.50"),
-            min_leg_odds=Decimal("1.15"), max_leg_odds=Decimal("1.80"),
+            min_combined_odds=Decimal("3.00"), max_combined_odds=Decimal("5.00"),
+            min_leg_odds=Decimal("1.30"), max_leg_odds=Decimal("2.20"),
             min_leg_probability=0.58, max_model_deficit=0.08,
             max_legs_per_league=2, maximise="probability",
         ),
-        DailyTicketLevel(
-            version="daily-safe-relaxed-v1",
-            min_legs=2, max_legs=3,
-            min_combined_odds=Decimal("1.60"), max_combined_odds=Decimal("4.50"),
-            min_leg_odds=Decimal("1.10"), max_leg_odds=Decimal("2.10"),
-            min_leg_probability=0.50, max_model_deficit=0.12,
-            max_legs_per_league=2, maximise="probability",
-            max_quote_age=_RELAXED_QUOTE_AGE,
-        ),
-        _LAST_RESORT,
     ),
     DailyProduct.BALANCED: (
         DailyTicketLevel(
             version="daily-balanced-v1",
             min_legs=3, max_legs=4,
-            min_combined_odds=Decimal("3.00"), max_combined_odds=Decimal("6.00"),
-            min_leg_odds=Decimal("1.25"), max_leg_odds=Decimal("2.30"),
+            min_combined_odds=Decimal("5.00"), max_combined_odds=Decimal("10.00"),
+            min_leg_odds=Decimal("1.35"), max_leg_odds=Decimal("2.80"),
             min_leg_probability=0.45, max_model_deficit=0.08,
             max_legs_per_league=2, maximise="expected_return",
         ),
-        DailyTicketLevel(
-            version="daily-balanced-relaxed-v1",
-            min_legs=2, max_legs=4,
-            min_combined_odds=Decimal("2.50"), max_combined_odds=Decimal("8.00"),
-            min_leg_odds=Decimal("1.15"), max_leg_odds=Decimal("2.80"),
-            min_leg_probability=0.38, max_model_deficit=0.12,
-            max_legs_per_league=2, maximise="expected_return",
-            max_quote_age=_RELAXED_QUOTE_AGE,
-        ),
-        _LAST_RESORT,
     ),
     DailyProduct.BOLD: (
         DailyTicketLevel(
             version="daily-bold-v1",
             min_legs=4, max_legs=5,
-            min_combined_odds=Decimal("6.00"), max_combined_odds=Decimal("15.00"),
+            min_combined_odds=Decimal("10.00"), max_combined_odds=Decimal("20.00"),
             min_leg_odds=Decimal("1.35"), max_leg_odds=Decimal("3.20"),
             min_leg_probability=0.33, max_model_deficit=0.08,
             max_legs_per_league=2, maximise="expected_return",
         ),
-        DailyTicketLevel(
-            version="daily-bold-relaxed-v1",
-            min_legs=3, max_legs=5,
-            min_combined_odds=Decimal("4.50"), max_combined_odds=Decimal("20.00"),
-            min_leg_odds=Decimal("1.20"), max_leg_odds=Decimal("4.00"),
-            min_leg_probability=0.28, max_model_deficit=0.12,
-            max_legs_per_league=2, maximise="expected_return",
-            max_quote_age=_RELAXED_QUOTE_AGE,
-        ),
-        _LAST_RESORT,
     ),
 }
 
@@ -273,7 +224,7 @@ def build_daily_tickets(
     Deterministic: the same candidates and ``as_of`` always yield the same
     tickets. Earlier products never take legs that the later products need
     to exist at all (see ``_build_one``). A product that cannot be built even
-    at its last-resort rung is reported in ``shortfall`` — the caller must
+    inside its target band is reported in ``shortfall`` — the caller must
     surface that loudly.
     """
     if as_of.tzinfo is None or as_of.utcoffset() is None:
@@ -282,7 +233,7 @@ def build_daily_tickets(
     usable = [
         c for c in candidates
         if c.kickoff_utc > as_of
-        and timedelta(0) <= as_of - c.captured_at <= LAST_RESORT_QUOTE_AGE
+        and timedelta(0) <= as_of - c.captured_at <= MAX_DAILY_QUOTE_AGE
     ]
     # One leg per fixture across the whole day: keep the strongest candidate.
     by_fixture: dict[str, DailyCandidate] = {}
@@ -338,37 +289,32 @@ def _build_one(
     reserve: tuple[DailyProduct, ...],
     as_of: datetime,
 ) -> DailyTicket | None:
-    """Best ticket for *product* that still leaves the *reserve* products buildable.
-
-    Walks the ladder rung by rung; within a rung, combinations are tried best
-    first and the first one whose leftover pool can still yield a last-resort
-    ticket for every reserve product wins. Only when no rung can protect the
-    reserve is the unconstrained best ticket taken (one ticket beats none).
-    """
-    fallback: DailyTicket | None = None
+    """Best target-band ticket that still leaves reserve products buildable."""
     for rung, level in enumerate(DAILY_LADDERS[product]):
         ranked = _ranked_combinations(
             level, [c for c in pool if _eligible(c, level, as_of)][:POOL_CAP]
         )
         if not ranked:
             continue
-        if fallback is None:
-            fallback = _ticket(product, ranked[0], level, rung)
         if not reserve:
             return _ticket(product, ranked[0], level, rung)
         for combo in ranked[:MAX_RESERVE_CHECKS]:
             used = {c.fixture_id for c in combo}
             leftover = [c for c in pool if c.fixture_id not in used]
-            if _reserve_feasible(leftover, len(reserve), as_of):
+            if _reserve_feasible(leftover, reserve, as_of):
                 return _ticket(product, combo, level, rung)
-    return fallback
+    return None
 
 
-def _reserve_feasible(pool: list[DailyCandidate], count: int, as_of: datetime) -> bool:
-    """Can *count* disjoint last-resort tickets still be built from *pool*?"""
-    remaining = [c for c in pool if _eligible(c, _LAST_RESORT, as_of)]
-    for _ in range(count):
-        ranked = _ranked_combinations(_LAST_RESORT, remaining[:_RESERVE_PROBE_POOL])
+def _reserve_feasible(
+    pool: list[DailyCandidate], products: tuple[DailyProduct, ...], as_of: datetime
+) -> bool:
+    """Can the reserved products still build target-band tickets?"""
+    remaining = list(pool)
+    for product in products:
+        level = DAILY_LADDERS[product][0]
+        eligible = [c for c in remaining if _eligible(c, level, as_of)]
+        ranked = _ranked_combinations(level, eligible[:_RESERVE_PROBE_POOL])
         if not ranked:
             return False
         used = {c.fixture_id for c in ranked[0]}

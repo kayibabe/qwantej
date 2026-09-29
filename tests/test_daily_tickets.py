@@ -107,9 +107,9 @@ def test_rich_slate_builds_all_three_products_at_preferred_rung() -> None:
 def test_safe_ticket_maximises_joint_probability() -> None:
     result = build_daily_tickets(_rich_pool(), products=(DailyProduct.SAFE,), as_of=NOW)
     safe = result.tickets[0]
-    # The heaviest favourites that clear the 1.80 minimum combined price.
-    assert safe.joint_probability > 0.45
-    assert all(leg.decimal_odds <= Decimal("1.80") for leg in safe.legs)
+    # The strongest eligible combination must still meet the new 3.00 target.
+    assert safe.joint_probability > 0.20
+    assert Decimal("3.00") <= safe.combined_odds <= Decimal("5.00")
 
 
 def test_builder_is_deterministic_regardless_of_input_order() -> None:
@@ -131,70 +131,63 @@ def test_stale_quotes_and_started_fixtures_are_never_used() -> None:
     assert used.isdisjoint({"fx-090", "fx-091", "fx-092"})
 
 
-def test_model_disagreement_filters_preferred_rung_only() -> None:
-    # Every leg has the model 15pp below the market: rung 0 and 1 reject them
-    # all, so the ticket must come from the last-resort rung — and say so.
+def test_model_disagreement_reports_shortfall_instead_of_relaxing_quality() -> None:
+    # Every leg has the model 15pp below the market, so no target-band ticket
+    # may be published merely to preserve the daily count.
     pool = [_cand(i, p, model_delta=-0.15) for i, p in enumerate(
         ["1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "2.00", "2.20", "2.50", "3.00"]
     )]
     result = build_daily_tickets(pool, as_of=NOW)
-    assert result.tickets, "last resort must still produce tickets"
-    assert all(t.level_version == "daily-last-resort-v1" for t in result.tickets)
-    _assert_ticket_invariants(result)
+    assert result.tickets == ()
+    assert result.shortfall == DAILY_PRODUCTS
 
 
-def test_thin_slate_falls_back_but_still_delivers_three_tickets() -> None:
-    # Six fixtures, prices outside most preferred leg bands.
+def test_thin_slate_reports_shortfall_instead_of_falling_back() -> None:
+    # Six fixtures cannot support all three target-band products.
     pool = [_cand(i, p) for i, p in enumerate(["1.08", "1.09", "3.40", "3.60", "4.50", "5.50"])]
     result = build_daily_tickets(pool, as_of=NOW)
-    assert len(result.tickets) == 3
-    assert result.shortfall == ()
-    assert any(t.rung > 0 for t in result.tickets)
-    _assert_ticket_invariants(result)
+    assert result.tickets == ()
+    assert result.shortfall == DAILY_PRODUCTS
 
 
 def test_impossible_slate_reports_shortfall_instead_of_inventing_legs() -> None:
     pool = [_cand(i, p) for i, p in enumerate(["1.40", "1.50", "1.60"])]
     result = build_daily_tickets(pool, as_of=NOW)
     built = len(result.tickets)
-    assert built >= 1
+    assert built == 0
     assert built + len(result.shortfall) == 3
     assert len(result.shortfall) >= 1
     _assert_ticket_invariants(result)
 
 
-def test_earlier_products_do_not_starve_later_ones() -> None:
-    # Regression (review finding 1): greedy SAFE(2 legs) + BALANCED(3 legs)
-    # consumed 5 of 6 legs and left BOLD short, although three disjoint
-    # tickets were possible.
+def test_target_bands_report_shortfall_when_the_slate_is_too_short() -> None:
     pool = [
         _cand(i, p, league=f"L{i}")
         for i, p in enumerate(["1.40", "1.45", "1.50", "1.55", "1.60", "1.65"])
     ]
     result = build_daily_tickets(pool, as_of=NOW)
-    assert len(result.tickets) == 3, result.shortfall
-    assert result.shortfall == ()
-    _assert_ticket_invariants(result)
+    assert result.tickets == ()
+    assert result.shortfall == DAILY_PRODUCTS
 
 
-def test_slate_of_only_heavy_favourites_still_yields_tickets() -> None:
+def test_slate_of_only_heavy_favourites_reports_shortfall() -> None:
     pool = [_cand(i, "1.05", league=f"L{i % 5}") for i in range(10)]
     result = build_daily_tickets(pool, as_of=NOW)
-    assert len(result.tickets) >= 1
-    _assert_ticket_invariants(result)
+    assert result.tickets == ()
+    assert result.shortfall == DAILY_PRODUCTS
 
 
-def test_quote_freshness_is_relaxed_rung_by_rung() -> None:
+def test_quotes_older_than_three_hours_are_not_used() -> None:
     five_hours = [_cand(i, p, captured=NOW - timedelta(hours=5))
                   for i, p in enumerate(_rich_pool_prices())]
     result = build_daily_tickets(five_hours, as_of=NOW)
-    assert len(result.tickets) == 3
-    assert all(t.rung >= 1 for t in result.tickets), "5h-old prices must not reach rung 0"
+    assert result.tickets == ()
+    assert result.shortfall == DAILY_PRODUCTS
     day_old = [_cand(i, p, captured=NOW - timedelta(hours=20))
                for i, p in enumerate(_rich_pool_prices())]
     result = build_daily_tickets(day_old, as_of=NOW)
-    assert len(result.tickets) == 3
-    assert all(t.level_version == "daily-last-resort-v1" for t in result.tickets)
+    assert result.tickets == ()
+    assert result.shortfall == DAILY_PRODUCTS
 
 
 def _rich_pool_prices() -> list[str]:
@@ -341,7 +334,7 @@ def test_ensure_creates_three_paper_unstaked_tickets_with_lineage(session) -> No
     for acc in accs:
         assert acc.paper_only is True
         assert acc.stake is None
-        assert acc.optimiser_version == "daily-ticket-v1"
+        assert acc.optimiser_version == "daily-ticket-v2-target-bands"
         assert acc.input_manifest_hash
     legs = session.scalars(select(AccumulatorLeg)).all()
     assert len({leg.fixture_id for leg in legs}) == len(legs)
@@ -472,12 +465,14 @@ def test_incomplete_or_mixed_bookmaker_btts_is_excluded(session) -> None:
 
 
 def test_daily_ticket_persists_archived_btts_market(session) -> None:
-    pairs = _seed_slate(session, prices=["1.50", "1.60"], leagues=2)
+    pairs = _seed_slate(session, prices=["1.70", "1.80"], leagues=2)
     fixture, home_prediction = pairs[0]
+    pairs[1][1].calibrated_probability = 0.65
     # Keep the second fixture's home forecast, but leave this fixture with BTTS only.
     session.delete(home_prediction)
     btts = _add_prediction(session, fixture, Decimal("1.80"), False, 80.0,
                            market="BTTS", selection="yes")
+    btts.calibrated_probability = 0.65
     for selection, odds in (("yes", "1.80"), ("no", "2.05")):
         session.add(OddsQuote(
             fixture_id=fixture.id, bookmaker="Book", market="BTTS",

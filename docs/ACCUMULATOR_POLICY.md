@@ -15,24 +15,24 @@ The UI may display "10.0+" for Alpha, but the internal operating band is
 capped around 20.00. Any 20+ entertainment product is a separate
 Jackpot/experimental product, excluded from core investment-performance
 KPIs. **No value ticket is mandatory** — `NO QUALIFIED ACCA` is an expected
-operational result, not a failure. The daily minimum is met by the separate
-Daily Picks line below, not by these products.
+operational result, not a failure. Daily Picks are attempted separately and
+may also report a shortfall when their strict target bands are unavailable.
 
-## Daily Picks — guaranteed minimum (separate product line)
+## Daily Picks — strict paper-ticket product line
 
-Owner decision (2026-09-23): the platform publishes **at least three tickets
-per UTC day**. The value products above stay exactly as strict as before —
-their thresholds are never relaxed to fill the quota. Instead, a separate
-**Daily Picks** line (`daily_safe`, `daily_balanced`, `daily_bold`;
+The platform attempts one ticket per product per UTC day. The value products
+above stay exactly as strict as before — their thresholds are never relaxed
+to fill the quota. The separate **Daily Picks** line
+(`daily_safe`, `daily_balanced`, `daily_bold`;
 `src/qwantej/accumulator/daily.py`, `backend/services/daily_tickets.py`)
-tops the day up:
+also fails closed when its target odds band cannot be met:
 
-| Product | Preferred shape (rung 0) | Relaxed (rung 1) | Last resort (rung 2) |
+| Product | Publishable target band | Relaxed fallback | Last resort |
 | --- | --- | --- | --- |
-| DAILY SAFE | 2–3 legs, 1.80–3.50, legs 1.15–1.80, maximise hit probability | 2–3 legs, 1.60–4.50 | 2–5 legs, 1.25–30.00, any leg 1.03–6.00 |
-| DAILY BALANCED | 3–4 legs, 3.00–6.00, legs 1.25–2.30, maximise expected return | 2–4 legs, 2.50–8.00 | same shared last resort |
-| DAILY BOLD | 4–5 legs, 6.00–15.00, legs 1.35–3.20, maximise expected return | 3–5 legs, 4.50–20.00 | same shared last resort |
-| Max quote age | 3 h | 8 h | 26 h |
+| DAILY SAFE | 2–3 legs, 3.00–5.00, legs 1.30–2.20, maximise hit probability | none | none |
+| DAILY BALANCED | 3–4 legs, >5.00–10.00, legs 1.35–2.80, maximise expected return | none | none |
+| DAILY BOLD | 4–5 legs, >10.00–20.00 operating band, legs 1.35–3.20, maximise expected return | none | none |
+| Max quote age | 3 h | — | — |
 
 - **Not value-qualified**, labelled as such in the UI; the system recommends
   **no stake** for them (real money you choose to place is recorded separately
@@ -50,9 +50,9 @@ tops the day up:
 - Built once per UTC day from `DAILY_TICKET_BUILD_HOUR_UTC` (default 06),
   idempotently topped up hourly; 30 h lookahead, 72 h fallback. Earlier
   products never take legs a later product needs to exist.
-- Every ticket records the rung it was built at (`policy_version`). A day the
-  slate cannot support even the last resort is a logged **SHORTFALL** with a
-  Telegram alert — never a silently invented ticket.
+- Every ticket records its policy version (`policy_version`). A day the slate
+  cannot support a product's strict target band is a logged **SHORTFALL** with
+  a Telegram alert — never a silently invented lower-odds ticket.
 - Daily Picks must be excluded from value-product KPIs and from
   ticket-settlement ROI claims for CORE/GROWTH/ALPHA (filter `daily_*`); the
   Performance page reports every product on its own row for this reason.

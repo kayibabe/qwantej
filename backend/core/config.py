@@ -63,9 +63,9 @@ class Settings(BaseSettings):
     paper_ticket_pipeline_enabled: bool = False
     # Archive all-league prospective forecasts separately from production.
     all_leagues_research_pipeline_enabled: bool = False
-    # Daily Picks guaranteed per UTC day by the paper-ticket pipeline (one per
-    # product: safe, balanced, bold). Separate from the value-qualified
-    # CORE/GROWTH/ALPHA products, whose thresholds are never relaxed. 0 disables.
+    # Daily Picks target count per UTC day by the paper-ticket pipeline (one per
+    # product: safe, balanced, bold). A target is not a guarantee: products
+    # whose strict odds band cannot be met are reported as a shortfall. 0 disables.
     daily_ticket_minimum: int = Field(default=3, ge=0, le=3)
     # UTC hour from which the day's Daily Picks are built (06 → tickets cover
     # the day's European fixtures). A later restart still builds immediately.

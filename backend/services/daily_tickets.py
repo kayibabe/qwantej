@@ -43,7 +43,7 @@ from backend.services.accumulator import AccumulatorPersistenceError
 from qwantej.accumulator.daily import (
     DAILY_BUILDER_VERSION,
     DAILY_PRODUCTS,
-    LAST_RESORT_QUOTE_AGE,
+    MAX_DAILY_QUOTE_AGE,
     DailyCandidate,
     DailyProduct,
     DailyTicket,
@@ -66,8 +66,8 @@ MIN_DQS = 60.0
 MIN_LEAD = timedelta(minutes=60)
 PRIMARY_LOOKAHEAD = timedelta(hours=30)
 FALLBACK_LOOKAHEAD = timedelta(hours=72)
-# Oldest quote any ladder rung accepts; each rung applies its own, tighter cap.
-MAX_QUOTE_AGE = LAST_RESORT_QUOTE_AGE
+# Oldest quote accepted by the strict Daily ACCA target bands.
+MAX_QUOTE_AGE = MAX_DAILY_QUOTE_AGE
 # All legs of one bookmaker snapshot must be captured within this spread.
 MAX_LEG_SPREAD = timedelta(hours=1)
 # Serialises concurrent builders (overlapping deploys, manual runs) on
@@ -103,7 +103,7 @@ def ensure_daily_tickets(
     Nothing is built before *build_hour_utc* so the day's tickets cover the
     day's matches rather than the small hours. The caller owns the
     transaction. A non-empty ``shortfall`` means the slate genuinely could not
-    support a ticket even at the last-resort rung and must be alerted on.
+    support a ticket inside its product odds band and must be alerted on.
     """
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("now must be timezone-aware")
