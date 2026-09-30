@@ -19,6 +19,7 @@ from backend.models.calibration import (
     CalibrationSnapshot,
     CalibrationStatus,
 )
+from backend.models.daily_candidates import DailyCandidateSnapshot
 from backend.models.experiments import (
     Experiment,
     ExperimentKind,
@@ -80,6 +81,7 @@ __all__ = [
     "CalibrationMethod",
     "CalibrationStatus",
     "CalibrationSnapshot",
+    "DailyCandidateSnapshot",
     # Phase 5 — experiment registry and immutable Value Gate decisions
     "Experiment",
     "ExperimentKind",

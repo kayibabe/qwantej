@@ -9,6 +9,7 @@ const links = [
   { href: "/accumulators", label: "Tickets", icon: "accumulators" as const, group: "Workspace" },
   { href: "/performance", label: "Performance", icon: "performance" as const, group: "Workspace" },
   { href: "/predictions", label: "Forecasts", icon: "predictions" as const, group: "Research" },
+  { href: "/daily-candidates", label: "Daily candidates", icon: "predictions" as const, group: "Research" },
   { href: "/models", label: "Models", icon: "models" as const, group: "Research" },
 ]
 

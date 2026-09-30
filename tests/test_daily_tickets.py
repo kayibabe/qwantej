@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from backend.models import (
     Accumulator,
     AccumulatorLeg,
+    DailyCandidateSnapshot,
     Base,
     Competition,
     Fixture,
@@ -329,6 +330,10 @@ def test_ensure_creates_three_paper_unstaked_tickets_with_lineage(session) -> No
 
     assert run.shortfall == []
     assert len(run.created) == 3 and run.total_today == 3
+    snapshots = session.scalars(select(DailyCandidateSnapshot)).all()
+    assert len(snapshots) == run.candidates_considered
+    assert {row.candidate_status for row in snapshots} == {"selected", "not_selected"}
+    assert all(row.product_day.isoformat() == "2026-09-23" for row in snapshots)
     accs = session.scalars(select(Accumulator)).all()
     assert sorted(a.product for a in accs) == sorted(p.value for p in DAILY_PRODUCTS)
     for acc in accs:

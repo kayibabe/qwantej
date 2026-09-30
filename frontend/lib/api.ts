@@ -1,6 +1,7 @@
 import type {
   AccumulatorOut,
   AccumulatorPage,
+  DailyCandidatePage,
   KPIReportOut,
   ModelRegistryDetailOut,
   ModelRegistryPage,
@@ -63,6 +64,10 @@ export function fetchPredictions(params: {
 /** Markets that have at least one priced forecast. */
 export function fetchPricedMarkets(): Promise<string[]> {
   return apiFetch("/predictions/markets")
+}
+
+export function fetchDailyCandidates(date?: string): Promise<DailyCandidatePage> {
+  return apiFetch("/daily-candidates", date ? { date } : undefined)
 }
 
 export function fetchAccumulator(id: string): Promise<AccumulatorOut> {

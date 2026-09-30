@@ -241,3 +241,16 @@ All markets analysed
 
 See `DATA_DICTIONARY.md` for the rejection reason taxonomy every failed gate
 must record.
+
+## Daily Pick candidate-pool evidence
+
+Each Daily Pick build appends a snapshot to `daily_candidate_snapshots`. The
+snapshot contains the archived prediction identity, fixture, decision-time
+probabilities, build-time bookmaker quote, DQS, and whether the candidate was
+selected for a Daily Safe/Balanced/Bold ticket. Candidates that passed the
+Daily candidate loader but were not used are retained as
+`not_selected_by_target_band_optimizer`; they are not retroactively relabelled
+when later prices or results change. The `GET /daily-candidates?date=YYYY-MM-DD`
+endpoint and the Daily candidates UI join these immutable snapshots to current
+fixture scores and effective prediction settlements, so completed matches show
+their score and outcome while future matches remain pending.

@@ -26,6 +26,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -33,6 +34,7 @@ from sqlalchemy.orm import Session
 from backend.models import (
     Accumulator,
     AccumulatorLeg,
+    DailyCandidateSnapshot,
     Fixture,
     FixtureStatus,
     OddsQuote,
@@ -73,6 +75,7 @@ MAX_LEG_SPREAD = timedelta(hours=1)
 # Serialises concurrent builders (overlapping deploys, manual runs) on
 # PostgreSQL so two processes cannot both see "not yet published today".
 _ADVISORY_LOCK_KEY = 0x51_44_41_49_4C_59  # "QDAILY"
+_PRODUCT_DAY_ZONE = ZoneInfo("Africa/Blantyre")
 
 
 @dataclass
@@ -126,11 +129,14 @@ def ensure_daily_tickets(
         return run
 
     used_fixtures: set[str] = set()
+    observed_candidates: dict[str, DailyCandidate] = {}
     for lookahead in (PRIMARY_LOOKAHEAD, FALLBACK_LOOKAHEAD):
         candidates = [
             c for c in load_daily_candidates(session, now=now, lookahead=lookahead)
             if c.fixture_id not in used_fixtures
         ]
+        for candidate in candidates:
+            observed_candidates.setdefault(candidate.prediction_id, candidate)
         result = build_daily_tickets(candidates, products=missing, as_of=now)
         run.candidates_considered = max(run.candidates_considered, result.candidates_considered)
         run.tickets.extend(result.tickets)
@@ -143,6 +149,14 @@ def ensure_daily_tickets(
     run.shortfall = list(missing)
     if run.tickets:
         run.created = _persist(session, run.tickets, now=now)
+    if observed_candidates:
+        _persist_candidate_snapshot(
+            session,
+            list(observed_candidates.values()),
+            tickets=run.tickets,
+            created=run.created,
+            now=now,
+        )
     if run.shortfall:
         log.error(
             "daily_tickets: SHORTFALL — could not build %s (candidates=%d); "
@@ -156,6 +170,49 @@ def ensure_daily_tickets(
             len(run.created), run.total_today, target,
         )
     return run
+
+
+def _persist_candidate_snapshot(
+    session: Session,
+    candidates: list[DailyCandidate],
+    *,
+    tickets: list[DailyTicket],
+    created: list[Accumulator],
+    now: datetime,
+) -> None:
+    """Append the exact candidate set observed by this build attempt."""
+    selected: dict[str, tuple[str, uuid.UUID]] = {}
+    for ticket, accumulator in zip(tickets, created, strict=True):
+        for leg in ticket.legs:
+            selected[leg.prediction_id] = (ticket.product.value, accumulator.id)
+
+    run_id = uuid.uuid4()
+    product_day = now.astimezone(_PRODUCT_DAY_ZONE).date()
+    for candidate in candidates:
+        chosen = selected.get(candidate.prediction_id)
+        session.add(
+            DailyCandidateSnapshot(
+                run_id=run_id,
+                product_day=product_day,
+                captured_at_run=now,
+                prediction_id=uuid.UUID(candidate.prediction_id),
+                fixture_id=uuid.UUID(candidate.fixture_id),
+                league_id=candidate.league_id,
+                market=candidate.market,
+                selection=candidate.selection,
+                kickoff_utc=candidate.kickoff_utc,
+                model_probability=candidate.model_probability,
+                market_probability=candidate.market_probability,
+                decimal_odds=float(candidate.decimal_odds),
+                quote_captured_at=candidate.captured_at,
+                dqs=candidate.dqs,
+                bookmaker=candidate.bookmaker,
+                candidate_status="selected" if chosen else "not_selected",
+                exclusion_reason=None if chosen else "not_selected_by_target_band_optimizer",
+                selected_product=chosen[0] if chosen else None,
+                accumulator_id=chosen[1] if chosen else None,
+            )
+        )
 
 
 def _utc(ts: datetime) -> datetime:

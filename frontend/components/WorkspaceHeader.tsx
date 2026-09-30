@@ -8,6 +8,7 @@ const pageContext: Record<string, { title: string; subtitle: string }> = {
   "/accumulators": { title: "Tickets", subtitle: "Every published ticket, by year, month and day" },
   "/performance": { title: "Performance", subtitle: "Profit, ROI and settlement evidence" },
   "/predictions": { title: "Forecasts", subtitle: "Priced forecasts and how they settled" },
+  "/daily-candidates": { title: "Daily candidates", subtitle: "Daily Pick pool, selection decisions, and match outcomes" },
   "/models": { title: "Models", subtitle: "Which model versions produce the forecasts" },
 }
 

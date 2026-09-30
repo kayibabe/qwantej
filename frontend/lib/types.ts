@@ -97,6 +97,43 @@ export interface AccumulatorLegOut {
   match_evidence?: MatchEvidence | null
 }
 
+export interface DailyCandidateOut {
+  id: string
+  run_id: string
+  product_day: string
+  captured_at_run: string
+  prediction_id: string
+  fixture_id: string
+  home_team: string | null
+  away_team: string | null
+  competition_name: string | null
+  kickoff_utc: string
+  market: string
+  selection: string
+  model_probability: number
+  market_probability: number
+  decimal_odds: number
+  quote_captured_at: string
+  dqs: number
+  bookmaker: string | null
+  candidate_status: "selected" | "not_selected" | string
+  exclusion_reason: string | null
+  selected_product: string | null
+  accumulator_id: string | null
+  fixture_status: string
+  score: string | null
+  outcome: string | null
+}
+
+export interface DailyCandidatePage {
+  product_day: string
+  run_id: string | null
+  items: DailyCandidateOut[]
+  total: number
+  limit: number
+  offset: number
+}
+
 export interface MatchEvidenceRow {
   date: string | null
   opponent: string

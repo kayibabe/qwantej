@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.api.routes import (
     accumulators,
     audit,
+    daily_candidates,
     dashboard,
     health,
     models,
@@ -130,6 +131,7 @@ def create_app() -> FastAPI:
     application.include_router(performance.router)
     application.include_router(models.router)
     application.include_router(audit.router)
+    application.include_router(daily_candidates.router)
     application.include_router(dashboard.router)
     application.include_router(real_bets.router)
 
