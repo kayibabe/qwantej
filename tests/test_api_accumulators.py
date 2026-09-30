@@ -224,7 +224,9 @@ class TestListAccumulators:
                 edge=-0.009,
                 qss=62.5,
             )
-            stale_at = KICKOFF + timedelta(hours=4)
+            # The latest provider snapshot can be just under the three-hour
+            # polling threshold while the fixture itself is already overdue.
+            stale_at = KICKOFF + timedelta(hours=2, minutes=58)
             session.add_all([
                 leg,
                 StatsSnapshot(
@@ -244,7 +246,11 @@ class TestListAccumulators:
             ])
             session.flush()
 
-            state = _leg_display_data(session, [accumulator])[leg.id]
+            state = _leg_display_data(
+                session,
+                [accumulator],
+                now=KICKOFF + timedelta(hours=4),
+            )[leg.id]
 
         assert state["match_state"] == "awaiting_result"
         assert state["fixture_status"] == "scheduled"

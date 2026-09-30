@@ -38,8 +38,12 @@ _FIXTURE_SOURCE = "api-football:fixtures"
 
 
 def _leg_display_data(
-    db: DbDep, rows: list[Accumulator]
+    db: DbDep,
+    rows: list[Accumulator],
+    *,
+    now: datetime | None = None,
 ) -> dict[uuid.UUID, dict[str, object]]:
+    now_utc = (now or datetime.now(UTC)).astimezone(UTC)
     legs = [leg for row in rows for leg in row.legs]
     if not legs:
         return {}
@@ -102,7 +106,7 @@ def _leg_display_data(
             and fixture_status == FixtureStatus.SCHEDULED.value
             and fixture_snapshot is not None
             and latest_status in {"NS", "TBD"}
-            and _snapshot_is_overdue(fixture_snapshot, fixture.kickoff_utc)
+            and _snapshot_is_overdue(now_utc, fixture.kickoff_utc)
         )
 
         if outcome_value == SettlementOutcome.WIN.value:
@@ -163,15 +167,15 @@ def _leg_display_data(
     return result
 
 
-def _snapshot_is_overdue(snapshot: StatsSnapshot, kickoff_utc: datetime) -> bool:
-    """Whether a scheduled/not-started snapshot is at least three hours stale."""
-    snapshot_at = snapshot.as_of_timestamp
+def _snapshot_is_overdue(now: datetime, kickoff_utc: datetime) -> bool:
+    """Whether a scheduled/not-started fixture is at least three hours overdue."""
+    current = now
     kickoff = kickoff_utc
-    if snapshot_at.tzinfo is None:
-        snapshot_at = snapshot_at.replace(tzinfo=UTC)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=UTC)
     if kickoff.tzinfo is None:
         kickoff = kickoff.replace(tzinfo=UTC)
-    return snapshot_at.astimezone(UTC) - kickoff.astimezone(UTC) >= timedelta(hours=3)
+    return current.astimezone(UTC) - kickoff.astimezone(UTC) >= timedelta(hours=3)
 
 
 @router.get("", response_model=AccumulatorPage)
