@@ -14,7 +14,7 @@ function percent(value: number) {
 
 function FormList({ rows }: { rows: MatchEvidenceRow[] }) {
   if (!rows.length) return <p>No pre-kickoff form evidence is archived for this match.</p>
-  return <div className="space-y-2">{rows.map((row, index) => <div key={`${row.date}-${index}`} className="flex items-center justify-between gap-3"><span>{row.date} · {row.opponent} <span className="text-[var(--text-muted)]">({row.venue})</span></span><span className="font-mono font-semibold">{row.result} {row.score}</span></div>)}</div>
+  return <div className="space-y-1.5">{rows.map((row, index) => <p key={`${row.date}-${index}`} className="break-words">{row.date} · {row.opponent} <span className="text-[var(--text-muted)]">({row.venue})</span> <span className="ml-1 font-mono font-semibold text-[var(--text-primary)]">{row.result} {row.score}</span></p>)}</div>
 }
 
 function Summary({ summary }: { summary: { played: number; wins: number; draws: number; losses: number; goals_for: number; goals_against: number; points_per_game: number | null } | undefined }) {
@@ -71,7 +71,7 @@ export default function SelectionEvidenceDialog({
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#071626]/65 p-2 sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={`selection-${leg.id}`} className="max-h-[95vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] p-5 shadow-2xl sm:p-7">
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={`selection-${leg.id}`} className="max-h-[95vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] p-5 shadow-2xl sm:p-7">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--accent)]">Selection evidence</p>

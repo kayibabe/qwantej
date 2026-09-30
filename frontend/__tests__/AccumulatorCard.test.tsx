@@ -203,6 +203,29 @@ describe("AccumulatorCard", () => {
     expect(screen.getAllByText("No pre-kickoff form evidence is archived for this match.")).toHaveLength(2)
   })
 
+  it("keeps an evidence row flowing inside the expanded card", () => {
+    const withEvidence = {
+      ...BASE,
+      legs: [{
+        ...BASE.legs[0],
+        match_evidence: {
+          as_of: "2026-09-07T20:00:00Z",
+          home_form: [{ date: "2026-09-06", opponent: "A Very Long Opponent Name FC", venue: "home" as const, result: "W" as const, score: "2–1" }],
+          away_form: [],
+          home_summary: { played: 1, wins: 1, draws: 0, losses: 0, goals_for: 2, goals_against: 1, points_per_game: 3 },
+          away_summary: { played: 0, wins: 0, draws: 0, losses: 0, goals_for: 0, goals_against: 0, points_per_game: null },
+          h2h: [],
+          prediction: null,
+        },
+      }, BASE.legs[1]],
+    }
+    render(<AccumulatorCard acc={withEvidence} />)
+    fireEvent.click(screen.getByRole("button", { name: /View evidence for Home FC vs Away FC/ }))
+    fireEvent.click(screen.getByRole("tab", { name: "Stats" }))
+    expect(screen.getByText(/A Very Long Opponent Name FC/)).toBeInTheDocument()
+    expect(screen.getByText(/W 2–1/)).toBeInTheDocument()
+  })
+
   it("shows the derived ticket result, not the lifecycle status", () => {
     const won = { ...BASE, status: "settled", result: "won" as const, settlement_odds: 3.06, profit_units: 2.06 }
     render(<AccumulatorCard acc={won} />)
