@@ -15,6 +15,15 @@ const tickets = [
 ] as AccumulatorOut[]
 
 describe("TicketStakeSimulator", () => {
+  it("defaults the simulated stake per ticket to one unit", () => {
+    render(<TicketStakeSimulator periods={{ year: [period], month: [period], day: [period] }} initialScope={{ granularity: "year", period: "2026" }} initialTickets={tickets} />)
+
+    expect(screen.getByLabelText("Simulated stake per ticket")).toHaveValue(1)
+    expect(screen.getByText("MWK 3")).toBeInTheDocument()
+    expect(screen.getByText("MWK 4.5")).toBeInTheDocument()
+    expect(screen.getByText("+MWK 1.5")).toBeInTheDocument()
+  })
+
   it("shows an archived flat-stake P&L replay without including void or pending tickets", () => {
     render(<TicketStakeSimulator periods={{ year: [period], month: [period], day: [period] }} initialScope={{ granularity: "year", period: "2026" }} initialTickets={tickets} />)
     fireEvent.change(screen.getByLabelText("Simulated stake per ticket"), { target: { value: "100" } })

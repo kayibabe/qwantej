@@ -30,7 +30,7 @@ export default function TicketStakeSimulator({ periods, initialScope, initialTic
   const [granularity, setGranularity] = useState<ResultsGranularity>(defaultGranularity)
   const [period, setPeriod] = useState(initialScope?.period ?? periods[defaultGranularity][0]?.period ?? "")
   const [ticketId, setTicketId] = useState("all")
-  const [value, setValue] = useState("")
+  const [value, setValue] = useState("1")
   const [tickets, setTickets] = useState<AccumulatorOut[] | null>(initialTickets)
   const [loading, setLoading] = useState(initialTickets === null)
 
