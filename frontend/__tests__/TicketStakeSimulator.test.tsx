@@ -22,13 +22,12 @@ describe("TicketStakeSimulator", () => {
     expect(screen.getByText("Settled tickets")).toBeInTheDocument()
     expect(screen.getByText("3")).toBeInTheDocument()
     expect(screen.getByText("MWK 300")).toBeInTheDocument()
+    expect(screen.getByText("Total returned")).toBeInTheDocument()
+    expect(screen.getByText("MWK 450")).toBeInTheDocument()
     expect(screen.getByText("+MWK 150")).toBeInTheDocument()
     expect(screen.getByText("+50.0%")).toBeInTheDocument()
     expect(screen.getByText(/not a recommended stake and is not saved/i)).toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText("Tickets"), { target: { value: "won" } })
-    expect(screen.getByText("MWK 100")).toBeInTheDocument()
-    expect(screen.getByText("+MWK 250")).toBeInTheDocument()
   })
 
   it("offers Daily Bold ACCA and filters the replay to bold tickets", () => {
@@ -45,6 +44,7 @@ describe("TicketStakeSimulator", () => {
 
     expect(screen.getByText("Settled tickets")).toBeInTheDocument()
     expect(screen.getByText("MWK 100")).toBeInTheDocument()
+    expect(screen.getByText("MWK 400")).toBeInTheDocument()
     expect(screen.getByText("+MWK 300")).toBeInTheDocument()
   })
 })

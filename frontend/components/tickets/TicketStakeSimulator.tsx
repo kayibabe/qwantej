@@ -42,6 +42,7 @@ export default function TicketStakeSimulator({ periods, initialScope, initialTic
   const simulation = stake === null || tickets === null ? null : simulateTicketRows(selectedTickets, stake)
   const invalid = value !== "" && simulation === null && tickets !== null
   const totalStake = simulation && stake !== null ? simulation.settledTickets * stake : null
+  const totalReturned = simulation && stake !== null ? simulation.returnedUnits * stake : null
   const profit = simulation && stake !== null ? simulation.flatUnitProfit * stake : null
 
   useEffect(() => {
@@ -107,7 +108,7 @@ export default function TicketStakeSimulator({ periods, initialScope, initialTic
         </label>
       </div>
       <p id={`${inputId}-help`} className="mt-3 break-words text-xs leading-5 text-[var(--text-secondary)]">Replays archived prices and corrected outcomes only. Void tickets are refunded; pending tickets are excluded. This is not a recommended stake and is not saved.</p>
-      {loading ? <p className="mt-3 text-sm text-[var(--text-secondary)]" aria-live="polite">Loading selected tickets…</p> : invalid ? <p className="mt-3 text-sm font-medium text-[var(--loss)]" role="alert">Enter a positive, finite stake to see the simulation.</p> : simulation && totalStake !== null && profit !== null ? simulation.settledTickets ? <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-live="polite"><Metric label="Settled tickets" value={simulation.settledTickets.toLocaleString()} /><Metric label="Total staked" value={money(totalStake, false)} /><Metric label="P&amp;L" value={money(profit)} tone={profit} /><Metric label="ROI / yield" value={fmtSignedPct(simulation.roi)} tone={simulation.roi ?? 0} /></dl> : <p className="mt-3 text-sm text-[var(--text-secondary)]" aria-live="polite">No settled priced tickets are available to simulate yet.</p> : tickets === null ? <p className="mt-3 text-sm text-[var(--loss)]" role="alert">The selected ticket section could not be loaded.</p> : null}
+      {loading ? <p className="mt-3 text-sm text-[var(--text-secondary)]" aria-live="polite">Loading selected tickets…</p> : invalid ? <p className="mt-3 text-sm font-medium text-[var(--loss)]" role="alert">Enter a positive, finite stake to see the simulation.</p> : simulation && totalStake !== null && totalReturned !== null && profit !== null ? simulation.settledTickets ? <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5" aria-live="polite"><Metric label="Settled tickets" value={simulation.settledTickets.toLocaleString()} /><Metric label="Total staked" value={money(totalStake, false)} /><Metric label="Total returned" value={money(totalReturned, false)} /><Metric label="P&amp;L" value={money(profit)} tone={profit} /><Metric label="ROI / yield" value={fmtSignedPct(simulation.roi)} tone={simulation.roi ?? 0} /></dl> : <p className="mt-3 text-sm text-[var(--text-secondary)]" aria-live="polite">No settled priced tickets are available to simulate yet.</p> : tickets === null ? <p className="mt-3 text-sm text-[var(--loss)]" role="alert">The selected ticket section could not be loaded.</p> : null}
     </section>
   )
 }

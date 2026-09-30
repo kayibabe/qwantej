@@ -149,6 +149,8 @@ export interface PeriodSummary {
 export interface TicketStakeSimulation {
   settledTickets: number
   flatUnitProfit: number
+  /** Total payout returned by settled tickets, including the hypothetical stake. */
+  returnedUnits: number
   roi: number | null
 }
 
@@ -172,6 +174,7 @@ export function simulateTicketStake(
   return {
     settledTickets,
     flatUnitProfit,
+    returnedUnits: settledTickets + flatUnitProfit,
     roi: settledTickets ? flatUnitProfit / settledTickets : null,
   }
 }
@@ -190,7 +193,12 @@ export function simulateTicketRows(
     settledTickets += 1
     flatUnitProfit += ticket.profit_units
   }
-  return { settledTickets, flatUnitProfit, roi: settledTickets ? flatUnitProfit / settledTickets : null }
+  return {
+    settledTickets,
+    flatUnitProfit,
+    returnedUnits: settledTickets + flatUnitProfit,
+    roi: settledTickets ? flatUnitProfit / settledTickets : null,
+  }
 }
 
 /** Collapse a period's per-product tallies into one row. */
