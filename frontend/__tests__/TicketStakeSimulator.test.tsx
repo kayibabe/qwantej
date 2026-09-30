@@ -20,7 +20,9 @@ describe("TicketStakeSimulator", () => {
     fireEvent.change(screen.getByLabelText("Simulated stake per ticket"), { target: { value: "100" } })
 
     expect(screen.getByText("Settled tickets")).toBeInTheDocument()
-    expect(screen.getByText("2 won · 1 lost · 1 void")).toBeInTheDocument()
+    expect(screen.getByText("2 won")).toBeInTheDocument()
+    expect(screen.getByText("1 lost")).toBeInTheDocument()
+    expect(screen.getByText("1 void")).toBeInTheDocument()
     expect(screen.getByText("3")).toBeInTheDocument()
     expect(screen.getByText("MWK 300")).toBeInTheDocument()
     expect(screen.getByText("Total returned")).toBeInTheDocument()
@@ -44,7 +46,9 @@ describe("TicketStakeSimulator", () => {
     fireEvent.change(screen.getByLabelText("Simulated stake per ticket"), { target: { value: "100" } })
 
     expect(screen.getByText("Settled tickets")).toBeInTheDocument()
-    expect(screen.getByText("1 won · 0 lost · 0 void")).toBeInTheDocument()
+    expect(screen.getByText("1 won")).toBeInTheDocument()
+    expect(screen.getByText("0 lost")).toBeInTheDocument()
+    expect(screen.getByText("0 void")).toBeInTheDocument()
     expect(screen.getByText("MWK 100")).toBeInTheDocument()
     expect(screen.getByText("MWK 400")).toBeInTheDocument()
     expect(screen.getByText("+MWK 300")).toBeInTheDocument()

@@ -106,9 +106,11 @@ export default function TicketStakeSimulator({ periods, initialScope, initialTic
               <option value="daily_safe">Daily Safe ACCA</option>
               <option value="daily_bold">Daily Bold ACCA</option>
             </select>
-            {!loading && tickets !== null && <span className="text-xs font-normal text-[var(--text-secondary)]" aria-live="polite">
-              {selectedResults.won} won · {selectedResults.lost} lost · {selectedResults.void} void
-            </span>}
+            {!loading && tickets !== null && <div className="flex flex-wrap gap-1.5 pt-0.5 text-xs font-semibold" aria-live="polite" aria-label="Ticket results">
+              <span className="rounded-full border border-[var(--win)]/30 bg-[var(--win)]/10 px-2 py-0.5 text-[var(--win)]">{selectedResults.won} won</span>
+              <span className="rounded-full border border-[var(--loss)]/30 bg-[var(--loss)]/10 px-2 py-0.5 text-[var(--loss)]">{selectedResults.lost} lost</span>
+              <span className="rounded-full border border-[var(--void)]/40 bg-[var(--void)]/10 px-2 py-0.5 text-[var(--void)]">{selectedResults.void} void</span>
+            </div>}
           </div>
         </div>
         <label htmlFor={inputId} className="grid min-w-0 gap-1 text-sm font-semibold text-[var(--text-secondary)] sm:max-w-xs">
