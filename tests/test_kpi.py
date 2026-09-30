@@ -231,6 +231,7 @@ class TestComputeKpisFinancial:
         ]
         r = compute_kpis(obs)
         assert r.stake_basis == "flat_unit"
+        assert r.n_priced == 2
         assert r.total_stake == pytest.approx(2.0)
         assert r.total_profit == pytest.approx(0.5)
         assert r.roi == pytest.approx(0.25)
@@ -238,6 +239,7 @@ class TestComputeKpisFinancial:
     def test_financials_none_when_nothing_priced(self) -> None:
         r = compute_kpis([_obs("win", taken_odds=None), _obs("loss", taken_odds=None)])
         assert r.stake_basis is None
+        assert r.n_priced == 0
         assert r.roi is None
         assert r.total_stake is None
         assert r.total_profit is None

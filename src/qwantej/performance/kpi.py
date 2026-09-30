@@ -69,6 +69,7 @@ class PerformanceObservation:
     market: str | None = None
     league: str | None = None
     model_version: str | None = None
+    research_mode: bool = False
     product: str | None = None
 
     def __post_init__(self) -> None:
@@ -104,7 +105,10 @@ class PerformanceObservation:
 class KPIReport:
     """Aggregated performance KPIs for a segment of settled observations.
 
-    Counts cover all observations including voids and pushes.
+    Counts cover all observations including voids and pushes. ``n_priced``
+    identifies the settled win/loss population with usable odds; flat-unit
+    financial metrics use that population and must not be read as applying to
+    every scored forecast.
     Metrics requiring settled (win/loss) outcomes are None when no such
     observations exist.  Financial fields use the recorded stakes when every
     contributing row carries one (``stake_basis="real"``); otherwise they fall
@@ -122,6 +126,7 @@ class KPIReport:
     n_losses: int
     n_voids: int
     n_pushes: int
+    n_priced: int          # settled win/loss rows with executable odds
 
     # --- Betting ---
     hit_rate: float | None           # n_wins / n_settled
@@ -306,6 +311,7 @@ def compute_kpis(observations: Sequence[PerformanceObservation]) -> KPIReport:
         n_losses=n_losses,
         n_voids=n_voids,
         n_pushes=n_pushes,
+        n_priced=unit_stakes,
         hit_rate=hit_rate,
         average_odds=average_odds,
         break_even_hit_rate=break_even_hit_rate,

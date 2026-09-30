@@ -79,6 +79,7 @@ def client():
             selection="yes",
             conservative_probability=0.45,
             executable_odds=2.10,
+            research_mode=True,
         )
         seed.add_all([p1, p2])
         seed.flush()
@@ -150,7 +151,7 @@ class TestPerformanceReport:
             "brier_score", "brier_skill_score", "log_loss", "ece",
             "calibration_slope", "calibration_intercept",
             "mean_clv", "n_clv", "roi", "total_stake", "total_profit",
-            "max_drawdown", "volatility", "calibration_bins",
+            "max_drawdown", "volatility", "calibration_bins", "n_priced",
         ):
             assert field in data, f"missing field: {field}"
 
@@ -170,6 +171,15 @@ class TestPerformanceReport:
         assert data["n_wins"] == 1
         assert data["n_losses"] == 1
         assert data["hit_rate"] == pytest.approx(0.5)
+        assert data["n_priced"] == 2
+
+    def test_scope_separates_production_and_research(self, client: TestClient) -> None:
+        production = client.get("/performance/report", params={"scope": "production"}).json()
+        research = client.get("/performance/report", params={"scope": "research"}).json()
+        assert production["n_total"] == 1
+        assert production["n_wins"] == 1
+        assert research["n_total"] == 1
+        assert research["n_losses"] == 1
 
     def test_mean_clv(self, client: TestClient) -> None:
         data = client.get("/performance/report").json()

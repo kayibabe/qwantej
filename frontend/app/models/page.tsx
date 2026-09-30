@@ -146,6 +146,8 @@ export default async function ModelsPage({
           <a href="/performance?subject_type=prediction" className="font-semibold text-[var(--accent)] hover:underline">
             Performance → Individual forecasts
           </a>.
+          Research scope is a separate evidence boundary, not automatically a different model;
+          a challenger should differ in code, inputs or parameters before it is compared for promotion.
         </p>
       </div>
 

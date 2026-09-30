@@ -137,6 +137,7 @@ export function fetchPerformanceReport(params?: {
   subject_type?: string
   since?: string
   market?: string
+  scope?: "all" | "production" | "research"
 }): Promise<KPIReportOut> {
   return apiFetch("/performance/report", params as Record<string, string | undefined>)
 }
@@ -145,6 +146,7 @@ export function fetchPerformanceSegments(params: {
   by: "market" | "league" | "model_version" | "product"
   subject_type?: string
   since?: string
+  scope?: "all" | "production" | "research"
 }): Promise<PerformanceSegmentsOut> {
   return apiFetch("/performance/segments", params)
 }

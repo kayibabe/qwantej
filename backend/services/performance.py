@@ -18,6 +18,7 @@ All functions here are read-only.  Nothing is written to the database.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -60,6 +61,7 @@ def _build_observation(
     market: str | None,
     league: str | None,
     model_version: str | None,
+    research_mode: bool = False,
     product: str | None = None,
 ) -> PerformanceObservation:
     return PerformanceObservation(
@@ -82,6 +84,7 @@ def _build_observation(
         market=market,
         league=league,
         model_version=model_version,
+        research_mode=research_mode,
         product=product,
     )
 
@@ -97,6 +100,7 @@ def query_performance_observations(
     since: datetime | None = None,
     market: str | None = None,
     limit: int | None = None,
+    scope: Literal["all", "production", "research"] = "all",
 ) -> list[PerformanceObservation]:
     """Return settled observations as domain objects, ordered by ``settled_at``.
 
@@ -107,6 +111,8 @@ def query_performance_observations(
         market: if given, restrict to predictions for this market.
         limit: maximum rows; None (default) returns all rows so that aggregate
             KPI reports are never silently truncated.
+        scope: production, research, or all prediction evidence. Accumulator
+            observations are not research-scoped.
 
     Superseded rows (original settlements that have been corrected) are
     excluded; only the effective (latest) settlement per subject is returned.
@@ -130,6 +136,7 @@ def query_performance_observations(
                 Prediction.market.label("pred_market"),
                 Competition.name.label("league_name"),
                 ModelRegistry.version.label("model_ver"),
+                Prediction.research_mode.label("research_mode"),
             )
             .join(
                 Prediction,
@@ -149,6 +156,10 @@ def query_performance_observations(
             stmt = stmt.where(Settlement.settled_at >= since)
         if market is not None:
             stmt = stmt.where(Prediction.market == market)
+        if scope == "production":
+            stmt = stmt.where(Prediction.research_mode.is_(False))
+        elif scope == "research":
+            stmt = stmt.where(Prediction.research_mode.is_(True))
         stmt = stmt.order_by(Settlement.settled_at, Settlement.id)
         if limit is not None:
             stmt = stmt.limit(limit)
@@ -160,6 +171,7 @@ def query_performance_observations(
                 market=row.pred_market,
                 league=row.league_name,
                 model_version=row.model_ver,
+                research_mode=bool(row.research_mode),
             )
             for row in rows
         ]
@@ -208,6 +220,7 @@ def performance_report(
     since: datetime | None = None,
     market: str | None = None,
     limit: int | None = None,
+    scope: Literal["all", "production", "research"] = "all",
 ) -> KPIReport:
     """Compute overall KPIs for settled predictions.
 
@@ -219,6 +232,7 @@ def performance_report(
         since=since,
         market=market,
         limit=limit,
+        scope=scope,
     )
     return compute_kpis(observations)
 
@@ -264,6 +278,7 @@ def performance_by_segment(
     subject_type: str = "prediction",
     since: datetime | None = None,
     limit: int | None = None,
+    scope: Literal["all", "production", "research"] = "all",
 ) -> dict[str, KPIReport]:
     """Compute KPIs segmented by market, league, or model_version.
 
@@ -284,5 +299,6 @@ def performance_by_segment(
         subject_type=subject_type,
         since=since,
         limit=limit,
+        scope=scope,
     )
     return segment_kpis(observations, by=by)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -33,6 +33,7 @@ router = APIRouter(
 
 _VALID_SUBJECT_TYPES = {"prediction", "accumulator"}
 _VALID_SEGMENTS = {"market", "league", "model_version", "product"}
+PerformanceScope = Literal["all", "production", "research"]
 
 
 @router.get("/report", response_model=KPIReportOut)
@@ -41,13 +42,15 @@ def get_performance_report(
     subject_type: Annotated[str, Query()] = "prediction",
     since: Annotated[datetime | None, Query()] = None,
     market: Annotated[str | None, Query(max_length=40)] = None,
+    scope: Annotated[PerformanceScope, Query()] = "all",
 ) -> KPIReportOut:
-    """Return overall KPIs for all effective (non-superseded) settlements.
+    """Return overall KPIs for effective settlements in the requested scope.
 
     Optional filters:
     - ``subject_type`` — ``prediction`` (default) or ``accumulator``
     - ``since`` — only include settlements on or after this ISO-8601 timestamp
     - ``market`` — restrict to one market family (e.g. ``1X2``, ``BTTS``)
+    - ``scope`` — ``production``, ``research`` or ``all`` (default)
 
     KPI dimensions covered: predictive (Brier, BSS, log-loss, ECE, calibration
     slope/intercept), betting (hit rate, average odds, break-even rate), market
@@ -70,6 +73,7 @@ def get_performance_report(
         subject_type=subject_type,
         since=since,
         market=market,
+        scope=scope,
     )
     return KPIReportOut(
         **report.__dict__,
@@ -85,8 +89,9 @@ def get_performance_segments(
     by: Annotated[str, Query()] = "market",
     subject_type: Annotated[str, Query()] = "prediction",
     since: Annotated[datetime | None, Query()] = None,
+    scope: Annotated[PerformanceScope, Query()] = "all",
 ) -> PerformanceSegmentsOut:
-    """Return KPI reports broken down by a segmentation dimension.
+    """Return KPI reports broken down by a segmentation dimension and scope.
 
     ``by=product`` is available for accumulator evidence and uses the immutable
     stored accumulator product (for example ``daily_safe``), never a label
@@ -114,6 +119,7 @@ def get_performance_segments(
         by=by,
         subject_type=subject_type,
         since=since,
+        scope=scope,
     )
     return PerformanceSegmentsOut(
         by=by,

@@ -25,6 +25,9 @@ class KPIReportOut(BaseModel):
     n_losses: int
     n_voids: int
     n_pushes: int
+    # Settled win/loss rows with a usable executable price. Financial KPIs
+    # use this population when stake_basis is flat_unit.
+    n_priced: int
 
     # Betting
     hit_rate: float | None

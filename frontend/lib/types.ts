@@ -217,6 +217,8 @@ export interface KPIReportOut {
   n_losses: number
   n_voids: number
   n_pushes: number
+  /** Settled win/loss rows with a usable executable price. */
+  n_priced: number
   // Betting
   hit_rate: number | null
   average_odds: number | null

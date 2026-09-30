@@ -202,54 +202,18 @@ def _ensure_champion_model(session: Any, now: datetime) -> tuple[Any, Any]:
 
 
 def _ensure_shadow_model(session: Any, now: datetime) -> tuple[Any, Any]:
-    """Return a current-code challenger model/run for paper evidence only."""
-    from sqlalchemy import select
+    """Return the champion identity for a research-scoped inference run.
 
-    from backend.models import (
-        ModelFamily,
-        ModelRegistry,
-        ModelRun,
-        ModelRunKind,
-        ModelRunStatus,
-        ModelStatus,
-    )
-
-    commit = _code_commit()
-    version = f"{_MODEL_VERSION}-shadow-{commit[:12]}"
-    registry = session.scalars(
-        select(ModelRegistry).where(
-            ModelRegistry.name == f"{_MODEL_NAME}-shadow",
-            ModelRegistry.version == version,
-        )
-    ).first()
-    if registry is None:
-        registry = ModelRegistry(
-            family=ModelFamily.ENSEMBLE,
-            name=f"{_MODEL_NAME}-shadow",
-            version=version,
-            status=ModelStatus.CHALLENGER,
-            code_commit=commit,
-            hyperparameters={
-                "k_factor": 20.0,
-                "home_elo_advantage": 65.0,
-                "initial_elo": 1500.0,
-                "poisson_elo_blend": 0.5,
-            },
-            description="Paper-only Poisson + Elo shadow challenger.",
-        )
-        session.add(registry)
-        session.flush()
-    run = ModelRun(
-        model_id=registry.id,
-        kind=ModelRunKind.INFERENCE,
-        status=ModelRunStatus.RUNNING,
-        started_at=now,
-        code_commit=commit,
-        parameters={"market": _MARKET, "selection": _SELECTION, "shadow": True},
-    )
-    session.add(run)
-    session.flush()
-    log.info("signal_pipeline: created shadow challenger run %s", run.id)
+    Research scope is an operational boundary (``research_mode=True``), not a
+    different algorithm.  Older rows may reference the former synthetic
+    ``*-shadow-*`` challenger identities; new rows use the canonical model so
+    model-version performance is not split merely because league coverage was
+    different.  A real challenger must differ in code, inputs or parameters
+    and should be registered separately.
+    """
+    registry, run = _ensure_champion_model(session, now)
+    run.parameters = {"market": _MARKET, "selection": _SELECTION, "research": True}
+    log.info("signal_pipeline: created research inference run %s on champion %s", run.id, registry.id)
     return registry, run
 
 

@@ -40,6 +40,7 @@ function MetricCard({ label, value, sub, valueTone }: { label: string; value: st
 }
 
 type SearchParams = Record<string, string | string[] | undefined>
+type PerformanceScope = "all" | "production" | "research"
 
 // The former Ticket results and Settlements pages live here as tabs; their old
 // URLs redirect to these tabs (see next.config.ts).
@@ -82,6 +83,10 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
 
 function isDate(value: string | undefined) {
   return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value))
+}
+
+function scopeLabel(scope: PerformanceScope) {
+  return scope === "production" ? "Production forecasts" : scope === "research" ? "Research forecasts" : "All forecasts"
 }
 
 /** One row per segment: record, hit rate vs break-even, average odds, ROI, P&L. */
@@ -155,11 +160,12 @@ async function Overview({ params }: { params: SearchParams }) {
   // Tickets are what gets published and bet on, so they are the default lens.
   const subjectType = params.subject_type === "prediction" ? "prediction" : "accumulator"
   const tickets = subjectType === "accumulator"
+  const scope: PerformanceScope = params.scope === "research" || params.scope === "all" ? params.scope : "production"
   const since = requestedSince ? `${requestedSince}T00:00:00+02:00` : undefined
   const [report, primarySegments, modelSegments, bankroll, realResults] = await Promise.all([
-    fetchPerformanceReport({ subject_type: subjectType, since }).catch(() => null),
-    fetchPerformanceSegments({ by: tickets ? "product" : "market", subject_type: subjectType, since }).catch(() => null),
-    tickets ? Promise.resolve(null) : fetchPerformanceSegments({ by: "model_version", subject_type: subjectType, since }).catch(() => null),
+    fetchPerformanceReport({ subject_type: subjectType, since, scope }).catch(() => null),
+    fetchPerformanceSegments({ by: tickets ? "product" : "market", subject_type: subjectType, since, scope }).catch(() => null),
+    tickets ? Promise.resolve(null) : fetchPerformanceSegments({ by: "model_version", subject_type: subjectType, since, scope }).catch(() => null),
     fetchBankroll().catch(() => null),
     fetchRealBetResults().catch(() => null),
   ])
@@ -179,6 +185,7 @@ async function Overview({ params }: { params: SearchParams }) {
   return <>
     <form method="get" className="flex flex-wrap items-end gap-3 border-b border-[var(--border)] pb-4" aria-label="Performance scope">
       <label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">Show<select name="subject_type" defaultValue={subjectType} className="h-11 min-w-48 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]"><option value="accumulator">Accumulator tickets</option><option value="prediction">Individual forecasts</option></select></label>
+      {subjectType === "prediction" && <label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">Evidence<select name="scope" defaultValue={scope} className="h-11 min-w-48 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]"><option value="production">Production forecasts</option><option value="research">Research forecasts</option><option value="all">All forecasts</option></select></label>}
       <label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">Settled from<input type="date" name="since" defaultValue={requestedSince} className="h-11 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]" /></label>
       <button type="submit" className="h-11 rounded-lg border border-[var(--accent)] bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--bg-surface)] hover:bg-[var(--accent-hover)]">Apply</button>
     </form>
@@ -197,10 +204,10 @@ async function Overview({ params }: { params: SearchParams }) {
     </section>
 
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6" aria-label="Headline results">
-      <MetricCard label="Net P&amp;L" value={fmtUnits(report.total_profit)} sub={report.total_stake === null ? `No priced ${noun} settled yet` : `${report.total_stake.toFixed(0)} unit${report.total_stake === 1 ? "" : "s"} staked${flat ? ` · 1 unit per ${noun}` : ""}`} valueTone={tone(report.total_profit)} />
-      <MetricCard label="ROI / yield" value={fmtSignedPct(report.roi)} sub="Profit ÷ stake; voids refunded" valueTone={tone(report.roi)} />
+      <MetricCard label="Net P&amp;L" value={fmtUnits(report.total_profit)} sub={report.total_stake === null ? `No priced ${noun} settled yet` : `${report.total_stake.toFixed(0)} unit${report.total_stake === 1 ? "" : "s"} staked · ${report.n_priced} priced settled`} valueTone={tone(report.total_profit)} />
+      <MetricCard label="ROI / yield" value={fmtSignedPct(report.roi)} sub="Priced settled selections only; voids refunded" valueTone={tone(report.roi)} />
       <MetricCard label="Hit rate" value={pct(report.hit_rate)} sub={report.break_even_hit_rate === null ? "Break-even unavailable" : `Break-even ${pct(report.break_even_hit_rate)} at these odds`} valueTone={report.hit_rate !== null && report.break_even_hit_rate !== null ? tone(report.hit_rate - report.break_even_hit_rate) : undefined} />
-      <MetricCard label="Average odds" value={report.average_odds?.toFixed(2) ?? "—"} sub={`Decided ${noun}s`} />
+      <MetricCard label="Average odds" value={report.average_odds?.toFixed(2) ?? "—"} sub={`${report.n_priced} priced settled ${noun}${report.n_priced === 1 ? "" : "s"}`} />
       <MetricCard label="Max drawdown" value={report.max_drawdown === null ? "—" : `${report.max_drawdown.toFixed(2)} u`} sub="Worst peak-to-trough run" />
       <MetricCard label="Brier score" value={report.brier_score?.toFixed(3) ?? "—"} sub={calibrationCount ? `Lower is better · ${calibrationCount} scored` : "Lower is better"} />
     </section>
@@ -209,7 +216,7 @@ async function Overview({ params }: { params: SearchParams }) {
       <p className="text-xs font-semibold uppercase tracking-[.14em] text-[var(--accent)]">{tickets ? "By ticket type" : "By market"}</p>
       <div className="mt-2 flex flex-wrap items-baseline justify-between gap-3">
         <h2 id="segment-heading" className="text-lg font-semibold text-[var(--text-primary)]">{tickets ? "Which accumulator types are making money" : "Which markets the forecasts beat"}</h2>
-        <span className="text-xs text-[var(--text-muted)]">{flat ? `Flat 1-unit stake per ${noun}` : "Recorded stakes"}</span>
+        <span className="text-xs text-[var(--text-muted)]">{flat ? `Flat 1-unit stake on ${report.n_priced} priced settled ${noun}${report.n_priced === 1 ? "" : "s"}` : "Recorded stakes"}</span>
       </div>
       {segmentRows.length
         ? <div className="mt-4"><SegmentTable caption={tickets ? "Results by accumulator type" : "Results by market"} nameHeader={tickets ? "Ticket type" : "Market"} rows={segmentRows} colorFor={tickets ? productColor : undefined} labelFor={tickets ? (p) => productLabel(p) : undefined} /></div>
@@ -229,10 +236,12 @@ async function Overview({ params }: { params: SearchParams }) {
     <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-[var(--surface-shadow)]" aria-labelledby="reading-heading">
       <h2 id="reading-heading" className="text-base font-semibold text-[var(--text-primary)]">How to read these numbers</h2>
       <ul className="mt-3 grid gap-2 text-sm leading-6 text-[var(--text-secondary)] md:grid-cols-2">
-        <li><strong className="text-[var(--text-primary)]">1-unit figures</strong> assume the same stake on every {noun} at the archived price, so types can be compared fairly. Your actual money is in the Real money panel.</li>
+        <li><strong className="text-[var(--text-primary)]">Evidence scope:</strong> {scopeLabel(scope)}. Research rows are excluded from the production view and must not be used as live-model promotion evidence.</li>
+        <li><strong className="text-[var(--text-primary)]">Priced denominator:</strong> hit rate and predictive metrics cover all settled forecasts in scope; ROI, P&amp;L and drawdown cover only the {report.n_priced} settled forecasts with usable odds.</li>
+        <li><strong className="text-[var(--text-primary)]">1-unit figures</strong> assume the same stake on every priced {noun} at the archived price, so types can be compared fairly. Your actual money is in the Real money panel.</li>
         <li><strong className="text-[var(--text-primary)]">Hit rate vs break-even:</strong> a type is profitable when it wins more often than its odds require.</li>
         <li><strong className="text-[var(--text-primary)]">Tickets settle automatically</strong> as soon as the result is certain: one lost leg loses the ticket immediately; a win needs every leg settled.</li>
-        <li><strong className="text-[var(--text-primary)]">Sample size:</strong> {decided < 30 ? `only ${decided} decided so far, so ROI and hit rate can still swing a lot.` : `${decided} decided; keep watching drawdown alongside ROI.`}</li>
+        <li><strong className="text-[var(--text-primary)]">Sample size:</strong> {report.n_priced < 30 ? `only ${report.n_priced} priced settled so far, so ROI and hit rate can still swing a lot.` : `${report.n_priced} priced settled; keep watching drawdown alongside ROI.`}</li>
       </ul>
     </section>
 
