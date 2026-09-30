@@ -38,6 +38,15 @@ export default function TicketStakeSimulator({ periods, initialScope, initialTic
   const selectedTickets = tickets?.filter((ticket) =>
     ticketId === "all" || ticket.product === ticketId
   ) ?? []
+  const selectedResults = selectedTickets.reduce(
+    (counts, ticket) => {
+      if (ticket.result === "won") counts.won += 1
+      if (ticket.result === "lost") counts.lost += 1
+      if (ticket.result === "void") counts.void += 1
+      return counts
+    },
+    { won: 0, lost: 0, void: 0 },
+  )
   const stake = value === "" ? null : Number(value)
   const simulation = stake === null || tickets === null ? null : simulateTicketRows(selectedTickets, stake)
   const invalid = value !== "" && simulation === null && tickets !== null
@@ -89,15 +98,18 @@ export default function TicketStakeSimulator({ periods, initialScope, initialTic
         <div className="grid min-w-0 gap-3 sm:grid-cols-3">
           <Select label="Section" value={granularity} onChange={(next) => changeGranularity(next as ResultsGranularity)} options={GRANULARITIES} />
           <Select label={granularity === "day" ? "Day" : granularity === "month" ? "Month" : "Year"} value={period} onChange={changePeriod} options={options.map((item) => ({ value: item.period, label: periodLabel(item.period, granularity) }))} />
-          <label className="grid min-w-0 gap-1 text-sm font-semibold text-[var(--text-secondary)]">
-            Tickets
-            <select value={ticketId} onChange={(event) => setTicketId(event.target.value)} disabled={loading || tickets === null} className="h-10 min-w-0 max-w-full rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 font-normal text-[var(--text-primary)] focus-visible:outline-2 focus-visible:outline-[var(--accent)]">
+          <div className="grid min-w-0 gap-1 text-sm font-semibold text-[var(--text-secondary)]">
+            <label htmlFor={`${inputId}-ticket-type`}>Tickets</label>
+            <select id={`${inputId}-ticket-type`} value={ticketId} onChange={(event) => setTicketId(event.target.value)} disabled={loading || tickets === null} className="h-10 min-w-0 max-w-full rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 font-normal text-[var(--text-primary)] focus-visible:outline-2 focus-visible:outline-[var(--accent)]">
               <option value="all">All ACCA tickets</option>
               <option value="daily_balanced">Daily Balanced ACCA</option>
               <option value="daily_safe">Daily Safe ACCA</option>
               <option value="daily_bold">Daily Bold ACCA</option>
             </select>
-          </label>
+            {!loading && tickets !== null && <span className="text-xs font-normal text-[var(--text-secondary)]" aria-live="polite">
+              {selectedResults.won} won · {selectedResults.lost} lost · {selectedResults.void} void
+            </span>}
+          </div>
         </div>
         <label htmlFor={inputId} className="grid min-w-0 gap-1 text-sm font-semibold text-[var(--text-secondary)] sm:max-w-xs">
           Simulated stake per ticket
