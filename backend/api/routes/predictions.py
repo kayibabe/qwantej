@@ -7,12 +7,12 @@ from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import ColumnElement, func, select
+from sqlalchemy import ColumnElement, case, func, literal, select
 from sqlalchemy.orm import InstrumentedAttribute, selectinload
 
 from backend.api.deps import DbDep
 from backend.core.security import RequireApiKey
-from backend.models import Fixture, Prediction, Settlement
+from backend.models import Fixture, ModelRegistry, Prediction, Settlement
 from backend.schemas.predictions import PredictionOut, PredictionPage
 
 router = APIRouter(prefix="/predictions", tags=["predictions"], dependencies=[RequireApiKey])
@@ -32,6 +32,13 @@ _SORT_COLUMNS: dict[str, InstrumentedAttribute | ColumnElement] = {
     "prediction_timestamp": Prediction.prediction_timestamp,
     "market": Prediction.market,
     "selection": Prediction.selection,
+    # These two fields are rendered in the archive table from immutable
+    # prediction/model metadata, so keep their sort semantics server-side too.
+    "model_version": (
+        select(ModelRegistry.name + literal(" ") + ModelRegistry.version)
+        .where(ModelRegistry.id == Prediction.model_version_id)
+        .scalar_subquery()
+    ),
     "conservative_probability": Prediction.conservative_probability,
     "executable_odds": Prediction.executable_odds,
     "expected_value": Prediction.expected_value,
@@ -53,11 +60,20 @@ _SORT_COLUMNS: dict[str, InstrumentedAttribute | ColumnElement] = {
         .limit(1)
         .scalar_subquery()
     ),
+    # Match the visible audit badges: production passed, production rejected,
+    # research passed, research rejected.
+    "audit": case(
+        (Prediction.research_mode.is_(True) & Prediction.gate_passed.is_(False), 3),
+        (Prediction.research_mode.is_(True), 2),
+        (Prediction.gate_passed.is_(False), 1),
+        else_=0,
+    ),
 }
 SortField = Literal[
     "prediction_timestamp",
     "market",
     "selection",
+    "model_version",
     "conservative_probability",
     "executable_odds",
     "expected_value",
@@ -65,6 +81,7 @@ SortField = Literal[
     "dqs",
     "kickoff_utc",
     "outcome",
+    "audit",
 ]
 SortDir = Literal["asc", "desc"]
 PredictionScope = Literal["all", "production", "research", "awaiting", "overdue"]

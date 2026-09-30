@@ -178,6 +178,12 @@ class TestListPredictions:
 
 
 class TestSortPredictions:
+    @pytest.mark.parametrize("sort", ["model_version", "audit"])
+    def test_sort_by_every_forecast_table_header(self, seeded_client, sort: str) -> None:
+        client, _, _ = seeded_client
+        response = client.get("/predictions", params={"sort": sort, "dir": "asc"})
+        assert response.status_code == 200
+
     def test_sort_by_conservative_probability_ascending(self, seeded_client) -> None:
         client, _, _ = seeded_client
         r = client.get("/predictions", params={"sort": "conservative_probability", "dir": "asc"})

@@ -120,12 +120,12 @@ async function PredictionsTable({
             <tr>
               <SortableHeader label="Match" sortKey="kickoff_utc" />
               <SortableHeader label="Pick" sortKey="selection" />
-              <th scope="col" className="hidden px-4 py-2 text-left font-medium lg:table-cell">Model version</th>
+              <SortableHeader label="Model version" sortKey="model_version" className="hidden px-4 py-2 font-medium lg:table-cell" />
               <SortableHeader label="Odds" sortKey="executable_odds" align="right" />
               <SortableHeader label="Model prob." sortKey="conservative_probability" align="right" />
               <SortableHeader label="EV" sortKey="expected_value" align="right" />
               <SortableHeader label="QSS" sortKey="qss" align="right" className="hidden px-4 py-2 font-medium md:table-cell" />
-              <th scope="col" className="hidden px-4 py-2 text-right font-medium md:table-cell">Audit</th>
+              <SortableHeader label="Audit" sortKey="audit" align="right" className="hidden px-4 py-2 font-medium md:table-cell" />
               <SortableHeader label="Result" sortKey="outcome" align="right" />
             </tr>
           </thead>
