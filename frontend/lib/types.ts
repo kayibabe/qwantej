@@ -94,6 +94,31 @@ export interface AccumulatorLegOut {
   elapsed_minutes: number | null
   settlement_outcome: string | null
   quote_captured_at: string | null
+  match_evidence?: MatchEvidence | null
+}
+
+export interface MatchEvidenceRow {
+  date: string | null
+  opponent: string
+  venue: "home" | "away"
+  result: "W" | "D" | "L"
+  score: string
+}
+
+export interface MatchEvidence {
+  as_of: string
+  home_form: MatchEvidenceRow[]
+  away_form: MatchEvidenceRow[]
+  home_summary: { played: number; wins: number; draws: number; losses: number; goals_for: number; goals_against: number; points_per_game: number | null }
+  away_summary: { played: number; wins: number; draws: number; losses: number; goals_for: number; goals_against: number; points_per_game: number | null }
+  h2h: Array<{ date: string | null; home_team: string; away_team: string; home_score: number | null; away_score: number | null }>
+  prediction: {
+    market: string; selection: string; line: number | null
+    ensemble_probability: number | null; calibrated_probability: number | null; conservative_probability: number | null
+    fair_market_probability: number | null; edge_pp: number | null; qss: number | null; dqs: number | null
+    model_probabilities: Record<string, number>; decision_as_of: string; model_version_id: string | null
+    feature_version: string | null; calibration_version: string | null
+  } | null
 }
 
 export interface AccumulatorOut {

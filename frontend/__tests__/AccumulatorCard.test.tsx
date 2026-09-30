@@ -196,11 +196,11 @@ describe("AccumulatorCard", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
   })
 
-  it("does not invent missing match statistics", () => {
+  it("shows an explicit empty state when match evidence is missing", () => {
     render(<AccumulatorCard acc={BASE} />)
     fireEvent.click(screen.getByRole("button", { name: /View evidence for Home FC vs Away FC/ }))
     fireEvent.click(screen.getByRole("tab", { name: "Stats" }))
-    expect(screen.getByText("Match statistics are not included in the published ticket archive.")).toBeInTheDocument()
+    expect(screen.getAllByText("No pre-kickoff form evidence is archived for this match.")).toHaveLength(2)
   })
 
   it("shows the derived ticket result, not the lifecycle status", () => {

@@ -36,6 +36,8 @@ class AccumulatorLegOut(BaseModel):
     settlement_outcome: str | None = None
     # Price-freshness timestamp written at leg creation time.
     quote_captured_at: datetime | None = None
+    # Point-in-time match context available to the evidence drill-down.
+    match_evidence: dict | None = None
 
 
 class AccumulatorOut(BaseModel):

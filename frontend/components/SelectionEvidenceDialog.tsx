@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import type { AccumulatorLegOut } from "@/lib/types"
+import type { AccumulatorLegOut, MatchEvidenceRow } from "@/lib/types"
 import { fmtDatetime } from "@/lib/format"
 
 type Tab = "Overview" | "Stats" | "Probability" | "H2H" | "Signals" | "Odds"
@@ -10,6 +10,16 @@ const TABS: Tab[] = ["Overview", "Stats", "Probability", "H2H", "Signals", "Odds
 
 function percent(value: number) {
   return `${(value * 100).toFixed(1)}%`
+}
+
+function FormList({ rows }: { rows: MatchEvidenceRow[] }) {
+  if (!rows.length) return <p>No pre-kickoff form evidence is archived for this match.</p>
+  return <div className="space-y-2">{rows.map((row, index) => <div key={`${row.date}-${index}`} className="flex items-center justify-between gap-3"><span>{row.date} · {row.opponent} <span className="text-[var(--text-muted)]">({row.venue})</span></span><span className="font-mono font-semibold">{row.result} {row.score}</span></div>)}</div>
+}
+
+function Summary({ summary }: { summary: { played: number; wins: number; draws: number; losses: number; goals_for: number; goals_against: number; points_per_game: number | null } | undefined }) {
+  if (!summary?.played) return null
+  return <p className="mb-3 text-xs text-[var(--text-muted)]">{summary.played} played · {summary.wins}W {summary.draws}D {summary.losses}L · {summary.goals_for}–{summary.goals_against} goals · {summary.points_per_game?.toFixed(2)} PPG</p>
 }
 
 export default function SelectionEvidenceDialog({
@@ -57,6 +67,7 @@ export default function SelectionEvidenceDialog({
     ? `${leg.home_team} vs ${leg.away_team}`
     : `Fixture ${leg.fixture_id.slice(0, 8)}`
   const source = leg.bookmaker ?? "Bookmaker not recorded"
+  const evidence = leg.match_evidence
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#071626]/65 p-2 sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
@@ -98,10 +109,10 @@ export default function SelectionEvidenceDialog({
 
         <div className="min-h-32 py-5 text-sm leading-6 text-[var(--text-secondary)]" role="tabpanel">
           {tab === "Overview" && <div className="space-y-2"><p><strong className="text-[var(--text-primary)]">Archived selection:</strong> {leg.selection} at {leg.decimal_odds.toFixed(2)} with {source}.</p><p>Match result and leg settlement are not included in this ticket record. The ticket status above applies to the full accumulator.</p></div>}
-          {tab === "Stats" && <p>Match statistics are not included in the published ticket archive.</p>}
+          {tab === "Stats" && <div className="space-y-5"><p className="text-xs text-[var(--text-muted)]">Completed fixtures before kickoff only; evidence as of {evidence?.as_of ? fmtDatetime(evidence.as_of) : "the archived kickoff"}.</p><div className="grid gap-5 sm:grid-cols-2"><section><h3 className="mb-2 font-semibold text-[var(--text-primary)]">{leg.home_team ?? "Home"} form</h3><Summary summary={evidence?.home_summary} /><FormList rows={evidence?.home_form ?? []} /></section><section><h3 className="mb-2 font-semibold text-[var(--text-primary)]">{leg.away_team ?? "Away"} form</h3><Summary summary={evidence?.away_summary} /><FormList rows={evidence?.away_form ?? []} /></section></div></div>}
           {tab === "Probability" && <div className="space-y-2"><p><strong className="text-[var(--text-primary)]">{daily ? "Stored probability estimate" : "Stored conservative model probability"}:</strong> {percent(leg.conservative_probability)}</p><p><strong className="text-[var(--text-primary)]">Price-implied probability:</strong> {percent(1 / leg.decimal_odds)} at the archived snapshot odds.</p><p>These figures describe the published selection; they are not an individual-match guarantee.</p></div>}
-          {tab === "H2H" && <p>Head-to-head history is not included in the published ticket archive.</p>}
-          {tab === "Signals" && <div className="space-y-2"><p><strong className="text-[var(--text-primary)]">Stored edge:</strong> {leg.edge >= 0 ? "+" : ""}{(leg.edge * 100).toFixed(1)} percentage points.</p><p><strong className="text-[var(--text-primary)]">Q-score:</strong> {leg.qss.toFixed(1)}. This is the archived score, not a new grade or recommendation.</p>{daily && <p>This Daily Pick did not pass through the Value Gate.</p>}</div>}
+          {tab === "H2H" && (!evidence?.h2h.length ? <p>No prior head-to-head fixtures are archived.</p> : <div className="space-y-2">{evidence.h2h.map((row, index) => <div key={`${row.date}-${index}`} className="flex justify-between gap-3"><span>{row.date} · {row.home_team} vs {row.away_team}</span><strong className="font-mono text-[var(--text-primary)]">{row.home_score}–{row.away_score}</strong></div>)}</div>)}
+          {tab === "Signals" && <div className="space-y-2"><p><strong className="text-[var(--text-primary)]">Stored edge:</strong> {leg.edge >= 0 ? "+" : ""}{(leg.edge * 100).toFixed(1)} percentage points.</p><p><strong className="text-[var(--text-primary)]">Q-score:</strong> {leg.qss.toFixed(1)}. This is the archived score, not a new grade or recommendation.</p>{Object.entries(evidence?.prediction?.model_probabilities ?? {}).map(([model, value]) => <p key={model}><strong className="text-[var(--text-primary)]">{model}:</strong> {percent(value)}</p>)}{daily && <p>This Daily Pick did not pass through the Value Gate.</p>}</div>}
           {tab === "Odds" && <div className="space-y-2"><p><strong className="text-[var(--text-primary)]">Archived snapshot:</strong> {leg.decimal_odds.toFixed(2)} decimal odds from {source}.</p><p><strong className="text-[var(--text-primary)]">Captured:</strong> {leg.quote_captured_at ? `${fmtDatetime(leg.quote_captured_at)} (Africa/Blantyre)` : "Timestamp not recorded"}.</p><p>Check current bookmaker prices before treating this as an available price.</p></div>}
         </div>
       </div>

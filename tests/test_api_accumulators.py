@@ -410,6 +410,16 @@ class TestGetAccumulator:
         r = client.get(f"/accumulators/{uuid.uuid4()}")
         assert r.status_code == 404
 
+    def test_match_evidence_is_attached_without_inventing_history(self, seeded_client) -> None:
+        client, acca1_id, _ = seeded_client
+        r = client.get(f"/accumulators/{acca1_id}")
+        assert r.status_code == 200
+        evidence = r.json()["legs"][0]["match_evidence"]
+        assert evidence["home_form"] == []
+        assert evidence["away_form"] == []
+        assert evidence["h2h"] == []
+        assert evidence["prediction"]["market"] == "1X2"
+
 
 # ---------------------------------------------------------------------------
 # Service-path round-trip: persist_accumulator_decision → API → quote_captured_at

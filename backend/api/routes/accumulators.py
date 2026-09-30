@@ -18,6 +18,7 @@ from backend.models import (
     Accumulator,
     AccumulatorLeg,
     FixtureStatus,
+    Prediction,
     Settlement,
     SettlementOutcome,
     StatsSnapshot,
@@ -25,6 +26,7 @@ from backend.models import (
 from backend.models.fixtures import Fixture
 from backend.models.settlements import TicketStatus
 from backend.schemas.accumulators import AccumulatorLegOut, AccumulatorOut, AccumulatorPage
+from backend.services.match_evidence import build_match_evidence
 from qwantej.performance.accumulator_results import (
     derive_ticket_result,
     flat_unit_profit,
@@ -42,6 +44,7 @@ def _leg_display_data(
     rows: list[Accumulator],
     *,
     now: datetime | None = None,
+    include_match_evidence: bool = False,
 ) -> dict[uuid.UUID, dict[str, object]]:
     now_utc = (now or datetime.now(UTC)).astimezone(UTC)
     legs = [leg for row in rows for leg in row.legs]
@@ -49,6 +52,12 @@ def _leg_display_data(
         return {}
     fixture_ids = {leg.fixture_id for leg in legs}
     prediction_ids = {leg.prediction_id for leg in legs}
+    predictions_by_id: dict[uuid.UUID, Prediction] = {}
+    if include_match_evidence:
+        predictions = db.scalars(
+            select(Prediction).where(Prediction.id.in_(prediction_ids))
+        ).all()
+        predictions_by_id = {prediction.id: prediction for prediction in predictions}
     snapshots = db.scalars(
         select(StatsSnapshot)
         .where(
@@ -163,6 +172,11 @@ def _leg_display_data(
             "live_phase": live_phase,
             "elapsed_minutes": elapsed,
             "settlement_outcome": outcome_value,
+            "match_evidence": (
+                build_match_evidence(db, fixture, predictions_by_id.get(leg.prediction_id))
+                if include_match_evidence and fixture
+                else None
+            ),
         }
     return result
 
@@ -267,7 +281,7 @@ def get_accumulator(
     if row is None:
         raise HTTPException(status_code=404, detail="Accumulator not found")
     row.legs.sort(key=lambda leg: leg.leg_index)
-    display_data = _leg_display_data(db, [row])
+    display_data = _leg_display_data(db, [row], include_match_evidence=True)
     return _serialize_accumulator(row, display_data)
 
 
