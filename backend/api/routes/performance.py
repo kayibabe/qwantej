@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Query
@@ -36,36 +36,20 @@ _VALID_SEGMENTS = {"market", "league", "model_version", "product"}
 PerformanceScope = Literal["all", "production", "research"]
 
 
-def _day_boundary(value: date | None, *, end: bool = False) -> datetime | None:
-    if value is None:
-        return None
-    local = datetime.combine(value, time.min, tzinfo=PRODUCT_DAY_ZONE)
-    return local.astimezone(UTC) if not end else (local + timedelta(days=1)).astimezone(UTC)
-
-
 @router.get("/report", response_model=KPIReportOut)
 def get_performance_report(
     db: DbDep,
     subject_type: Annotated[str, Query()] = "prediction",
     since: Annotated[datetime | None, Query()] = None,
-    until: Annotated[datetime | None, Query()] = None,
     market: Annotated[str | None, Query(max_length=40)] = None,
-    selection: Annotated[str | None, Query(max_length=80)] = None,
-    min_probability: Annotated[float | None, Query(ge=0, le=1)] = None,
-    min_odds: Annotated[float | None, Query(gt=1)] = None,
-    date_from: Annotated[date | None, Query()] = None,
-    date_to: Annotated[date | None, Query()] = None,
     scope: Annotated[PerformanceScope, Query()] = "all",
 ) -> KPIReportOut:
     """Return overall KPIs for effective settlements in the requested scope.
 
     Optional filters:
     - ``subject_type`` — ``prediction`` (default) or ``accumulator``
-    - ``since`` / ``until`` — settlement timestamp window ``[since, until)``
+    - ``since`` — only include settlements on or after this ISO-8601 timestamp
     - ``market`` — restrict to one market family (e.g. ``1X2``, ``BTTS``)
-    - ``selection`` — restrict to the archived selection (e.g. ``UNDER_2_5``)
-    - ``min_probability`` / ``min_odds`` — inclusive archived execution filters
-    - ``date_from`` / ``date_to`` — inclusive match-date window in Africa/Blantyre
     - ``scope`` — ``production``, ``research`` or ``all`` (default)
 
     KPI dimensions covered: predictive (Brier, BSS, log-loss, ECE, calibration
@@ -83,24 +67,12 @@ def get_performance_report(
             status_code=422,
             detail="market filter is only supported for subject_type=prediction",
         )
-    if until is not None and since is not None and since >= until:
-        raise HTTPException(status_code=422, detail="since must be before until")
-    if date_from is not None and date_to is not None and date_from > date_to:
-        raise HTTPException(status_code=422, detail="date_from must be on or before date_to")
-    if any(v is not None for v in (selection, min_probability, min_odds, date_from, date_to)) and subject_type != "prediction":
-        raise HTTPException(status_code=422, detail="match filters are only supported for subject_type=prediction")
 
     report = performance_report(
         db,
         subject_type=subject_type,
         since=since,
-        until=until,
         market=market,
-        selection=selection,
-        min_probability=min_probability,
-        min_odds=min_odds,
-        match_since=_day_boundary(date_from),
-        match_until=_day_boundary(date_to, end=True),
         scope=scope,
     )
     return KPIReportOut(
@@ -117,13 +89,6 @@ def get_performance_segments(
     by: Annotated[str, Query()] = "market",
     subject_type: Annotated[str, Query()] = "prediction",
     since: Annotated[datetime | None, Query()] = None,
-    until: Annotated[datetime | None, Query()] = None,
-    market: Annotated[str | None, Query(max_length=40)] = None,
-    selection: Annotated[str | None, Query(max_length=80)] = None,
-    min_probability: Annotated[float | None, Query(ge=0, le=1)] = None,
-    min_odds: Annotated[float | None, Query(gt=1)] = None,
-    date_from: Annotated[date | None, Query()] = None,
-    date_to: Annotated[date | None, Query()] = None,
     scope: Annotated[PerformanceScope, Query()] = "all",
 ) -> PerformanceSegmentsOut:
     """Return KPI reports broken down by a segmentation dimension and scope.
@@ -148,25 +113,12 @@ def get_performance_segments(
             status_code=422,
             detail=f"subject_type must be one of {sorted(_VALID_SUBJECT_TYPES)}",
         )
-    if until is not None and since is not None and since >= until:
-        raise HTTPException(status_code=422, detail="since must be before until")
-    if date_from is not None and date_to is not None and date_from > date_to:
-        raise HTTPException(status_code=422, detail="date_from must be on or before date_to")
-    if any(v is not None for v in (market, selection, min_probability, min_odds, date_from, date_to)) and subject_type != "prediction":
-        raise HTTPException(status_code=422, detail="match filters are only supported for subject_type=prediction")
 
     segments = performance_by_segment(
         db,
         by=by,
         subject_type=subject_type,
         since=since,
-        until=until,
-        market=market,
-        selection=selection,
-        min_probability=min_probability,
-        min_odds=min_odds,
-        match_since=_day_boundary(date_from),
-        match_until=_day_boundary(date_to, end=True),
         scope=scope,
     )
     return PerformanceSegmentsOut(

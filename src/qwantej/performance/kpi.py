@@ -148,7 +148,6 @@ class KPIReport:
     # --- Financial (see stake_basis) ---
     roi: float | None                # sum(profit_loss) / sum(stake); alias: yield
     total_stake: float | None        # sum(stake)
-    total_return: float | None       # total stake returned, including profit
     total_profit: float | None       # sum(profit_loss)
 
     # --- Risk ---
@@ -326,7 +325,6 @@ def compute_kpis(observations: Sequence[PerformanceObservation]) -> KPIReport:
         n_clv=clv_n,
         roi=roi,
         total_stake=stake_sum,
-        total_return=(stake_sum + pl_sum) if stake_sum is not None and pl_sum is not None else None,
         total_profit=pl_sum,
         calibration_bins=calibration_bins,
         max_drawdown=max_drawdown,

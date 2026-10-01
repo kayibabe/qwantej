@@ -236,7 +236,6 @@ export interface KPIReportOut {
   // Financial
   roi: number | null
   total_stake: number | null
-  total_return: number | null
   total_profit: number | null
   // Risk
   max_drawdown: number | null // stake units, not a fraction

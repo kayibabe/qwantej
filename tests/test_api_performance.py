@@ -185,35 +185,6 @@ class TestPerformanceReport:
         data = client.get("/performance/report").json()
         assert data["mean_clv"] == pytest.approx(0.01)
 
-    def test_match_filters_use_archived_selection_probability_odds_and_date(self, client: TestClient) -> None:
-        data = client.get(
-            "/performance/report",
-            params={
-                "market": "1X2",
-                "selection": "home",
-                "min_probability": 0.60,
-                "min_odds": 1.80,
-                "date_from": "2026-09-07",
-                "date_to": "2026-09-07",
-            },
-        ).json()
-        assert data["n_total"] == 1
-        assert data["n_wins"] == 1
-        assert data["total_return"] == pytest.approx(1.80)
-        assert data["total_profit"] == pytest.approx(0.80)
-        assert data["roi"] == pytest.approx(0.80)
-
-    def test_match_date_window_is_inclusive_in_blantyre_calendar(self, client: TestClient) -> None:
-        data = client.get(
-            "/performance/report",
-            params={"date_from": "2026-09-06", "date_to": "2026-09-06"},
-        ).json()
-        assert data["n_total"] == 0
-
-    def test_total_return_is_exposed(self, client: TestClient) -> None:
-        data = client.get("/performance/report").json()
-        assert data["total_return"] == pytest.approx(1.80)
-
     def test_since_filter(self, client: TestClient) -> None:
         future = NOW + timedelta(days=1)
         data = client.get("/performance/report", params={"since": future.isoformat()}).json()
