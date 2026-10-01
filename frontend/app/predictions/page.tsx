@@ -101,21 +101,32 @@ async function PredictionsTable({
   dir: "asc" | "desc" | undefined
   offset: number
 }) {
-  const page = await fetchPredictions({ market, scope, sort, dir, limit: LIMIT, offset, priced_only: true }).catch(() => null)
+  // Research forecasts may be probability-only while their market odds are
+  // being reconstructed. Production and other operational views remain
+  // restricted to priced forecasts.
+  const page = await fetchPredictions({
+    market,
+    scope,
+    sort,
+    dir,
+    limit: LIMIT,
+    offset,
+    priced_only: scope !== "research",
+  }).catch(() => null)
 
   if (!page) {
     return <p className="text-sm text-[var(--loss)]">Could not load forecasts.</p>
   }
 
   if (page.items.length === 0) {
-    return <p className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-surface)] p-6 text-sm text-[var(--text-secondary)]">No priced forecasts match this filter.</p>
+    return <p className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-surface)] p-6 text-sm text-[var(--text-secondary)]">No {scope === "research" ? "research" : "priced"} forecasts match this filter.</p>
   }
 
   return (
     <>
       <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] shadow-[var(--surface-shadow)]">
         <table className="w-full text-sm">
-          <caption className="sr-only">Priced forecasts, newest first unless sorted. Column headers sort the table; Match sorts by kickoff time.</caption>
+          <caption className="sr-only">{scope === "research" ? "Research forecasts" : "Priced forecasts"}, newest first unless sorted. Column headers sort the table; Match sorts by kickoff time.</caption>
           <thead className="border-b border-[var(--border)] text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
             <tr>
               <SortableHeader label="Match" sortKey="kickoff_utc" />
@@ -156,6 +167,9 @@ export default async function PredictionsPage({
   const dir = sp.dir === "asc" ? "asc" : sp.dir === "desc" ? "desc" : undefined
   const offset = Math.max(0, Number(sp.offset ?? 0) || 0)
   const markets = await fetchPricedMarkets().catch(() => [] as string[])
+  const visibleMarkets = scope === "research"
+    ? Array.from(new Set([...markets, "TEAM_TOTALS"]))
+    : markets
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 p-4 sm:p-8">
@@ -188,7 +202,7 @@ export default async function PredictionsPage({
 
       <nav aria-label="Filter by market" className="flex flex-wrap items-center gap-2">
         <span className="mr-1 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Market</span>
-        {["", ...markets].map((m) => {
+        {["", ...visibleMarkets].map((m) => {
           const active = (market ?? "") === m
           const params = new URLSearchParams({ scope, offset: "0" })
           if (m) params.set("market", m)

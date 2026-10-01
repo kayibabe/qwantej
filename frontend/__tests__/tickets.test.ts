@@ -158,6 +158,11 @@ describe("forecast labels", () => {
     expect(selectionLabel({ ...base, market: "TOTALS", selection: "over", line: 2.5 })).toBe("Over 2.5")
   })
 
+  it("labels Home Over 0.5 research forecasts", () => {
+    expect(selectionLabel({ ...base, market: "TEAM_TOTALS", selection: "home_over", line: 0.5 })).toBe("Arsenal over 0.5")
+    expect(marketLabel("TEAM_TOTALS")).toBe("Home team total")
+  })
+
   it("falls back to the raw values for unknown markets", () => {
     expect(selectionLabel({ ...base, market: "CORNERS", selection: "over 9" })).toBe("over 9")
     expect(marketLabel("CORNERS")).toBe("CORNERS")

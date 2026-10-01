@@ -5,6 +5,7 @@ const MARKET_LABEL: Record<string, string> = {
   DOUBLE_CHANCE: "Double chance",
   BTTS: "Both teams to score",
   TOTALS: "Total goals",
+  TEAM_TOTALS: "Home team total",
 }
 
 export function marketLabel(market: string): string {
@@ -27,6 +28,10 @@ export function selectionLabel(
       return sel === "yes" ? "Both teams score" : sel === "no" ? "Not both teams score" : p.selection
     case "TOTALS": {
       const side = sel === "over" ? "Over" : sel === "under" ? "Under" : p.selection
+      return p.line !== null ? `${side} ${p.line}` : side
+    }
+    case "TEAM_TOTALS": {
+      const side = sel === "home_over" ? `${home} over` : sel === "away_over" ? `${away} over` : p.selection
       return p.line !== null ? `${side} ${p.line}` : side
     }
     default:
