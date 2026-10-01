@@ -158,24 +158,19 @@ function RealMoney({ bankroll, results }: { bankroll: BankrollSummaryOut | null;
 async function Overview({ params }: { params: SearchParams }) {
   const requestedSince = typeof params.since === "string" && isDate(params.since) ? params.since : undefined
   const requestedUntil = typeof params.until === "string" && isDate(params.until) ? params.until : undefined
-  const linkedDate = typeof params.date === "string" && isDate(params.date) ? params.date : undefined
-  const dateFrom = typeof params.date_from === "string" && isDate(params.date_from) ? params.date_from : linkedDate
-  const dateTo = typeof params.date_to === "string" && isDate(params.date_to) ? params.date_to : linkedDate
+  const dateFrom = typeof params.date_from === "string" && isDate(params.date_from) ? params.date_from : undefined
+  const dateTo = typeof params.date_to === "string" && isDate(params.date_to) ? params.date_to : undefined
   const market = typeof params.market === "string" ? params.market : undefined
   const selection = typeof params.selection === "string" ? params.selection : undefined
-  const minProbabilityPercent = typeof params.min_probability === "string"
-    ? params.min_probability
-    : typeof params.minProbability === "string" ? params.minProbability : undefined
+  const minProbabilityPercent = typeof params.min_probability === "string" ? params.min_probability : undefined
   const minProbability = minProbabilityPercent && Number.isFinite(Number(minProbabilityPercent))
     ? String(Number(minProbabilityPercent) / 100)
     : undefined
-  const minOdds = typeof params.min_odds === "string"
-    ? params.min_odds
-    : typeof params.minOdds === "string" ? params.minOdds : undefined
+  const minOdds = typeof params.min_odds === "string" ? params.min_odds : undefined
   // Tickets are what gets published and bet on, so they are the default lens.
   // Match filters are individual-forecast filters. This also makes URLs copied
   // from research screens work when they omit the optional subject_type.
-  const hasMatchFilters = [params.market, params.selection, params.min_probability, params.minProbability, params.min_odds, params.minOdds, params.date, params.date_from, params.date_to]
+  const hasMatchFilters = [params.market, params.selection, params.min_probability, params.min_odds, params.date_from, params.date_to]
     .some((value) => value !== undefined)
   const subjectType = params.subject_type === "accumulator"
     ? "accumulator"
