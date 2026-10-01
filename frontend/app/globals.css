@@ -135,10 +135,7 @@ body {
   background: color-mix(in srgb, var(--bg-surface) 94%, transparent);
   padding: .75rem 2rem;
 }
-.workspace-research-status { display: flex; align-items: center; gap: .45rem; color: var(--text-muted); font-size: .875rem; letter-spacing: .04em; white-space: nowrap; }
-.workspace-status-dot { width: .55rem; height: .55rem; border-radius: 999px; background: #0d9f6e; box-shadow: 0 0 0 4px color-mix(in srgb, #0d9f6e 13%, transparent); }
-.workspace-theme { margin-left: .25rem; }
-.workspace-context { display: flex; min-width: 0; flex: 1; align-items: baseline; justify-content: center; gap: .5rem; color: var(--text-muted); font-size: .8125rem; }
+.workspace-context { display: flex; min-width: 0; flex: 1; align-items: baseline; gap: .5rem; color: var(--text-muted); font-size: .8125rem; }
 .workspace-context strong { color: var(--text-secondary); font-weight: 650; }
 .workspace-context span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-refresh { border: 1px solid var(--border); border-radius: .6rem; background: var(--bg-surface); color: var(--text-secondary); padding: .6rem .8rem; font-size: .8125rem; font-weight: 600; transition: background-color .15s ease, border-color .15s ease; }
@@ -148,7 +145,6 @@ body {
 @media (max-width: 767px) {
   .workspace-header { min-height: 54px; padding: .5rem 1rem; }
   .workspace-context { display: none; }
-  .workspace-research-status { flex: 1; font-size: .75rem; }
 }
 
 @media (prefers-color-scheme: dark) {

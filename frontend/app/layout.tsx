@@ -45,8 +45,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           </div>
         </header>
         {/* Sidebar */}
-        <aside className="hidden w-[268px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--bg-surface)] md:flex">
-          <div className="flex min-h-28 items-center border-b border-[var(--border)] px-5 py-3">
+        <aside className="hidden w-[252px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--bg-surface)] md:flex">
+          <div className="border-b border-[var(--border)] px-5 py-4">
             <img src="/qwantej-brand-light.png" alt="Qwantej — Intelligence Beyond Numbers" className="brand-lockup" />
           </div>
           <Nav />
