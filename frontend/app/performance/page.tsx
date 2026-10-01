@@ -85,6 +85,10 @@ function isDate(value: string | undefined) {
   return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value))
 }
 
+function nonEmpty(value: string | string[] | undefined) {
+  return typeof value === "string" && value.trim() ? value : undefined
+}
+
 function scopeLabel(scope: PerformanceScope) {
   return scope === "production" ? "Production forecasts" : scope === "research" ? "Research forecasts" : "All forecasts"
 }
@@ -161,21 +165,17 @@ async function Overview({ params }: { params: SearchParams }) {
   const linkedDate = typeof params.date === "string" && isDate(params.date) ? params.date : undefined
   const dateFrom = typeof params.date_from === "string" && isDate(params.date_from) ? params.date_from : linkedDate
   const dateTo = typeof params.date_to === "string" && isDate(params.date_to) ? params.date_to : linkedDate
-  const market = typeof params.market === "string" ? params.market : undefined
-  const selection = typeof params.selection === "string" ? params.selection : undefined
-  const minProbabilityPercent = typeof params.min_probability === "string"
-    ? params.min_probability
-    : typeof params.minProbability === "string" ? params.minProbability : undefined
+  const market = nonEmpty(params.market)
+  const selection = nonEmpty(params.selection)
+  const minProbabilityPercent = nonEmpty(params.min_probability) ?? nonEmpty(params.minProbability)
   const minProbability = minProbabilityPercent && Number.isFinite(Number(minProbabilityPercent))
     ? String(Number(minProbabilityPercent) / 100)
     : undefined
-  const minOdds = typeof params.min_odds === "string"
-    ? params.min_odds
-    : typeof params.minOdds === "string" ? params.minOdds : undefined
+  const minOdds = nonEmpty(params.min_odds) ?? nonEmpty(params.minOdds)
   // Tickets are what gets published and bet on, so they are the default lens.
   // Match filters are individual-forecast filters. This also makes URLs copied
   // from research screens work when they omit the optional subject_type.
-  const hasMatchFilters = [params.market, params.selection, params.min_probability, params.minProbability, params.min_odds, params.minOdds, params.date, params.date_from, params.date_to]
+  const hasMatchFilters = [market, selection, minProbabilityPercent, minOdds, linkedDate, dateFrom, dateTo]
     .some((value) => value !== undefined)
   const subjectType = params.subject_type === "accumulator"
     ? "accumulator"
