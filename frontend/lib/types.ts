@@ -35,6 +35,16 @@ export interface PredictionPage {
   offset: number
 }
 
+export interface PredictionMarketSummary {
+  market: string
+  total: number
+  won: number
+  lost: number
+  void: number
+  push: number
+  unsettled: number
+}
+
 export interface SettlementOut {
   id: string
   subject_type: string

@@ -6,6 +6,7 @@ import type {
   ModelRegistryDetailOut,
   ModelRegistryPage,
   PerformanceSegmentsOut,
+  PredictionMarketSummary,
   PredictionPage,
   SettlementPage,
   SettlementSummary,
@@ -64,6 +65,12 @@ export function fetchPredictions(params: {
 /** Markets that have at least one priced forecast. */
 export function fetchPricedMarkets(): Promise<string[]> {
   return apiFetch("/predictions/markets")
+}
+
+export function fetchPredictionMarketSummary(
+  scope: "all" | "production" | "research" | "awaiting" | "overdue",
+): Promise<PredictionMarketSummary[]> {
+  return apiFetch("/predictions/summary", { scope })
 }
 
 export function fetchDailyCandidates(date?: string): Promise<DailyCandidatePage> {

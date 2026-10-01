@@ -113,6 +113,22 @@ class TestListPredictions:
         assert data["total"] == 2
         assert len(data["items"]) == 2
 
+    def test_research_market_summary_counts_unsettled_rows(self, seeded_client) -> None:
+        client, _, _ = seeded_client
+        r = client.get("/predictions/summary?scope=research")
+        assert r.status_code == 200
+        assert r.json() == [
+            {
+                "market": "1X2",
+                "total": 1,
+                "won": 0,
+                "lost": 0,
+                "void": 0,
+                "push": 0,
+                "unsettled": 1,
+            }
+        ]
+
     def test_exposes_archive_audit_context_and_overdue_settlement(self, seeded_client) -> None:
         client, _, _ = seeded_client
         item = client.get("/predictions").json()["items"][0]

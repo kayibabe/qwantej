@@ -48,3 +48,13 @@ class PredictionPage(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class PredictionMarketSummary(BaseModel):
+    market: str
+    total: int
+    won: int
+    lost: int
+    void: int
+    push: int
+    unsettled: int

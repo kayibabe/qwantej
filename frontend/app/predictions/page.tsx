@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import { Suspense } from "react"
-import { fetchPredictions, fetchPricedMarkets } from "@/lib/api"
+import { fetchPredictions, fetchPredictionMarketSummary, fetchPricedMarkets } from "@/lib/api"
 import { fmtDatetime } from "@/lib/format"
 import { marketLabel, selectionLabel } from "@/lib/forecasts"
 import type { PredictionOut } from "@/lib/types"
@@ -11,6 +11,11 @@ export const metadata: Metadata = { title: "Forecasts" }
 
 const LIMIT = 50
 type Scope = "all" | "production" | "research" | "awaiting" | "overdue"
+
+function summaryLabel(summary: { total: number; won: number; lost: number; void: number; unsettled: number } | undefined): string {
+  if (!summary) return "0 total"
+  return `${summary.total} total · ${summary.won}W · ${summary.lost}L · ${summary.void}V · ${summary.unsettled}U`
+}
 
 const SCOPE_OPTIONS: { value: Scope; label: string; description: string }[] = [
   { value: "production", label: "Published production", description: "Gate-passed forecasts used for production signals" },
@@ -167,6 +172,18 @@ export default async function PredictionsPage({
   const dir = sp.dir === "asc" ? "asc" : sp.dir === "desc" ? "desc" : undefined
   const offset = Math.max(0, Number(sp.offset ?? 0) || 0)
   const markets = await fetchPricedMarkets().catch(() => [] as string[])
+  const marketSummaries = await fetchPredictionMarketSummary(scope).catch(() => [])
+  const summaryByMarket = new Map(marketSummaries.map((summary) => [summary.market, summary]))
+  const allSummary = marketSummaries.reduce(
+    (total, summary) => ({
+      total: total.total + summary.total,
+      won: total.won + summary.won,
+      lost: total.lost + summary.lost,
+      void: total.void + summary.void,
+      unsettled: total.unsettled + summary.unsettled,
+    }),
+    { total: 0, won: 0, lost: 0, void: 0, unsettled: 0 },
+  )
   const visibleMarkets = scope === "research"
     ? Array.from(new Set([...markets, "TEAM_TOTALS"]))
     : markets
@@ -219,7 +236,10 @@ export default async function PredictionsPage({
                   : "border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-raised)]",
               ].join(" ")}
             >
-              {m ? marketLabel(m) : "All markets"}
+              <span>{m ? marketLabel(m) : "All markets"}</span>
+              <span className="ml-1 text-[10px] opacity-80">
+                {summaryLabel(m ? summaryByMarket.get(m) : allSummary)}
+              </span>
             </a>
           )
         })}

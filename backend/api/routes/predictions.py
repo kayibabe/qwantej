@@ -13,7 +13,7 @@ from sqlalchemy.orm import InstrumentedAttribute, selectinload
 from backend.api.deps import DbDep
 from backend.core.security import RequireApiKey
 from backend.models import Fixture, ModelRegistry, Prediction, Settlement
-from backend.schemas.predictions import PredictionOut, PredictionPage
+from backend.schemas.predictions import PredictionMarketSummary, PredictionOut, PredictionPage
 
 router = APIRouter(prefix="/predictions", tags=["predictions"], dependencies=[RequireApiKey])
 
@@ -174,6 +174,49 @@ def list_priced_markets(db: DbDep) -> list[str]:
             .order_by(Prediction.market)
         )
     )
+
+
+@router.get("/summary", response_model=list[PredictionMarketSummary])
+def prediction_market_summary(
+    db: DbDep,
+    scope: Annotated[PredictionScope, Query()] = "research",
+) -> list[PredictionMarketSummary]:
+    """Return outcome counts by market for the selected forecast scope."""
+    outcome = (
+        select(Settlement.outcome)
+        .where(
+            Settlement.subject_type == "prediction",
+            Settlement.subject_id == Prediction.id,
+            Settlement.id.not_in(_SUPERSEDED_SETTLEMENTS),
+        )
+        .order_by(Settlement.settled_at.desc(), Settlement.id.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+    stmt = select(Prediction.market, outcome.label("outcome"))
+    if scope == "production":
+        stmt = stmt.where(Prediction.research_mode.is_(False), Prediction.gate_passed.is_(True))
+    elif scope == "research":
+        stmt = stmt.where(Prediction.research_mode.is_(True))
+
+    summary: dict[str, dict[str, int]] = {}
+    for market, raw_outcome in db.execute(stmt):
+        counts = summary.setdefault(
+            market,
+            {"total": 0, "won": 0, "lost": 0, "void": 0, "push": 0, "unsettled": 0},
+        )
+        counts["total"] += 1
+        key = (
+            {"win": "won", "loss": "lost"}.get(raw_outcome.value, raw_outcome.value)
+            if raw_outcome is not None
+            else "unsettled"
+        )
+        counts[key] += 1
+
+    return [
+        PredictionMarketSummary(market=market, **summary[market])
+        for market in sorted(summary)
+    ]
 
 
 @router.get("", response_model=PredictionPage)

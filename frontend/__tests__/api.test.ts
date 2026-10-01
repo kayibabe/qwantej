@@ -72,6 +72,16 @@ describe("fetchPredictions", () => {
   })
 })
 
+describe("fetchPredictionMarketSummary", () => {
+  it("passes the forecast scope", async () => {
+    mockFetch.mockReturnValueOnce(makeResponse([]))
+    const { fetchPredictionMarketSummary } = await import("@/lib/api")
+    await fetchPredictionMarketSummary("research")
+    expect(mockFetch.mock.calls[0][0]).toContain("/predictions/summary")
+    expect(mockFetch.mock.calls[0][0]).toContain("scope=research")
+  })
+})
+
 describe("fetchSettlementSummary", () => {
   it("calls /settlements/summary", async () => {
     const summary = { n_settled: 10, n_wins: 6, n_losses: 4, n_voids: 0, win_rate: 0.6, avg_clv: 0.02, avg_brier: 0.18 }
