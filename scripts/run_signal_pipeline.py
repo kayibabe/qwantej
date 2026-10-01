@@ -16,7 +16,10 @@ within the lookahead window that has not yet been predicted, the pipeline:
   7. Runs the accumulator optimiser over all qualified (gate-passed) selections
      for Core, Growth and Alpha tiers.
   8. Persists accumulator decisions (paper_only=True until production sign-off).
-  9. Sends a Telegram summary notification.
+  9. In shadow mode, also archives the Home Over 0.5 team-total probability
+     forecast as research-only evidence; this path has no odds or publishing
+     route.
+  10. Sends a Telegram summary notification.
 
 **Paper-only**: all accumulators are persisted with paper_only=True.  A
 separate release decision (with walk-forward evidence + Codex review) is
@@ -65,6 +68,9 @@ log = logging.getLogger("signal_pipeline")
 
 _MARKET = "1X2"
 _SELECTION = "home"
+_RESEARCH_MARKET = "TEAM_TOTALS"
+_RESEARCH_SELECTION = "home_over"
+_RESEARCH_LINE = 0.5
 _MODEL_NAME = "poisson+elo-ensemble"
 _MODEL_VERSION = "1.0.0"
 _MODEL_FAMILY = "ensemble"
@@ -213,7 +219,11 @@ def _ensure_shadow_model(session: Any, now: datetime) -> tuple[Any, Any]:
     """
     registry, run = _ensure_champion_model(session, now)
     run.parameters = {"market": _MARKET, "selection": _SELECTION, "research": True}
-    log.info("signal_pipeline: created research inference run %s on champion %s", run.id, registry.id)
+    log.info(
+        "signal_pipeline: created research inference run %s on champion %s",
+        run.id,
+        registry.id,
+    )
     return registry, run
 
 
@@ -239,7 +249,13 @@ def _fit_linear_calibration(probs: list[float], outcomes: list[float]) -> dict:
     return {"slope": float(slope), "intercept": float(intercept)}
 
 
-def _ensure_champion_calibration(session: Any, now: datetime, commit: str) -> Any:
+def _ensure_champion_calibration(
+    session: Any,
+    now: datetime,
+    commit: str,
+    *,
+    market: str | None = None,
+) -> Any:
     """Return the current champion CalibrationModel, creating one if needed.
 
     If ≥ CALIBRATION_MIN_SAMPLES WIN/LOSS settlements with taken_probability
@@ -252,15 +268,21 @@ def _ensure_champion_calibration(session: Any, now: datetime, commit: str) -> An
         CalibrationMethod,
         CalibrationModel,
         CalibrationStatus,
+        Prediction,
         Settlement,
     )
     from backend.models import SettlementOutcome as OrmOutcome
 
     # Check for existing champion.
+    market_filter = (
+        CalibrationModel.market == market
+        if market is not None
+        else CalibrationModel.market.is_(None)
+    )
     champion = session.scalars(
         select(CalibrationModel).where(
             CalibrationModel.status == CalibrationStatus.CHAMPION,
-            CalibrationModel.market.is_(None),  # global calibrator
+            market_filter,
         )
     ).first()
     if champion is not None:
@@ -270,15 +292,19 @@ def _ensure_champion_calibration(session: Any, now: datetime, commit: str) -> An
     superseded_ids = select(Settlement.supersedes_id).where(
         Settlement.supersedes_id.is_not(None)
     )
+    training_query = select(Settlement).where(
+        Settlement.subject_type == "prediction",
+        Settlement.id.not_in(superseded_ids),
+        Settlement.taken_probability.is_not(None),
+        Settlement.outcome.in_([OrmOutcome.WIN, OrmOutcome.LOSS]),
+    )
+    if market is not None:
+        training_query = training_query.join(
+            Prediction,
+            Prediction.id == Settlement.subject_id,
+        ).where(Prediction.market == market)
     rows = list(session.scalars(
-        select(Settlement).where(
-            Settlement.subject_type == "prediction",
-            Settlement.id.not_in(superseded_ids),
-            Settlement.taken_probability.is_not(None),
-            Settlement.outcome.in_([OrmOutcome.WIN, OrmOutcome.LOSS]),
-        )
-        .order_by(Settlement.settled_at.desc())
-        .limit(500)
+        training_query.order_by(Settlement.settled_at.desc()).limit(500)
     ))
 
     probs = [float(r.taken_probability) for r in rows if r.taken_probability is not None]
@@ -307,7 +333,8 @@ def _ensure_champion_calibration(session: Any, now: datetime, commit: str) -> An
         )
 
     artefact_hash = _sha256(params)
-    version = f"signal-calibrator-{version_tag}-{now.strftime('%Y%m%d')}"
+    market_tag = market.lower().replace("_", "-") if market else "global"
+    version = f"signal-calibrator-{market_tag}-{version_tag}-{now.strftime('%Y%m%d')}"
 
     cal = CalibrationModel(
         version=version,
@@ -322,6 +349,7 @@ def _ensure_champion_calibration(session: Any, now: datetime, commit: str) -> An
         artefact_hash=artefact_hash,
         code_commit=commit,
         promoted_at=now,
+        market=market,
     )
     session.add(cal)
     session.flush()
@@ -339,6 +367,13 @@ def _apply_calibration(raw_prob: float, params: dict) -> float:
     return max(0.001, min(0.999, slope * raw_prob + intercept))
 
 
+def _home_over05_probability(home_xg: float, away_xg: float) -> float:
+    """Return the raw Poisson P(home goals > 0.5) research probability."""
+    from qwantej.models.poisson.model import poisson_scoreline
+
+    return float(poisson_scoreline(home_xg, away_xg).team_over("home", 0.5).yes)
+
+
 # ---------------------------------------------------------------------------
 # Fixture selection
 # ---------------------------------------------------------------------------
@@ -349,6 +384,8 @@ def _upcoming_unpredicted_fixtures(
     lookahead_hours: int,
     *,
     shadow: bool = False,
+    market: str = _MARKET,
+    selection: str = _SELECTION,
 ) -> list[Any]:
     """Return upcoming fixtures for production or non-public research.
 
@@ -372,8 +409,8 @@ def _upcoming_unpredicted_fixtures(
     # must not prevent prospective shadow evidence for the same fixture, and
     # vice versa.
     predicted_fixture_ids = select(Prediction.fixture_id).where(
-        Prediction.market == _MARKET,
-        Prediction.selection == _SELECTION,
+        Prediction.market == market,
+        Prediction.selection == selection,
         Prediction.research_mode.is_(shadow),
     )
 
@@ -562,6 +599,9 @@ def _process_fixture(
     value_policy: Any,
     commit: str,
     shadow: bool = False,
+    market: str = _MARKET,
+    selection: str = _SELECTION,
+    line: float | None = None,
 ) -> _ProcessResult | None:
     """Extract features, run models, apply calibration, evaluate gate, archive.
 
@@ -593,6 +633,16 @@ def _process_fixture(
     from qwantej.value.gate import ValueCandidate, evaluate_value_gate
 
     as_of = now
+    is_home_over05_research = (
+        shadow
+        and market == _RESEARCH_MARKET
+        and selection == _RESEARCH_SELECTION
+        and line == _RESEARCH_LINE
+    )
+    if is_home_over05_research:
+        calibration_market = _RESEARCH_MARKET
+    else:
+        calibration_market = _MARKET
     kickoff = fixture.kickoff_utc
     if kickoff.tzinfo is None:
         kickoff = kickoff.replace(tzinfo=UTC)
@@ -638,24 +688,31 @@ def _process_fixture(
         data_as_of=as_of,
         data_snapshot_ref=snap.snapshot_ref,
         code_commit=commit,
-        parameters={"fixture_id": str(fixture.id), "market": _MARKET, "selection": _SELECTION},
+        parameters={"fixture_id": str(fixture.id), "market": market, "selection": selection},
         metrics={"pipeline_run_id": str(model_run.id)},
     )
     session.add(fixture_run)
     session.flush()
 
     # 3. Run probability models.
-    poisson_result = poisson_scoreline(features.home_xg, features.away_xg).match_result()
-    elo_result = elo_probs(features.elo_home_rating, features.elo_away_rating)
-
-    raw_prob = (float(poisson_result.home) + float(elo_result.home)) / 2.0
-    model_probs = {
-        "poisson_home": float(poisson_result.home),
-        "poisson_draw": float(poisson_result.draw),
-        "poisson_away": float(poisson_result.away),
-        "elo_home": float(elo_result.home),
-        "elo_away": float(elo_result.away),
-    }
+    if is_home_over05_research:
+        raw_prob = _home_over05_probability(features.home_xg, features.away_xg)
+        model_probs = {
+            "poisson_home_over_0_5": raw_prob,
+            "poisson_home_blank": 1.0 - raw_prob,
+        }
+    else:
+        scoreline = poisson_scoreline(features.home_xg, features.away_xg)
+        poisson_result = scoreline.match_result()
+        elo_result = elo_probs(features.elo_home_rating, features.elo_away_rating)
+        raw_prob = (float(poisson_result.home) + float(elo_result.home)) / 2.0
+        model_probs = {
+            "poisson_home": float(poisson_result.home),
+            "poisson_draw": float(poisson_result.draw),
+            "poisson_away": float(poisson_result.away),
+            "elo_home": float(elo_result.home),
+            "elo_away": float(elo_result.away),
+        }
 
     # 4. Calibrate.
     cal_params = calibration_model.parameters or {"slope": 1.0, "intercept": 0.0}
@@ -664,10 +721,17 @@ def _process_fixture(
     p_cons = max(0.001, cal_prob - 0.05)
 
     # 5. Odds lookup with full-market de-vigging (proportional method).
-    _1x2_selections = ["home", "draw", "away"]
-    decimal_odds, fair_prob, bookmaker, quote_ts = _devigged_fair_prob(
-        session, fixture.id, _MARKET, _SELECTION, _1x2_selections, before=as_of
-    )
+    if is_home_over05_research:
+        # Team-total odds are not yet a canonical ingestion market. Archive the
+        # probability-only research forecast rather than silently substituting a
+        # different market or a post-kickoff price.
+        decimal_odds = fair_prob = None
+        bookmaker = quote_ts = None
+    else:
+        _1x2_selections = ["home", "draw", "away"]
+        decimal_odds, fair_prob, bookmaker, quote_ts = _devigged_fair_prob(
+            session, fixture.id, _MARKET, _SELECTION, _1x2_selections, before=as_of
+        )
 
     # 6. DQS.
     dqs = _compute_dqs(features)
@@ -676,7 +740,7 @@ def _process_fixture(
     rel_result: ReliabilityLookupResult | None = current_reliability_for_fixture(
         session,
         fixture.competition_id,
-        _MARKET,
+        calibration_market,
         as_of=as_of,
         policy_version=_RELIABILITY_POLICY_VERSION,
     )
@@ -692,7 +756,14 @@ def _process_fixture(
     # fair_prob is None iff the devigged-probability snapshot is unavailable;
     # guarding on it alongside decimal_odds keeps the type-checker satisfied.
     gate_reasons: list[str] = []
-    if decimal_odds is None or fair_prob is None or quote_ts is None:
+    if is_home_over05_research:
+        executable_odds = None
+        edge = 0.0
+        ev = 0.0
+        edge_pp_val = 0.0
+        gate_passed = False
+        gate_reasons = ["RESEARCH_ONLY_NO_TEAM_TOTAL_ODDS"]
+    elif decimal_odds is None or fair_prob is None or quote_ts is None:
         executable_odds = None
         edge = 0.0
         ev = 0.0
@@ -750,8 +821,9 @@ def _process_fixture(
         fixture_id=fixture.id,
         prediction_timestamp=as_of,
         decision_as_of=as_of,
-        market=_MARKET,
-        selection=_SELECTION,
+        market=market,
+        selection=selection,
+        line=line,
         model_probabilities=model_probs,
         ensemble_probability=raw_prob,
         calibrated_probability=cal_prob,
@@ -1037,19 +1109,46 @@ def run_once(
                 if shadow
                 else _ensure_champion_model(session, now)
             )
-            calibration_model = _ensure_champion_calibration(session, now, commit)
+            calibration_models = {
+                _MARKET: _ensure_champion_calibration(session, now, commit),
+            }
+            if shadow:
+                calibration_models[_RESEARCH_MARKET] = _ensure_champion_calibration(
+                    session,
+                    now,
+                    commit,
+                    market=_RESEARCH_MARKET,
+                )
 
-            # Find upcoming unpredicted fixtures.
-            fixtures = _upcoming_unpredicted_fixtures(
-                session, now, lookahead_hours, shadow=shadow
+            # Find upcoming unpredicted fixtures. Shadow mode archives both the
+            # existing 1X2 challenger and the Home Over 0.5 research market;
+            # production mode remains unchanged and processes only 1X2.
+            market_jobs = (
+                [(_MARKET, _SELECTION, None),
+                 (_RESEARCH_MARKET, _RESEARCH_SELECTION, _RESEARCH_LINE)]
+                if shadow
+                else [(_MARKET, _SELECTION, None)]
             )
+            fixtures = []
+            for job_market, job_selection, job_line in market_jobs:
+                fixtures.extend(
+                    (fixture, job_market, job_selection, job_line)
+                    for fixture in _upcoming_unpredicted_fixtures(
+                        session,
+                        now,
+                        lookahead_hours,
+                        shadow=shadow,
+                        market=job_market,
+                        selection=job_selection,
+                    )
+                )
             run.fixtures_evaluated = len(fixtures)
             log.info(
                 "signal_pipeline: %d fixture(s) in next %dh to process",
                 len(fixtures), lookahead_hours,
             )
 
-            for fixture in fixtures:
+            for fixture, job_market, job_selection, job_line in fixtures:
                 fixtures_by_id[str(fixture.id)] = fixture
                 result = _process_fixture(
                     session,
@@ -1057,10 +1156,13 @@ def run_once(
                     now=now,
                     model_registry=model_registry,
                     model_run=model_run,
-                    calibration_model=calibration_model,
+                    calibration_model=calibration_models[job_market],
                     value_policy=value_policy,
                     commit=commit,
                     shadow=shadow,
+                    market=job_market,
+                    selection=job_selection,
+                    line=job_line,
                 )
                 if result is not None:
                     process_results.append(result)
@@ -1085,7 +1187,7 @@ def run_once(
                     fixtures_by_id,
                     now=now,
                     model_registry=model_registry,
-                    calibration_model=calibration_model,
+                    calibration_model=calibration_models[_MARKET],
                     commit=commit,
                 )
 

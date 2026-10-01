@@ -38,6 +38,17 @@ No challenger is promoted on a single favorable metric or a hunch — the
 comparison row above is the checklist, and it must be satisfied and
 recorded in `model_registry`/`experiments` before a promotion PR is opened.
 
+## Home Over 0.5 research market
+
+The shadow pipeline archives `TEAM_TOTALS / home_over / 0.5` forecasts using
+the coherent Poisson scoreline distribution. These rows are always
+`research_mode=true`, `gate_passed=false`, and carry the reason code
+`RESEARCH_ONLY_NO_TEAM_TOTAL_ODDS`. They are settled for probability and
+calibration analysis but cannot enter live signals, value tickets or
+accumulators. Team-total odds are not yet canonicalized by ingestion, so no
+ROI claim is permitted until a point-in-time team-total price source is added
+and validated.
+
 ## Drift detection
 
 Six independent drift types, each tracked separately (do not collapse them

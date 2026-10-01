@@ -171,6 +171,11 @@ artifact fields are frozen after insertion while lifecycle status remains mutabl
 - **Research boundary**: `research_mode` marks predictions derived from
   retrospective or otherwise non-production data. It defaults to `false` and
   such rows must not support live reliability or promotion evidence.
+- **Home Over 0.5 shadow market**: `market="TEAM_TOTALS"`,
+  `selection="home_over"`, `line=0.5`; the probability is derived from the
+  home-goal marginal of the PIT-safe Poisson scoreline distribution. Initial
+  shadow rows are probability-only because team-total odds are not yet in the
+  canonical ingestion map, and therefore cannot support ROI or value claims.
 - **Calibration lineage**: `calibration_model_id` → `calibration_models`, plus
   the denormalized `calibration_version` written into the immutable record.
 - **Linkage/diagnostics**: `accumulator_id` (polymorphic UUID, no FK until

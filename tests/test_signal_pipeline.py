@@ -19,6 +19,7 @@ live signal).
 
 from __future__ import annotations
 
+import math
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -31,6 +32,7 @@ from scripts.run_signal_pipeline import (
     _ensure_champion_calibration,
     _ensure_champion_model,
     _fit_linear_calibration,
+    _home_over05_probability,
     _upcoming_unpredicted_fixtures,
     run_once,
 )
@@ -38,6 +40,16 @@ from scripts.run_signal_pipeline import (
 # ---------------------------------------------------------------------------
 # Helpers — shared DB seeding
 # ---------------------------------------------------------------------------
+
+
+def test_home_over05_probability_is_the_coherent_poisson_team_total() -> None:
+    assert _home_over05_probability(1.0, 1.2) == pytest.approx(1.0 - math.exp(-1.0))
+
+
+def test_home_over05_probability_changes_only_with_home_rate() -> None:
+    low_away = _home_over05_probability(1.4, 0.5)
+    high_away = _home_over05_probability(1.4, 2.5)
+    assert high_away == pytest.approx(low_away)
 
 def _make_session():
     """Return a SQLite in-memory session with all migrations applied."""
@@ -885,6 +897,36 @@ class TestProcessFixtureSuccessPath:
         assert float(pred.lrs) == pytest.approx(78.0), "lrs must match snapshot.league_reliability"
         assert float(pred.mrs) == pytest.approx(75.0), "mrs must match snapshot.market_reliability"
         assert pred.reliability_snapshot_id == rel_snap.id, "lineage must reference the snapshot"
+
+        research_calibration = _ensure_champion_calibration(
+            db_session,
+            now,
+            commit,
+            market="TEAM_TOTALS",
+        )
+        research = _process_fixture(
+            db_session,
+            f,
+            now=now,
+            model_registry=registry,
+            model_run=pipeline_run,
+            calibration_model=research_calibration,
+            value_policy=ValueGatePolicy(),
+            commit=commit,
+            shadow=True,
+            market="TEAM_TOTALS",
+            selection="home_over",
+            line=0.5,
+        )
+
+        assert research is not None
+        research_prediction = research.prediction
+        assert research_prediction.market == "TEAM_TOTALS"
+        assert research_prediction.selection == "home_over"
+        assert float(research_prediction.line) == pytest.approx(0.5)
+        assert research_prediction.research_mode is True
+        assert research_prediction.gate_passed is False
+        assert research_prediction.reason_codes == ["RESEARCH_ONLY_NO_TEAM_TOTAL_ODDS"]
 
 
 class TestProcessFixtureGateRejectedPath:

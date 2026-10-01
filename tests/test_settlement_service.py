@@ -181,6 +181,17 @@ class TestResolveOutcomeDoubleChance:
 # ---------------------------------------------------------------------------
 
 class TestResolveOutcomeOtherMarkets:
+    def test_home_team_over05_research_market(self, session: Session) -> None:
+        f = _make_fixture(session, home_goals=1, away_goals=0)
+        assert resolve_outcome(
+            f, "TEAM_TOTALS", "home_over", line=0.5
+        ) is EngineOutcome.WIN
+
+        f.home_goals = 0
+        assert resolve_outcome(
+            f, "TEAM_TOTALS", "home_over", line=0.5
+        ) is EngineOutcome.LOSS
+
     def test_btts_yes_wins(self, session: Session) -> None:
         f = _make_fixture(session, home_goals=1, away_goals=1)
         assert resolve_outcome(f, "BTTS", "yes") is EngineOutcome.WIN

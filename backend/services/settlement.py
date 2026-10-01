@@ -63,6 +63,10 @@ def resolve_outcome(
 
     ``TOTALS``
         ``over`` / ``under``; *line* required (e.g. 2.5)
+
+    ``TEAM_TOTALS``
+        Research-only team totals. ``home_over`` settles when the home team
+        scores more than *line* (currently the shadow market uses 0.5).
     """
     home = fixture.home_goals
     away = fixture.away_goals
@@ -116,6 +120,18 @@ def resolve_outcome(
         if sel == "under":
             return EngineOutcome.WIN if total < line else EngineOutcome.LOSS
         raise SettlementError(f"Unknown TOTALS selection: {selection!r}")
+
+    if market_key == "TEAM_TOTALS":
+        if line is None:
+            raise SettlementError("line is required for TEAM_TOTALS market")
+        if sel == "home_over":
+            return EngineOutcome.WIN if home > line else EngineOutcome.LOSS
+        if sel == "away_over":
+            return EngineOutcome.WIN if away > line else EngineOutcome.LOSS
+        raise SettlementError(
+            f"Unknown TEAM_TOTALS selection: {selection!r}; "
+            "expected 'home_over' or 'away_over'."
+        )
 
     raise SettlementError(f"Unsupported market: {market!r}")
 
