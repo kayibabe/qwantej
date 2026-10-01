@@ -143,8 +143,8 @@ export interface PeriodSummary {
 
 /**
  * A read-only replay of the archive at one hypothetical flat stake per
- * priced, decided ticket. Void and pending tickets do not contribute a stake
- * or P&L, matching the performance report's flat-unit convention.
+ * priced, decided ticket. Void tickets count as refunded stake with zero P&L;
+ * pending tickets are excluded, matching bookmaker settlement treatment.
  */
 export interface TicketStakeSimulation {
   settledTickets: number
@@ -166,9 +166,10 @@ export function simulateTicketStake(
     for (const product of period.products) {
       // An older API response without the immutable flat-unit result cannot
       // support an honest monetary replay.
-      if (typeof product.profit_units !== "number") return null
-      settledTickets += product.won + product.lost
-      flatUnitProfit += product.profit_units
+      const decidedTickets = product.won + product.lost
+      if (decidedTickets > 0 && typeof product.profit_units !== "number") return null
+      settledTickets += decidedTickets + product.void
+      flatUnitProfit += product.profit_units ?? 0
     }
   }
   return {
@@ -188,10 +189,10 @@ export function simulateTicketRows(
   let settledTickets = 0
   let flatUnitProfit = 0
   for (const ticket of tickets) {
-    if (ticket.result !== "won" && ticket.result !== "lost") continue
-    if (typeof ticket.profit_units !== "number") return null
+    if (ticket.result !== "won" && ticket.result !== "lost" && ticket.result !== "void") continue
+    if (ticket.result !== "void" && typeof ticket.profit_units !== "number") return null
     settledTickets += 1
-    flatUnitProfit += ticket.profit_units
+    flatUnitProfit += ticket.profit_units ?? 0
   }
   return {
     settledTickets,

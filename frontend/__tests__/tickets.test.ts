@@ -84,8 +84,8 @@ describe("simulateTicketStake", () => {
     ],
   }]
 
-  it("uses one hypothetical stake for every priced win/loss, excluding voids and pending tickets", () => {
-    expect(simulateTicketStake(periods, 100)).toEqual({ settledTickets: 4, flatUnitProfit: 0.5, returnedUnits: 4.5, roi: 0.125 })
+  it("includes refunded void stakes but excludes pending tickets", () => {
+    expect(simulateTicketStake(periods, 100)).toEqual({ settledTickets: 5, flatUnitProfit: 0.5, returnedUnits: 5.5, roi: 0.1 })
   })
 
   it("rejects non-positive stakes and incomplete historical P&L", () => {

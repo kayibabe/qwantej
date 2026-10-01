@@ -19,12 +19,12 @@ describe("TicketStakeSimulator", () => {
     render(<TicketStakeSimulator periods={{ year: [period], month: [period], day: [period] }} initialScope={{ granularity: "year", period: "2026" }} initialTickets={tickets} />)
 
     expect(screen.getByLabelText("Simulated stake per ticket")).toHaveValue(1)
-    expect(screen.getByText("MWK 3")).toBeInTheDocument()
-    expect(screen.getByText("MWK 4.5")).toBeInTheDocument()
+    expect(screen.getByText("MWK 4")).toBeInTheDocument()
+    expect(screen.getByText("MWK 5.5")).toBeInTheDocument()
     expect(screen.getByText("+MWK 1.5")).toBeInTheDocument()
   })
 
-  it("shows an archived flat-stake P&L replay without including void or pending tickets", () => {
+  it("shows an archived flat-stake P&L replay including refunded void stakes", () => {
     render(<TicketStakeSimulator periods={{ year: [period], month: [period], day: [period] }} initialScope={{ granularity: "year", period: "2026" }} initialTickets={tickets} />)
     fireEvent.change(screen.getByLabelText("Simulated stake per ticket"), { target: { value: "100" } })
 
@@ -32,12 +32,12 @@ describe("TicketStakeSimulator", () => {
     expect(screen.getByText("2 won")).toBeInTheDocument()
     expect(screen.getByText("1 lost")).toBeInTheDocument()
     expect(screen.getByText("1 void")).toBeInTheDocument()
-    expect(screen.getByText("3")).toBeInTheDocument()
-    expect(screen.getByText("MWK 300")).toBeInTheDocument()
+    expect(screen.getByText("4")).toBeInTheDocument()
+    expect(screen.getByText("MWK 400")).toBeInTheDocument()
     expect(screen.getByText("Total returned")).toBeInTheDocument()
-    expect(screen.getByText("MWK 450")).toBeInTheDocument()
+    expect(screen.getByText("MWK 550")).toBeInTheDocument()
     expect(screen.getByText("+MWK 150")).toBeInTheDocument()
-    expect(screen.getByText("+50.0%")).toBeInTheDocument()
+    expect(screen.getByText("+37.5%")).toBeInTheDocument()
     expect(screen.getByText(/not a recommended stake and is not saved/i)).toBeInTheDocument()
 
   })
