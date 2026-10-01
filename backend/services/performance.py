@@ -98,7 +98,13 @@ def query_performance_observations(
     *,
     subject_type: str = "prediction",
     since: datetime | None = None,
+    until: datetime | None = None,
     market: str | None = None,
+    selection: str | None = None,
+    min_probability: float | None = None,
+    min_odds: float | None = None,
+    match_since: datetime | None = None,
+    match_until: datetime | None = None,
     limit: int | None = None,
     scope: Literal["all", "production", "research"] = "all",
 ) -> list[PerformanceObservation]:
@@ -108,7 +114,12 @@ def query_performance_observations(
         session: open SQLAlchemy session.
         subject_type: "prediction" (default) or "accumulator".
         since: if given, only include settlements on or after this timestamp.
+        until: if given, only include settlements before this timestamp.
         market: if given, restrict to predictions for this market.
+        selection: if given, restrict to the archived prediction selection.
+        min_probability: minimum archived taken probability, inclusive.
+        min_odds: minimum archived taken odds, inclusive.
+        match_since/match_until: kickoff window, half-open [since, until).
         limit: maximum rows; None (default) returns all rows so that aggregate
             KPI reports are never silently truncated.
         scope: production, research, or all prediction evidence. Accumulator
@@ -154,8 +165,20 @@ def query_performance_observations(
         )
         if since is not None:
             stmt = stmt.where(Settlement.settled_at >= since)
+        if until is not None:
+            stmt = stmt.where(Settlement.settled_at < until)
+        if match_since is not None:
+            stmt = stmt.where(Fixture.kickoff_utc >= match_since)
+        if match_until is not None:
+            stmt = stmt.where(Fixture.kickoff_utc < match_until)
         if market is not None:
             stmt = stmt.where(Prediction.market == market)
+        if selection is not None:
+            stmt = stmt.where(Prediction.selection == selection)
+        if min_probability is not None:
+            stmt = stmt.where(Settlement.taken_probability >= min_probability)
+        if min_odds is not None:
+            stmt = stmt.where(Settlement.taken_odds >= min_odds)
         if scope == "production":
             stmt = stmt.where(Prediction.research_mode.is_(False))
         elif scope == "research":
@@ -196,6 +219,8 @@ def query_performance_observations(
         stmt_acca = stmt_acca.limit(limit)
     if since is not None:
         stmt_acca = stmt_acca.where(Settlement.settled_at >= since)
+    if until is not None:
+        stmt_acca = stmt_acca.where(Settlement.settled_at < until)
 
     return [
         _build_observation(
@@ -218,7 +243,13 @@ def performance_report(
     *,
     subject_type: str = "prediction",
     since: datetime | None = None,
+    until: datetime | None = None,
     market: str | None = None,
+    selection: str | None = None,
+    min_probability: float | None = None,
+    min_odds: float | None = None,
+    match_since: datetime | None = None,
+    match_until: datetime | None = None,
     limit: int | None = None,
     scope: Literal["all", "production", "research"] = "all",
 ) -> KPIReport:
@@ -230,7 +261,13 @@ def performance_report(
         session,
         subject_type=subject_type,
         since=since,
+        until=until,
         market=market,
+        selection=selection,
+        min_probability=min_probability,
+        min_odds=min_odds,
+        match_since=match_since,
+        match_until=match_until,
         limit=limit,
         scope=scope,
     )
@@ -277,6 +314,13 @@ def performance_by_segment(
     by: str,
     subject_type: str = "prediction",
     since: datetime | None = None,
+    until: datetime | None = None,
+    market: str | None = None,
+    selection: str | None = None,
+    min_probability: float | None = None,
+    min_odds: float | None = None,
+    match_since: datetime | None = None,
+    match_until: datetime | None = None,
     limit: int | None = None,
     scope: Literal["all", "production", "research"] = "all",
 ) -> dict[str, KPIReport]:
@@ -298,6 +342,13 @@ def performance_by_segment(
         session,
         subject_type=subject_type,
         since=since,
+        until=until,
+        market=market,
+        selection=selection,
+        min_probability=min_probability,
+        min_odds=min_odds,
+        match_since=match_since,
+        match_until=match_until,
         limit=limit,
         scope=scope,
     )

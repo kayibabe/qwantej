@@ -49,6 +49,7 @@ class KPIReportOut(BaseModel):
     # Financial
     roi: float | None
     total_stake: float | None
+    total_return: float | None
     total_profit: float | None
 
     # Risk

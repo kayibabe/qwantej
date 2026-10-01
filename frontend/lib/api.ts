@@ -136,7 +136,13 @@ export function fetchTodayStatus(date?: string): Promise<TodayStatus> {
 export function fetchPerformanceReport(params?: {
   subject_type?: string
   since?: string
+  until?: string
   market?: string
+  selection?: string
+  min_probability?: string
+  min_odds?: string
+  date_from?: string
+  date_to?: string
   scope?: "all" | "production" | "research"
 }): Promise<KPIReportOut> {
   return apiFetch("/performance/report", params as Record<string, string | undefined>)
@@ -146,6 +152,13 @@ export function fetchPerformanceSegments(params: {
   by: "market" | "league" | "model_version" | "product"
   subject_type?: string
   since?: string
+  until?: string
+  market?: string
+  selection?: string
+  min_probability?: string
+  min_odds?: string
+  date_from?: string
+  date_to?: string
   scope?: "all" | "production" | "research"
 }): Promise<PerformanceSegmentsOut> {
   return apiFetch("/performance/segments", params)

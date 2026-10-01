@@ -157,15 +157,25 @@ function RealMoney({ bankroll, results }: { bankroll: BankrollSummaryOut | null;
 
 async function Overview({ params }: { params: SearchParams }) {
   const requestedSince = typeof params.since === "string" && isDate(params.since) ? params.since : undefined
+  const requestedUntil = typeof params.until === "string" && isDate(params.until) ? params.until : undefined
+  const dateFrom = typeof params.date_from === "string" && isDate(params.date_from) ? params.date_from : undefined
+  const dateTo = typeof params.date_to === "string" && isDate(params.date_to) ? params.date_to : undefined
+  const market = typeof params.market === "string" ? params.market : undefined
+  const selection = typeof params.selection === "string" ? params.selection : undefined
+  const minProbabilityPercent = typeof params.min_probability === "string" ? params.min_probability : undefined
+  const minProbability = minProbabilityPercent && Number.isFinite(Number(minProbabilityPercent))
+    ? String(Number(minProbabilityPercent) / 100)
+    : undefined
+  const minOdds = typeof params.min_odds === "string" ? params.min_odds : undefined
   // Tickets are what gets published and bet on, so they are the default lens.
   const subjectType = params.subject_type === "prediction" ? "prediction" : "accumulator"
   const tickets = subjectType === "accumulator"
   const scope: PerformanceScope = params.scope === "research" || params.scope === "all" ? params.scope : "production"
   const since = requestedSince ? `${requestedSince}T00:00:00+02:00` : undefined
   const [report, primarySegments, modelSegments, bankroll, realResults] = await Promise.all([
-    fetchPerformanceReport({ subject_type: subjectType, since, scope }).catch(() => null),
-    fetchPerformanceSegments({ by: tickets ? "product" : "market", subject_type: subjectType, since, scope }).catch(() => null),
-    tickets ? Promise.resolve(null) : fetchPerformanceSegments({ by: "model_version", subject_type: subjectType, since, scope }).catch(() => null),
+    fetchPerformanceReport({ subject_type: subjectType, since, until: requestedUntil ? `${requestedUntil}T00:00:00+02:00` : undefined, market, selection, min_probability: minProbability, min_odds: minOdds, date_from: dateFrom, date_to: dateTo, scope }).catch(() => null),
+    fetchPerformanceSegments({ by: tickets ? "product" : "market", subject_type: subjectType, since, until: requestedUntil ? `${requestedUntil}T00:00:00+02:00` : undefined, market, selection, min_probability: minProbability, min_odds: minOdds, date_from: dateFrom, date_to: dateTo, scope }).catch(() => null),
+    tickets ? Promise.resolve(null) : fetchPerformanceSegments({ by: "model_version", subject_type: subjectType, since, until: requestedUntil ? `${requestedUntil}T00:00:00+02:00` : undefined, market, selection, min_probability: minProbability, min_odds: minOdds, date_from: dateFrom, date_to: dateTo, scope }).catch(() => null),
     fetchBankroll().catch(() => null),
     fetchRealBetResults().catch(() => null),
   ])
@@ -187,6 +197,15 @@ async function Overview({ params }: { params: SearchParams }) {
       <label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">Show<select name="subject_type" defaultValue={subjectType} className="h-11 min-w-48 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]"><option value="accumulator">Accumulator tickets</option><option value="prediction">Individual forecasts</option></select></label>
       {subjectType === "prediction" && <label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">Evidence<select name="scope" defaultValue={scope} className="h-11 min-w-48 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]"><option value="production">Production forecasts</option><option value="research">Research forecasts</option><option value="all">All forecasts</option></select></label>}
       <label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">Settled from<input type="date" name="since" defaultValue={requestedSince} className="h-11 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]" /></label>
+      <label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">Settled before<input type="date" name="until" defaultValue={requestedUntil} className="h-11 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]" /></label>
+      {subjectType === "prediction" && <>
+        <label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">Match date from<input type="date" name="date_from" defaultValue={dateFrom} className="h-11 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]" /></label>
+        <label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">Match date to<input type="date" name="date_to" defaultValue={dateTo} className="h-11 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]" /></label>
+        <label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">Market<input name="market" defaultValue={market} placeholder="TOTAL_GOALS" className="h-11 w-40 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]" /></label>
+        <label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">Selection<input name="selection" defaultValue={selection} placeholder="UNDER_2_5" className="h-11 w-40 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]" /></label>
+        <label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">Min probability<input type="number" min="0" max="100" step="1" name="min_probability" defaultValue={minProbabilityPercent ?? ""} placeholder="60" className="h-11 w-32 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]" /></label>
+        <label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">Min odds<input type="number" min="1.01" step="0.01" name="min_odds" defaultValue={minOdds} placeholder="1.80" className="h-11 w-32 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]" /></label>
+      </>}
       <button type="submit" className="h-11 rounded-lg border border-[var(--accent)] bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--bg-surface)] hover:bg-[var(--accent-hover)]">Apply</button>
     </form>
 
@@ -203,7 +222,8 @@ async function Overview({ params }: { params: SearchParams }) {
       </span>
     </section>
 
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6" aria-label="Headline results">
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7" aria-label="Headline results">
+      <MetricCard label="Returns" value={fmtUnits(report.total_return)} sub="Gross returned from priced settled bets" valueTone={tone(report.total_return)} />
       <MetricCard label="Net P&amp;L" value={fmtUnits(report.total_profit)} sub={report.total_stake === null ? `No priced ${noun} settled yet` : `${report.total_stake.toFixed(0)} unit${report.total_stake === 1 ? "" : "s"} staked · ${report.n_priced} priced settled`} valueTone={tone(report.total_profit)} />
       <MetricCard label="ROI / yield" value={fmtSignedPct(report.roi)} sub="Priced settled selections only; voids refunded" valueTone={tone(report.roi)} />
       <MetricCard label="Hit rate" value={pct(report.hit_rate)} sub={report.break_even_hit_rate === null ? "Break-even unavailable" : `Break-even ${pct(report.break_even_hit_rate)} at these odds`} valueTone={report.hit_rate !== null && report.break_even_hit_rate !== null ? tone(report.hit_rate - report.break_even_hit_rate) : undefined} />
