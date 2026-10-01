@@ -168,7 +168,15 @@ async function Overview({ params }: { params: SearchParams }) {
     : undefined
   const minOdds = typeof params.min_odds === "string" ? params.min_odds : undefined
   // Tickets are what gets published and bet on, so they are the default lens.
-  const subjectType = params.subject_type === "prediction" ? "prediction" : "accumulator"
+  // Match filters are individual-forecast filters. This also makes URLs copied
+  // from research screens work when they omit the optional subject_type.
+  const hasMatchFilters = [params.market, params.selection, params.min_probability, params.min_odds, params.date_from, params.date_to]
+    .some((value) => value !== undefined)
+  const subjectType = params.subject_type === "accumulator"
+    ? "accumulator"
+    : params.subject_type === "prediction" || hasMatchFilters
+      ? "prediction"
+      : "accumulator"
   const tickets = subjectType === "accumulator"
   const scope: PerformanceScope = params.scope === "research" || params.scope === "all" ? params.scope : "production"
   const since = requestedSince ? `${requestedSince}T00:00:00+02:00` : undefined
