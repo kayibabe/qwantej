@@ -12,9 +12,24 @@ export const metadata: Metadata = { title: "Forecasts" }
 const LIMIT = 50
 type Scope = "all" | "production" | "research" | "awaiting" | "overdue"
 
-function summaryLabel(summary: { total: number; won: number; lost: number; void: number; unsettled: number } | undefined): string {
-  if (!summary) return "0 total"
-  return `${summary.total} total · ${summary.won}W · ${summary.lost}L · ${summary.void}V · ${summary.unsettled}U`
+function SummaryMetrics({ summary }: { summary: { total: number; settled: number; won: number; lost: number; void: number; unsettled: number; hit_rate: number | null } | undefined }) {
+  if (!summary) return <span className="text-[10px] opacity-80">0 total</span>
+  const metrics: Array<[string, string | number]> = [
+    ["Total", summary.total],
+    ["Settled", summary.settled],
+    ["Won", summary.won],
+    ["Lost", summary.lost],
+    ["Void", summary.void],
+    ["Unsettled", summary.unsettled],
+    ["Hit rate", summary.hit_rate === null ? "—" : `${(summary.hit_rate * 100).toFixed(1)}%`],
+  ]
+  return (
+    <span className="ml-1 inline-flex flex-wrap gap-1 text-[10px] font-normal normal-case tracking-normal opacity-90">
+      {metrics.map(([label, value]) => (
+        <span key={label} className="rounded border border-current/20 px-1.5 py-0.5" title={label}>{label}: {value}</span>
+      ))}
+    </span>
+  )
 }
 
 const SCOPE_OPTIONS: { value: Scope; label: string; description: string }[] = [
@@ -177,13 +192,19 @@ export default async function PredictionsPage({
   const allSummary = marketSummaries.reduce(
     (total, summary) => ({
       total: total.total + summary.total,
+      settled: total.settled + summary.settled,
       won: total.won + summary.won,
       lost: total.lost + summary.lost,
       void: total.void + summary.void,
+      push: total.push + summary.push,
       unsettled: total.unsettled + summary.unsettled,
     }),
-    { total: 0, won: 0, lost: 0, void: 0, unsettled: 0 },
+    { total: 0, settled: 0, won: 0, lost: 0, void: 0, push: 0, unsettled: 0 },
   )
+  const allSummaryWithHitRate = {
+    ...allSummary,
+    hit_rate: allSummary.won + allSummary.lost ? allSummary.won / (allSummary.won + allSummary.lost) : null,
+  }
   const visibleMarkets = scope === "research"
     ? Array.from(new Set([...markets, "TEAM_TOTALS"]))
     : markets
@@ -238,7 +259,7 @@ export default async function PredictionsPage({
             >
               <span>{m ? marketLabel(m) : "All markets"}</span>
               <span className="ml-1 text-[10px] opacity-80">
-                {summaryLabel(m ? summaryByMarket.get(m) : allSummary)}
+                <SummaryMetrics summary={m ? summaryByMarket.get(m) : allSummaryWithHitRate} />
               </span>
             </a>
           )

@@ -38,11 +38,13 @@ export interface PredictionPage {
 export interface PredictionMarketSummary {
   market: string
   total: number
+  settled: number
   won: number
   lost: number
   void: number
   push: number
   unsettled: number
+  hit_rate: number | null
 }
 
 export interface SettlementOut {

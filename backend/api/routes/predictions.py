@@ -214,7 +214,22 @@ def prediction_market_summary(
         counts[key] += 1
 
     return [
-        PredictionMarketSummary(market=market, **summary[market])
+        PredictionMarketSummary(
+            market=market,
+            settled=(
+                summary[market]["won"]
+                + summary[market]["lost"]
+                + summary[market]["void"]
+                + summary[market]["push"]
+            ),
+            hit_rate=(
+                summary[market]["won"]
+                / (summary[market]["won"] + summary[market]["lost"])
+                if summary[market]["won"] + summary[market]["lost"]
+                else None
+            ),
+            **summary[market],
+        )
         for market in sorted(summary)
     ]
 

@@ -53,8 +53,10 @@ class PredictionPage(BaseModel):
 class PredictionMarketSummary(BaseModel):
     market: str
     total: int
+    settled: int
     won: int
     lost: int
     void: int
     push: int
     unsettled: int
+    hit_rate: float | None

@@ -121,11 +121,13 @@ class TestListPredictions:
             {
                 "market": "1X2",
                 "total": 1,
+                "settled": 0,
                 "won": 0,
                 "lost": 0,
                 "void": 0,
                 "push": 0,
                 "unsettled": 1,
+                "hit_rate": None,
             }
         ]
 
