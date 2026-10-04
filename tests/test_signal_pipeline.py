@@ -31,6 +31,7 @@ from scripts.run_signal_pipeline import (
     _devigged_fair_prob,
     _ensure_champion_calibration,
     _ensure_champion_model,
+    _ensure_shadow_model,
     _fit_linear_calibration,
     _home_over05_probability,
     _upcoming_unpredicted_fixtures,
@@ -582,6 +583,11 @@ class TestEnsureChampionModel:
         assert db_session.scalar(
             select(ModelRegistry).where(ModelRegistry.name == "poisson+elo-ensemble")
         ) is not None
+
+    def test_research_run_sets_scope_at_creation(self, db_session):
+        _, run = _ensure_shadow_model(db_session, datetime.now(UTC))
+
+        assert run.parameters == {"market": "1X2", "selection": "home", "research": True}
 
 
 class TestEnsureChampionCalibration:
