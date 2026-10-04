@@ -56,6 +56,7 @@ from backend.models import (
     Team,
 )
 from qwantej.audit import canonical_hash
+from scripts.run_signal_pipeline import _ensure_shadow_model
 
 DATABASE_URL = get_settings().database_url
 
@@ -654,6 +655,14 @@ def _new_model_run(session: Session) -> ModelRun:
 
 
 class TestModelRunFieldFreeze:
+    def test_research_scope_is_persisted_without_mutating_run_inputs(
+        self, session: Session
+    ) -> None:
+        _, run = _ensure_shadow_model(session, datetime.now(UTC))
+        session.flush()
+
+        assert run.parameters["research"] is True
+
     def test_input_field_update_is_blocked(self, session: Session) -> None:
         run = _new_model_run(session)
         _assert_blocked(

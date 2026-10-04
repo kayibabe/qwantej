@@ -141,7 +141,9 @@ def _sha256(obj: object) -> str:
 # Bootstrap: champion model registry
 # ---------------------------------------------------------------------------
 
-def _ensure_champion_model(session: Any, now: datetime) -> tuple[Any, Any]:
+def _ensure_champion_model(
+    session: Any, now: datetime, *, research: bool = False
+) -> tuple[Any, Any]:
     """Return (ModelRegistry, ModelRun) for the current inference run.
 
     Creates a champion ModelRegistry row if none exists for _MODEL_NAME/_MODEL_VERSION.
@@ -199,7 +201,11 @@ def _ensure_champion_model(session: Any, now: datetime) -> tuple[Any, Any]:
         status=ModelRunStatus.RUNNING,
         started_at=now,
         code_commit=commit,
-        parameters={"market": _MARKET, "selection": _SELECTION},
+        parameters={
+            "market": _MARKET,
+            "selection": _SELECTION,
+            **({"research": True} if research else {}),
+        },
     )
     session.add(run)
     session.flush()
@@ -217,8 +223,7 @@ def _ensure_shadow_model(session: Any, now: datetime) -> tuple[Any, Any]:
     different.  A real challenger must differ in code, inputs or parameters
     and should be registered separately.
     """
-    registry, run = _ensure_champion_model(session, now)
-    run.parameters = {"market": _MARKET, "selection": _SELECTION, "research": True}
+    registry, run = _ensure_champion_model(session, now, research=True)
     log.info(
         "signal_pipeline: created research inference run %s on champion %s",
         run.id,
