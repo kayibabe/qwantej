@@ -604,6 +604,13 @@ class TestEnsureChampionCalibration:
         cal = _ensure_champion_calibration(db_session, now, "abc1234")
         assert cal.status.value == "champion"
 
+    def test_market_calibration_version_fits_prediction_lineage(self, db_session):
+        cal = _ensure_champion_calibration(
+            db_session, datetime.now(UTC), "abc1234", market="TEAM_TOTALS"
+        )
+
+        assert len(cal.version) <= 40
+
     def test_idempotent_does_not_create_duplicate(self, db_session):
 
         now = datetime.now(UTC)
