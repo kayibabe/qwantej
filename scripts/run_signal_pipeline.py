@@ -338,8 +338,14 @@ def _ensure_champion_calibration(
         )
 
     artefact_hash = _sha256(params)
+    # ``Prediction.calibration_version`` is limited to 40 characters, so the
+    # registry version copied into it must fit that stricter lineage field.
     market_tag = market.lower().replace("_", "-") if market else "global"
-    version = f"signal-calibrator-{market_tag}-{version_tag}-{now.strftime('%Y%m%d')}"
+    if len(market_tag) > 12:
+        market_tag = f"{market_tag[:12]}-{_sha256(market_tag)[:8]}"
+    version = f"cal-{market_tag}-{version_tag}-{now.strftime('%Y%m%d')}"
+    if len(version) > 40:
+        raise ValueError(f"calibration version exceeds prediction lineage limit: {version}")
 
     cal = CalibrationModel(
         version=version,
