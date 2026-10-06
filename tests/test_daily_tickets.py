@@ -16,9 +16,9 @@ from sqlalchemy.orm import Session
 from backend.models import (
     Accumulator,
     AccumulatorLeg,
-    DailyCandidateSnapshot,
     Base,
     Competition,
+    DailyCandidateSnapshot,
     Fixture,
     FixtureStatus,
     OddsQuote,
