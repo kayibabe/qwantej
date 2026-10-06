@@ -78,6 +78,7 @@ class DailyCandidate:
     captured_at: datetime
     dqs: float
     bookmaker: str | None = None
+    quote_id: str | None = None
 
     def __post_init__(self) -> None:
         for name, value in (

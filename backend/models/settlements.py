@@ -155,6 +155,11 @@ class AccumulatorLeg(UUIDPKMixin, CreatedAtMixin, Base):
     quote_captured_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Exact immutable bookmaker quote used to price this leg. Nullable keeps
+    # historical rows created before quote identity was persisted readable.
+    quote_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("odds_quotes.id"), nullable=True, index=True
+    )
 
     accumulator: Mapped["Accumulator"] = relationship(
         back_populates="legs",

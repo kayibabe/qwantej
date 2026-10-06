@@ -102,6 +102,9 @@ idempotent and records the source accumulator on every derived leg.
 - No more than three legs from the same market family (initial policy,
   subject to validation).
 - Enforce price freshness at lock time.
+- Persist the exact immutable `OddsQuote` identity for every newly published
+  Daily Pick leg; reject missing, mismatched, future-dated or stale bookmaker
+  provenance before persistence.
 - Each ticket must remain positive under its conservative probability
   estimate and stress haircut.
 

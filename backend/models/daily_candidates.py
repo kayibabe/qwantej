@@ -42,6 +42,10 @@ class DailyCandidateSnapshot(UUIDPKMixin, CreatedAtMixin, Base):
     market_probability: Mapped[float] = mapped_column(Numeric(7, 6), nullable=False)
     decimal_odds: Mapped[float] = mapped_column(Numeric(8, 3), nullable=False)
     quote_captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Exact immutable quote observed for this candidate selection.
+    quote_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("odds_quotes.id"), nullable=True, index=True
+    )
     dqs: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)
     bookmaker: Mapped[str | None] = mapped_column(String(80))
     candidate_status: Mapped[str] = mapped_column(String(32), nullable=False)

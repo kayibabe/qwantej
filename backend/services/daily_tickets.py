@@ -205,6 +205,7 @@ def _persist_candidate_snapshot(
                 market_probability=candidate.market_probability,
                 decimal_odds=float(candidate.decimal_odds),
                 quote_captured_at=candidate.captured_at,
+                quote_id=uuid.UUID(candidate.quote_id) if candidate.quote_id else None,
                 dqs=candidate.dqs,
                 bookmaker=candidate.bookmaker,
                 candidate_status="selected" if chosen else "not_selected",
@@ -285,7 +286,7 @@ def load_daily_candidates(
         snap = snapshots.get((fixture_id, market, selection))
         if snap is None:
             continue
-        odds, fair_probability, bookmaker, captured_at = snap
+        odds, fair_probability, bookmaker, captured_at, quote_id = snap
         model_p = float(prediction.calibrated_probability)  # type: ignore[arg-type]
         if not 0 < model_p < 1 or not 0 < fair_probability < 1:
             continue
@@ -303,6 +304,7 @@ def load_daily_candidates(
                 captured_at=captured_at,
                 dqs=float(prediction.dqs),  # type: ignore[arg-type]
                 bookmaker=bookmaker,
+                quote_id=str(quote_id),
             )
         )
     return candidates
@@ -310,7 +312,7 @@ def load_daily_candidates(
 
 def _market_snapshots(
     session: Session, fixture_ids: list[uuid.UUID], *, now: datetime
-) -> dict[tuple[uuid.UUID, str, str], tuple[Decimal, float, str, datetime]]:
+) -> dict[tuple[uuid.UUID, str, str], tuple[Decimal, float, str, datetime, uuid.UUID]]:
     """Freshest coherent supported-market snapshots by fixture and selection.
 
     Coherent = one bookmaker quoting every outcome within MAX_LEG_SPREAD,
@@ -333,7 +335,7 @@ def _market_snapshots(
         if q.line is None and q.selection in _MARKET_SELECTIONS[q.market]:
             latest[(q.fixture_id, q.market)][q.bookmaker].setdefault(q.selection, q)
 
-    out: dict[tuple[uuid.UUID, str, str], tuple[Decimal, float, str, datetime]] = {}
+    out: dict[tuple[uuid.UUID, str, str], tuple[Decimal, float, str, datetime, uuid.UUID]] = {}
     for (fixture_id, market), books in latest.items():
         selections = _MARKET_SELECTIONS[market]
         best: tuple[datetime, str] | None = None
@@ -352,9 +354,10 @@ def _market_snapshots(
             if best is None or rank[0] > best[0] or (rank[0] == best[0] and rank[1] < best[1]):
                 best = rank
                 for index, selection in enumerate(selections):
+                    quote = sel_map[selection]
                     out[(fixture_id, market, selection)] = (
-                        Decimal(str(sel_map[selection].decimal_odds)),
-                        fair[index], bookmaker, min(stamps),
+                        Decimal(str(quote.decimal_odds)),
+                        fair[index], bookmaker, _utc(quote.captured_at), quote.id,
                     )
     return out
 
@@ -374,6 +377,7 @@ def _manifest_hash(tickets: list[DailyTicket], now: datetime) -> str:
                         "market_probability": leg.market_probability,
                         "model_probability": leg.model_probability,
                         "captured_at": leg.captured_at.isoformat(),
+                        "quote_id": leg.quote_id,
                     }
                     for leg in t.legs
                 ],
@@ -390,6 +394,35 @@ def _persist(session: Session, tickets: list[DailyTicket], *, now: datetime) -> 
     predictions: dict[str, Prediction] = {}
     for ticket in tickets:
         for leg in ticket.legs:
+            if not leg.bookmaker or not leg.bookmaker.strip():
+                problems.append(f"prediction {leg.prediction_id} has no bookmaker provenance")
+            if not leg.quote_id:
+                problems.append(f"prediction {leg.prediction_id} has no quote provenance")
+            else:
+                try:
+                    quote = session.get(OddsQuote, uuid.UUID(leg.quote_id))
+                except ValueError:
+                    quote = None
+                if quote is None:
+                    problems.append(f"prediction {leg.prediction_id} quote does not exist")
+                else:
+                    quote_time = _utc(quote.captured_at)
+                    age = now.astimezone(UTC) - quote_time
+                    if age < timedelta(0) or age > MAX_QUOTE_AGE:
+                        problems.append(
+                            f"prediction {leg.prediction_id} quote is stale or future-dated"
+                        )
+                    if (
+                        quote.fixture_id != uuid.UUID(leg.fixture_id)
+                        or quote.market != leg.market
+                        or quote.selection != leg.selection
+                        or quote.bookmaker != leg.bookmaker
+                        or quote_time != _utc(leg.captured_at)
+                        or Decimal(str(quote.decimal_odds)) != leg.decimal_odds
+                    ):
+                        problems.append(
+                            f"prediction {leg.prediction_id} quote does not match candidate"
+                        )
             if leg.prediction_id in predictions:
                 problems.append(f"prediction {leg.prediction_id} used by two tickets")
                 continue
@@ -454,6 +487,7 @@ def _persist(session: Session, tickets: list[DailyTicket], *, now: datetime) -> 
                     qss=float(prediction.qss) if prediction.qss is not None else leg.dqs,
                     bookmaker=leg.bookmaker,
                     quote_captured_at=leg.captured_at,
+                    quote_id=uuid.UUID(leg.quote_id) if leg.quote_id else None,
                 )
             )
             prediction.accumulator_id = accumulator.id

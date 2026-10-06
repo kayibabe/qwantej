@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import random
 import uuid
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -26,7 +27,12 @@ from backend.models import (
     Season,
     Team,
 )
-from backend.services.daily_tickets import ensure_daily_tickets, load_daily_candidates
+from backend.services.accumulator import AccumulatorPersistenceError
+from backend.services.daily_tickets import (
+    _persist,
+    ensure_daily_tickets,
+    load_daily_candidates,
+)
 from qwantej.accumulator.daily import (
     DAILY_LADDERS,
     DAILY_PRODUCTS,
@@ -347,6 +353,32 @@ def test_ensure_creates_three_paper_unstaked_tickets_with_lineage(session) -> No
         prediction = session.get(Prediction, leg.prediction_id)
         assert prediction.accumulator_id == leg.accumulator_id
         assert leg.bookmaker == "Book" and leg.quote_captured_at is not None
+        assert leg.quote_id is not None
+        assert session.get(OddsQuote, leg.quote_id) is not None
+
+
+def test_persistence_rejects_missing_quote_provenance(session) -> None:
+    candidates = [_cand(i, price) for i, price in enumerate(
+        ["1.40", "1.50", "1.60", "1.70", "1.80", "1.90"]
+    )]
+    result = build_daily_tickets(candidates, products=(DailyProduct.SAFE,), as_of=NOW)
+
+    with pytest.raises(AccumulatorPersistenceError, match="no quote provenance"):
+        _persist(session, list(result.tickets), now=NOW)
+
+
+def test_persistence_rejects_quote_that_is_stale_at_commit(session) -> None:
+    _seed_slate(session)
+    candidates = load_daily_candidates(session, now=NOW, lookahead=timedelta(hours=30))
+    result = build_daily_tickets(candidates, products=(DailyProduct.SAFE,), as_of=NOW)
+    ticket = result.tickets[0]
+    stale_legs = tuple(
+        replace(leg, captured_at=NOW - timedelta(hours=4)) for leg in ticket.legs
+    )
+    stale_ticket = replace(ticket, legs=stale_legs)
+
+    with pytest.raises(AccumulatorPersistenceError, match="does not match candidate"):
+        _persist(session, [stale_ticket], now=NOW)
 
 
 def test_ensure_is_idempotent_within_a_utc_day(session) -> None:
