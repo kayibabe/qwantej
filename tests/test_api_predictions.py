@@ -153,7 +153,9 @@ class TestListPredictions:
         assert data["total"] == 1
         assert data["items"][0]["market"] == "1X2"
 
-    def test_scope_filters_preserve_production_research_and_overdue_boundaries(self, seeded_client) -> None:
+    def test_scope_filters_preserve_production_research_and_overdue_boundaries(
+        self, seeded_client
+    ) -> None:
         client, _, _ = seeded_client
 
         production = client.get("/predictions", params={"scope": "production"}).json()

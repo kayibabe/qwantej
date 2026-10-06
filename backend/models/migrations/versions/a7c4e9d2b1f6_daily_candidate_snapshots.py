@@ -2,8 +2,8 @@
 
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "a7c4e9d2b1f6"
@@ -20,8 +20,18 @@ def upgrade() -> None:
         sa.Column("run_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("product_day", sa.Date(), nullable=False),
         sa.Column("captured_at_run", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("prediction_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("predictions.id"), nullable=False),
-        sa.Column("fixture_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("fixtures.id"), nullable=False),
+        sa.Column(
+            "prediction_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("predictions.id"),
+            nullable=False,
+        ),
+        sa.Column(
+            "fixture_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("fixtures.id"),
+            nullable=False,
+        ),
         sa.Column("league_id", sa.String(40), nullable=False),
         sa.Column("market", sa.String(40), nullable=False),
         sa.Column("selection", sa.String(80), nullable=False),
@@ -35,11 +45,19 @@ def upgrade() -> None:
         sa.Column("candidate_status", sa.String(32), nullable=False),
         sa.Column("exclusion_reason", sa.String(120)),
         sa.Column("selected_product", sa.String(20)),
-        sa.Column("accumulator_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("accumulators.id")),
+        sa.Column(
+            "accumulator_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("accumulators.id"),
+        ),
         sa.UniqueConstraint("run_id", "prediction_id", name="uq_daily_candidate_run_prediction"),
     )
     for column in ("run_id", "product_day", "prediction_id", "fixture_id", "kickoff_utc"):
-        op.create_index(f"ix_daily_candidate_snapshots_{column}", "daily_candidate_snapshots", [column])
+        op.create_index(
+            f"ix_daily_candidate_snapshots_{column}",
+            "daily_candidate_snapshots",
+            [column],
+        )
 
 
 def downgrade() -> None:

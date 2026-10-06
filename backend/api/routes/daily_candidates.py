@@ -15,7 +15,9 @@ from backend.core.security import RequireApiKey
 from backend.models import Competition, DailyCandidateSnapshot, Fixture, Settlement, Team
 from backend.schemas.daily_candidates import DailyCandidateOut, DailyCandidatePage
 
-router = APIRouter(prefix="/daily-candidates", tags=["daily-candidates"], dependencies=[RequireApiKey])
+router = APIRouter(
+    prefix="/daily-candidates", tags=["daily-candidates"], dependencies=[RequireApiKey]
+)
 PRODUCT_DAY_ZONE = ZoneInfo("Africa/Blantyre")
 
 
@@ -40,7 +42,14 @@ def list_daily_candidates(
         .limit(1)
     )
     if latest_run is None:
-        return DailyCandidatePage(product_day=product_day, run_id=None, items=[], total=0, limit=limit, offset=offset)
+        return DailyCandidatePage(
+            product_day=product_day,
+            run_id=None,
+            items=[],
+            total=0,
+            limit=limit,
+            offset=offset,
+        )
 
     total = int(db.scalar(
         select(func.count()).select_from(DailyCandidateSnapshot).where(
@@ -103,4 +112,11 @@ def list_daily_candidates(
         score=_score(fixture),
         outcome=outcomes.get(snapshot.prediction_id),
     ) for snapshot, fixture, home_team, away_team, competition in rows]
-    return DailyCandidatePage(product_day=product_day, run_id=latest_run, items=items, total=total, limit=limit, offset=offset)
+    return DailyCandidatePage(
+        product_day=product_day,
+        run_id=latest_run,
+        items=items,
+        total=total,
+        limit=limit,
+        offset=offset,
+    )

@@ -26,12 +26,18 @@ class DailyCandidateSnapshot(UUIDPKMixin, CreatedAtMixin, Base):
     run_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
     product_day: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     captured_at_run: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    prediction_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("predictions.id"), nullable=False, index=True)
-    fixture_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("fixtures.id"), nullable=False, index=True)
+    prediction_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("predictions.id"), nullable=False, index=True
+    )
+    fixture_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("fixtures.id"), nullable=False, index=True
+    )
     league_id: Mapped[str] = mapped_column(String(40), nullable=False)
     market: Mapped[str] = mapped_column(String(40), nullable=False)
     selection: Mapped[str] = mapped_column(String(80), nullable=False)
-    kickoff_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    kickoff_utc: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
     model_probability: Mapped[float] = mapped_column(Numeric(7, 6), nullable=False)
     market_probability: Mapped[float] = mapped_column(Numeric(7, 6), nullable=False)
     decimal_odds: Mapped[float] = mapped_column(Numeric(8, 3), nullable=False)
