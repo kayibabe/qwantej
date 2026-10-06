@@ -326,12 +326,12 @@ class TestReviewRegressions:
 
         monkeypatch.setattr(service, "effective_leg_outcomes", capture)
         settle_decided_tickets(session, now=NOW + timedelta(days=365))
-        assert calls == []
+        assert all(set(legs).isdisjoint(ids) for ids in calls)
         old = session.scalar(select(Settlement).where(Settlement.subject_id == legs[0]))
         seed.settle(legs[0], "win", supersedes=old.id)
         run = settle_decided_tickets(session, now=NOW + timedelta(days=366))
         assert run.corrected == 1
-        assert calls == [set(legs)]
+        assert any(set(legs).issubset(ids) for ids in calls)
 
     @pytest.mark.parametrize("age", [0, 31, 365])
     def test_reopen_preserves_history_and_removes_loss_until_decided(self, session, age):

@@ -6,10 +6,9 @@ outside the database first; retaining derived rows would correctly make the
 constraint restoration fail rather than delete historical ticket evidence.
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
-
 
 revision = "a6c8e0f2d4b1"
 down_revision = "b8d2f4a6c9e1"

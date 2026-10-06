@@ -34,11 +34,18 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
-from backend.models import Accumulator, AuditActor, AuditEvent, AuditEventType, Settlement
+from backend.models import (
+    Accumulator,
+    AuditActor,
+    AuditEvent,
+    AuditEventType,
+    Settlement,
+    TicketSettlementQueue,
+)
 from backend.models import SettlementOutcome as OrmOutcome
 from backend.models.settlements import TicketStatus
 from backend.services.accumulator_results import effective_leg_outcomes
@@ -135,6 +142,10 @@ def settle_decided_tickets(session: Session, *, now: datetime) -> TicketSettleme
     tickets = list(
         session.scalars(
             select(Accumulator)
+            .join(
+                TicketSettlementQueue,
+                TicketSettlementQueue.accumulator_id == Accumulator.id,
+            )
             .where(
                 Accumulator.status.in_(
                     [TicketStatus.PENDING, TicketStatus.LOCKED, TicketStatus.SETTLED]
@@ -153,6 +164,13 @@ def settle_decided_tickets(session: Session, *, now: datetime) -> TicketSettleme
         session, {leg.prediction_id for t in tickets for leg in t.legs}
     )
     current = _effective_ticket_settlements(session, {t.id for t in tickets})
+
+    def consume_queue(ticket_id: uuid.UUID) -> None:
+        session.execute(
+            delete(TicketSettlementQueue).where(
+                TicketSettlementQueue.accumulator_id == ticket_id
+            )
+        )
 
     for ticket in tickets:
         legs = [
@@ -202,6 +220,7 @@ def settle_decided_tickets(session: Session, *, now: datetime) -> TicketSettleme
             and existing.outcome == _ORM_OUTCOME[outcome]
             and _same_price(existing.taken_odds, price)
         ):
+            consume_queue(ticket.id)
             continue
 
         metrics = _settle_engine(
@@ -251,6 +270,7 @@ def settle_decided_tickets(session: Session, *, now: datetime) -> TicketSettleme
             run.settled += 1
         else:
             run.corrected += 1
+        consume_queue(ticket.id)
 
     log.info(
         "ticket_settlement: settled=%d corrected=%d reopened=%d pending=%d errors=%d",

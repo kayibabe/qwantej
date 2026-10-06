@@ -22,7 +22,6 @@ from backend.models import (
 )
 from backend.services.daily_accumulator import ensure_daily_accumulator
 
-
 NOW = datetime(2026, 10, 6, 8, tzinfo=UTC)
 
 
