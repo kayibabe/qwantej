@@ -21,6 +21,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -434,6 +435,52 @@ def _persist(session: Session, tickets: list[DailyTicket], *, now: datetime) -> 
             if prediction is None:
                 problems.append(f"prediction {leg.prediction_id} does not exist")
                 continue
+            # Candidate-level quote identity is not sufficient on its own:
+            # the archived prediction must carry the same executable price
+            # block and immutable lineage that the candidate claims.  Never
+            # coerce missing fields to neutral values; they are unavailable
+            # provenance and make the ticket ineligible.
+            unavailable = []
+            for field_name in (
+                "executable_odds",
+                "quote_timestamp",
+                "fair_market_probability",
+                "model_run_id",
+                "calibration_model_id",
+                "feature_version",
+                "calibration_version",
+                "input_snapshot_ref",
+                "input_snapshot_hash",
+            ):
+                if getattr(prediction, field_name) is None or getattr(prediction, field_name) == "":
+                    unavailable.append(field_name)
+            if unavailable:
+                problems.append(
+                    f"UNAVAILABLE_PROVENANCE prediction {leg.prediction_id}: "
+                    f"missing {', '.join(unavailable)}"
+                )
+            else:
+                assert prediction.executable_odds is not None
+                assert prediction.fair_market_probability is not None
+                if Decimal(str(prediction.executable_odds)) != leg.decimal_odds:
+                    problems.append(
+                        f"prediction {leg.prediction_id} executable_odds does not match quote"
+                    )
+                assert prediction.quote_timestamp is not None
+                if _utc(prediction.quote_timestamp) != _utc(leg.captured_at):
+                    problems.append(
+                        f"prediction {leg.prediction_id} quote_timestamp does not match quote"
+                    )
+                if not math.isclose(
+                    float(prediction.fair_market_probability),
+                    leg.market_probability,
+                    rel_tol=0.0,
+                    abs_tol=1e-6,
+                ):
+                    problems.append(
+                        f"prediction {leg.prediction_id} fair_market_probability "
+                        "does not match quote"
+                    )
             if str(prediction.fixture_id) != leg.fixture_id:
                 problems.append(
                     f"prediction {leg.prediction_id} is not for fixture {leg.fixture_id}"

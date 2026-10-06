@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
@@ -14,10 +15,13 @@ from backend.schemas.performance import (
     AccumulatorPeriodResultOut,
     AccumulatorProductResultOut,
     AccumulatorResultsOut,
+    EvidenceStatusOut,
     KPIReportOut,
+    LegAttributionOut,
     PerformanceSegmentsOut,
 )
 from backend.services.accumulator_results import accumulator_results_by_period
+from backend.services.leg_attribution import query_leg_attribution
 from backend.services.performance import (
     awaiting_settlement_count,
     performance_by_segment,
@@ -34,6 +38,26 @@ router = APIRouter(
 _VALID_SUBJECT_TYPES = {"prediction", "accumulator"}
 _VALID_SEGMENTS = {"market", "league", "model_version", "product"}
 PerformanceScope = Literal["all", "production", "research"]
+
+
+def _evidence_status(report, *, scope: str, subject_type: str) -> EvidenceStatusOut:
+    """Classify metric evidence explicitly; unavailable values are not zero."""
+    if scope == "research":
+        overall = "RESEARCH_ONLY"
+    elif report.n_settled < 30:
+        overall = "INSUFFICIENT_SAMPLE"
+    elif subject_type == "accumulator" or report.stake_basis != "real":
+        overall = "PAPER_ONLY"
+    else:
+        overall = "QUALIFIED"
+    sample = "INSUFFICIENT_SAMPLE" if report.n_settled < 30 else overall
+    return EvidenceStatusOut(
+        overall=overall,
+        hit_rate=sample if report.hit_rate is not None else "UNAVAILABLE_PROVENANCE",
+        calibration=sample if report.brier_score is not None else "UNAVAILABLE_PROVENANCE",
+        clv=(sample if report.mean_clv is not None else "UNAVAILABLE_PROVENANCE"),
+        financial=(sample if report.roi is not None else "UNAVAILABLE_PROVENANCE"),
+    )
 
 
 @router.get("/report", response_model=KPIReportOut)
@@ -77,9 +101,8 @@ def get_performance_report(
     )
     return KPIReportOut(
         **report.__dict__,
-        n_awaiting=awaiting_settlement_count(
-            db, subject_type=subject_type, now=datetime.now(UTC)
-        ),
+        n_awaiting=awaiting_settlement_count(db, subject_type=subject_type, now=datetime.now(UTC)),
+        evidence_status=_evidence_status(report, scope=scope, subject_type=subject_type),
     )
 
 
@@ -123,8 +146,30 @@ def get_performance_segments(
     )
     return PerformanceSegmentsOut(
         by=by,
-        segments={k: KPIReportOut(**v.__dict__) for k, v in segments.items()},
+        segments={
+            k: KPIReportOut(
+                **v.__dict__,
+                evidence_status=_evidence_status(v, scope=scope, subject_type=subject_type),
+            )
+            for k, v in segments.items()
+        },
     )
+
+
+@router.get("/leg-attribution", response_model=list[LegAttributionOut])
+def get_leg_attribution(
+    db: DbDep,
+    accumulator_id: uuid.UUID | None = None,
+    since: Annotated[datetime | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=5000)] = 1000,
+) -> list[LegAttributionOut]:
+    """Return one immutable-evidence row per prediction/ticket occurrence."""
+    return [
+        LegAttributionOut.model_validate(row, from_attributes=True)
+        for row in query_leg_attribution(
+            db, accumulator_id=accumulator_id, since=since, limit=limit
+        )
+    ]
 
 
 @router.get("/accumulator-results", response_model=AccumulatorResultsOut)

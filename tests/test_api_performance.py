@@ -152,8 +152,11 @@ class TestPerformanceReport:
             "calibration_slope", "calibration_intercept",
             "mean_clv", "n_clv", "roi", "total_stake", "total_profit",
             "max_drawdown", "volatility", "calibration_bins", "n_priced",
+            "evidence_status",
         ):
             assert field in data, f"missing field: {field}"
+
+        assert data["evidence_status"]["overall"] == "INSUFFICIENT_SAMPLE"
 
     def test_calibration_bins_shape(self, client: TestClient) -> None:
         data = client.get("/performance/report").json()
@@ -217,6 +220,7 @@ class TestPerformanceReport:
                 data = c.get("/performance/report").json()
                 assert data["n_total"] == 0
                 assert data["hit_rate"] is None
+                assert data["evidence_status"]["overall"] == "INSUFFICIENT_SAMPLE"
         finally:
             app.dependency_overrides.clear()
 

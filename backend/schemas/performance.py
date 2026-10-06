@@ -2,7 +2,20 @@
 
 from __future__ import annotations
 
+import uuid
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict
+
+
+class EvidenceStatusOut(BaseModel):
+    """Evidence classification for each KPI family; missing is never zero."""
+
+    overall: str
+    hit_rate: str
+    calibration: str
+    clv: str
+    financial: str
 
 
 class CalibrationBinOut(BaseModel):
@@ -65,6 +78,38 @@ class KPIReportOut(BaseModel):
     # Subjects whose matches have kicked off but which have no settlement yet
     # (open tickets / unsettled selections).  Only set on /performance/report.
     n_awaiting: int | None = None
+    evidence_status: EvidenceStatusOut
+
+
+class LegAttributionOut(BaseModel):
+    prediction_id: uuid.UUID
+    accumulator_id: uuid.UUID
+    product: str
+    market: str
+    selection: str
+    league: str | None
+    fixture_id: uuid.UUID
+    leg_index: int
+    leg_outcome: str | None
+    ticket_outcome: str
+    first_losing_leg: int | None
+    stored_odds: float
+    quote_age_seconds: float | None
+    bookmaker: str | None
+    quote_id: uuid.UUID | None
+    quote_timestamp: datetime | None
+    closing_odds: float | None
+    clv: float | None
+    model_version: str | None
+    calibration_version: str | None
+    feature_version: str | None
+    policy_version: str | None
+    optimiser_version: str | None
+    lrs: float | None
+    mrs: float | None
+    reliability_state: str | None
+    paper_profit_units: float | None
+    evidence_status: str
 
 
 class PerformanceSegmentsOut(BaseModel):

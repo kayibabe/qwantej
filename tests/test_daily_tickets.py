@@ -76,8 +76,26 @@ def _cand(
 
 def _rich_pool() -> list[DailyCandidate]:
     prices = [
-        "1.22", "1.30", "1.35", "1.40", "1.45", "1.50", "1.55", "1.62", "1.70", "1.80",
-        "1.90", "2.00", "2.10", "2.25", "2.40", "2.60", "2.80", "3.00", "3.10", "1.28",
+        "1.22",
+        "1.30",
+        "1.35",
+        "1.40",
+        "1.45",
+        "1.50",
+        "1.55",
+        "1.62",
+        "1.70",
+        "1.80",
+        "1.90",
+        "2.00",
+        "2.10",
+        "2.25",
+        "2.40",
+        "2.60",
+        "2.80",
+        "3.00",
+        "3.10",
+        "1.28",
     ]
     return [_cand(i, p) for i, p in enumerate(prices)]
 
@@ -141,9 +159,12 @@ def test_stale_quotes_and_started_fixtures_are_never_used() -> None:
 def test_model_disagreement_reports_shortfall_instead_of_relaxing_quality() -> None:
     # Every leg has the model 15pp below the market, so no target-band ticket
     # may be published merely to preserve the daily count.
-    pool = [_cand(i, p, model_delta=-0.15) for i, p in enumerate(
-        ["1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "2.00", "2.20", "2.50", "3.00"]
-    )]
+    pool = [
+        _cand(i, p, model_delta=-0.15)
+        for i, p in enumerate(
+            ["1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "2.00", "2.20", "2.50", "3.00"]
+        )
+    ]
     result = build_daily_tickets(pool, as_of=NOW)
     assert result.tickets == ()
     assert result.shortfall == DAILY_PRODUCTS
@@ -185,13 +206,15 @@ def test_slate_of_only_heavy_favourites_reports_shortfall() -> None:
 
 
 def test_quotes_older_than_three_hours_are_not_used() -> None:
-    five_hours = [_cand(i, p, captured=NOW - timedelta(hours=5))
-                  for i, p in enumerate(_rich_pool_prices())]
+    five_hours = [
+        _cand(i, p, captured=NOW - timedelta(hours=5)) for i, p in enumerate(_rich_pool_prices())
+    ]
     result = build_daily_tickets(five_hours, as_of=NOW)
     assert result.tickets == ()
     assert result.shortfall == DAILY_PRODUCTS
-    day_old = [_cand(i, p, captured=NOW - timedelta(hours=20))
-               for i, p in enumerate(_rich_pool_prices())]
+    day_old = [
+        _cand(i, p, captured=NOW - timedelta(hours=20)) for i, p in enumerate(_rich_pool_prices())
+    ]
     result = build_daily_tickets(day_old, as_of=NOW)
     assert result.tickets == ()
     assert result.shortfall == DAILY_PRODUCTS
@@ -220,10 +243,17 @@ def test_empty_pool_is_full_shortfall() -> None:
 )
 def test_candidate_validation_rejects_bad_inputs(overrides) -> None:
     base = dict(
-        prediction_id="p", fixture_id="f", league_id="l", market="1X2", selection="home",
-        kickoff_utc=NOW + timedelta(hours=3), model_probability=0.6,
-        market_probability=0.58, decimal_odds=Decimal("1.60"),
-        captured_at=NOW - timedelta(minutes=5), dqs=80.0,
+        prediction_id="p",
+        fixture_id="f",
+        league_id="l",
+        market="1X2",
+        selection="home",
+        kickoff_utc=NOW + timedelta(hours=3),
+        model_probability=0.6,
+        market_probability=0.58,
+        decimal_odds=Decimal("1.60"),
+        captured_at=NOW - timedelta(minutes=5),
+        dqs=80.0,
     )
     base.update(overrides)
     with pytest.raises(ValueError):
@@ -249,8 +279,24 @@ def session():
 
 
 _HOME_PRICES = [
-    "1.22", "1.30", "1.35", "1.40", "1.45", "1.50", "1.55", "1.62", "1.70", "1.80",
-    "1.90", "2.00", "2.10", "2.25", "2.40", "2.60", "2.80", "3.00",
+    "1.22",
+    "1.30",
+    "1.35",
+    "1.40",
+    "1.45",
+    "1.50",
+    "1.55",
+    "1.62",
+    "1.70",
+    "1.80",
+    "1.90",
+    "2.00",
+    "2.10",
+    "2.25",
+    "2.40",
+    "2.60",
+    "2.80",
+    "3.00",
 ]
 
 
@@ -276,8 +322,11 @@ def _seed_slate(
         session.add_all([home, away])
         session.flush()
         fixture = Fixture(
-            competition=comps[i % leagues], season=seasons[i % leagues],
-            home_team=home, away_team=away, kickoff_utc=kickoff,
+            competition=comps[i % leagues],
+            season=seasons[i % leagues],
+            home_team=home,
+            away_team=away,
+            kickoff_utc=kickoff,
             status=FixtureStatus.SCHEDULED,
         )
         session.add(fixture)
@@ -285,13 +334,51 @@ def _seed_slate(
         home_odds = Decimal(price)
         prediction = _add_prediction(session, fixture, home_odds, research_mode, dqs)
         _add_market(session, fixture, home_odds, captured=NOW - quote_age)
+        home_quote = session.scalar(
+            select(OddsQuote).where(
+                OddsQuote.fixture_id == fixture.id,
+                OddsQuote.selection == "home",
+            )
+        )
+        assert home_quote is not None
+        implied = [
+            1 / float(home_quote.decimal_odds),
+            1
+            / float(
+                session.scalar(
+                    select(OddsQuote.decimal_odds).where(
+                        OddsQuote.fixture_id == fixture.id,
+                        OddsQuote.selection == "draw",
+                    )
+                )
+            ),
+            1
+            / float(
+                session.scalar(
+                    select(OddsQuote.decimal_odds).where(
+                        OddsQuote.fixture_id == fixture.id,
+                        OddsQuote.selection == "away",
+                    )
+                )
+            ),
+        ]
+        prediction.executable_odds = home_quote.decimal_odds
+        prediction.quote_timestamp = home_quote.captured_at
+        prediction.fair_market_probability = implied[0] / sum(implied)
+        prediction.model_run_id = uuid.uuid4()
+        prediction.calibration_model_id = uuid.uuid4()
+        prediction.feature_version = "feat-test"
+        prediction.calibration_version = "cal-test"
+        prediction.input_snapshot_ref = "feature-snapshot:test"
+        prediction.input_snapshot_hash = "sha256:test"
         out.append((fixture, prediction))
     session.flush()
     return out
 
 
-def _add_prediction(session, fixture, home_odds, research_mode, dqs, *,
-                    market="1X2", selection="home") -> Prediction:
+def _add_prediction(
+    session, fixture, home_odds, research_mode, dqs, *, market="1X2", selection="home"
+) -> Prediction:
     p = min(0.93, 0.93 / float(home_odds))
     prediction = Prediction(
         fixture_id=fixture.id,
@@ -312,8 +399,15 @@ def _add_prediction(session, fixture, home_odds, research_mode, dqs, *,
     return prediction
 
 
-def _add_market(session, fixture, home_odds: Decimal, *, captured: datetime,
-                bookmaker: str = "Book", selections=("home", "draw", "away")) -> None:
+def _add_market(
+    session,
+    fixture,
+    home_odds: Decimal,
+    *,
+    captured: datetime,
+    bookmaker: str = "Book",
+    selections=("home", "draw", "away"),
+) -> None:
     implied_home = 1 / float(home_odds)
     rest = max(0.05, 1.05 - implied_home)
     prices = {
@@ -322,10 +416,17 @@ def _add_market(session, fixture, home_odds: Decimal, *, captured: datetime,
         "away": Decimal(str(round(1 / (rest * 0.55), 2))),
     }
     for sel in selections:
-        session.add(OddsQuote(
-            fixture_id=fixture.id, bookmaker=bookmaker, market="1X2", selection=sel,
-            decimal_odds=prices[sel], captured_at=captured, source="test",
-        ))
+        session.add(
+            OddsQuote(
+                fixture_id=fixture.id,
+                bookmaker=bookmaker,
+                market="1X2",
+                selection=sel,
+                decimal_odds=prices[sel],
+                captured_at=captured,
+                source="test",
+            )
+        )
 
 
 def test_ensure_creates_three_paper_unstaked_tickets_with_lineage(session) -> None:
@@ -358,9 +459,9 @@ def test_ensure_creates_three_paper_unstaked_tickets_with_lineage(session) -> No
 
 
 def test_persistence_rejects_missing_quote_provenance(session) -> None:
-    candidates = [_cand(i, price) for i, price in enumerate(
-        ["1.40", "1.50", "1.60", "1.70", "1.80", "1.90"]
-    )]
+    candidates = [
+        _cand(i, price) for i, price in enumerate(["1.40", "1.50", "1.60", "1.70", "1.80", "1.90"])
+    ]
     result = build_daily_tickets(candidates, products=(DailyProduct.SAFE,), as_of=NOW)
 
     with pytest.raises(AccumulatorPersistenceError, match="no quote provenance"):
@@ -372,9 +473,7 @@ def test_persistence_rejects_quote_that_is_stale_at_commit(session) -> None:
     candidates = load_daily_candidates(session, now=NOW, lookahead=timedelta(hours=30))
     result = build_daily_tickets(candidates, products=(DailyProduct.SAFE,), as_of=NOW)
     ticket = result.tickets[0]
-    stale_legs = tuple(
-        replace(leg, captured_at=NOW - timedelta(hours=4)) for leg in ticket.legs
-    )
+    stale_legs = tuple(replace(leg, captured_at=NOW - timedelta(hours=4)) for leg in ticket.legs)
     stale_ticket = replace(ticket, legs=stale_legs)
 
     with pytest.raises(AccumulatorPersistenceError, match="does not match candidate"):
@@ -409,7 +508,8 @@ def test_next_day_gets_a_fresh_set(session) -> None:
     tomorrow = NOW + timedelta(days=1)
     # Tomorrow's slate, priced 30 minutes before tomorrow's run.
     _seed_slate(
-        session, kickoff=tomorrow + timedelta(hours=8),
+        session,
+        kickoff=tomorrow + timedelta(hours=8),
         quote_age=timedelta(minutes=30) - timedelta(days=1),
     )
     run = ensure_daily_tickets(session, now=tomorrow)
@@ -434,17 +534,29 @@ def test_low_dqs_stale_or_incoherent_markets_are_excluded(session) -> None:
     h, a = Team(name="IH"), Team(name="IA")
     session.add_all([comp, season, h, a])
     session.flush()
-    fx = Fixture(competition=comp, season=season, home_team=h, away_team=a,
-                 kickoff_utc=NOW + timedelta(hours=8), status=FixtureStatus.SCHEDULED)
+    fx = Fixture(
+        competition=comp,
+        season=season,
+        home_team=h,
+        away_team=a,
+        kickoff_utc=NOW + timedelta(hours=8),
+        status=FixtureStatus.SCHEDULED,
+    )
     session.add(fx)
     session.flush()
     _add_prediction(session, fx, Decimal("1.45"), True, 80.0)
-    _add_market(session, fx, Decimal("1.45"), captured=NOW - timedelta(minutes=10),
-                selections=("home", "away"))
+    _add_market(
+        session,
+        fx,
+        Decimal("1.45"),
+        captured=NOW - timedelta(minutes=10),
+        selections=("home", "away"),
+    )
     session.flush()
 
-    ids = {c.fixture_id for c in load_daily_candidates(
-        session, now=NOW, lookahead=timedelta(hours=30))}
+    ids = {
+        c.fixture_id for c in load_daily_candidates(session, now=NOW, lookahead=timedelta(hours=30))
+    }
     assert ids == {str(f.id) for f, _ in good}
     assert str(low_dqs[0][0].id) not in ids and str(stale[0][0].id) not in ids
     assert str(fx.id) not in ids
@@ -462,18 +574,23 @@ def test_production_forecast_preferred_over_research_for_same_fixture(session) -
 def test_archived_draw_away_and_btts_are_repriced_from_complete_markets(session) -> None:
     pairs = _seed_slate(session, prices=["1.50", "1.60", "1.70"], leagues=3)
     draw_fixture, away_fixture, btts_fixture = (pair[0] for pair in pairs)
-    draw = _add_prediction(session, draw_fixture, Decimal("3.50"), False, 80.0,
-                           selection="draw")
-    away = _add_prediction(session, away_fixture, Decimal("2.80"), False, 80.0,
-                           selection="away")
-    btts = _add_prediction(session, btts_fixture, Decimal("1.80"), False, 80.0,
-                           market="BTTS", selection="yes")
+    draw = _add_prediction(session, draw_fixture, Decimal("3.50"), False, 80.0, selection="draw")
+    away = _add_prediction(session, away_fixture, Decimal("2.80"), False, 80.0, selection="away")
+    btts = _add_prediction(
+        session, btts_fixture, Decimal("1.80"), False, 80.0, market="BTTS", selection="yes"
+    )
     for selection, odds in (("yes", "1.80"), ("no", "2.05")):
-        session.add(OddsQuote(
-            fixture_id=btts_fixture.id, bookmaker="Book", market="BTTS",
-            selection=selection, decimal_odds=Decimal(odds),
-            captured_at=NOW - timedelta(minutes=15), source="test",
-        ))
+        session.add(
+            OddsQuote(
+                fixture_id=btts_fixture.id,
+                bookmaker="Book",
+                market="BTTS",
+                selection=selection,
+                decimal_odds=Decimal(odds),
+                captured_at=NOW - timedelta(minutes=15),
+                source="test",
+            )
+        )
     session.flush()
 
     candidates = load_daily_candidates(session, now=NOW, lookahead=timedelta(hours=30))
@@ -488,14 +605,21 @@ def test_archived_draw_away_and_btts_are_repriced_from_complete_markets(session)
 
 def test_incomplete_or_mixed_bookmaker_btts_is_excluded(session) -> None:
     [(fixture, _)] = _seed_slate(session, prices=["1.50"], leagues=1)
-    prediction = _add_prediction(session, fixture, Decimal("1.80"), False, 80.0,
-                                 market="BTTS", selection="yes")
+    prediction = _add_prediction(
+        session, fixture, Decimal("1.80"), False, 80.0, market="BTTS", selection="yes"
+    )
     for bookmaker, selection in (("Book A", "yes"), ("Book B", "no")):
-        session.add(OddsQuote(
-            fixture_id=fixture.id, bookmaker=bookmaker, market="BTTS",
-            selection=selection, decimal_odds=Decimal("1.90"),
-            captured_at=NOW - timedelta(minutes=15), source="test",
-        ))
+        session.add(
+            OddsQuote(
+                fixture_id=fixture.id,
+                bookmaker=bookmaker,
+                market="BTTS",
+                selection=selection,
+                decimal_odds=Decimal("1.90"),
+                captured_at=NOW - timedelta(minutes=15),
+                source="test",
+            )
+        )
     session.flush()
     candidates = load_daily_candidates(session, now=NOW, lookahead=timedelta(hours=30))
     assert str(prediction.id) not in {c.prediction_id for c in candidates}
@@ -507,24 +631,64 @@ def test_daily_ticket_persists_archived_btts_market(session) -> None:
     pairs[1][1].calibrated_probability = 0.65
     # Keep the second fixture's home forecast, but leave this fixture with BTTS only.
     session.delete(home_prediction)
-    btts = _add_prediction(session, fixture, Decimal("1.80"), False, 80.0,
-                           market="BTTS", selection="yes")
+    btts = _add_prediction(
+        session, fixture, Decimal("1.80"), False, 80.0, market="BTTS", selection="yes"
+    )
     btts.calibrated_probability = 0.65
     for selection, odds in (("yes", "1.80"), ("no", "2.05")):
-        session.add(OddsQuote(
-            fixture_id=fixture.id, bookmaker="Book", market="BTTS",
-            selection=selection, decimal_odds=Decimal(odds),
-            captured_at=NOW - timedelta(minutes=15), source="test",
-        ))
+        session.add(
+            OddsQuote(
+                fixture_id=fixture.id,
+                bookmaker="Book",
+                market="BTTS",
+                selection=selection,
+                decimal_odds=Decimal(odds),
+                captured_at=NOW - timedelta(minutes=15),
+                source="test",
+            )
+        )
     session.flush()
+    btts_quote = session.scalar(
+        select(OddsQuote).where(
+            OddsQuote.fixture_id == fixture.id,
+            OddsQuote.market == "BTTS",
+            OddsQuote.selection == "yes",
+        )
+    )
+    assert btts_quote is not None
+    btts_prediction = btts
+    btts_prediction.executable_odds = btts_quote.decimal_odds
+    btts_prediction.quote_timestamp = btts_quote.captured_at
+    btts_prediction.fair_market_probability = (1 / float(btts_quote.decimal_odds)) / (
+        1 / float(btts_quote.decimal_odds) + 1 / 2.05
+    )
+    btts_prediction.model_run_id = uuid.uuid4()
+    btts_prediction.calibration_model_id = uuid.uuid4()
+    btts_prediction.feature_version = "feat-test"
+    btts_prediction.calibration_version = "cal-test"
+    btts_prediction.input_snapshot_ref = "feature-snapshot:test"
+    btts_prediction.input_snapshot_hash = "sha256:test"
 
     run = ensure_daily_tickets(session, now=NOW, target=1)
     assert len(run.created) == 1
     assert run.created[0].paper_only is True
-    leg = session.scalars(select(AccumulatorLeg).where(
-        AccumulatorLeg.prediction_id == btts.id
-    )).one()
+    leg = session.scalars(
+        select(AccumulatorLeg).where(AccumulatorLeg.prediction_id == btts.id)
+    ).one()
     assert (leg.market_family, leg.selection) == ("BTTS", "yes")
+
+
+def test_missing_prediction_provenance_is_explicit_and_fail_closed(session) -> None:
+    # Direct ORM rows model legacy/incomplete archive data.  The publication
+    # path must not turn that absence into a neutral price or lineage value.
+    _seed_slate(session)
+    for prediction in session.scalars(select(Prediction)).all():
+        prediction.executable_odds = None
+        prediction.quote_timestamp = None
+        prediction.fair_market_probability = None
+    with pytest.raises(AccumulatorPersistenceError, match="UNAVAILABLE_PROVENANCE"):
+        ensure_daily_tickets(session, now=NOW, target=1)
+    assert session.query(Accumulator).count() == 0
 
 
 def test_fixture_already_on_a_ticket_is_not_reused(session) -> None:
@@ -534,8 +698,9 @@ def test_fixture_already_on_a_ticket_is_not_reused(session) -> None:
     other = _add_prediction(session, fixture, Decimal("1.40"), False, 80.0)
     other.accumulator_id = uuid.uuid4()
     session.flush()
-    ids = {c.fixture_id for c in load_daily_candidates(
-        session, now=NOW, lookahead=timedelta(hours=30))}
+    ids = {
+        c.fixture_id for c in load_daily_candidates(session, now=NOW, lookahead=timedelta(hours=30))
+    }
     assert str(fixture.id) not in ids
 
 
