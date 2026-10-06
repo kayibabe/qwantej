@@ -45,8 +45,9 @@ also fails closed when its target odds band cannot be met:
   complete same-bookmaker quotes. It does not synthesize missing forecasts or
   force market diversity; the live signal pipeline currently archives home 1X2.
   Totals remain excluded because the ticket leg does not retain a totals line.
-  DQS < 60 (framework REJECT band) is never used. One leg per fixture across
-  all tickets; a prediction backs at most one ticket.
+  DQS < 60 (framework REJECT band) is never used. One leg per fixture within
+  each source ticket; the derived daily accumulator may reuse those persisted
+  source legs and records their source ticket IDs.
 - Built once per UTC day from `DAILY_TICKET_BUILD_HOUR_UTC` (default 06),
   idempotently topped up hourly; 30 h lookahead, 72 h fallback. Earlier
   products never take legs a later product needs to exist.
@@ -56,6 +57,20 @@ also fails closed when its target odds band cannot be met:
 - Daily Picks must be excluded from value-product KPIs and from
   ticket-settlement ROI claims for CORE/GROWTH/ALPHA (filter `daily_*`); the
   Performance page reports every product on its own row for this reason.
+
+## Derived daily accumulator
+
+After the source `daily_safe` (Conservative) and `daily_balanced` tickets have
+both been persisted, the scheduler attempts one paper-only ticket named
+`Accu-YYYY-MM-DD`. It runs from `DAILY_ACCUMULATOR_BUILD_HOUR_UTC` (default
+07:00 UTC) and retries on later hourly cycles if either source ticket is still
+missing.
+
+The ticket is the union of unique fixtures from those two persisted source
+tickets. When a fixture occurs in both, the `daily_safe`/Conservative leg wins,
+including when the selections conflict. The merge does not search for new
+matches, fill missing games, or overwrite either source ticket. It is
+idempotent and records the source accumulator on every derived leg.
 
 ## Initial policy thresholds (research defaults — must be backtested)
 

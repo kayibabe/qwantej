@@ -70,6 +70,10 @@ class Settings(BaseSettings):
     # UTC hour from which the day's Daily Picks are built (06 → tickets cover
     # the day's European fixtures). A later restart still builds immediately.
     daily_ticket_build_hour_utc: int = Field(default=6, ge=0, le=23)
+    # Earliest UTC hour for the derived Accu-YYYY-MM-DD merge. The merge still
+    # waits until both source Daily Safe (Conservative) and Daily Balanced
+    # tickets exist.
+    daily_accumulator_build_hour_utc: int = Field(default=7, ge=0, le=23)
 
     # Real-money tracking: the single ISO 4217 currency of the owner's
     # bankroll. Every recorded real bet must be in this currency.

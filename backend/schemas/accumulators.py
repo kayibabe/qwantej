@@ -14,6 +14,7 @@ class AccumulatorLegOut(BaseModel):
     id: uuid.UUID
     leg_index: int
     prediction_id: uuid.UUID
+    source_accumulator_id: uuid.UUID | None = None
     fixture_id: uuid.UUID
     league_id: str
     market_family: str

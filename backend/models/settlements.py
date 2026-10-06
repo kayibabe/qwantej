@@ -100,7 +100,10 @@ class Accumulator(UUIDPKMixin, CreatedAtMixin, Base):
     decision_cutoff: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     paper_only: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
-    legs: Mapped[list["AccumulatorLeg"]] = relationship(back_populates="accumulator")
+    legs: Mapped[list["AccumulatorLeg"]] = relationship(
+        back_populates="accumulator",
+        foreign_keys="AccumulatorLeg.accumulator_id",
+    )
 
 
 class AccumulatorLeg(UUIDPKMixin, CreatedAtMixin, Base):
@@ -111,7 +114,6 @@ class AccumulatorLeg(UUIDPKMixin, CreatedAtMixin, Base):
         UniqueConstraint(
             "accumulator_id", "prediction_id", name="uq_acca_leg_accumulator_prediction"
         ),
-        UniqueConstraint("prediction_id", name="uq_acca_leg_prediction"),
         CheckConstraint("decimal_odds > 1", name="ck_acca_leg_odds_gt_1"),
         CheckConstraint(
             "conservative_probability > 0 AND conservative_probability <= 1",
@@ -127,6 +129,12 @@ class AccumulatorLeg(UUIDPKMixin, CreatedAtMixin, Base):
     )
     prediction_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("predictions.id"), nullable=False, index=True
+    )
+    # A derived ticket may reuse a source prediction without changing the
+    # source prediction's primary accumulator back-link.  This records the
+    # exact source ticket used by the derived ticket.
+    source_accumulator_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("accumulators.id"), nullable=True, index=True
     )
     leg_index: Mapped[int] = mapped_column(nullable=False)
     fixture_id: Mapped[uuid.UUID] = mapped_column(
@@ -148,7 +156,10 @@ class AccumulatorLeg(UUIDPKMixin, CreatedAtMixin, Base):
         DateTime(timezone=True), nullable=True
     )
 
-    accumulator: Mapped["Accumulator"] = relationship(back_populates="legs")
+    accumulator: Mapped["Accumulator"] = relationship(
+        back_populates="legs",
+        foreign_keys=[accumulator_id],
+    )
     fixture: Mapped["Fixture"] = relationship()
 
     # --- Display helpers (read from eagerly-loaded fixture) ---

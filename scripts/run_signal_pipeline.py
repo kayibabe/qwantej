@@ -1015,6 +1015,34 @@ def _run_daily_ticket_phase(
         run.errors += 1
 
 
+def _run_daily_accumulator_phase(
+    run: PipelineRun,
+    engine: Any,
+    *,
+    now: datetime,
+    build_hour_utc: int,
+    dry_run: bool,
+) -> None:
+    """Merge only the persisted Conservative and Balanced Daily Pick tickets."""
+    from backend.core.db import session_scope
+    from backend.services.daily_accumulator import ensure_daily_accumulator
+
+    try:
+        with session_scope(engine) as session:
+            result = ensure_daily_accumulator(
+                session, now=now, build_hour_utc=build_hour_utc
+            )
+            if result.created is not None:
+                log.info("signal_pipeline: created daily accumulator %s", result.name)
+            elif result.waiting_for_sources:
+                log.info("signal_pipeline: daily accumulator waiting for source tickets")
+            if dry_run:
+                session.rollback()
+    except Exception:
+        log.exception("signal_pipeline: daily accumulator phase failed")
+        run.errors += 1
+
+
 # ---------------------------------------------------------------------------
 # Notifications
 # ---------------------------------------------------------------------------
@@ -1230,6 +1258,11 @@ def run_once(
         _run_daily_ticket_phase(
             run, engine, now=now, target=settings.daily_ticket_minimum,
             build_hour_utc=settings.daily_ticket_build_hour_utc, dry_run=dry_run,
+        )
+        _run_daily_accumulator_phase(
+            run, engine, now=now,
+            build_hour_utc=settings.daily_accumulator_build_hour_utc,
+            dry_run=dry_run,
         )
 
     if not dry_run:
