@@ -245,10 +245,9 @@ class TestQueryReliabilityObservations:
         with pytest.raises(ValueError, match="as_of must be timezone-aware"):
             query_reliability_observations(session, as_of=datetime(2026, 9, 10, 12))
 
-    def test_duplicate_competition_names_raises(self, session):
-        # Two competitions with the same name but different IDs are ambiguous:
-        # the matrix would merge their data under one name but only one UUID
-        # would survive in competition_id_map.
+    def test_duplicate_competition_names_remain_distinct(self, session):
+        # Display names are not canonical identity.  Duplicate names must not
+        # merge observations or silently select one UUID for both segments.
         comp_a = Competition(name="EPL", tier=1)
         comp_b = Competition(name="EPL", tier=2)
         session.add_all([comp_a, comp_b])
@@ -258,8 +257,15 @@ class TestQueryReliabilityObservations:
             pred = _prediction(session, fix)
             _settlement(session, pred)
 
-        with pytest.raises(ValueError, match="ambiguous competition names"):
-            query_reliability_observations(session, as_of=NOW)
+        observations, competition_ids = query_reliability_observations(
+            session, as_of=NOW
+        )
+
+        assert {observation.league for observation in observations} == {
+            f"EPL [{comp_a.id}]",
+            f"EPL [{comp_b.id}]",
+        }
+        assert set(competition_ids.values()) == {comp_a.id, comp_b.id}
 
     def test_no_clv_gives_none(self, session):
         comp = _competition(session)

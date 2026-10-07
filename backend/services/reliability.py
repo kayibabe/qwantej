@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import uuid
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -173,8 +173,10 @@ def query_reliability_observations(
     a calibrated_probability on the linked prediction are included.  Filtered to
     settled_at <= as_of for PIT safety.
 
-    Returns (observations, competition_id_map) where competition_id_map maps
-    competition.name → competition.id for use in archive_reliability_matrix.
+    Returns (observations, competition_id_map).  The observation league key is
+    the competition name for unique names, and a name-plus-UUID key when the
+    database contains duplicate display names.  This keeps distinct canonical
+    competitions from being merged while preserving readable segment labels.
     """
     if as_of.tzinfo is None or as_of.utcoffset() is None:
         raise ValueError("as_of must be timezone-aware")
@@ -201,7 +203,9 @@ def query_reliability_observations(
 
     observations: list[ReliabilityObservation] = []
     competition_id_map: dict[str, uuid.UUID] = {}
-    # Tracks all UUIDs seen per name to detect ambiguous (non-unique) names.
+    observation_competition_ids: dict[str, uuid.UUID] = {}
+    # Tracks all UUIDs seen per display name.  Names are presentation data, not
+    # canonical identity, so duplicate names must remain separate segments.
     _name_to_ids: dict[str, set[uuid.UUID]] = {}
 
     for settlement, prediction, competition in session.execute(stmt):
@@ -210,7 +214,6 @@ def query_reliability_observations(
         assert settlement.taken_odds is not None
         assert prediction.calibrated_probability is not None
         competition_class = f"tier-{competition.tier}" if competition.tier else "tier-1"
-        competition_id_map[competition.name] = competition.id
         _name_to_ids.setdefault(competition.name, set()).add(competition.id)
 
         is_win = settlement.outcome == SettlementOutcome.WIN
@@ -237,15 +240,22 @@ def query_reliability_observations(
                 model_stability=1.0,
             )
         )
+        observation_competition_ids[str(settlement.subject_id)] = competition.id
 
-    ambiguous = sorted(name for name, ids in _name_to_ids.items() if len(ids) > 1)
-    if ambiguous:
-        raise ValueError(
-            f"ambiguous competition names (multiple IDs): {', '.join(ambiguous)}; "
-            "ensure competition names are unique in the database"
-        )
+    ambiguous_ids = {
+        name: ids for name, ids in _name_to_ids.items() if len(ids) > 1
+    }
+    normalized: list[ReliabilityObservation] = []
+    for observation in observations:
+        competition_id = observation_competition_ids[observation.observation_id]
+        if observation.league in ambiguous_ids:
+            league_key = f"{observation.league} [{competition_id}]"
+        else:
+            league_key = observation.league
+        normalized.append(replace(observation, league=league_key))
+        competition_id_map[league_key] = competition_id
 
-    return observations, competition_id_map
+    return normalized, competition_id_map
 
 
 def rebuild_reliability_snapshots(

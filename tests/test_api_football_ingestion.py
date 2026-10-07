@@ -239,16 +239,25 @@ def test_fixture_finalization_is_audited(session: Session) -> None:
     assert session.query(AuditEvent).count() == 1
 
 
-def test_fixture_identity_conflict_rolls_back_batch(session: Session) -> None:
+def test_fixture_identity_conflict_is_quarantined_without_mutation(
+    session: Session,
+) -> None:
     ingest_fixtures(session, [_fixture_payload()], captured_at=NOW)
     mappings_before = session.query(SourceMapping).count()
-    with pytest.raises(ApiFootballIngestionError, match="identity conflicts"):
-        ingest_fixtures(
-            session,
-            [_fixture_payload(home_id=999)],
-            captured_at=NOW + timedelta(minutes=1),
-        )
+    summary = ingest_fixtures(
+        session,
+        [_fixture_payload(home_id=999)],
+        captured_at=NOW + timedelta(minutes=1),
+    )
+    assert summary.fixture_identity_conflicts == 1
     assert session.query(SourceMapping).count() == mappings_before
+    event = session.scalar(
+        select(AuditEvent).where(
+            AuditEvent.action == "quarantine_fixture_identity_conflict"
+        )
+    )
+    assert event is not None
+    assert event.payload["external_fixture_id"] == "1001"
 
 
 def test_statistics_and_fixture_observations_can_share_capture_time(

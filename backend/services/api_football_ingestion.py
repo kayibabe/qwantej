@@ -77,6 +77,7 @@ class IngestionSummary:
     fixtures_created: int = 0
     fixtures_updated: int = 0
     fixture_snapshots_created: int = 0
+    fixture_identity_conflicts: int = 0
     statistics_snapshots_created: int = 0
     odds_quotes_created: int = 0
     odds_quotes_deduplicated: int = 0
@@ -147,6 +148,7 @@ def ingest_walk_forward_window(
             fixtures_created=fixture_summary.fixtures_created,
             fixtures_updated=fixture_summary.fixtures_updated,
             fixture_snapshots_created=fixture_summary.fixture_snapshots_created,
+            fixture_identity_conflicts=fixture_summary.fixture_identity_conflicts,
             statistics_snapshots_created=statistics_count,
             odds_quotes_created=odds_summary.odds_quotes_created,
             odds_quotes_deduplicated=odds_summary.odds_quotes_deduplicated,
@@ -241,6 +243,7 @@ def refresh_tracked_accumulator_fixtures(
         "fixtures_created": 0,
         "fixtures_updated": 0,
         "fixture_snapshots_created": 0,
+        "fixture_identity_conflicts": 0,
     }
     for offset in range(0, len(external_ids), 20):
         batch = external_ids[offset : offset + 20]
@@ -256,6 +259,7 @@ def refresh_tracked_accumulator_fixtures(
         totals["fixtures_created"] += summary.fixtures_created
         totals["fixtures_updated"] += summary.fixtures_updated
         totals["fixture_snapshots_created"] += summary.fixture_snapshots_created
+        totals["fixture_identity_conflicts"] += summary.fixture_identity_conflicts
     return IngestionSummary(**totals)
 
 
@@ -268,59 +272,96 @@ def _ingest_fixtures(
     _require_aware(captured_at, "captured_at")
     provider = _provider(session)
     created = updated = snapshots = 0
+    identity_conflicts = 0
     for payload in payloads:
         parsed = parse_fixture(payload)
-        competition = _competition(session, provider, parsed)
-        season = _season(session, provider, competition, parsed)
-        home = _team(
-            session,
-            provider,
-            parsed.external_home_team_id,
-            parsed.home_team_name,
-        )
-        away = _team(
-            session,
-            provider,
-            parsed.external_away_team_id,
-            parsed.away_team_name,
-        )
-        fixture = _mapped_entity(
-            session, provider.id, EntityType.FIXTURE, parsed.external_fixture_id, Fixture
-        )
-        if fixture is None:
-            fixture = Fixture(
-                competition=competition,
-                season=season,
-                home_team=home,
-                away_team=away,
-                kickoff_utc=parsed.kickoff_utc,
-                status=FixtureStatus(parsed.status),
-                venue=_bounded(parsed.venue, 150, "fixture venue"),
-                home_goals=parsed.home_goals if parsed.status == "finished" else None,
-                away_goals=parsed.away_goals if parsed.status == "finished" else None,
-            )
-            session.add(fixture)
-            session.flush()
-            _mapping(
-                session,
-                provider,
-                EntityType.FIXTURE,
-                parsed.external_fixture_id,
-                fixture.id,
-            )
-            created += 1
-        else:
-            _assert_fixture_identity(fixture, competition, season, home, away, parsed)
-            if _update_fixture(session, fixture, parsed, captured_at):
-                updated += 1
+        try:
+            # Roll back all canonical lookups/creations for this provider record
+            # before recording the quarantine event.  A bad team mapping must
+            # not leave an orphan canonical team or source mapping behind.
+            with session.begin_nested():
+                competition = _competition(session, provider, parsed)
+                season = _season(session, provider, competition, parsed)
+                home = _team(
+                    session,
+                    provider,
+                    parsed.external_home_team_id,
+                    parsed.home_team_name,
+                )
+                away = _team(
+                    session,
+                    provider,
+                    parsed.external_away_team_id,
+                    parsed.away_team_name,
+                )
+                fixture = _mapped_entity(
+                    session,
+                    provider.id,
+                    EntityType.FIXTURE,
+                    parsed.external_fixture_id,
+                    Fixture,
+                )
+                if fixture is None:
+                    fixture = Fixture(
+                        competition=competition,
+                        season=season,
+                        home_team=home,
+                        away_team=away,
+                        kickoff_utc=parsed.kickoff_utc,
+                        status=FixtureStatus(parsed.status),
+                        venue=_bounded(parsed.venue, 150, "fixture venue"),
+                        home_goals=(
+                            parsed.home_goals if parsed.status == "finished" else None
+                        ),
+                        away_goals=(
+                            parsed.away_goals if parsed.status == "finished" else None
+                        ),
+                    )
+                    session.add(fixture)
+                    session.flush()
+                    _mapping(
+                        session,
+                        provider,
+                        EntityType.FIXTURE,
+                        parsed.external_fixture_id,
+                        fixture.id,
+                    )
+                    created += 1
+                else:
+                    _assert_fixture_identity(fixture, competition, season, home, away, parsed)
+                    if _update_fixture(session, fixture, parsed, captured_at):
+                        updated += 1
 
-        if _append_fixture_snapshot(session, fixture, parsed.raw, captured_at):
-            snapshots += 1
+                if _append_fixture_snapshot(session, fixture, parsed.raw, captured_at):
+                    snapshots += 1
+        except ApiFootballIngestionError as exc:
+            if "identity conflicts with its canonical mapping" not in str(exc):
+                raise
+            identity_conflicts += 1
+            session.add(
+                AuditEvent(
+                    event_type=AuditEventType.GOVERNANCE,
+                    actor=AuditActor.SYSTEM,
+                    actor_ref="api-football-ingestion",
+                    action="quarantine_fixture_identity_conflict",
+                    summary=(
+                        "Quarantined provider fixture whose identity conflicts "
+                        "with the canonical mapping"
+                    ),
+                    entity_type="fixtures",
+                    payload={
+                        "external_fixture_id": parsed.external_fixture_id,
+                        "error": str(exc),
+                    },
+                    occurred_at=captured_at.astimezone(UTC),
+                )
+            )
     session.flush()
     return IngestionSummary(
         fixtures_created=created,
         fixtures_updated=updated,
         fixture_snapshots_created=snapshots,
+        fixture_identity_conflicts=identity_conflicts,
     )
 
 

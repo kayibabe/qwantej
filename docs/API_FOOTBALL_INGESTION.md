@@ -46,10 +46,11 @@ with session_scope() as session:
     )
 ```
 
-The caller owns the outer commit. Each ingestion operation uses a savepoint, so
-an invalid provider record, broken canonical mapping, or conflicting fixture
-identity rolls back that batch. Exact fixture/statistics captures and odds
-quotes are deduplicated on retry.
+The caller owns the outer commit. Each ingestion operation uses savepoints. An
+invalid provider record or broken canonical mapping rolls back its operation;
+a conflicting fixture identity is quarantined per fixture, recorded in
+`audit_events`, and excluded without weakening the canonical identity guard.
+Exact fixture/statistics captures and odds quotes are deduplicated on retry.
 
 ## Point in time safeguards
 
@@ -57,8 +58,9 @@ quotes are deduplicated on retry.
   `source_mappings`; modelling code receives canonical UUIDs.
 - The request receipt time is the `as_of_timestamp` for fixture/statistics
   observations. Provider odds use their own `update` timestamp.
-- Fixture identity conflicts fail closed. Legitimate status, result, venue, or
-  kickoff revisions create an immutable `audit_events` record.
+- Fixture identity conflicts fail closed per fixture and create an immutable
+  quarantine `audit_events` record. Legitimate status, result, venue, or kickoff
+  revisions create a separate immutable reconciliation record.
 - A finished fixture cannot regress to a non-final state.
 - The feature-store service separately rejects any observation after its
   decision cutoff and rejects every cutoff at or after kickoff.
