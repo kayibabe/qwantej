@@ -3,6 +3,7 @@ import type {
   AccumulatorPage,
   DailyCandidatePage,
   KPIReportOut,
+  MatchEvidence,
   ModelRegistryDetailOut,
   ModelRegistryPage,
   PerformanceSegmentsOut,
@@ -62,6 +63,10 @@ export function fetchPredictions(params: {
   })
 }
 
+export function fetchPrediction(id: string): Promise<PredictionPage["items"][number]> {
+  return apiFetch(`/predictions/${encodeURIComponent(id)}`)
+}
+
 /** Markets that have at least one priced forecast. */
 export function fetchPricedMarkets(): Promise<string[]> {
   return apiFetch("/predictions/markets")
@@ -71,6 +76,10 @@ export function fetchPredictionMarketSummary(
   scope: "all" | "production" | "research" | "awaiting" | "overdue",
 ): Promise<PredictionMarketSummary[]> {
   return apiFetch("/predictions/summary", { scope })
+}
+
+export function fetchPredictionEvidence(predictionId: string): Promise<MatchEvidence> {
+  return apiFetch(`/predictions/${encodeURIComponent(predictionId)}/evidence`)
 }
 
 export function fetchDailyCandidates(date?: string): Promise<DailyCandidatePage> {
@@ -143,6 +152,7 @@ export function fetchTodayStatus(date?: string): Promise<TodayStatus> {
 export function fetchPerformanceReport(params?: {
   subject_type?: string
   since?: string
+  until?: string
   market?: string
   scope?: "all" | "production" | "research"
 }): Promise<KPIReportOut> {
@@ -150,9 +160,10 @@ export function fetchPerformanceReport(params?: {
 }
 
 export function fetchPerformanceSegments(params: {
-  by: "market" | "league" | "model_version" | "product"
+  by: "market" | "league" | "model_version" | "product" | "odds_band"
   subject_type?: string
   since?: string
+  until?: string
   scope?: "all" | "production" | "research"
 }): Promise<PerformanceSegmentsOut> {
   return apiFetch("/performance/segments", params)

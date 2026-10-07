@@ -5,12 +5,12 @@ import { usePathname } from "next/navigation"
 import NavIcon from "@/components/NavIcon"
 
 const links = [
-  { href: "/", label: "Today", detail: "What is actionable now", icon: "dashboard" as const, group: "Decision workspace" },
-  { href: "/accumulators", label: "Tickets", detail: "Published selections and evidence", icon: "accumulators" as const, group: "Decision workspace" },
-  { href: "/performance", label: "Results", detail: "What happened over time", icon: "performance" as const, group: "Decision workspace" },
-  { href: "/predictions", label: "Forecasts", detail: "Archived probabilities and prices", icon: "predictions" as const, group: "Research & audit" },
-  { href: "/daily-candidates", label: "Daily candidates", detail: "The candidate pool before selection", icon: "predictions" as const, group: "Research & audit" },
-  { href: "/models", label: "Models", detail: "Versions and calibration context", icon: "models" as const, group: "Research & audit" },
+  { href: "/", label: "Today’s intelligence", detail: "Bet, pass, and evidence", icon: "dashboard" as const, group: "Betting desk" },
+  { href: "/accumulators", label: "Published tickets", detail: "Selections and archived prices", icon: "accumulators" as const, group: "Betting desk" },
+  { href: "/performance", label: "Performance", detail: "Results, calibration, and risk", icon: "performance" as const, group: "Analytics" },
+  { href: "/predictions", label: "Forecast archive", detail: "Historical probabilities and lineage", icon: "predictions" as const, group: "Evidence & models" },
+  { href: "/daily-candidates", label: "Candidate pool", detail: "What was considered and rejected", icon: "predictions" as const, group: "Evidence & models" },
+  { href: "/models", label: "Model registry", detail: "Versions and calibration context", icon: "models" as const, group: "Evidence & models" },
 ]
 
 export default function Nav() {
@@ -21,7 +21,7 @@ export default function Nav() {
       className="flex flex-col gap-1 px-3 py-4"
       aria-label="Primary navigation"
     >
-      {["Decision workspace", "Research & audit"].map((group) => <div key={group} className="nav-group">
+      {["Betting desk", "Analytics", "Evidence & models"].map((group) => <div key={group} className="nav-group">
         <span className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">{group}</span>
       {links.filter((link) => link.group === group).map(({ href, label, detail, icon }) => {
         const active = pathname === href || (href !== "/" && pathname.startsWith(`${href}/`))

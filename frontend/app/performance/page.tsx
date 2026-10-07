@@ -89,6 +89,13 @@ function scopeLabel(scope: PerformanceScope) {
   return scope === "production" ? "Production forecasts" : scope === "research" ? "Research forecasts" : "All forecasts"
 }
 
+type PredictionDimension = "market" | "league" | "model_version" | "odds_band"
+type SegmentDimension = PredictionDimension | "product"
+
+function dimensionLabel(dimension: SegmentDimension) {
+  return dimension === "product" ? "Ticket type" : dimension === "odds_band" ? "Odds band" : dimension === "model_version" ? "Model version" : dimension[0].toUpperCase() + dimension.slice(1)
+}
+
 /** One row per segment: record, hit rate vs break-even, average odds, ROI, P&L. */
 function SegmentTable({ caption, rows, nameHeader, colorFor, labelFor }: {
   caption: string
@@ -157,15 +164,19 @@ function RealMoney({ bankroll, results }: { bankroll: BankrollSummaryOut | null;
 
 async function Overview({ params }: { params: SearchParams }) {
   const requestedSince = typeof params.since === "string" && isDate(params.since) ? params.since : undefined
+  const requestedUntil = typeof params.until === "string" && isDate(params.until) ? params.until : undefined
   // Tickets are what gets published and bet on, so they are the default lens.
   const subjectType = params.subject_type === "prediction" ? "prediction" : "accumulator"
   const tickets = subjectType === "accumulator"
   const scope: PerformanceScope = params.scope === "research" || params.scope === "all" ? params.scope : "production"
+  const requestedDimension = params.by === "league" || params.by === "model_version" || params.by === "odds_band" ? params.by : "market"
+  const dimension: SegmentDimension = tickets ? "product" : requestedDimension
   const since = requestedSince ? `${requestedSince}T00:00:00+02:00` : undefined
+  const until = requestedUntil ? `${requestedUntil}T00:00:00+02:00` : undefined
   const [report, primarySegments, modelSegments, bankroll, realResults] = await Promise.all([
-    fetchPerformanceReport({ subject_type: subjectType, since, scope }).catch(() => null),
-    fetchPerformanceSegments({ by: tickets ? "product" : "market", subject_type: subjectType, since, scope }).catch(() => null),
-    tickets ? Promise.resolve(null) : fetchPerformanceSegments({ by: "model_version", subject_type: subjectType, since, scope }).catch(() => null),
+    fetchPerformanceReport({ subject_type: subjectType, since, until, scope }).catch(() => null),
+    fetchPerformanceSegments({ by: dimension, subject_type: subjectType, since, until, scope }).catch(() => null),
+    tickets ? Promise.resolve(null) : fetchPerformanceSegments({ by: "model_version", subject_type: subjectType, since, until, scope }).catch(() => null),
     fetchBankroll().catch(() => null),
     fetchRealBetResults().catch(() => null),
   ])
@@ -185,8 +196,8 @@ async function Overview({ params }: { params: SearchParams }) {
   return <>
     <form method="get" className="flex flex-wrap items-end gap-3 border-b border-[var(--border)] pb-4" aria-label="Performance scope">
       <label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">Show<select name="subject_type" defaultValue={subjectType} className="h-11 min-w-48 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]"><option value="accumulator">Accumulator tickets</option><option value="prediction">Individual forecasts</option></select></label>
-      {subjectType === "prediction" && <label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">Evidence<select name="scope" defaultValue={scope} className="h-11 min-w-48 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]"><option value="production">Production forecasts</option><option value="research">Research forecasts</option><option value="all">All forecasts</option></select></label>}
-      <label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">Settled from<input type="date" name="since" defaultValue={requestedSince} className="h-11 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]" /></label>
+      {subjectType === "prediction" && <><label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">Evidence<select name="scope" defaultValue={scope} className="h-11 min-w-48 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]"><option value="production">Production forecasts</option><option value="research">Research forecasts</option><option value="all">All forecasts</option></select></label><label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">Break down by<select name="by" defaultValue={dimension} className="h-11 min-w-48 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]"><option value="market">Market</option><option value="league">League</option><option value="odds_band">Odds band</option><option value="model_version">Model version</option></select></label></>}
+      <label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">Settled from<input type="date" name="since" defaultValue={requestedSince} className="h-11 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]" /></label><label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">Settled before<input type="date" name="until" defaultValue={requestedUntil} className="h-11 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 text-sm font-normal text-[var(--text-primary)]" /></label>
       <button type="submit" className="h-11 rounded-lg border border-[var(--accent)] bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--bg-surface)] hover:bg-[var(--accent-hover)]">Apply</button>
     </form>
 
@@ -213,13 +224,13 @@ async function Overview({ params }: { params: SearchParams }) {
     </section>
 
     <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 shadow-[var(--surface-shadow)]" aria-labelledby="segment-heading">
-      <p className="text-xs font-semibold uppercase tracking-[.14em] text-[var(--accent)]">{tickets ? "By ticket type" : "By market"}</p>
+      <p className="text-xs font-semibold uppercase tracking-[.14em] text-[var(--accent)]">{tickets ? "By ticket type" : `By ${dimensionLabel(dimension)}`}</p>
       <div className="mt-2 flex flex-wrap items-baseline justify-between gap-3">
-        <h2 id="segment-heading" className="text-lg font-semibold text-[var(--text-primary)]">{tickets ? "Which accumulator types are making money" : "Which markets the forecasts beat"}</h2>
+        <h2 id="segment-heading" className="text-lg font-semibold text-[var(--text-primary)]">{tickets ? "Which accumulator types are making money" : `How forecasts perform by ${dimensionLabel(dimension).toLowerCase()}`}</h2>
         <span className="text-xs text-[var(--text-muted)]">{flat ? `Flat 1-unit stake on ${report.n_priced} priced settled ${noun}${report.n_priced === 1 ? "" : "s"}` : "Recorded stakes"}</span>
       </div>
       {segmentRows.length
-        ? <div className="mt-4"><SegmentTable caption={tickets ? "Results by accumulator type" : "Results by market"} nameHeader={tickets ? "Ticket type" : "Market"} rows={segmentRows} colorFor={tickets ? productColor : undefined} labelFor={tickets ? (p) => productLabel(p) : undefined} /></div>
+        ? <div className="mt-4"><SegmentTable caption={tickets ? "Results by accumulator type" : `Results by ${dimensionLabel(dimension).toLowerCase()}`} nameHeader={tickets ? "Ticket type" : dimensionLabel(dimension)} rows={segmentRows} colorFor={tickets ? productColor : undefined} labelFor={tickets ? (p) => productLabel(p) : undefined} /></div>
         : <p className="mt-4 rounded-lg bg-[var(--bg-raised)] p-4 text-sm text-[var(--text-secondary)]">No {noun} has been settled in this scope yet{awaiting ? `; ${awaiting} ${awaiting === 1 ? "is" : "are"} awaiting a result` : ""}.</p>}
       {tickets && <p className="mt-4 text-xs text-[var(--text-muted)]">Daily Picks are built without the value gate; compare them with Core, Growth and Alpha rather than adding them together. <Link href="/performance?tab=periods" className="font-semibold text-[var(--accent)] hover:underline">See results by day, month and year →</Link></p>}
     </section>

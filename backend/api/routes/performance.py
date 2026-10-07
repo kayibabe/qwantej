@@ -36,7 +36,7 @@ router = APIRouter(
 )
 
 _VALID_SUBJECT_TYPES = {"prediction", "accumulator"}
-_VALID_SEGMENTS = {"market", "league", "model_version", "product"}
+_VALID_SEGMENTS = {"market", "league", "model_version", "product", "odds_band"}
 PerformanceScope = Literal["all", "production", "research"]
 
 
@@ -65,6 +65,7 @@ def get_performance_report(
     db: DbDep,
     subject_type: Annotated[str, Query()] = "prediction",
     since: Annotated[datetime | None, Query()] = None,
+    until: Annotated[datetime | None, Query()] = None,
     market: Annotated[str | None, Query(max_length=40)] = None,
     scope: Annotated[PerformanceScope, Query()] = "all",
 ) -> KPIReportOut:
@@ -73,6 +74,7 @@ def get_performance_report(
     Optional filters:
     - ``subject_type`` — ``prediction`` (default) or ``accumulator``
     - ``since`` — only include settlements on or after this ISO-8601 timestamp
+    - ``until`` — exclusive upper bound for the settlement timestamp
     - ``market`` — restrict to one market family (e.g. ``1X2``, ``BTTS``)
     - ``scope`` — ``production``, ``research`` or ``all`` (default)
 
@@ -91,11 +93,14 @@ def get_performance_report(
             status_code=422,
             detail="market filter is only supported for subject_type=prediction",
         )
+    if since is not None and until is not None and since >= until:
+        raise HTTPException(status_code=422, detail="since must be before until")
 
     report = performance_report(
         db,
         subject_type=subject_type,
         since=since,
+        until=until,
         market=market,
         scope=scope,
     )
@@ -112,6 +117,7 @@ def get_performance_segments(
     by: Annotated[str, Query()] = "market",
     subject_type: Annotated[str, Query()] = "prediction",
     since: Annotated[datetime | None, Query()] = None,
+    until: Annotated[datetime | None, Query()] = None,
     scope: Annotated[PerformanceScope, Query()] = "all",
 ) -> PerformanceSegmentsOut:
     """Return KPI reports broken down by a segmentation dimension and scope.
@@ -120,9 +126,11 @@ def get_performance_segments(
     stored accumulator product (for example ``daily_safe``), never a label
     derived from current configuration.
 
-    - ``by`` — ``market``, ``league``, or ``model_version`` (default: ``market``)
+    - ``by`` — ``market``, ``league``, ``model_version``, ``product``, or
+      archived ``odds_band`` (default: ``market``)
     - ``subject_type`` — ``prediction`` (default) or ``accumulator``
     - ``since`` — restrict to settlements on or after this ISO-8601 timestamp
+    - ``until`` — exclusive upper bound for the settlement timestamp
 
     Each segment key maps to a full :class:`KPIReportOut`.
     """
@@ -136,12 +144,15 @@ def get_performance_segments(
             status_code=422,
             detail=f"subject_type must be one of {sorted(_VALID_SUBJECT_TYPES)}",
         )
+    if since is not None and until is not None and since >= until:
+        raise HTTPException(status_code=422, detail="since must be before until")
 
     segments = performance_by_segment(
         db,
         by=by,
         subject_type=subject_type,
         since=since,
+        until=until,
         scope=scope,
     )
     return PerformanceSegmentsOut(

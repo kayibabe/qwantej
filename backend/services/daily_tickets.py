@@ -209,8 +209,12 @@ def _persist_candidate_snapshot(
                 quote_id=uuid.UUID(candidate.quote_id) if candidate.quote_id else None,
                 dqs=candidate.dqs,
                 bookmaker=candidate.bookmaker,
-                candidate_status="selected" if chosen else "not_selected",
-                exclusion_reason=None if chosen else "not_selected_by_target_band_optimizer",
+                # A candidate that passed the upstream candidate gates but was
+                # not selected for a target-band ticket is a watch item, not a
+                # failed prediction. Historical rows retain their original
+                # ``not_selected`` value; new snapshots use the explicit state.
+                candidate_status="selected" if chosen else "watch",
+                exclusion_reason=None if chosen else "outside_target_band_optimizer",
                 selected_product=chosen[0] if chosen else None,
                 accumulator_id=chosen[1] if chosen else None,
             )

@@ -30,6 +30,15 @@ _VALID_OUTCOMES = frozenset({"win", "loss", "void", "push"})
 
 _N_BINS_ECE = 10      # bins used for ECE / calibration slope/intercept
 _MIN_CALIB_N = 2      # minimum samples to attempt calibration metrics
+_ODDS_BANDS: tuple[tuple[float, float | None, str], ...] = (
+    (1.10, 1.30, "1.10–1.29"),
+    (1.30, 1.50, "1.30–1.49"),
+    (1.50, 1.70, "1.50–1.69"),
+    (1.70, 2.00, "1.70–1.99"),
+    (2.00, 2.50, "2.00–2.49"),
+    (2.50, 3.00, "2.50–2.99"),
+    (3.00, None, "3.00+"),
+)
 
 
 # ---------------------------------------------------------------------------
@@ -352,18 +361,36 @@ def segment_kpis(
     Raises:
         ValueError: if *by* is not a recognised segmentation dimension.
     """
-    valid_by = {"market", "league", "model_version", "product"}
+    valid_by = {"market", "league", "model_version", "product", "odds_band"}
     if by not in valid_by:
         raise ValueError(f"by must be one of {sorted(valid_by)}, got {by!r}")
 
     groups: dict[str, list[PerformanceObservation]] = {}
     for obs in observations:
-        key = getattr(obs, by)
+        if by == "odds_band":
+            key = odds_band(obs.taken_odds)
+        else:
+            key = getattr(obs, by)
         if key is None:
             key = "(unknown)"
         groups.setdefault(key, []).append(obs)
 
     return {seg: compute_kpis(group) for seg, group in groups.items()}
+
+
+def odds_band(odds: float | None) -> str | None:
+    """Return the stable odds band for an archived decimal price.
+
+    Boundary values use half-open intervals, so every usable price belongs to
+    exactly one band. Prices below 1.10 are retained as a distinct unknown
+    bucket by callers rather than being silently forced into the first band.
+    """
+    if odds is None:
+        return None
+    for lower, upper, label in _ODDS_BANDS:
+        if odds >= lower and (upper is None or odds < upper):
+            return label
+    return None
 
 
 # ---------------------------------------------------------------------------

@@ -13,6 +13,7 @@ from sqlalchemy.orm import InstrumentedAttribute, selectinload
 from backend.api.deps import DbDep
 from backend.core.security import RequireApiKey
 from backend.models import Fixture, ModelRegistry, Prediction, Settlement
+from backend.services.match_evidence import build_match_evidence
 from backend.schemas.predictions import PredictionMarketSummary, PredictionOut, PredictionPage
 
 router = APIRouter(prefix="/predictions", tags=["predictions"], dependencies=[RequireApiKey])
@@ -326,3 +327,28 @@ def get_prediction(
     if row is None:
         raise HTTPException(status_code=404, detail="Prediction not found")
     return _serialize([row], db)[0]
+
+
+@router.get("/{prediction_id}/evidence")
+def get_prediction_evidence(
+    prediction_id: uuid.UUID,
+    db: DbDep,
+) -> dict[str, object]:
+    """Return archived prediction context and strictly pre-kickoff match evidence.
+
+    This is a presentation read model. It never recalculates a forecast and
+    the evidence builder excludes the selected fixture and all later results.
+    """
+    row = db.scalar(
+        select(Prediction)
+        .options(
+            selectinload(Prediction.fixture).options(
+                selectinload(Fixture.home_team),
+                selectinload(Fixture.away_team),
+            )
+        )
+        .where(Prediction.id == prediction_id)
+    )
+    if row is None or row.fixture is None:
+        raise HTTPException(status_code=404, detail="Prediction evidence not found")
+    return build_match_evidence(db, row.fixture, row)

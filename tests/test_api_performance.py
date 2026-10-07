@@ -201,6 +201,10 @@ class TestPerformanceReport:
         r = client.get("/performance/report?subject_type=accumulator&market=1X2")
         assert r.status_code == 422
 
+    def test_invalid_date_window_is_rejected(self, client: TestClient) -> None:
+        r = client.get("/performance/report?since=2026-09-10T00:00:00Z&until=2026-09-09T00:00:00Z")
+        assert r.status_code == 422
+
     def test_empty_db_returns_zero_counts(self) -> None:
         engine = create_engine(
             "sqlite:///:memory:",

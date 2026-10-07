@@ -113,6 +113,22 @@ class TestListPredictions:
         assert data["total"] == 2
         assert len(data["items"]) == 2
 
+    def test_match_evidence_is_point_in_time(self, seeded_client) -> None:
+        client, _, prediction_id = seeded_client
+        response = client.get(f"/predictions/{prediction_id}/evidence")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["prediction"]["market"] == "1X2"
+        assert body["prediction"]["selection"] == "home"
+        assert body["home_form"] == []
+        assert body["away_form"] == []
+        assert body["h2h"] == []
+
+    def test_match_evidence_returns_404_for_unknown_prediction(self, seeded_client) -> None:
+        client, _, _ = seeded_client
+        response = client.get("/predictions/00000000-0000-0000-0000-000000000000/evidence")
+        assert response.status_code == 404
+
     def test_research_market_summary_counts_unsettled_rows(self, seeded_client) -> None:
         client, _, _ = seeded_client
         r = client.get("/predictions/summary?scope=research")

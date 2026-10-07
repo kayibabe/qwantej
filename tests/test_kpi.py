@@ -11,6 +11,7 @@ from qwantej.performance.kpi import (
     PerformanceObservation,
     compute_kpis,
     segment_kpis,
+    odds_band,
 )
 
 # ---------------------------------------------------------------------------
@@ -356,6 +357,19 @@ class TestSegmentKpis:
         result = segment_kpis(obs, by="product")
         assert result["daily_safe"].n_wins == 2
         assert result["daily_balanced"].n_losses == 1
+
+    def test_segment_by_odds_band_uses_archived_price(self) -> None:
+        obs = [_obs("win", taken_odds=1.29), _obs("loss", taken_odds=1.30), _obs("win", taken_odds=3.0)]
+        result = segment_kpis(obs, by="odds_band")
+        assert result["1.10–1.29"].n_wins == 1
+        assert result["1.30–1.49"].n_losses == 1
+        assert result["3.00+"].n_wins == 1
+
+    def test_odds_band_boundaries_are_explicit(self) -> None:
+        assert odds_band(1.29) == "1.10–1.29"
+        assert odds_band(1.30) == "1.30–1.49"
+        assert odds_band(3.0) == "3.00+"
+        assert odds_band(None) is None
 
     def test_segment_unknown_placed_in_bucket(self) -> None:
         obs = [

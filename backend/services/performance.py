@@ -98,6 +98,7 @@ def query_performance_observations(
     *,
     subject_type: str = "prediction",
     since: datetime | None = None,
+    until: datetime | None = None,
     market: str | None = None,
     limit: int | None = None,
     scope: Literal["all", "production", "research"] = "all",
@@ -154,6 +155,8 @@ def query_performance_observations(
         )
         if since is not None:
             stmt = stmt.where(Settlement.settled_at >= since)
+        if until is not None:
+            stmt = stmt.where(Settlement.settled_at < until)
         if market is not None:
             stmt = stmt.where(Prediction.market == market)
         if scope == "production":
@@ -196,6 +199,8 @@ def query_performance_observations(
         stmt_acca = stmt_acca.limit(limit)
     if since is not None:
         stmt_acca = stmt_acca.where(Settlement.settled_at >= since)
+    if until is not None:
+        stmt_acca = stmt_acca.where(Settlement.settled_at < until)
 
     return [
         _build_observation(
@@ -218,6 +223,7 @@ def performance_report(
     *,
     subject_type: str = "prediction",
     since: datetime | None = None,
+    until: datetime | None = None,
     market: str | None = None,
     limit: int | None = None,
     scope: Literal["all", "production", "research"] = "all",
@@ -230,6 +236,7 @@ def performance_report(
         session,
         subject_type=subject_type,
         since=since,
+        until=until,
         market=market,
         limit=limit,
         scope=scope,
@@ -277,6 +284,7 @@ def performance_by_segment(
     by: str,
     subject_type: str = "prediction",
     since: datetime | None = None,
+    until: datetime | None = None,
     limit: int | None = None,
     scope: Literal["all", "production", "research"] = "all",
 ) -> dict[str, KPIReport]:
@@ -298,6 +306,7 @@ def performance_by_segment(
         session,
         subject_type=subject_type,
         since=since,
+        until=until,
         limit=limit,
         scope=scope,
     )
