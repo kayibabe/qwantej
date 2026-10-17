@@ -1,4 +1,4 @@
-"""Persistent checks that make Lohela's in-process schedules self-healing."""
+"""Persistent checks that make Qwantej's in-process schedules self-healing."""
 
 from __future__ import annotations
 
@@ -189,7 +189,7 @@ async def lock_daily_pipeline_date(db: AsyncSession, target_date: date) -> None:
         return
     await db.execute(
         text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
-        {"lock_key": f"lohela:daily-pipeline:{target_date.isoformat()}"},
+        {"lock_key": f"qwantej:daily-pipeline:{target_date.isoformat()}"},
     )
 
 

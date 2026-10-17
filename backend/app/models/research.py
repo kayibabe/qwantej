@@ -399,7 +399,7 @@ class LeaguePerformance(Base):
 
 
 class EdgeBandCalibration(Base):
-    """Lohela calibration by market-family x edge-band, feeding the selection gate.
+    """Qwantej calibration by market-family x edge-band, feeding the selection gate.
 
     Coarser than the per-band diagnostics in probability_calibration_analysis
     (which stays whole-history and read-only), but finer than ModelPerformance
@@ -512,7 +512,7 @@ class SinglesLedgerSnapshot(Base):
 
 
 class BandMixScan(Base):
-    """Once-per-day, insert-only scan of the best-performing Lohela × market band mixes.
+    """Once-per-day, insert-only scan of the best-performing Qwantej × market band mixes.
 
     Captured before that day's band-mix candidates are listed, from settled
     evidence dated strictly before target_date, so the criteria used for a day
@@ -532,16 +532,16 @@ class BandMixScan(Base):
 
 
 class BandMixPairState(Base):
-    """Current research status for one Lohela × market band pair."""
+    """Current research status for one Qwantej × market band pair."""
 
     __tablename__ = "band_mix_pair_states"
     __table_args__ = (
-        UniqueConstraint("policy_version", "lohela_band", "market_band", name="uq_band_mix_pair_state"),
+        UniqueConstraint("policy_version", "qwantej_band", "market_band", name="uq_band_mix_pair_state"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     policy_version: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
-    lohela_band: Mapped[str] = mapped_column(String(20), nullable=False)
+    qwantej_band: Mapped[str] = mapped_column(String(20), nullable=False)
     market_band: Mapped[str] = mapped_column(String(20), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="inactive")
     first_promoted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -557,14 +557,14 @@ class BandMixLifecycleEvent(Base):
 
     __tablename__ = "band_mix_lifecycle_events"
     __table_args__ = (
-        UniqueConstraint("target_date", "policy_version", "lohela_band", "market_band", name="uq_band_mix_lifecycle_day"),
+        UniqueConstraint("target_date", "policy_version", "qwantej_band", "market_band", name="uq_band_mix_lifecycle_day"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     target_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     evidence_through: Mapped[date] = mapped_column(Date, nullable=False)
     policy_version: Mapped[str] = mapped_column(String(40), nullable=False)
-    lohela_band: Mapped[str] = mapped_column(String(20), nullable=False)
+    qwantej_band: Mapped[str] = mapped_column(String(20), nullable=False)
     market_band: Mapped[str] = mapped_column(String(20), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     transition: Mapped[str] = mapped_column(String(24), nullable=False)
@@ -589,7 +589,7 @@ class BandMixDailyPick(Base):
     target_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     prediction_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     match_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    lohela_band: Mapped[str] = mapped_column(String(20), nullable=False)
+    qwantej_band: Mapped[str] = mapped_column(String(20), nullable=False)
     market_band: Mapped[str] = mapped_column(String(20), nullable=False)
     mix_roi: Mapped[float | None] = mapped_column(Float, nullable=True)
     mix_sample_size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

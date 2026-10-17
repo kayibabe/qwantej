@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import math
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import load_only, selectinload
 
 from app.models import (
     AccumulatorTicket,
@@ -50,6 +50,31 @@ def _has_pre_kickoff_quote(prediction: Prediction) -> bool:
         and prediction.source_odds_at is not None
         and _as_utc(prediction.source_odds_at) <= _as_utc(match.kickoff_at)
     )
+
+
+def _research_predictions_query(date_from, date_to, model_version):
+    """Load only report inputs; prediction feature/provenance JSON is sizeable."""
+    query = select(Prediction).join(Match).options(
+        load_only(
+            Prediction.match_id, Prediction.market, Prediction.selection,
+            Prediction.model_version, Prediction.created_at, Prediction.as_of_at,
+            Prediction.source_odds_at, Prediction.source_decimal_odds,
+            Prediction.source_implied_probability, Prediction.model_probability,
+            Prediction.q_grade, Prediction.edge, raiseload=True,
+        ),
+        selectinload(Prediction.match).load_only(
+            Match.kickoff_at, Match.home_goals, Match.away_goals,
+            Match.competition_id, raiseload=True,
+        ).selectinload(Match.competition),
+    ).order_by(Prediction.created_at.desc())
+    # These bounds preserve the reports' existing UTC kickoff-date scope.
+    if date_from:
+        query = query.where(Match.kickoff_at >= datetime.combine(date_from, time.min, timezone.utc))
+    if date_to:
+        query = query.where(Match.kickoff_at < datetime.combine(date_to + timedelta(days=1), time.min, timezone.utc))
+    if model_version:
+        query = query.where(Prediction.model_version == model_version)
+    return query
 
 
 async def performance_summary(db: AsyncSession, date_from: date | None = None, date_to: date | None = None, model_version: str | None = None) -> dict:
@@ -335,9 +360,7 @@ async def all_market_research_summary(db: AsyncSession, stake: float = 1.0, date
     This is deliberately separate from published tickets and user bets. Rows
     without a captured price or supported settlement outcome are excluded.
     """
-    result = await db.execute(select(Prediction).join(Match).options(
-        selectinload(Prediction.match).selectinload(Match.competition)
-    ).order_by(Prediction.created_at.desc()))
+    result = await db.execute(_research_predictions_query(date_from, date_to, model_version))
     latest: dict[tuple[int, str, str], Prediction] = {}
     excluded_missing_odds = 0
     excluded_post_kickoff_information = 0
@@ -667,7 +690,7 @@ async def probability_calibration_analysis(
     date_to: date | None = None,
     model_version: str | None = None,
 ) -> dict:
-    """Compare Lohela model probability vs. market-implied probability across the whole system.
+    """Compare Qwantej model probability vs. market-implied probability across the whole system.
 
     Uses the same whole-system population as all_market_research_summary: every
     latest prediction (accepted into a ticket or rejected) with a pre-kickoff
@@ -675,9 +698,7 @@ async def probability_calibration_analysis(
     answers where each probability source is well-calibrated (bucketed by 5pp
     bands) and which model/market combinations perform best together.
     """
-    result = await db.execute(select(Prediction).join(Match).options(
-        selectinload(Prediction.match)
-    ).order_by(Prediction.created_at.desc()))
+    result = await db.execute(_research_predictions_query(date_from, date_to, model_version))
     latest: dict[tuple[int, str, str], Prediction] = {}
     for prediction in result.scalars().all():
         if model_version and prediction.model_version != model_version:
@@ -749,7 +770,7 @@ async def probability_calibration_analysis(
             })
         return rows_out
 
-    lohela_buckets = bucket_breakdown(lambda p: p.model_probability)
+    qwantej_buckets = bucket_breakdown(lambda p: p.model_probability)
     market_buckets = bucket_breakdown(lambda p: p.source_implied_probability)
 
     combined_groups: dict[tuple[str, str], list[tuple[Prediction, SelectionResult]]] = {}
@@ -757,18 +778,18 @@ async def probability_calibration_analysis(
         key = (_probability_band(p.model_probability), _probability_band(p.source_implied_probability))
         combined_groups.setdefault(key, []).append((p, o))
     combined_matrix = []
-    for (lohela_band, market_band), items in combined_groups.items():
-        avg_lohela = sum(p.model_probability for p, _ in items) / len(items)
+    for (qwantej_band, market_band), items in combined_groups.items():
+        avg_qwantej = sum(p.model_probability for p, _ in items) / len(items)
         avg_market = sum(p.source_implied_probability for p, _ in items) / len(items)
         combined_matrix.append({
-            "lohela_band": lohela_band,
+            "qwantej_band": qwantej_band,
             "market_band": market_band,
             **outcomes_aggregate(items),
-            "avg_lohela_probability": round(avg_lohela, 4),
+            "avg_qwantej_probability": round(avg_qwantej, 4),
             "avg_market_probability": round(avg_market, 4),
         })
     combined_matrix.sort(key=lambda row: (
-        _PROBABILITY_BAND_ORDER.index(row["lohela_band"]),
+        _PROBABILITY_BAND_ORDER.index(row["qwantej_band"]),
         _PROBABILITY_BAND_ORDER.index(row["market_band"]),
     ))
     best_combinations = sorted(
@@ -792,13 +813,13 @@ async def probability_calibration_analysis(
         return round(sum((p - y) ** 2 for p, y in outcomes) / len(outcomes), 4) if outcomes else None
 
     def calibration_summary(items: list[tuple[Prediction, SelectionResult]]) -> dict:
-        lohela_o = [(p.model_probability, 1.0 if o == SelectionResult.WON else 0.0) for p, o in items]
+        qwantej_o = [(p.model_probability, 1.0 if o == SelectionResult.WON else 0.0) for p, o in items]
         market_o = [(p.source_implied_probability, 1.0 if o == SelectionResult.WON else 0.0) for p, o in items]
         return {
             **outcomes_aggregate(items),
-            "lohela_brier_score": brier(lohela_o),
+            "qwantej_brier_score": brier(qwantej_o),
             "market_brier_score": brier(market_o),
-            "lohela_calibration_error": round(_calibration_error(lohela_o) or 0.0, 4) if lohela_o else None,
+            "qwantej_calibration_error": round(_calibration_error(qwantej_o) or 0.0, 4) if qwantej_o else None,
             "market_calibration_error": round(_calibration_error(market_o) or 0.0, 4) if market_o else None,
         }
 
@@ -821,7 +842,7 @@ async def probability_calibration_analysis(
         for family, items in sorted(by_market_family.items(), key=lambda kv: len(kv[1]), reverse=True)
     ]
 
-    lohela_outcomes = [(p.model_probability, 1.0 if o == SelectionResult.WON else 0.0) for p, o in effective]
+    qwantej_outcomes = [(p.model_probability, 1.0 if o == SelectionResult.WON else 0.0) for p, o in effective]
     market_outcomes = [(p.source_implied_probability, 1.0 if o == SelectionResult.WON else 0.0) for p, o in effective]
 
     return {
@@ -830,12 +851,12 @@ async def probability_calibration_analysis(
             "sample_size": len(effective),
             "voids_excluded": len(rows) - len(effective),
             "unsupported_markets_excluded": unsupported,
-            "lohela_brier_score": brier(lohela_outcomes),
+            "qwantej_brier_score": brier(qwantej_outcomes),
             "market_brier_score": brier(market_outcomes),
-            "lohela_calibration_error": round(_calibration_error(lohela_outcomes) or 0.0, 4) if lohela_outcomes else None,
+            "qwantej_calibration_error": round(_calibration_error(qwantej_outcomes) or 0.0, 4) if qwantej_outcomes else None,
             "market_calibration_error": round(_calibration_error(market_outcomes) or 0.0, 4) if market_outcomes else None,
         },
-        "lohela_buckets": lohela_buckets,
+        "qwantej_buckets": qwantej_buckets,
         "market_buckets": market_buckets,
         "combined_matrix": combined_matrix,
         "best_combinations": best_combinations,

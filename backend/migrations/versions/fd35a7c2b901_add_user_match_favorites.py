@@ -11,6 +11,18 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Fresh databases already contain current model tables from the baseline.
+    tables = set(sa.inspect(op.get_bind()).get_table_names())
+    if "user_match_favorites" not in tables:
+        _create_favorites()
+    if "user_match_filter_presets" not in tables:
+        _create_presets()
+    indexes = {index["name"] for index in sa.inspect(op.get_bind()).get_indexes("user_match_filter_presets")}
+    if "ix_user_match_filter_presets_user_id" not in indexes:
+        op.create_index("ix_user_match_filter_presets_user_id", "user_match_filter_presets", ["user_id"], unique=False)
+
+
+def _create_favorites() -> None:
     op.create_table(
         "user_match_favorites",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -22,6 +34,9 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("user_id", "match_id", name="uq_user_match_favorite"),
     )
+
+
+def _create_presets() -> None:
     op.create_table(
         "user_match_filter_presets",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -32,7 +47,6 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_user_match_filter_presets_user_id", "user_match_filter_presets", ["user_id"], unique=False)
 
 
 def downgrade() -> None:

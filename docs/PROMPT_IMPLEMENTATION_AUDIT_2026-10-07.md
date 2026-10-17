@@ -2,11 +2,11 @@
 
 ## Scope
 
-This pass translates the supplied Bet App Prompt into a safe first product slice for Lohela. The prompt is treated as a product requirements document. Existing paper-trading, provenance, settlement, and deployment controls remain authoritative.
+This pass translates the supplied Bet App Prompt into a safe first product slice for Qwantej. The prompt is treated as a product requirements document. Existing paper-trading, provenance, settlement, and deployment controls remain authoritative.
 
 ## System audit summary
 
-Lohela already contains the core evidence chain: ingestion and validation, model runs, published ticket versions, priced selections, accumulator generation, settlement, historical ledgers, calibration, closing-line value, and backtest safeguards. The existing frontend also separates Today, Track, and Validate, which is a sound decision loop.
+Qwantej already contains the core evidence chain: ingestion and validation, model runs, published ticket versions, priced selections, accumulator generation, settlement, historical ledgers, calibration, closing-line value, and backtest safeguards. The existing frontend also separates Today, Track, and Validate, which is a sound decision loop.
 
 The main usability gap was not absence of data. It was prioritisation. The Today page led with ticket tiers and operational context, while the user still had to assemble the answer to “what should I do?” from several metrics and a separate selection detail view.
 

@@ -51,7 +51,7 @@ export default function InsightsPage() {
   return (
     <section className="league-insights-page">
       <div className="section-heading">
-        <div><h1>Stats &amp; trends</h1><p>League results and team form, calculated from completed matches in Lohela’s database.</p></div>
+        <div><h1>Stats &amp; trends</h1><p>League results and team form, calculated from completed matches in Qwantej’s database.</p></div>
       </div>
       <div className="insights-controls">
         <label>Competition

@@ -1,15 +1,15 @@
 @echo off
-title Lohela — Stopping
+title Qwantej — Stopping
 echo.
 echo  ============================
-echo   LOHELA — Shutting down...
+echo   QWANTEJ — Shutting down...
 echo  ============================
 echo.
 
 cd /d "%~dp0"
 
 echo [1/3] Closing frontend window and Vite process...
-taskkill /fi "windowtitle eq Lohela Frontend*" /t /f >nul 2>&1
+taskkill /fi "windowtitle eq Qwantej Frontend*" /t /f >nul 2>&1
 taskkill /im node.exe /f >nul 2>&1
 taskkill /im npm.cmd /f >nul 2>&1
 

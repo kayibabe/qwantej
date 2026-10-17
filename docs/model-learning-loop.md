@@ -1,6 +1,6 @@
 # Model learning loop
 
-Lohela learns through immutable offline challengers. Settled outcomes never
+Qwantej learns through immutable offline challengers. Settled outcomes never
 rewrite published tickets or an existing prediction/model version.
 
 ## Lifecycle

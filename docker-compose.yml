@@ -9,7 +9,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lohela"]
+      test: ["CMD-SHELL", "pg_isready -U lohela -d lohela"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -26,7 +26,7 @@ services:
     restart: unless-stopped
 
   migrate:
-    image: lohela-backend:latest
+    image: qwantej-backend:latest
     env_file:
       - .env
     environment:
@@ -39,7 +39,7 @@ services:
     command: alembic upgrade head
 
   backend:
-    image: lohela-backend:latest
+    image: qwantej-backend:latest
     build:
       # Root context: the image also builds the React client (see Dockerfile).
       context: .
@@ -67,7 +67,7 @@ services:
       retries: 3
 
   celery_worker:
-    image: lohela-backend:latest
+    image: qwantej-backend:latest
     env_file:
       - .env
     environment:

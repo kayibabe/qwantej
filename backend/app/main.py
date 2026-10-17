@@ -1,5 +1,5 @@
 """
-Lohela — Football Intelligence & Accumulator Analytics Platform
+Qwantej — Football Intelligence & Accumulator Analytics Platform
 FastAPI application entry point — spec §32, §35.
 """
 
@@ -386,7 +386,7 @@ async def _queue_db_backup():
 
 
 app = FastAPI(
-    title="Lohela Intelligence API",
+    title="Qwantej Intelligence API",
     description="Football Intelligence & Accumulator Analytics Platform — Internal API",
     version="0.2.0",
     lifespan=lifespan,

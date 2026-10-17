@@ -40,9 +40,9 @@ def probability_calibration_workbook(data: dict) -> io.BytesIO:
             ["Sample size", s["sample_size"]],
             ["Voids excluded", s["voids_excluded"]],
             ["Unsupported markets excluded", s["unsupported_markets_excluded"]],
-            ["Lohela Brier score", s["lohela_brier_score"]],
+            ["Qwantej Brier score", s["qwantej_brier_score"]],
             ["Market Brier score", s["market_brier_score"]],
-            ["Lohela calibration error", s["lohela_calibration_error"]],
+            ["Qwantej calibration error", s["qwantej_calibration_error"]],
             ["Market calibration error", s["market_calibration_error"]],
             ["Note", data["note"]],
         ],
@@ -50,10 +50,10 @@ def probability_calibration_workbook(data: dict) -> io.BytesIO:
 
     bucket_headers = ["Band", "Sample size", "Wins", "Losses", "Hit rate", "Avg probability", "Calibration gap", "ROI"]
 
-    lohela_ws = wb.create_sheet("Lohela buckets")
-    _write_table(lohela_ws, bucket_headers, [
+    qwantej_ws = wb.create_sheet("Qwantej buckets")
+    _write_table(qwantej_ws, bucket_headers, [
         [r["band"], r["sample_size"], r["wins"], r["losses"], r["hit_rate"], r["avg_probability"], r["calibration_gap"], r["roi"]]
-        for r in data["lohela_buckets"]
+        for r in data["qwantej_buckets"]
     ])
 
     market_ws = wb.create_sheet("Market buckets")
@@ -62,17 +62,17 @@ def probability_calibration_workbook(data: dict) -> io.BytesIO:
         for r in data["market_buckets"]
     ])
 
-    matrix_headers = ["Lohela band", "Market band", "Sample size", "Wins", "Losses", "Hit rate", "ROI", "Avg Lohela probability", "Avg market probability"]
+    matrix_headers = ["Qwantej band", "Market band", "Sample size", "Wins", "Losses", "Hit rate", "ROI", "Avg Qwantej probability", "Avg market probability"]
 
     matrix_ws = wb.create_sheet("Combined matrix")
     _write_table(matrix_ws, matrix_headers, [
-        [r["lohela_band"], r["market_band"], r["sample_size"], r["wins"], r["losses"], r["hit_rate"], r["roi"], r["avg_lohela_probability"], r["avg_market_probability"]]
+        [r["qwantej_band"], r["market_band"], r["sample_size"], r["wins"], r["losses"], r["hit_rate"], r["roi"], r["avg_qwantej_probability"], r["avg_market_probability"]]
         for r in data["combined_matrix"]
     ])
 
     best_ws = wb.create_sheet("Best combinations")
     _write_table(best_ws, matrix_headers, [
-        [r["lohela_band"], r["market_band"], r["sample_size"], r["wins"], r["losses"], r["hit_rate"], r["roi"], r["avg_lohela_probability"], r["avg_market_probability"]]
+        [r["qwantej_band"], r["market_band"], r["sample_size"], r["wins"], r["losses"], r["hit_rate"], r["roi"], r["avg_qwantej_probability"], r["avg_market_probability"]]
         for r in data["best_combinations"]
     ])
 
@@ -85,13 +85,13 @@ def probability_calibration_workbook(data: dict) -> io.BytesIO:
 
     market_headers = [
         "Market family", "Sample size", "Wins", "Losses", "Hit rate", "ROI",
-        "Lohela Brier", "Market Brier", "Lohela calibration error", "Market calibration error",
+        "Qwantej Brier", "Market Brier", "Qwantej calibration error", "Market calibration error",
     ]
     market_family_ws = wb.create_sheet("By market")
     _write_table(market_family_ws, market_headers, [
         [
             r["market_family"], r["sample_size"], r["wins"], r["losses"], r["hit_rate"], r["roi"],
-            r["lohela_brier_score"], r["market_brier_score"], r["lohela_calibration_error"], r["market_calibration_error"],
+            r["qwantej_brier_score"], r["market_brier_score"], r["qwantej_calibration_error"], r["market_calibration_error"],
         ]
         for r in data["by_market"]
     ])

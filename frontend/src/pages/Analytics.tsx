@@ -49,13 +49,13 @@ type View = 'performance' | 'ledger' | 'methods'
 type ResearchView = 'calibration' | 'market' | 'backtest'
 
 interface ProbabilityBucketRow { band: string; sample_size: number; wins: number; losses: number; hit_rate: number | null; roi: number | null; avg_probability: number; calibration_gap: number }
-interface CombinedMatrixRow { lohela_band: string; market_band: string; sample_size: number; wins: number; losses: number; hit_rate: number | null; roi: number | null; avg_lohela_probability: number; avg_market_probability: number }
+interface CombinedMatrixRow { qwantej_band: string; market_band: string; sample_size: number; wins: number; losses: number; hit_rate: number | null; roi: number | null; avg_qwantej_probability: number; avg_market_probability: number }
 interface EdgeBucketRow { edge_band: string; sample_size: number; wins: number; losses: number; hit_rate: number | null; roi: number | null }
-interface MarketBreakdownRow { market_family: string; sample_size: number; wins: number; losses: number; hit_rate: number | null; roi: number | null; lohela_brier_score: number | null; market_brier_score: number | null; lohela_calibration_error: number | null; market_calibration_error: number | null; edge_buckets: EdgeBucketRow[] }
+interface MarketBreakdownRow { market_family: string; sample_size: number; wins: number; losses: number; hit_rate: number | null; roi: number | null; qwantej_brier_score: number | null; market_brier_score: number | null; qwantej_calibration_error: number | null; market_calibration_error: number | null; edge_buckets: EdgeBucketRow[] }
 interface ProbabilityCalibrationData {
   model_version: string
-  summary: { sample_size: number; voids_excluded: number; unsupported_markets_excluded: number; lohela_brier_score: number | null; market_brier_score: number | null; lohela_calibration_error: number | null; market_calibration_error: number | null }
-  lohela_buckets: ProbabilityBucketRow[]
+  summary: { sample_size: number; voids_excluded: number; unsupported_markets_excluded: number; qwantej_brier_score: number | null; market_brier_score: number | null; qwantej_calibration_error: number | null; market_calibration_error: number | null }
+  qwantej_buckets: ProbabilityBucketRow[]
   market_buckets: ProbabilityBucketRow[]
   combined_matrix: CombinedMatrixRow[]
   best_combinations: CombinedMatrixRow[]
@@ -223,7 +223,7 @@ function ProbabilityCalibration() {
   if (!data) return <AnalyticsEmpty title="No calibration data" body="Calibration bands appear once predictions have pre-kickoff prices and settled outcomes." />
 
   const s = data.summary
-  const betterModel = (s.lohela_brier_score ?? 1) <= (s.market_brier_score ?? 1) ? 'Lohela' : 'Market'
+  const betterModel = (s.qwantej_brier_score ?? 1) <= (s.market_brier_score ?? 1) ? 'Qwantej' : 'Market'
 
   return <>
     <div className="journal-note"><strong>Whole-system probability calibration</strong><span>Every latest prediction — accepted or rejected — with a pre-kickoff price and a settled outcome. Voids are excluded from hit rate and ROI.</span></div>
@@ -238,17 +238,17 @@ function ProbabilityCalibration() {
     {exportError && <div className="sample-warning">Export failed. Check the API connection and try again.</div>}
     <div className="research-kpis">
       <MetricCard label="Sample size" value={s.sample_size.toString()} note={`${s.voids_excluded} void · ${s.unsupported_markets_excluded} unsupported excluded`} />
-      <MetricCard label="Lohela Brier score" value={score(s.lohela_brier_score)} note="Lower is better" />
+      <MetricCard label="Qwantej Brier score" value={score(s.qwantej_brier_score)} note="Lower is better" />
       <MetricCard label="Market Brier score" value={score(s.market_brier_score)} note="Lower is better" />
-      <MetricCard label="Better calibrated" value={betterModel} note={`Lohela ${score(s.lohela_calibration_error)} vs Market ${score(s.market_calibration_error)} calibration error`} tone={betterModel === 'Lohela' ? 'positive' : 'warning'} />
+      <MetricCard label="Better calibrated" value={betterModel} note={`Qwantej ${score(s.qwantej_calibration_error)} vs Market ${score(s.market_calibration_error)} calibration error`} tone={betterModel === 'Qwantej' ? 'positive' : 'warning'} />
     </div>
     {s.sample_size < 30 && <div className="sample-warning">Small sample: only {s.sample_size} settled predictions in this scope. Treat bucket results as directional.</div>}
     <div className="analytics-insight-grid analytics-insight-grid--stacked">
-      <ProbabilityBucketTable title="Lohela model probability" subtitle="Bucketed by predicted win probability, 5pp bands" rows={data.lohela_buckets} />
+      <ProbabilityBucketTable title="Qwantej model probability" subtitle="Bucketed by predicted win probability, 5pp bands" rows={data.qwantej_buckets} />
       <ProbabilityBucketTable title="Market implied probability" subtitle="Bucketed by 1/odds at pick time, 5pp bands" rows={data.market_buckets} />
     </div>
     <section className="analytics-card">
-      <div className="section-header"><div><span className="eyebrow">Where the two views agree or diverge</span><h2 className="section-title">Lohela × Market combined matrix</h2></div><span className="section-subtitle">Every observed band pairing, sorted by probability band</span></div>
+      <div className="section-header"><div><span className="eyebrow">Where the two views agree or diverge</span><h2 className="section-title">Qwantej × Market combined matrix</h2></div><span className="section-subtitle">Every observed band pairing, sorted by probability band</span></div>
       <CombinedMatrixTable rows={data.combined_matrix} />
     </section>
     <section className="analytics-card">
@@ -256,7 +256,7 @@ function ProbabilityCalibration() {
       {data.best_combinations.length === 0 ? <AnalyticsEmpty title="No qualifying combinations yet" body="Combinations need at least 8 settled predictions to appear here." compact /> : <CombinedMatrixTable rows={data.best_combinations} />}
     </section>
     <section className="analytics-card">
-      <div className="section-header"><div><span className="eyebrow">Value-betting signal</span><h2 className="section-title">Performance by edge (Lohela minus market)</h2></div><span className="section-subtitle">Positive edge should correlate with positive ROI if the model has real edge</span></div>
+      <div className="section-header"><div><span className="eyebrow">Value-betting signal</span><h2 className="section-title">Performance by edge (Qwantej minus market)</h2></div><span className="section-subtitle">Positive edge should correlate with positive ROI if the model has real edge</span></div>
       <EdgeBucketTable rows={data.edge_buckets} />
     </section>
     <section className="analytics-card">
@@ -276,17 +276,17 @@ function ProbabilityBucketTable({ title, subtitle, rows }: { title: string; subt
 }
 
 function CombinedMatrixTable({ rows }: { rows: CombinedMatrixRow[] }) {
-  const { sorted, header } = useSortableRows(rows, { lohela: row => bandSortValue(row.lohela_band), market: row => bandSortValue(row.market_band), n: row => row.sample_size, wins: row => row.wins, hit: row => row.hit_rate, roi: row => row.roi })
+  const { sorted, header } = useSortableRows(rows, { qwantej: row => bandSortValue(row.qwantej_band), market: row => bandSortValue(row.market_band), n: row => row.sample_size, wins: row => row.wins, hit: row => row.hit_rate, roi: row => row.roi })
   if (rows.length === 0) return <AnalyticsEmpty title="No combined bands yet" body="Combinations appear once both probability sources have settled outcomes." compact />
-  return <div className="analytics-table-wrap"><table className="analytics-table"><thead><tr>{header('lohela', 'Lohela band')}{header('market', 'Market band')}{header('n', 'N')}{header('wins', 'Won / lost')}{header('hit', 'Hit rate')}{header('roi', 'ROI')}</tr></thead><tbody>{sorted.map((row, index) => <tr key={`${row.lohela_band}-${row.market_band}-${index}`}><td><strong>{row.lohela_band}%</strong></td><td>{row.market_band}%</td><td>{row.sample_size}</td><td>{row.wins} / {row.losses}</td><td>{pct(row.hit_rate)}</td><td className={row.roi != null && row.roi >= 0 ? 'positive' : 'negative'}>{row.roi == null ? '—' : pct(row.roi)}</td></tr>)}</tbody></table></div>
+  return <div className="analytics-table-wrap"><table className="analytics-table"><thead><tr>{header('qwantej', 'Qwantej band')}{header('market', 'Market band')}{header('n', 'N')}{header('wins', 'Won / lost')}{header('hit', 'Hit rate')}{header('roi', 'ROI')}</tr></thead><tbody>{sorted.map((row, index) => <tr key={`${row.qwantej_band}-${row.market_band}-${index}`}><td><strong>{row.qwantej_band}%</strong></td><td>{row.market_band}%</td><td>{row.sample_size}</td><td>{row.wins} / {row.losses}</td><td>{pct(row.hit_rate)}</td><td className={row.roi != null && row.roi >= 0 ? 'positive' : 'negative'}>{row.roi == null ? '—' : pct(row.roi)}</td></tr>)}</tbody></table></div>
 }
 
 function MarketBreakdownTable({ rows }: { rows: MarketBreakdownRow[] }) {
   const [expanded, setExpanded] = useState<string | null>(null)
-  const { sorted, header } = useSortableRows(rows, { family: row => formatMarket(row.market_family), n: row => row.sample_size, wins: row => row.wins, hit: row => row.hit_rate, roi: row => row.roi, lohelaBrier: row => row.lohela_brier_score, marketBrier: row => row.market_brier_score, lohelaError: row => row.lohela_calibration_error, marketError: row => row.market_calibration_error })
+  const { sorted, header } = useSortableRows(rows, { family: row => formatMarket(row.market_family), n: row => row.sample_size, wins: row => row.wins, hit: row => row.hit_rate, roi: row => row.roi, qwantejBrier: row => row.qwantej_brier_score, marketBrier: row => row.market_brier_score, qwantejError: row => row.qwantej_calibration_error, marketError: row => row.market_calibration_error })
   if (rows.length === 0) return <AnalyticsEmpty title="No market breakdown yet" body="Market families appear once predictions have settled outcomes." compact />
-  return <div className="analytics-table-wrap"><table className="analytics-table"><thead><tr>{header('family', 'Market family')}{header('n', 'N')}{header('wins', 'Won / lost')}{header('hit', 'Hit rate')}{header('roi', 'ROI')}{header('lohelaBrier', 'Lohela Brier')}{header('marketBrier', 'Market Brier')}{header('lohelaError', 'Lohela calib. error')}{header('marketError', 'Market calib. error')}<th><span className="sr-only">Actions</span></th></tr></thead><tbody>{sorted.map(row => <Fragment key={row.market_family}>
-    <tr><td><strong>{formatMarket(row.market_family)}</strong></td><td>{row.sample_size}</td><td>{row.wins} / {row.losses}</td><td>{pct(row.hit_rate)}</td><td className={row.roi != null && row.roi >= 0 ? 'positive' : 'negative'}>{row.roi == null ? '—' : pct(row.roi)}</td><td>{score(row.lohela_brier_score)}</td><td>{score(row.market_brier_score)}</td><td>{score(row.lohela_calibration_error)}</td><td>{score(row.market_calibration_error)}</td><td><button type="button" className="btn-ghost btn-sm" onClick={() => setExpanded(current => current === row.market_family ? null : row.market_family)}>{expanded === row.market_family ? 'Hide edge' : 'Edge bands'}</button></td></tr>
+  return <div className="analytics-table-wrap"><table className="analytics-table"><thead><tr>{header('family', 'Market family')}{header('n', 'N')}{header('wins', 'Won / lost')}{header('hit', 'Hit rate')}{header('roi', 'ROI')}{header('qwantejBrier', 'Qwantej Brier')}{header('marketBrier', 'Market Brier')}{header('qwantejError', 'Qwantej calib. error')}{header('marketError', 'Market calib. error')}<th><span className="sr-only">Actions</span></th></tr></thead><tbody>{sorted.map(row => <Fragment key={row.market_family}>
+    <tr><td><strong>{formatMarket(row.market_family)}</strong></td><td>{row.sample_size}</td><td>{row.wins} / {row.losses}</td><td>{pct(row.hit_rate)}</td><td className={row.roi != null && row.roi >= 0 ? 'positive' : 'negative'}>{row.roi == null ? '—' : pct(row.roi)}</td><td>{score(row.qwantej_brier_score)}</td><td>{score(row.market_brier_score)}</td><td>{score(row.qwantej_calibration_error)}</td><td>{score(row.market_calibration_error)}</td><td><button type="button" className="btn-ghost btn-sm" onClick={() => setExpanded(current => current === row.market_family ? null : row.market_family)}>{expanded === row.market_family ? 'Hide edge' : 'Edge bands'}</button></td></tr>
     {expanded === row.market_family && <tr><td colSpan={10}><EdgeBucketTable rows={row.edge_buckets} /></td></tr>}
   </Fragment>)}</tbody></table></div>
 }

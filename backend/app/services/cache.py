@@ -10,7 +10,7 @@ TTLs (tunable via env):
   CACHE_TTL_ODDS_SECONDS      (default 1800  = 30 min) — live odds
   CACHE_TTL_STATS_SECONDS     (default 86400 = 24 h)  — per-fixture stats/injuries
 
-Keys follow the pattern:  lohela:<prefix>:<md5(params)>
+Keys follow the pattern:  qwantej:<prefix>:<md5(params)>
 """
 
 import hashlib
@@ -25,7 +25,7 @@ import redis.asyncio as aioredis
 from app.config import settings
 
 logger = logging.getLogger(__name__)
-API_FOOTBALL_QUOTA_KEY = "lohela:ops:api_football_quota"
+API_FOOTBALL_QUOTA_KEY = "qwantej:ops:api_football_quota"
 
 # Shared connection pool — created lazily on first use
 _redis: aioredis.Redis | None = None
@@ -62,7 +62,7 @@ async def close() -> None:
 def make_key(prefix: str, params: dict) -> str:
     payload = json.dumps(params, sort_keys=True)
     digest = hashlib.md5(payload.encode()).hexdigest()[:12]
-    return f"lohela:{prefix}:{digest}"
+    return f"qwantej:{prefix}:{digest}"
 
 
 async def get(key: str) -> Any | None:
@@ -95,10 +95,10 @@ async def get_api_football_quota() -> dict[str, Any] | None:
 
 
 async def delete_prefix(prefix: str) -> int:
-    """Delete all keys under lohela:<prefix>:* — used by admin cache-clear."""
+    """Delete all keys under qwantej:<prefix>:* — used by admin cache-clear."""
     try:
         client = await _get_client()
-        keys = await client.keys(f"lohela:{prefix}:*")
+        keys = await client.keys(f"qwantej:{prefix}:*")
         if keys:
             count = await client.delete(*keys)
             logger.info("Cache cleared %d keys under prefix '%s'", count, prefix)
@@ -109,10 +109,10 @@ async def delete_prefix(prefix: str) -> int:
 
 
 async def flush_all() -> int:
-    """Delete every lohela:* key — admin-only nuclear option."""
+    """Delete every qwantej:* key — admin-only nuclear option."""
     try:
         client = await _get_client()
-        keys = await client.keys("lohela:*")
+        keys = await client.keys("qwantej:*")
         if keys:
             count = await client.delete(*keys)
             logger.info("Cache flushed %d keys", count)
@@ -133,7 +133,7 @@ async def lock(name: str, timeout: int = 60, blocking_timeout: int = 90) -> Asyn
     """
     client = await _get_client()
     async with client.lock(
-        f"lohela:lock:{name}", timeout=timeout, blocking_timeout=blocking_timeout
+        f"qwantej:lock:{name}", timeout=timeout, blocking_timeout=blocking_timeout
     ):
         yield
 
@@ -145,7 +145,7 @@ async def stats() -> dict:
         prefixes = ["fixtures", "odds", "stats", "injuries"]
         result = {}
         for p in prefixes:
-            keys = await client.keys(f"lohela:{p}:*")
+            keys = await client.keys(f"qwantej:{p}:*")
             result[p] = len(keys)
         result["total"] = sum(result.values())
         return result

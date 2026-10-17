@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     secret_key: str = "change_me_in_production"
     research_api_key: str = ""
-    auth_cookie_name: str = "lohela_session"
+    auth_cookie_name: str = "qwantej_session"
     auth_session_days: int = 30
     auth_allow_registration: bool = True
     log_level: str = "INFO"
@@ -86,7 +86,7 @@ class Settings(BaseSettings):
     settlement_lookback_days: int = 7
     settlement_startup_lookback_days: int = 30
     scheduler_leader_lock_enabled: bool = True
-    scheduler_leader_lock_name: str = "lohela:apscheduler:leader"
+    scheduler_leader_lock_name: str = "qwantej:apscheduler:leader"
 
     # Weekly offline learning creates shadow challengers only. Promotion remains manual.
     learning_shadow_schedule_enabled: bool = True

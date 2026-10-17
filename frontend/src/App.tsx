@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import './App.css'
+import './WorkspaceNavigation.css'
 import { TODAY } from './pages/dailyTickets/helpers'
 import { addDays } from './utils'
 import { AuthControls, useAuth } from './auth'
@@ -23,6 +24,7 @@ function PageLoading() {
 type Theme = 'dark' | 'light' | 'system'
 type ModulePage = 'tickets' | 'matches' | 'live' | 'insights' | 'research' | 'tracker' | 'analytics' | 'tools' | 'admin'
 type Page = ModulePage | 'home' | 'match' | 'upgrade' | 'login'
+type Workspace = 'football' | 'research'
 
 function dateFromSearch(search: string): string {
   const value = new URLSearchParams(search).get('date')
@@ -82,6 +84,7 @@ export default function App() {
   const { user, loading: authLoading } = useAuth()
   const isInternal = user?.role === 'admin'
   const [page, setPage] = useState<Page>(() => routePage(window.location.pathname))
+  const [workspace, setWorkspace] = useState<Workspace>(() => workspaceForPage(routePage(window.location.pathname)) ?? 'football')
   const [matchId, setMatchId] = useState<number | null>(() => routeMatchId(window.location.pathname))
   const [date, setDate] = useState(() => dateFromSearch(window.location.search))
   const [theme, setTheme] = useState<Theme>('system')
@@ -96,7 +99,10 @@ export default function App() {
 
   useEffect(() => {
     const onPopState = () => {
-      setPage(routePage(window.location.pathname))
+      const nextPage = routePage(window.location.pathname)
+      setPage(nextPage)
+      const nextWorkspace = workspaceForPage(nextPage)
+      if (nextWorkspace) setWorkspace(nextWorkspace)
       setMatchId(routeMatchId(window.location.pathname))
       setDate(dateFromSearch(window.location.search))
     }
@@ -110,16 +116,19 @@ export default function App() {
     if (!user && path !== '/' && path !== '/login') {
       window.history.replaceState({}, '', '/login')
       setPage('login')
+      setWorkspace('football')
       setMatchId(null)
     } else if (user && (path === '/login' || path === '/')) {
       window.history.replaceState({}, '', '/tickets')
       setPage('tickets')
+      setWorkspace('football')
     }
   }, [authLoading, user])
 
   useEffect(() => {
     if (authLoading || !user || isInternal || !isInternalPage(page)) return
     setPage('tickets')
+    setWorkspace('football')
     setMatchId(null)
     window.history.replaceState({}, '', '/tickets')
   }, [authLoading, isInternal, page])
@@ -132,6 +141,8 @@ export default function App() {
 
   function navigate(next: Page, _requested?: ModulePage, replace = false) {
     setPage(next)
+    const nextWorkspace = workspaceForPage(next)
+    if (nextWorkspace) setWorkspace(nextWorkspace)
     const path = next === 'home' ? '/' : next === 'upgrade' ? '/upgrade' : `/${next}`
     window.history[replace ? 'replaceState' : 'pushState']({}, '', datePath(path, date))
   }
@@ -139,11 +150,17 @@ export default function App() {
   function navigateToMatch(nextMatchId: number) {
     setMatchId(nextMatchId)
     setPage('match')
+    setWorkspace('research')
     window.history.pushState({}, '', datePath(`/match/${nextMatchId}`, date))
   }
 
   function goTo(next: ModulePage) {
     navigate(next)
+  }
+
+  function switchWorkspace(next: Workspace) {
+    if (!isInternal || next === workspace) return
+    goTo(next === 'football' ? 'tickets' : 'research')
   }
 
   const cycleTheme = () => {
@@ -178,33 +195,31 @@ export default function App() {
   return (
     <div className="app">
       <aside className="app-sidebar">
-        <a className="brand" href="/" aria-label="Lohela home" onClick={(event) => { event.preventDefault(); goTo('tickets') }}>
-          <img className="brand-logo" src="/lohela-compact.png" alt="Lohela — Intelligence beyond numbers" />
+        <a className="brand" href="/" aria-label="Qwantej home" onClick={(event) => { event.preventDefault(); goTo('tickets') }}>
+          <img className="brand-logo brand-logo-light" src="/light/icon-128.png" alt="" />
+          <img className="brand-logo brand-logo-dark" src="/dark/icon-128.png" alt="" />
+          <span className="brand-copy"><strong className="brand-name">Qwantej</strong><small className="brand-tagline">Intelligence beyond numbers</small></span>
         </a>
+        {isInternal && <WorkspaceSwitcher workspace={workspace} onChange={switchWorkspace} className="workspace-switcher-sidebar" />}
         <nav className="sidebar-nav" aria-label="Primary navigation">
-          <span className="sidebar-label">Football</span>
-          {NAV.map(n => (
+          <span className="sidebar-label">{workspace === 'football' ? 'Football' : 'Research workspace'}</span>
+          {(workspace === 'research' ? INTERNAL_NAV : NAV).map(n => (
             <button key={n.id} className={`nav-tab${page === n.id ? ' active' : ''}`} onClick={() => goTo(n.id)} title={NAV_META[n.id].hint} aria-current={page === n.id ? 'page' : undefined}>
               <span className="nav-icon"><NavIcon name={NAV_META[n.id].icon} /></span>{n.label}
             </button>
           ))}
-          {isInternal && <>
-            <span className="sidebar-label sidebar-label-evidence">Internal workspace</span>
-            {INTERNAL_NAV.map(n => (
-              <button key={n.id} className={`nav-tab${page === n.id ? ' active' : ''}`} onClick={() => goTo(n.id)} title={NAV_META[n.id].hint} aria-current={page === n.id ? 'page' : undefined}>
-                <span className="nav-icon"><NavIcon name={NAV_META[n.id].icon} /></span>{n.label}
-              </button>
-            ))}
-          </>}
         </nav>
         <div className="sidebar-account">
           <AuthControls onSignIn={() => navigate('login')} onSignedOut={() => navigate('login', undefined, true)} />
         </div>
       </aside>
       <header className="app-header">
-        <a className="topbar-brand" href="/tickets" aria-label="Lohela home" onClick={(event) => { event.preventDefault(); goTo('tickets') }}>
-          <span className="topbar-mark" aria-hidden="true">L</span><span>LOHELA</span>
+        <a className="topbar-brand" href="/tickets" aria-label="Qwantej home" onClick={(event) => { event.preventDefault(); goTo('tickets') }}>
+          <img className="topbar-mark topbar-logo-light" src="/light/icon-128.png" alt="" />
+          <img className="topbar-mark topbar-logo-dark" src="/dark/icon-128.png" alt="" />
+          <span>QWANTEJ</span>
         </a>
+        {isInternal && <WorkspaceSwitcher workspace={workspace} onChange={switchWorkspace} className="workspace-switcher-header" />}
         {(page === 'tickets' || page === 'matches' || (page === 'research' && isInternal)) && (
           <div className="date-nav">
             <button className="date-btn" onClick={() => nav(-1)} title="Previous day" aria-label="Previous day">‹</button>
@@ -275,8 +290,8 @@ export default function App() {
       </main>
 
 
-      <nav className={`bottom-nav ${isInternal ? 'internal' : 'public'}`} aria-label="Primary navigation">
-        {(isInternal ? [...NAV, ...INTERNAL_NAV] : NAV).map(item => (
+      <nav className={`bottom-nav ${isInternal ? 'internal' : 'public'} ${workspace}`} aria-label="Primary navigation">
+        {(isInternal && workspace === 'research' ? INTERNAL_NAV : NAV).map(item => (
           <button
             key={item.id}
             className={page === item.id ? 'active' : ''}
@@ -288,6 +303,15 @@ export default function App() {
           </button>
         ))}
       </nav>
+    </div>
+  )
+}
+
+function WorkspaceSwitcher({ workspace, onChange, className }: { workspace: Workspace; onChange: (workspace: Workspace) => void; className: string }) {
+  return (
+    <div className={`workspace-switcher ${className}`} role="group" aria-label="Choose workspace">
+      <button type="button" className={workspace === 'football' ? 'active' : ''} aria-pressed={workspace === 'football'} onClick={() => onChange('football')}>Football</button>
+      <button type="button" className={workspace === 'research' ? 'active' : ''} aria-pressed={workspace === 'research'} onClick={() => onChange('research')}>Research</button>
     </div>
   )
 }
@@ -305,6 +329,12 @@ function routePage(pathname: string): Page {
 
 function isInternalPage(page: Page): boolean {
   return page === 'research' || page === 'tracker' || page === 'analytics' || page === 'tools' || page === 'admin' || page === 'match'
+}
+
+function workspaceForPage(page: Page): Workspace | null {
+  if (isInternalPage(page)) return 'research'
+  if (page === 'tickets' || page === 'matches' || page === 'live' || page === 'insights') return 'football'
+  return null
 }
 
 function routeMatchId(pathname: string): number | null {

@@ -63,7 +63,7 @@ All 61 published records have no learning profile ID. All mark the nine Q compon
 
 For a calibrated probability P, E[Y\|P]=P. If inclusion S is determined solely by a threshold on P, then E[Y−P\|S]=E[E[Y−P\|P]\|S]=0. This is a population statement, not a guarantee of zero error in a small realized sample. General selection using other variables, slate rankings, estimated edges or correlated errors requires stronger conditional guarantees; marginal calibration is not enough.
 
-The reproducible script includes a **synthetic counterexample**, separate from real evidence: 100 forecasts at p=.2 with 20 wins, and 100 at p=.8 with 80 wins. Filtering to p>=.7 leaves exactly 80% predicted and 80% observed, refuting the word “always.” It does not model Lohela or establish the absence of winner's curse here.
+The reproducible script includes a **synthetic counterexample**, separate from real evidence: 100 forecasts at p=.2 with 20 wins, and 100 at p=.8 with 80 wins. Filtering to p>=.7 leaves exactly 80% predicted and 80% observed, refuting the word “always.” It does not model Qwantej or establish the absence of winner's curse here.
 
 Brier measures reliability, resolution and outcome uncertainty together. A lower Brier score need not mean better calibration; the [scikit-learn calibration documentation](https://scikit-learn.org/1.8/modules/calibration.html) states this distinction. The observed published errors warrant investigation, but five dates and overlapping fixtures do not prove a particular cause or rule out variance. The original bootstrap intervals remain exploratory.
 

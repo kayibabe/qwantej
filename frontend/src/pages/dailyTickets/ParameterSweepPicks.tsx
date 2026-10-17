@@ -40,12 +40,27 @@ export function ParameterSweepPicks({
 
   useEffect(() => {
     let active = true;
-    const load = () => fetchParameterSweepSelections(date)
-      .then(value => { if (active) { setData(value); setError(null); } })
-      .catch(cause => { if (active) setError(cause instanceof Error ? cause.message : "Unable to load dynamic policy"); });
-    load();
-    const timer = window.setInterval(load, 300_000);
-    return () => { active = false; window.clearInterval(timer); };
+    let timer: number;
+    let controller: AbortController;
+    setData(null);
+    setError(null);
+    const load = async () => {
+      controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 20_000);
+      let delay = 15_000;
+      try {
+        const value = await fetchParameterSweepSelections(date, controller.signal);
+        if (active) { setData(value); setError(null); }
+        if (value.scan) delay = 300_000;
+      } catch (cause) {
+        if (active) setError(controller.signal.aborted ? "The request timed out. Retrying shortly." : cause instanceof Error ? cause.message : "Unable to load dynamic policy");
+      } finally {
+        window.clearTimeout(timeout);
+        if (active) timer = window.setTimeout(load, delay);
+      }
+    };
+    void load();
+    return () => { active = false; controller?.abort(); window.clearTimeout(timer); };
   }, [date]);
 
   const scan = data?.scan;
@@ -59,11 +74,11 @@ export function ParameterSweepPicks({
           <h2>Dynamic odds policy</h2>
           <span className="section-note">A broad daily parameter sweep. Matches appear only when a frozen pre-day validation window clears the 20% ROI research gate.</span>
         </div>
-        {data && <span className="section-note match-count-summary"><b>{rows.length}</b> qualifying matches</span>}
+        {scan && <span className="section-note match-count-summary"><b>{rows.length}</b> qualifying matches</span>}
       </div>
 
       {error && <div className="error-bar" role="alert"><div><strong>Dynamic policy unavailable</strong><span>{error}</span></div></div>}
-      {!scan && !error && <p className="panel-empty">Running the daily parameter sweep…</p>}
+      {!scan && !error && <p className="panel-empty" role="status">{data?.message ?? "Loading the saved policy scan…"}</p>}
       {scan && (
         <>
           <div className={`band-mix-scan${scan.provisional ? " provisional" : ""}`} role="status">

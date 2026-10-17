@@ -9,10 +9,10 @@ from app.services.band_mix_picks import (
 )
 
 
-def _row(lohela, market, n, roi, wins=None):
+def _row(qwantej, market, n, roi, wins=None):
     wins = wins if wins is not None else n // 2
     return {
-        "lohela_band": lohela, "market_band": market, "sample_size": n,
+        "qwantej_band": qwantej, "market_band": market, "sample_size": n,
         "wins": wins, "losses": n - wins, "hit_rate": wins / n if n else None, "roi": roi,
     }
 
@@ -32,8 +32,8 @@ def test_any_band_joins_after_the_dynamic_evidence_and_roi_thresholds():
 
     result = evaluate_band_mixes([qualifying, small, below_roi])
 
-    assert [(r["lohela_band"], r["market_band"]) for r in result["watchlist"]] == [("65-70", "<50")]
-    monitored = {(r["lohela_band"], r["market_band"]): r for r in result["monitored"]}
+    assert [(r["qwantej_band"], r["market_band"]) for r in result["watchlist"]] == [("65-70", "<50")]
+    monitored = {(r["qwantej_band"], r["market_band"]): r for r in result["monitored"]}
     assert monitored[("80-85", "50-55")]["reason"] == "INSUFFICIENT_SAMPLE"
     assert monitored[("70-75", "60-65")]["reason"] == "ROI_BELOW_THRESHOLD"
 

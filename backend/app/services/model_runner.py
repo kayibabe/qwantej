@@ -480,7 +480,7 @@ class ModelRunner:
             )
             decision_at = datetime.now(timezone.utc)
             feature_snapshot = {
-                "schema_version": "lohela.model-features.v1",
+                "schema_version": "qwantej.model-features.v1",
                 "captured_at": decision_at.isoformat(),
                 "market": market_key,
                 "model_inputs": {

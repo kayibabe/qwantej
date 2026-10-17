@@ -2,7 +2,7 @@
 
 ## Scope and version validation
 
-Source: the local Lohela API after rebuilding and restarting only the backend.
+Source: the local Qwantej API after rebuilding and restarting only the backend.
 For 6–12 October 2026, this review selects the highest published version for
 each target date and ticket tier, then compares ticket publication time with
 the earliest kickoff in that ticket. All P&L below is simulated at one unit per

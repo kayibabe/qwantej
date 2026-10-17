@@ -479,7 +479,7 @@ export async function fetchQualifiedSelections(date: string, minQScore = 75): Pr
 }
 
 export interface BandMix {
-  lohela_band: string
+  qwantej_band: string
   market_band: string
   source: 'dynamic' | 'watchlist' | 'discovered'
   best_rank: number | null
@@ -527,7 +527,7 @@ export interface BandMixPick {
   edge: number | null
   q_score: number
   q_grade: string
-  lohela_band: string
+  qwantej_band: string
   market_band: string
   mix_source: 'dynamic' | 'watchlist' | 'discovered'
   mix_rank: number | null
@@ -549,7 +549,7 @@ export interface BandMixSummary {
 }
 
 export interface BandMixLifecycleEvent {
-  lohela_band: string
+  qwantej_band: string
   market_band: string
   status: 'active' | 'inactive'
   transition: 'promoted' | 'demoted' | 'unchanged' | 'initial_inactive'
@@ -661,13 +661,15 @@ export interface ParameterSweepScan {
 }
 
 export interface ParameterSweepSelections {
-  scan: ParameterSweepScan
-  summary: { picks: number; matches: number; settled: number; wins: number; losses: number; voids: number; pending: number; profit_loss: number; roi: number | null }
+  scan: ParameterSweepScan | null
+  status?: 'processing'
+  message?: string
+  summary: { picks: number; matches: number; settled: number; wins: number; losses: number; voids: number; pending: number; profit_loss: number; roi: number | null } | null
   rows: ParameterSweepPick[]
 }
 
-export async function fetchParameterSweepSelections(date: string): Promise<ParameterSweepSelections> {
-  const res = await fetch(`/api/v1/selections/parameter-sweep?${new URLSearchParams({ date })}`)
+export async function fetchParameterSweepSelections(date: string, signal?: AbortSignal): Promise<ParameterSweepSelections> {
+  const res = await fetch(`/api/v1/selections/parameter-sweep?${new URLSearchParams({ date })}`, { signal })
   if (!res.ok) throw new Error(`API error ${res.status}`)
   return res.json()
 }

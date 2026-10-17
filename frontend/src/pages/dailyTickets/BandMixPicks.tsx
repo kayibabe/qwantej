@@ -73,7 +73,7 @@ export function BandMixPicks({
         <div>
           <h2>Best-mix picks</h2>
           <span className="section-note">
-            One qualifying selection per match, chosen only when its Lohela and market band pair meets frozen research criteria.
+            One qualifying selection per match, chosen only when its Qwantej and market band pair meets frozen research criteria.
             Historical performance is not a promise of profit.
           </span>
         </div>
@@ -248,7 +248,7 @@ function PerformanceReport({ date }: { date: string }) {
 
 function MixTable({ mixes }: { mixes: BandMix[] }) {
   const { sorted, header } = useSortableRows(mixes, {
-    lohela: (mix) => bandSortValue(mix.lohela_band),
+    qwantej: (mix) => bandSortValue(mix.qwantej_band),
     market: (mix) => bandSortValue(mix.market_band),
     n: (mix) => mix.sample_size,
     wins: (mix) => mix.wins,
@@ -264,7 +264,7 @@ function MixTable({ mixes }: { mixes: BandMix[] }) {
         <caption className="sr-only">Band-mix criteria and their current performance</caption>
         <thead>
           <tr>
-            {header("lohela", "Lohela band")}
+            {header("qwantej", "Qwantej band")}
             {header("market", "Market band")}
             {header("n", "N")}
             {header("wins", "Won / lost")}
@@ -277,8 +277,8 @@ function MixTable({ mixes }: { mixes: BandMix[] }) {
         </thead>
         <tbody>
           {sorted.map((mix) => (
-            <tr key={`${mix.lohela_band}-${mix.market_band}`}>
-              <td><strong>{mix.lohela_band}%</strong></td>
+            <tr key={`${mix.qwantej_band}-${mix.market_band}`}>
+              <td><strong>{mix.qwantej_band}%</strong></td>
               <td>{mix.market_band}%</td>
               <td>{mix.sample_size}</td>
               <td>{mix.wins} / {mix.losses}</td>
@@ -312,10 +312,10 @@ function PickTable({
       kickoff: ({ row }) => row.kickoff_at,
       match: ({ row }) => `${row.home_team} ${row.away_team}`,
       market: ({ row }) => `${formatMarket(row.market)} ${formatSelection(row.selection)}`,
-      lohela: ({ row }) => row.model_probability,
+      qwantej: ({ row }) => row.model_probability,
       marketProb: ({ row }) => row.market_probability,
       odds: ({ row }) => row.odds,
-      mix: ({ row }) => bandSortValue(row.lohela_band) * 1000 + bandSortValue(row.market_band),
+      mix: ({ row }) => bandSortValue(row.qwantej_band) * 1000 + bandSortValue(row.market_band),
       mixRoi: ({ row }) => row.mix_roi,
       q: ({ row }) => row.q_score,
       result: ({ row }) => (row.result ? RESULT_ORDER[row.result] : null),
@@ -331,7 +331,7 @@ function PickTable({
             {header("kickoff", "Kickoff")}
             {header("match", "Match / league")}
             {header("market", "Market / pick")}
-            {header("lohela", "Lohela")}
+            {header("qwantej", "Qwantej")}
             {header("marketProb", "Market")}
             {header("odds", "Odds")}
             {header("mix", "Mix")}
@@ -352,7 +352,7 @@ function PickTable({
                 <td>{pct(row.model_probability)}</td>
                 <td>{pct(row.market_probability)}{!row.pre_kickoff_quote && <small>Post-kickoff quote</small>}</td>
                 <td>{row.odds.toFixed(2)}</td>
-                <td title={`Dynamic group${row.mix_rank ? ` · ROI rank #${row.mix_rank}` : ""}`}><strong>{row.lohela_band} × {row.market_band}</strong><small>{row.mix_rank ? `ROI rank #${row.mix_rank}` : "Dynamic group"}</small></td>
+                <td title={`Dynamic group${row.mix_rank ? ` · ROI rank #${row.mix_rank}` : ""}`}><strong>{row.qwantej_band} × {row.market_band}</strong><small>{row.mix_rank ? `ROI rank #${row.mix_rank}` : "Dynamic group"}</small></td>
                 <td className={row.mix_roi != null && row.mix_roi > 0 ? "positive" : "negative"}>{pct(row.mix_roi)}<small>N {row.mix_sample_size} · {pct(row.mix_hit_rate)} hit</small></td>
                 <td><b className={`grade-badge grade-${gradeTone(row.q_grade)}`}>{row.q_grade}</b> {row.q_score.toFixed(1)}</td>
                 <td>

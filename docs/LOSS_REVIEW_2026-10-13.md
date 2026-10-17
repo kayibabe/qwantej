@@ -2,7 +2,7 @@
 
 ## Scope and evidence labels
 
-This is a read-only retrospective of the local Lohela API records for 6–12
+This is a read-only retrospective of the local Qwantej API records for 6–12
 October 2026, plus the all-market research cohort for 1–12 October. It does not
 represent the other apps in Portfolio or verified real-money betting.
 

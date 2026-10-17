@@ -1,5 +1,5 @@
 """
-Stage 1 & 2 of the Lohela pipeline — spec §26.
+Stage 1 & 2 of the Qwantej pipeline — spec §26.
 
 Pulls fixtures, team statistics, injuries, and xG data from API-Football.
 Supports both direct (dashboard.api-football.com) and RapidAPI hosts via

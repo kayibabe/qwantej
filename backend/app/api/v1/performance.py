@@ -40,7 +40,7 @@ async def totals_calibration(date_from: date | None = None, date_to: date | None
 
 @router.get("/probability-calibration")
 async def probability_calibration(date_from: date | None = None, date_to: date | None = None, model_version: str | None = None, db: AsyncSession = Depends(get_db)):
-    """Bucket Lohela model probability vs. market-implied probability by 5pp band, whole-system."""
+    """Bucket Qwantej model probability vs. market-implied probability by 5pp band, whole-system."""
     return await probability_calibration_analysis(db, date_from, date_to, model_version)
 
 

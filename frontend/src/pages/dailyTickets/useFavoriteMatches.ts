@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../auth'
 import { addMatchFavorite, fetchMatchFavoriteIds, removeMatchFavorite } from '../../lib/api'
 
-const STORAGE_KEY = 'lohela.match-favorites.v2'
+const STORAGE_KEY = 'qwantej.match-favorites.v2'
 
 function readStoredFavorites(key: string): number[] {
   try {

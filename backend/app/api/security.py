@@ -1,14 +1,14 @@
 """Minimal internal research access gate for state-changing endpoints."""
 
 import hmac
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database import get_db
+from app.database import AsyncSessionLocal, get_db
 from app.models import User, UserSession
 from app.services.auth import session_token_hash
 
@@ -44,7 +44,21 @@ async def get_optional_current_user(
     user = await db.get(User, session.user_id)
     if not user or user.account_status != "active":
         return None
-    session.last_seen_at = datetime.now(timezone.utc)
+    # Never dirty the authentication row in the page's transaction: autoflush
+    # would lock this session until an expensive report finishes, serializing
+    # every concurrent request from the same browser.
+    now = datetime.now(timezone.utc)
+    if session.last_seen_at < now - timedelta(minutes=5):
+        async with AsyncSessionLocal() as activity_db:
+            activity = await activity_db.scalar(
+                select(UserSession).where(
+                    UserSession.id == session.id,
+                    UserSession.last_seen_at < now - timedelta(minutes=5),
+                ).with_for_update(skip_locked=True)
+            )
+            if activity is not None:
+                activity.last_seen_at = now
+                await activity_db.commit()
     return user
 
 

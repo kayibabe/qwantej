@@ -1,7 +1,7 @@
 # Singles overhaul baseline
 
 Verified on 2026-09-19 at approximately 17:42 UTC (19:42 Africa/Blantyre).
-Source: the existing local Lohela Docker PostgreSQL database. This is a local
+Source: the existing local Qwantej Docker PostgreSQL database. This is a local
 snapshot, not independently verified production or bookmaker account performance.
 No external credentials, database writes, scheduler changes, or promotions were used.
 SQL transactions explicitly used READ ONLY and ended with ROLLBACK.

@@ -98,11 +98,14 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
   return (
     <main className="public-home">
       <header className="public-topbar">
-        <a className="public-brand" href="/" aria-label="Lohela home">
-          <span className="public-brand-mark">L</span>
-          <span><strong>LOHELA</strong><small>FOOTBALL INTELLIGENCE</small></span>
+        <a className="public-brand" href="/" aria-label="Qwantej home">
+          <picture className="public-brand-icon">
+            <source media="(prefers-color-scheme: dark)" srcSet="/dark/icon-128.png" />
+            <img src="/light/icon-128.png" alt="" />
+          </picture>
+          <span><strong>QWANTEJ</strong><small>FOOTBALL INTELLIGENCE</small></span>
         </a>
-        <nav className="public-page-nav" aria-label="Explore Lohela">
+        <nav className="public-page-nav" aria-label="Explore Qwantej">
           <a href="#public-product">How it works</a>
           <a href="#public-matches">Fixtures</a>
           <a href="#public-faq">FAQs</a>
@@ -114,11 +117,11 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
       </header>
 
       <div className="public-dashboard" id="public-matches">
-        <aside className="public-dashboard-rail" aria-label="Public Lohela tools">
+        <aside className="public-dashboard-rail" aria-label="Public Qwantej tools">
           <nav className="public-tool-nav" aria-label="Tools">
             <span className="public-rail-heading">EXPLORE</span>
             <a className="is-active" href="#public-matches" aria-current="page"><span aria-hidden="true">◉</span>Matches</a>
-            <a href="#public-product"><span aria-hidden="true">▤</span>How Lohela works</a>
+            <a href="#public-product"><span aria-hidden="true">▤</span>How Qwantej works</a>
             <a href="#public-faq"><span aria-hidden="true">ⓘ</span>FAQs</a>
           </nav>
           <section className="public-side-card public-rail-card">
@@ -177,7 +180,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
 
       <section className="public-product" id="public-product" aria-labelledby="public-product-title">
         <div className="public-product-heading">
-          <span className="public-section-kicker">THE LOHELA APPROACH</span>
+          <span className="public-section-kicker">THE QWANTEJ APPROACH</span>
           <h2 id="public-product-title">From fixture list to final result.</h2>
           <p>Useful football research should show its work—and leave room for uncertainty.</p>
         </div>
@@ -191,7 +194,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
           <article className="public-product-card">
             <span className="public-product-number">02</span>
             <h3>Read the recommendation in context</h3>
-            <p>Lohela keeps published selections distinct from research candidates. Where price evidence is available, the workspace shows the captured odds and timing.</p>
+            <p>Qwantej keeps published selections distinct from research candidates. Where price evidence is available, the workspace shows the captured odds and timing.</p>
             <span className="public-product-note">Recommendations are opinions, not guarantees.</span>
           </article>
           <article className="public-product-card">
@@ -203,7 +206,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
         </div>
       </section>
 
-      <section className="public-access" aria-label="Lohela account access">
+      <section className="public-access" aria-label="Qwantej account access">
         <div className="public-access-heading">
           <span className="public-section-kicker">START FREE, GO DEEPER WHEN YOU NEED TO</span>
           <h2>Choose how you want to explore.</h2>
@@ -217,7 +220,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
           </article>
           <article className="public-access-card is-featured">
             <div><span className="public-access-label">FREE ACCOUNT</span><h3>Follow the daily slate</h3></div>
-            <p>Open your Lohela workspace for daily published recommendations, match browsing and live scores.</p>
+            <p>Open your Qwantej workspace for daily published recommendations, match browsing and live scores.</p>
             <button onClick={onCreateAccount}>Create a free account <span aria-hidden="true">→</span></button>
           </article>
           <article className="public-access-card">
@@ -232,14 +235,14 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
         <div className="public-faq-heading"><span className="public-section-kicker">GOOD TO KNOW</span><h2 id="public-faq-title">A few quick answers.</h2></div>
         <div className="public-faq-list">
           <details><summary>What can I see without an account?</summary><p>Public fixtures include the competition, teams, kickoff or live status, and scores when available. Personal account information and workspace tools stay behind sign-in.</p></details>
-          <details><summary>What does Lohela do with recommendations?</summary><p>Lohela presents dated published selections separately from research. Where captured price evidence exists, it can be reviewed alongside the selection. A recommendation is never a promise of a result.</p></details>
-          <details><summary>Is Lohela free to use?</summary><p>Public fixture browsing is open. A free account unlocks the daily workspace; Pro adds detailed odds, expanded ticket history and Stats &amp; Trends.</p></details>
-          <details><summary>Does Lohela guarantee wins or profit?</summary><p>No. Football outcomes are uncertain. Any historical result is a record of completed matches, not a guarantee or forecast of future performance.</p></details>
+          <details><summary>What does Qwantej do with recommendations?</summary><p>Qwantej presents dated published selections separately from research. Where captured price evidence exists, it can be reviewed alongside the selection. A recommendation is never a promise of a result.</p></details>
+          <details><summary>Is Qwantej free to use?</summary><p>Public fixture browsing is open. A free account unlocks the daily workspace; Pro adds detailed odds, expanded ticket history and Stats &amp; Trends.</p></details>
+          <details><summary>Does Qwantej guarantee wins or profit?</summary><p>No. Football outcomes are uncertain. Any historical result is a record of completed matches, not a guarantee or forecast of future performance.</p></details>
         </div>
-        <div className="public-faq-cta"><div><strong>Ready to follow the next matchday?</strong><span>Create a free account to open your Lohela workspace.</span></div><button className="public-cta" onClick={onCreateAccount}>Get started for free <span aria-hidden="true">→</span></button></div>
+        <div className="public-faq-cta"><div><strong>Ready to follow the next matchday?</strong><span>Create a free account to open your Qwantej workspace.</span></div><button className="public-cta" onClick={onCreateAccount}>Get started for free <span aria-hidden="true">→</span></button></div>
       </section>
 
-      <footer className="public-footer"><span>LOHELA · Intelligence beyond numbers</span><span>Information only. Football outcomes are uncertain; no result is guaranteed.</span></footer>
+      <footer className="public-footer"><span>QWANTEJ · Intelligence beyond numbers</span><span>Information only. Football outcomes are uncertain; no result is guaranteed.</span></footer>
     </main>
   )
 }

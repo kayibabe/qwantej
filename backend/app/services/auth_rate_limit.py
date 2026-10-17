@@ -32,7 +32,7 @@ async def enforce_auth_rate_limit(request: Request, endpoint: str, limit: int) -
     if limit <= 0:
         return
     identity = hashlib.sha256(_client_identity(request).encode("utf-8")).hexdigest()[:24]
-    key = f"lohela:auth-rate:{endpoint}:{identity}"
+    key = f"qwantej:auth-rate:{endpoint}:{identity}"
     try:
         client = await _get_client()
         count = await client.incr(key)

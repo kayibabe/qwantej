@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════
-   LOHELA — Design System
+   QWANTEJ — Design System
    Single source of truth for all component styles.
    ═══════════════════════════════════════════════════════════════ */
 
@@ -364,15 +364,22 @@ strong, b { font-weight: 500; }
 }
 
 .brand-logo {
-  width: 178px;
-  height: auto;
-  max-height: 62px;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
   object-fit: contain;
   display: block;
 }
+.brand-logo-dark { display: none; }
+html[data-theme="dark"] .brand-logo-light { display: none; }
+html[data-theme="dark"] .brand-logo-dark { display: block; }
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) .brand-logo-light { display: none; }
+  html:not([data-theme]) .brand-logo-dark { display: block; }
+}
 
-.brand-copy { display: flex; flex-direction: column; gap: 1px; line-height: 1; }
-.brand-name { margin: 0; font-size: 16px; letter-spacing: -0.45px; }
+.brand-copy { display: flex; flex-direction: column; gap: 3px; line-height: 1; }
+.brand-name { margin: 0; font-size: 16px; letter-spacing: -0.45px; font-weight: 700; }
 .brand-tagline {
   color: var(--muted);
   font-size: 8px;
@@ -2467,12 +2474,15 @@ th[aria-sort="descending"] .table-sort span,
 .auth-standalone .auth-page { min-height: 100dvh; width: 100%; box-sizing: border-box; }
 .auth-card { width: min(440px, 100%); max-width: 100%; overflow: hidden; border: 1px solid color-mix(in srgb, var(--border) 80%, transparent); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-md); }
 .auth-card-brand { display: inline-flex; align-items: center; gap: 10px; margin: 28px 0 6px 34px; color: var(--text); text-decoration: none; }
-.auth-card-brand img { width: 31px; height: auto; }
+.auth-card-brand img { width: 38px; height: 38px; }
+.auth-card-brand picture { display: block; width: 38px; height: 38px; }
+.auth-card-brand picture img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .auth-card-brand span { display: grid; gap: 2px; }
 .auth-card-brand strong { font-size: 16px; letter-spacing: -.02em; }
 .auth-card-brand small { color: var(--accent); font-size: 10px; }
 .auth-form-panel .auth-card-brand { align-self: center; flex-direction: column; align-items: center; gap: 6px; margin: 0 0 14px; text-align: center; }
-.auth-form-panel .auth-card-brand img { width: min(100%, 176px); height: auto; }
+.auth-form-panel .auth-card-brand picture { width: min(100%, 176px); height: auto; }
+.auth-form-panel .auth-card-brand picture img { width: 100%; height: auto; }
 .auth-card-body { display: block; min-width: 0; }
 .auth-card-body > * { min-width: 0; }
 .auth-benefits { display: none; }
@@ -3361,7 +3371,7 @@ th[aria-sort="descending"] .table-sort span,
 .app { display: grid; grid-template-columns: 218px minmax(0, 1fr); grid-template-rows: auto 1fr; }
 .app-sidebar { grid-row: 1 / -1; display: flex; flex-direction: column; min-height: 100dvh; padding: 18px 12px 14px; background: var(--surface); border-right: 1px solid var(--border); }
 .app-sidebar .brand { display: flex; align-items: center; gap: 9px; padding: 0 9px 22px; border-bottom: 1px solid var(--border); }
-.app-sidebar .brand-logo { width: 178px; max-width: 100%; height: auto; max-height: 62px; }
+.app-sidebar .brand-logo { width: 38px; max-width: 38px; height: 38px; max-height: 38px; }
 .app-sidebar .brand-name { color: var(--text); }
 .app-sidebar .brand-copy { min-width: 0; }
 .app-sidebar .brand-tagline { color: var(--accent); white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
@@ -4003,16 +4013,18 @@ body { line-height: 1.6; }
   letter-spacing: .02em;
 }
 .topbar-mark {
-  display: grid;
+  display: block;
   flex: 0 0 44px;
   width: 44px;
   height: 44px;
-  place-items: center;
-  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border));
-  border-radius: 50%;
-  color: var(--accent);
-  font-size: 24px;
-  font-weight: 600;
+  object-fit: contain;
+}
+.topbar-logo-dark { display: none; }
+html[data-theme="dark"] .topbar-logo-light { display: none; }
+html[data-theme="dark"] .topbar-logo-dark { display: block; }
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) .topbar-logo-light { display: none; }
+  html:not([data-theme]) .topbar-logo-dark { display: block; }
 }
 .app-sidebar {
   grid-column: 1;
@@ -4227,7 +4239,7 @@ body { line-height: 1.6; }
     flex-wrap: wrap;
   }
   .topbar-brand { min-width: 0; margin-right: auto; font-size: 17px; }
-  .topbar-mark { width: 36px; height: 36px; font-size: 20px; }
+  .topbar-mark { width: 36px; height: 36px; flex-basis: 36px; }
   .app-header .date-nav { order: 3; width: 100%; justify-content: center; margin: 2px 0 0; }
   .app-header .header-refresh { justify-self: auto; margin-left: 0; gap: 6px; }
   .app-header .global-refresh { display: none; }

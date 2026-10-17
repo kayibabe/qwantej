@@ -15,7 +15,7 @@ def _request_with_cookie(token: str) -> Request:
         "type": "http",
         "method": "GET",
         "path": "/",
-        "headers": [(b"cookie", f"lohela_session={token}".encode())],
+        "headers": [(b"cookie", f"qwantej_session={token}".encode())],
         "query_string": b"",
         "server": ("testserver", 80),
         "client": ("127.0.0.1", 1234),
@@ -88,7 +88,7 @@ async def test_research_key_normalizes_bom_and_rejects_non_ascii_without_500(mon
 async def test_revoked_or_expired_sessions_are_not_authenticated(monkeypatch):
     from app.api import security
 
-    monkeypatch.setattr(security, "settings", SimpleNamespace(auth_cookie_name="lohela_session"))
+    monkeypatch.setattr(security, "settings", SimpleNamespace(auth_cookie_name="qwantej_session"))
     expired = SimpleNamespace(
         revoked_at=None,
         expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),

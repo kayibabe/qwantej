@@ -89,7 +89,7 @@ export default function TrackerPage({ onOpenTickets, onOpenResearch, onOpenValid
     } finally { setLoading(false) }
   }, [filterStatus])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { if (view === 'manual') void load() }, [load, view])
   const groups = useMemo(() => groupJournalBets(bets), [bets])
 
   async function submitBet(event: React.FormEvent) {

@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import aliased
@@ -22,7 +23,8 @@ from app.services.band_mix_picks import (
     get_or_capture_scan,
     summarize_picks,
 )
-from app.services.parameter_sweep import get_or_capture_parameter_sweep, parameter_sweep_candidates
+from app.services.parameter_sweep import parameter_sweep_candidates
+from app.services.parameter_sweep_jobs import ready_scan, enqueue_scan
 from app.services.settlement import evaluate_selection
 
 router = APIRouter(prefix="/selections", tags=["selections"])
@@ -487,7 +489,7 @@ async def get_band_mix_selections(
     date: Optional[date] = Query(default=None, description="Target date (default: today)"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Selections in a currently best-performing Lohela × market band mix.
+    """Selections in a currently best-performing Qwantej × market band mix.
 
     The day's mix scan is frozen on first capture (by the pipeline or this
     endpoint) from evidence dated before the target day; see
@@ -522,7 +524,7 @@ async def get_band_mix_lifecycle(
         "policy_version": "dynamic-roi-v1",
         "events": events,
         "current_states": [{
-            "lohela_band": state.lohela_band,
+            "qwantej_band": state.qwantej_band,
             "market_band": state.market_band,
             "status": state.status,
             "first_promoted_at": state.first_promoted_at.isoformat() if state.first_promoted_at else None,
@@ -592,7 +594,16 @@ async def get_parameter_sweep_selections(
     pre-target validation ROI and evidence sample clear the stored gates.
     """
     target = date or cat_today()
-    scan = await get_or_capture_parameter_sweep(db, target)
+    scan = await ready_scan(db, target)
+    if scan is None:
+        try:
+            await enqueue_scan(target)
+        except Exception as exc:
+            raise HTTPException(503, "The research worker is unavailable. Please retry shortly.") from exc
+        return JSONResponse(status_code=202, headers={"Retry-After": "15"}, content={
+            "scan": None, "rows": [], "summary": None, "status": "processing",
+            "message": "The policy scan is queued or running in the background. You can use other pages while it completes.",
+        })
     rows = parameter_sweep_candidates(scan)
     settled = [row for row in rows if row.get("result") in {"win", "loss", "void"}]
     wins = sum(row.get("result") == "win" for row in settled)

@@ -27,6 +27,8 @@ import { fetchDailyMarketRoi, MarketRoiDaily, type MarketRoiDailyData } from "./
 import { TicketGridSkeleton } from "./TicketGridSkeleton";
 import { AllMatches } from "./AllMatches";
 import { FixtureExplorer } from "./FixtureExplorer";
+import PublishedSelections from "./PublishedSelections";
+import "./DailyOverview.css";
 import {
   accumulatorBlockers,
   apiAccumulatorToUi,
@@ -287,8 +289,9 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
       <div className="meta-bar">
         <div>
           <h1 className="meta-date">
-            <span className="event-date">{data ? formatDate(data.target_date) : formatDate(date)}</span>
+            {initialTab === "tickets" ? "Daily overview" : formatDate(data ? data.target_date : date)}
           </h1>
+          {initialTab === "tickets" && <p className="overview-date"><span className="event-date">{data ? formatDate(data.target_date) : formatDate(date)}</span></p>}
           <p className="research-disclaimer">
             {isAdmin
               ? "Internal research and paper trading only. No ticket is a promise of profit."
@@ -340,7 +343,7 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
         <TicketGridSkeleton />
       ) : (
         <>
-          <nav className="daily-tabs" aria-label="Daily ticket workspace">
+          {dailyTabs.length > 1 && <nav className="daily-tabs" aria-label="Daily ticket workspace">
             {dailyTabs.map(([key, label]) => (
               <button
                 key={key}
@@ -350,7 +353,7 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
                 {label}
               </button>
             ))}
-          </nav>
+          </nav>}
           {tab === "matches" && selectionMessage && (
             <p className="pipeline-banner-message tickets-operation-message negative" role="status">
               {selectionMessage}
@@ -376,7 +379,6 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
               </span>
             </div>
           */}
-          {tab === "tickets" && <div className="settlement-legend" aria-label="Ticket and settlement definitions"><span><b>Score</b> = match result</span><span><b>Market</b> = selected outcome</span><span><b>Ticket</b> = accumulator result</span>{publicPublishedTickets.some((ticket) => ticket.pricing === "market") && <span>Market-priced chance removes bookmaker margin; expected return estimates long-run return per unit staked.</span>}</div>}
           {tab === "matches" && canExploreMarkets && <div className="view-intro"><div><span className="eyebrow">Research candidates</span><h2 className="section-title">Qualified match markets</h2></div><p>These candidate signals are for inspection. A match appearing here does not mean it was selected for a published ticket.</p></div>}
           {isAdmin && tab === "matches" && marketRoi && (
             <div className="market-roi-match-gate" role="status">
@@ -399,17 +401,6 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
           )}
           {tab === "matches" && canExploreMarkets && <AllMatches rows={matchGroups} onSelect={openSelection} onAdd={addToAccumulator} allowAdd={isAdmin} />}
           {tab === "matches" && !canExploreMarkets && <FixtureExplorer fixtures={fixtures} />}
-          {tab === "tickets" && (
-            <div className="view-intro">
-              <div>
-                <span className="eyebrow">{isAdmin ? "Internal view" : "Published output"}</span>
-                <h2 className="section-title">Published ticket tiers</h2>
-              </div>
-              <p>{isAdmin
-                ? "These are the immutable ticket versions published for this date. Research candidates are shown under Matches."
-                : "Only tickets published through the existing evidence and publication gates are shown."}</p>
-            </div>
-          )}
           {isAdmin && tab === "best-mix" && (
             <BandMixPicks
               date={date}
@@ -446,7 +437,7 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
                       : data?.pipeline_run_id != null
                         ? `No generation record exists. Last stage: ${formatStage(data?.pipeline_current_stage ?? "unknown")}.${data?.pipeline_error ? ` ${data.pipeline_error}` : " The automation watchdog will retry a stale incomplete run within its bounded safety limit."}`
                         : date === TODAY
-                          ? "Lohela checks the latest due 00:15 or 05:00 CAT window on startup and every five minutes. If it was missed, it queues one full catch-up automatically."
+                          ? "Qwantej checks the latest due 00:15 or 05:00 CAT window on startup and every five minutes. If it was missed, it queues one full catch-up automatically."
                           : "The ticket cards are intentionally hidden because there is no evidence that candidate generation or publication ran for this date."}
                   </p>
                 </section>
@@ -511,6 +502,16 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
                   </div>
                 </details>
               )}
+              {publicPublishedTickets.length > 0 && (
+                <PublishedSelections tickets={publicTiers.flatMap((tier) => {
+                  const ticket = data?.[tier.key] ?? null;
+                  return ticket ? [{ tierName: tier.name, ticket }] : [];
+                })} onSelect={openTicketLeg} canViewSelections={user?.plan === "pro" || isAdmin} />
+              )}
+              {publicPublishedTickets.length > 0 && <div className="ticket-tier-section-heading">
+                <div><span className="eyebrow">Immutable published records</span><h2>Ticket tier totals</h2></div>
+                <p>Combined odds, estimated chance and full legs for each published tier.</p>
+              </div>}
               {publicPublishedTickets.length > 0 && <div className="ticket-grid public-ticket-grid">
               {publicTiers.map((tier) => (
                 <TicketCard

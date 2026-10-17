@@ -81,7 +81,7 @@ into a disposable throwaway container (never the dev DB itself), using a
 `postgresql-client-15` toolchain to match both ends exactly:
 
 ```bash
-python scripts/backup_db.py --url postgresql://lohela:lohela_pass@postgres:5432/lohela --output-dir /tmp/backups --label rehearsal
+python scripts/backup_db.py --url postgresql://qwantej:qwantej_pass@postgres:5432/qwantej --output-dir /tmp/backups --label rehearsal
 python scripts/restore_db.py --file <dump> --target-url postgresql://postgres:test@<disposable-container>:5432/restore_check --yes
 ```
 
@@ -99,14 +99,14 @@ against production's actual v18 server.
 ## Local supervisor backup destination
 
 The Windows supervisor Compose file at
-D:\WebApps\local-server\apps\lohela\compose.yaml bind-mounts
-D:\WebApps\local-server\backups\lohela to /data/backups on the Celery
+D:\WebApps\local-server\apps\qwantej\compose.yaml bind-mounts
+D:\WebApps\local-server\backups\qwantej to /data/backups on the Celery
 worker. This path is outside the worker container and Docker-managed volumes,
 so container recreation does not remove scheduled dumps. It remains on the same
 Windows host; it is not off-machine redundancy.
 
 The local backend scheduler is configured for 19:30 UTC (21:30 CAT). The
-scheduled task writes lohela_scheduled_*.dump to /data/backups, validates each
+scheduled task writes qwantej_scheduled_*.dump to /data/backups, validates each
 dump with the matching PostgreSQL client, and retains the latest 14 scheduled
 dumps.
 
@@ -158,7 +158,7 @@ is the plan for the *next* one, not a fix for an outstanding backlog.
 
 | Date | Action | Result |
 | --- | --- | --- |
-| 2026-10-13 | Local supervisor bind mount + backup rehearsal | Verified — host directory D:\WebApps\local-server\backups\lohela, 6,434,280-byte dump, 39 public tables; restored to a disposable postgres:15-alpine database and all 39 table row counts matched. |
+| 2026-10-13 | Local supervisor bind mount + backup rehearsal | Verified — host directory D:\WebApps\local-server\backups\qwantej, 6,434,280-byte dump, 39 public tables; restored to a disposable postgres:15-alpine database and all 39 table row counts matched. |
 | 2026-10-13 | Cross-version restore check | Initial PostgreSQL 18 client restore into local PostgreSQL 15 failed on transaction_timeout; backup/restore tools now select matching major clients, and the PostgreSQL 15 restore completed cleanly. |
 | 2026-09-20 | Confirmed prod Postgres version via read-only query | 18.6 (Debian 18.6-1.pgdg13+2) — dev is 15.17 |
 | 2026-09-20 | `backup_db.py` against local dev DB (v15 client) | Verified — 1,273,253 bytes, 32 tables with data, validated via `pg_restore --list` |

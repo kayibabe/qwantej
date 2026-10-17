@@ -41,7 +41,7 @@ async def export_portfolio_band_mix(
     x_portfolio_token: str | None = Header(default=None),
     db: AsyncSession = Depends(get_db),
 ):
-    """Read-only export of Lohela's captured Best-mix picks for Portfolio."""
+    """Read-only export of Qwantej's captured Best-mix picks for Portfolio."""
     expected = os.environ.get("PORTFOLIO_EXPORT_TOKEN", "")
     if not expected or not x_portfolio_token or not hmac.compare_digest(expected, x_portfolio_token):
         raise HTTPException(status_code=401, detail="Invalid portfolio service credential")
@@ -51,7 +51,7 @@ async def export_portfolio_band_mix(
     )).scalar_one_or_none()
     if scan is None:
         return {
-            "app": "lohela",
+            "app": "qwantej",
             "target_date": target_date.isoformat(),
             "captured": False,
             "captured_at": None,
@@ -64,7 +64,7 @@ async def export_portfolio_band_mix(
     # prediction rows would make a historical daily page look prospective.
     rows = await band_mix_ledger_rows(db, target_date)
     return {
-        "app": "lohela",
+        "app": "qwantej",
         "target_date": target_date.isoformat(),
         "captured": True,
         "captured_at": scan.captured_at.isoformat() if scan.captured_at else None,
@@ -96,7 +96,7 @@ async def export_portfolio_band_mix(
                 "qualification_status": "qualified",
                 "qualification_reason": None,
                 "evidence": {
-                    "lohela_band": row.get("lohela_band"),
+                    "qwantej_band": row.get("qwantej_band"),
                     "market_band": row.get("market_band"),
                     "mix_rank": row.get("mix_rank"),
                     "mix_sample_size": row.get("mix_sample_size"),

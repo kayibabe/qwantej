@@ -20,7 +20,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryS
   componentDidCatch(error: Error, info: ErrorInfo) {
     // Keep the user-facing fallback deterministic while retaining a useful
     // diagnostic in the browser console for local/support investigation.
-    console.error('Lohela workspace render failure', error, info)
+    console.error('Qwantej workspace render failure', error, info)
   }
 
   render() {

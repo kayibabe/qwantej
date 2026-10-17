@@ -50,7 +50,7 @@ class TicketPublisher:
         if self.db.get_bind().dialect.name == "postgresql":
             await self.db.execute(
                 text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
-                {"key": f"lohela:daily-tickets:{target_date.isoformat()}"},
+                {"key": f"qwantej:daily-tickets:{target_date.isoformat()}"},
             )
         retained = await self.db.execute(
             select(TicketGeneration)
@@ -446,7 +446,7 @@ def _pick_decision_snapshot(
     """Freeze the prediction, feature, market and quote lineage for one pick."""
     quote_id = leg.source_odds_id or leg.source_odds_provenance.get("quote_id")
     return {
-        "schema_version": "lohela.pick-decision.v1",
+        "schema_version": "qwantej.pick-decision.v1",
         "decision_at": decision_at.isoformat(),
         "generation_id": generation.id,
         "model_run_id": leg.model_run_id or generation.model_run_id,

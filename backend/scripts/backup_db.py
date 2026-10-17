@@ -99,7 +99,7 @@ def main() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     safe_label = re.sub(r"[^a-zA-Z0-9_-]+", "_", args.label)
-    dump_path = output_dir / f"lohela_{safe_label}_{stamp}.dump"
+    dump_path = output_dir / f"qwantej_{safe_label}_{stamp}.dump"
 
     print(f"Backing up {target} -> {dump_path}", file=sys.stderr)
     started = datetime.now(timezone.utc)

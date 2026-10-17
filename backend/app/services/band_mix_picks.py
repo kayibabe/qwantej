@@ -1,8 +1,8 @@
-"""Daily dynamic Lohela-band × market-band monitoring and candidate picks.
+"""Daily dynamic Qwantej-band × market-band monitoring and candidate picks.
 
 Each day works in two steps:
 
-1. Scan: before listing candidates, calculate every Lohela × market pair from
+1. Scan: before listing candidates, calculate every Qwantej × market pair from
    settled evidence dated strictly before the target day and freeze the active
    pairs in ``band_mix_scans``. A pair qualifies only at the configured
    minimum evidence and ROI threshold.
@@ -52,8 +52,8 @@ RECENT_WINDOW_DAYS = 60
 POLICY_VERSION = "dynamic-roi-v1"
 
 
-def _mix_key(lohela_band: str, market_band: str) -> str:
-    return f"{lohela_band}|{market_band}"
+def _mix_key(qwantej_band: str, market_band: str) -> str:
+    return f"{qwantej_band}|{market_band}"
 
 
 def lifecycle_transition(previous_status: str | None, active: bool) -> str:
@@ -71,14 +71,14 @@ def evaluate_band_mixes(
     recent_matrix: list[dict] | None = None,
 ) -> dict:
     """Return every currently qualifying pair from one frozen evidence set."""
-    recent = {_mix_key(r["lohela_band"], r["market_band"]): r for r in (recent_matrix or [])}
+    recent = {_mix_key(r["qwantej_band"], r["market_band"]): r for r in (recent_matrix or [])}
     ranked = sorted(combined_matrix, key=lambda row: (row["roi"] is not None, row["roi"] or float("-inf")), reverse=True)
-    ranks = {_mix_key(r["lohela_band"], r["market_band"]): index + 1 for index, r in enumerate(ranked)}
+    ranks = {_mix_key(r["qwantej_band"], r["market_band"]): index + 1 for index, r in enumerate(ranked)}
     stats_keys = ("sample_size", "wins", "losses", "hit_rate", "roi")
 
     def describe(row: dict) -> dict:
-        lohela_band, market_band = row["lohela_band"], row["market_band"]
-        key = _mix_key(lohela_band, market_band)
+        qwantej_band, market_band = row["qwantej_band"], row["market_band"]
+        key = _mix_key(qwantej_band, market_band)
         recent_row = recent.get(key)
         rank = ranks.get(key)
         if row["sample_size"] < MIN_MIX_SAMPLE:
@@ -88,7 +88,7 @@ def evaluate_band_mixes(
         else:
             reason = None
         return {
-            "lohela_band": lohela_band,
+            "qwantej_band": qwantej_band,
             "market_band": market_band,
             "source": "dynamic",
             "best_rank": rank,
@@ -145,13 +145,13 @@ async def record_band_mix_lifecycle(
     states = (await db.execute(select(BandMixPairState).where(
         BandMixPairState.policy_version == POLICY_VERSION,
     ))).scalars().all()
-    state_by_key = {_mix_key(state.lohela_band, state.market_band): state for state in states}
+    state_by_key = {_mix_key(state.qwantej_band, state.market_band): state for state in states}
     evaluations = list(monitored)
-    observed_keys = {_mix_key(row["lohela_band"], row["market_band"]) for row in monitored}
+    observed_keys = {_mix_key(row["qwantej_band"], row["market_band"]) for row in monitored}
     for state in states:
-        if _mix_key(state.lohela_band, state.market_band) not in observed_keys:
+        if _mix_key(state.qwantej_band, state.market_band) not in observed_keys:
             evaluations.append({
-                "lohela_band": state.lohela_band,
+                "qwantej_band": state.qwantej_band,
                 "market_band": state.market_band,
                 "active": False,
                 "reason": "NO_HISTORY",
@@ -159,14 +159,14 @@ async def record_band_mix_lifecycle(
                 "roi": None,
             })
     for row in evaluations:
-        state = state_by_key.get(_mix_key(row["lohela_band"], row["market_band"]))
+        state = state_by_key.get(_mix_key(row["qwantej_band"], row["market_band"]))
         previous_status = state.status if state else None
         transition = lifecycle_transition(previous_status, bool(row["active"]))
         status = "active" if row["active"] else "inactive"
         if state is None:
             db.add(BandMixPairState(
                 policy_version=POLICY_VERSION,
-                lohela_band=row["lohela_band"],
+                qwantej_band=row["qwantej_band"],
                 market_band=row["market_band"],
                 status=status,
                 first_promoted_at=now if status == "active" else None,
@@ -189,7 +189,7 @@ async def record_band_mix_lifecycle(
             target_date=target_date,
             evidence_through=evidence_through,
             policy_version=POLICY_VERSION,
-            lohela_band=row["lohela_band"],
+            qwantej_band=row["qwantej_band"],
             market_band=row["market_band"],
             status=status,
             transition=transition,
@@ -198,7 +198,7 @@ async def record_band_mix_lifecycle(
             reason=row["reason"],
         ))
         events.append({
-            "lohela_band": row["lohela_band"],
+            "qwantej_band": row["qwantej_band"],
             "market_band": row["market_band"],
             "status": status,
             "transition": transition,
@@ -233,7 +233,7 @@ async def ensure_band_mix_daily_ledger(
             target_date=target_date,
             prediction_id=row["prediction_id"],
             match_id=row["match_id"],
-            lohela_band=row["lohela_band"],
+            qwantej_band=row["qwantej_band"],
             market_band=row["market_band"],
             mix_roi=row["mix_roi"],
             mix_sample_size=row["mix_sample_size"],
@@ -379,13 +379,13 @@ async def band_mix_lifecycle_history(
         query = query.where(BandMixLifecycleEvent.target_date <= date_to)
     events = (await db.execute(query.order_by(
         BandMixLifecycleEvent.target_date.desc(),
-        BandMixLifecycleEvent.lohela_band,
+        BandMixLifecycleEvent.qwantej_band,
         BandMixLifecycleEvent.market_band,
     ))).scalars().all()
     return [{
         "target_date": event.target_date.isoformat(),
         "evidence_through": event.evidence_through.isoformat(),
-        "lohela_band": event.lohela_band,
+        "qwantej_band": event.qwantej_band,
         "market_band": event.market_band,
         "status": event.status,
         "transition": event.transition,
@@ -488,7 +488,7 @@ async def get_or_capture_scan(db: AsyncSession, target_date: date, capture_sourc
                 "prediction_id", "match_id", "home_team", "away_team", "competition",
                 "kickoff_at", "market", "selection", "model_probability",
                 "market_probability", "odds", "edge", "q_score", "q_grade",
-                "lohela_band", "market_band", "mix_source", "mix_rank",
+                "qwantej_band", "market_band", "mix_source", "mix_rank",
                 "mix_sample_size", "mix_hit_rate", "mix_roi", "pre_kickoff_quote",
             )
         } for row in rows]
@@ -536,7 +536,7 @@ def _choose_one_per_match(candidates: list[tuple[dict, dict]]) -> list[dict]:
 async def band_mix_candidates(db: AsyncSession, target_date: date, scan: dict) -> list[dict]:
     """One qualifying, pre-kickoff selection per fixture for the target date."""
     mixes = {
-        _mix_key(row["lohela_band"], row["market_band"]): row
+        _mix_key(row["qwantej_band"], row["market_band"]): row
         for row in [*scan["watchlist"], *scan["discovered"]]
         if row["active"]
     }
@@ -582,9 +582,9 @@ async def band_mix_candidates(db: AsyncSession, target_date: date, scan: dict) -
 
     candidates: list[tuple[dict, dict]] = []
     for prediction in predictions:
-        lohela_band = _probability_band(prediction.model_probability)
+        qwantej_band = _probability_band(prediction.model_probability)
         market_band = _probability_band(prediction.source_implied_probability)
-        mix = mixes.get(_mix_key(lohela_band, market_band))
+        mix = mixes.get(_mix_key(qwantej_band, market_band))
         if mix is None or not _has_pre_kickoff_information(prediction) or not _has_pre_kickoff_quote(prediction):
             continue
         match = prediction.match
@@ -604,7 +604,7 @@ async def band_mix_candidates(db: AsyncSession, target_date: date, scan: dict) -
             "edge": prediction.edge,
             "q_score": prediction.q_score,
             "q_grade": prediction.q_grade.value,
-            "lohela_band": lohela_band,
+            "qwantej_band": qwantej_band,
             "market_band": market_band,
             "mix_source": mix["source"],
             "mix_rank": mix["best_rank"],

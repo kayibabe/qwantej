@@ -11,7 +11,7 @@ from app.config import CURRENT_MODEL_VERSION, cat_today, settings
 
 logger = logging.getLogger(__name__)
 
-celery_app = Celery("lohela", broker=settings.redis_url, backend=settings.redis_url)
+celery_app = Celery("qwantej", broker=settings.redis_url, backend=settings.redis_url)
 celery_app.conf.update(
     task_serializer="json",
     result_serializer="json",
@@ -791,7 +791,7 @@ def capture_singles_ledger(self):
 
 
 @celery_app.task(name="pipeline.capture_parameter_sweep", bind=True, max_retries=1)
-def capture_parameter_sweep(self):
+def capture_parameter_sweep(self, target_date: str | None = None):
     """Freeze today's broad dynamic odds-policy research scan.
 
     The task is intentionally separate from ticket publication: a slow or
@@ -801,18 +801,27 @@ def capture_parameter_sweep(self):
     from app.config import cat_today
     from app.database import AsyncSessionLocal
     from app.services.parameter_sweep import get_or_capture_parameter_sweep
+    from app.services.parameter_sweep_jobs import job_key, ready_scan
+    from app.services import cache
+
+    target = date.fromisoformat(target_date) if target_date else cat_today()
 
     async def _run():
-        async with AsyncSessionLocal() as db:
-            result = await get_or_capture_parameter_sweep(
-                db, cat_today(), capture_source="scheduled"
-            )
-            return {
-                "target_date": result["target_date"],
-                "status": result["status"],
-                "chosen_policy": result.get("chosen_policy"),
-                "picks": len(result.get("candidate_manifest") or []),
-            }
+        async with cache.lock(f"parameter-sweep:{target}", timeout=7200, blocking_timeout=1):
+            async with AsyncSessionLocal() as db:
+                result = await ready_scan(db, target)
+                if result is None:
+                    result = await get_or_capture_parameter_sweep(
+                        db, target, capture_source="on_demand" if target_date else "scheduled"
+                    )
+                await cache.set(job_key(target) + ':result', result, ttl=300 if target > cat_today() else 86400)
+                await (await cache._get_client()).delete(job_key(target) + ':queued')
+                return {
+                    "target_date": result["target_date"],
+                    "status": result["status"],
+                    "chosen_policy": result.get("chosen_policy"),
+                    "picks": len(result.get("candidate_manifest") or []),
+                }
 
     try:
         result = _run_async(_run())
@@ -820,6 +829,12 @@ def capture_parameter_sweep(self):
         return result
     except Exception as exc:
         logger.exception("Parameter-policy scan failed")
+        if self.request.retries >= self.max_retries:
+            async def _failed():
+                client = await cache._get_client()
+                await client.set(job_key(target) + ':failed', '1', ex=300)
+                await client.delete(job_key(target) + ':queued')
+            _run_async(_failed())
         raise self.retry(exc=exc, countdown=600)
 
 
@@ -877,7 +892,7 @@ def backup_database(self):
             raise RuntimeError(f"backup_db.py failed (exit {proc.returncode}): {proc.stderr.strip()[-2000:]}")
         summary = json.loads(proc.stdout)
 
-        dumps = sorted(output_dir.glob("lohela_scheduled_*.dump"), key=lambda p: p.stat().st_mtime, reverse=True)
+        dumps = sorted(output_dir.glob("qwantej_scheduled_*.dump"), key=lambda p: p.stat().st_mtime, reverse=True)
         stale = dumps[settings.db_backup_retention_count:]
         for path in stale:
             path.unlink(missing_ok=True)

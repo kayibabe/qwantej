@@ -1,4 +1,4 @@
-# Lohela GUI system audit
+# Qwantej GUI system audit
 
 Date: 2026-09-18  
 Scope: React/Vite frontend in `frontend/`, with rendered login-shell review and static inspection of the authenticated workspace routes.  
@@ -6,7 +6,7 @@ Method: Inspect -> Plan -> Implement -> Test -> Review -> Correct -> Retest -> I
 
 ## Executive result
 
-Lohela has a coherent, category-appropriate research dashboard foundation: clear workspace modules, paper-research positioning, responsive navigation rules, loading/empty/error states, semantic landmarks, and a consistent design token system.
+Qwantej has a coherent, category-appropriate research dashboard foundation: clear workspace modules, paper-research positioning, responsive navigation rules, loading/empty/error states, semantic landmarks, and a consistent design token system.
 
 The audit found and remediated the highest-confidence GUI defects in scope:
 

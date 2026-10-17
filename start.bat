@@ -1,12 +1,13 @@
 @echo off
-title Lohela — Starting
+title Qwantej - Starting
 echo.
 echo  ============================
-echo   LOHELA — Starting up...
+echo   QWANTEJ - Starting up...
 echo  ============================
 echo.
 
 cd /d "%~dp0"
+set "FRONTEND_PORT=3011"
 
 echo [1/4] Checking Docker Desktop...
 docker info >nul 2>&1
@@ -46,9 +47,16 @@ if "%DOCKER_READY%" neq "1" (
 )
 
 echo [2/4] Starting backend services (Postgres, Redis, API, Celery)...
+docker compose build backend
+if errorlevel 1 (
+    echo ERROR: Backend image build failed.
+    pause
+    exit /b 1
+)
 docker compose up -d
 if errorlevel 1 (
     echo ERROR: Docker Compose failed.
+    docker compose logs --tail=50 migrate backend
     pause
     exit /b 1
 )
@@ -59,7 +67,7 @@ for /f "tokens=2 delims=:" %%p in ('docker compose port backend 8000 2^>nul') do
 
 set "API_READY=0"
 for /l %%i in (1,1,30) do (
-    powershell -NoProfile -Command "try { if ((Invoke-WebRequest -UseBasicParsing http://127.0.0.1:%API_PORT%/health).StatusCode -eq 200) { exit 0 } } catch {} ; exit 1" >nul 2>&1
+    powershell -NoProfile -Command "try { if ((Invoke-WebRequest -UseBasicParsing http://127.0.0.1:%API_PORT%/health/ready).StatusCode -eq 200) { exit 0 } } catch {} ; exit 1" >nul 2>&1
     if not errorlevel 1 (
         set "API_READY=1"
         goto :api_ready
@@ -76,13 +84,14 @@ if "%API_READY%" neq "1" (
 
 echo.
 echo [3/4] Starting frontend dev server...
-start "Lohela Frontend" cmd /k "cd /d "%~dp0frontend" && npm run dev"
+set "VITE_API_PROXY_TARGET=http://127.0.0.1:%API_PORT%"
+start "Qwantej Frontend" cmd /k "cd /d "%~dp0frontend" && npm run dev -- --port %FRONTEND_PORT% --strictPort"
 
 echo.
 echo [4/4] Waiting for Vite to compile, then opening browser...
 set "FRONTEND_READY=0"
 for /l %%i in (1,1,30) do (
-    powershell -NoProfile -Command "try { if ((Invoke-WebRequest -UseBasicParsing http://localhost:3000).StatusCode -eq 200) { exit 0 } } catch {} ; exit 1" >nul 2>&1
+    powershell -NoProfile -Command "try { if ((Invoke-WebRequest -UseBasicParsing http://localhost:%FRONTEND_PORT%).StatusCode -eq 200) { exit 0 } } catch {} ; exit 1" >nul 2>&1
     if not errorlevel 1 (
         set "FRONTEND_READY=1"
         goto :frontend_ready
@@ -90,14 +99,18 @@ for /l %%i in (1,1,30) do (
     timeout /t 2 /nobreak >nul
 )
 :frontend_ready
-if "%FRONTEND_READY%" neq "1" echo WARNING: Frontend did not respond within 60 seconds.
-start http://localhost:3000
+if "%FRONTEND_READY%" neq "1" (
+    echo ERROR: Frontend did not respond within 60 seconds.
+    pause
+    exit /b 1
+)
+start http://localhost:%FRONTEND_PORT%
 
 echo.
 echo  ============================
-echo   LOHELA is running!
+echo   QWANTEJ is running!
 echo.
-echo   App      : http://localhost:3000
+echo   App      : http://localhost:%FRONTEND_PORT%
 echo   API docs : http://localhost:%API_PORT%/docs
 echo.
 echo   Run stop.bat to shut down.
