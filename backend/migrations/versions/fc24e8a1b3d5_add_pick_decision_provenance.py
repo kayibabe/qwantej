@@ -14,32 +14,31 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "predictions",
-        sa.Column("feature_snapshot", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
-    )
-    op.add_column(
-        "predictions",
-        sa.Column("decision_at", sa.DateTime(timezone=True), nullable=True),
-    )
-    op.create_index("ix_predictions_decision_at", "predictions", ["decision_at"])
-
-    op.add_column("ticket_selections", sa.Column("source_odds_id_snapshot", sa.Integer(), nullable=True))
-    op.add_column(
-        "ticket_selections",
-        sa.Column("source_bookmaker_snapshot", sa.String(length=100), nullable=True),
-    )
-    op.add_column("ticket_selections", sa.Column("decision_at", sa.DateTime(timezone=True), nullable=True))
-    op.add_column(
-        "ticket_selections",
-        sa.Column("decision_snapshot", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
-    )
-    op.add_column(
-        "ticket_selections",
-        sa.Column("decision_snapshot_hash", sa.String(length=64), nullable=True),
-    )
-
     bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    columns = {table: {column["name"] for column in inspector.get_columns(table)} for table in ("predictions", "ticket_selections")}
+    additions = {
+        "predictions": (
+            sa.Column("feature_snapshot", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
+            sa.Column("decision_at", sa.DateTime(timezone=True), nullable=True),
+        ),
+        "ticket_selections": (
+            sa.Column("source_odds_id_snapshot", sa.Integer(), nullable=True),
+            sa.Column("source_bookmaker_snapshot", sa.String(length=100), nullable=True),
+            sa.Column("decision_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column("decision_snapshot", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
+            sa.Column("decision_snapshot_hash", sa.String(length=64), nullable=True),
+        ),
+    }
+    for table, table_columns in additions.items():
+        for column in table_columns:
+            if column.name not in columns[table]:
+                op.add_column(table, column)
+
+    indexes = {index["name"] for index in sa.inspect(bind).get_indexes("predictions")}
+    if "ix_predictions_decision_at" not in indexes:
+        op.create_index("ix_predictions_decision_at", "predictions", ["decision_at"])
+
     metadata = sa.MetaData()
     selections = sa.Table("ticket_selections", metadata, autoload_with=bind)
     tickets = sa.Table("accumulator_tickets", metadata, autoload_with=bind)
@@ -115,11 +114,15 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_column("ticket_selections", "decision_snapshot_hash")
-    op.drop_column("ticket_selections", "decision_snapshot")
-    op.drop_column("ticket_selections", "decision_at")
-    op.drop_column("ticket_selections", "source_bookmaker_snapshot")
-    op.drop_column("ticket_selections", "source_odds_id_snapshot")
-    op.drop_index("ix_predictions_decision_at", table_name="predictions")
-    op.drop_column("predictions", "decision_at")
-    op.drop_column("predictions", "feature_snapshot")
+    bind = op.get_bind()
+    for column in ("decision_snapshot_hash", "decision_snapshot", "decision_at", "source_bookmaker_snapshot", "source_odds_id_snapshot"):
+        columns = {item["name"] for item in sa.inspect(bind).get_columns("ticket_selections")}
+        if column in columns:
+            op.drop_column("ticket_selections", column)
+    indexes = {index["name"] for index in sa.inspect(bind).get_indexes("predictions")}
+    if "ix_predictions_decision_at" in indexes:
+        op.drop_index("ix_predictions_decision_at", table_name="predictions")
+    columns = {item["name"] for item in sa.inspect(bind).get_columns("predictions")}
+    for column in ("decision_at", "feature_snapshot"):
+        if column in columns:
+            op.drop_column("predictions", column)
