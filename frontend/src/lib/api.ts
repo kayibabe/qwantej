@@ -478,124 +478,22 @@ export async function fetchQualifiedSelections(date: string, minQScore = 75): Pr
   return res.json()
 }
 
-export interface BandMix {
-  qwantej_band: string
-  market_band: string
-  source: 'dynamic' | 'watchlist' | 'discovered'
-  best_rank: number | null
-  active: boolean
-  reason: 'NO_HISTORY' | 'INSUFFICIENT_SAMPLE' | 'NON_POSITIVE_ROI' | 'OUTSIDE_TOP_MIXES' | 'ROI_BELOW_THRESHOLD' | null
-  research_status: 'research_qualified' | 'not_qualified'
-  provisional: boolean
-  sample_size: number
-  wins: number
-  losses: number
-  hit_rate: number | null
-  roi: number | null
-  recent_sample_size?: number
-  recent_hit_rate?: number | null
-  recent_roi?: number | null
-}
-
-export interface BandMixScan {
-  target_date: string
-  evidence_through: string
-  captured_at: string | null
-  capture_source: string
-  provisional: boolean
-  reconstructed?: boolean
-  rules: { min_sample: number; min_roi?: number; provisional_below_sample?: number; recent_window_days?: number; one_selection_per_match?: boolean; best_mix_limit?: number; requires_positive_roi?: boolean; evidence: string }
-  evidence_sample_size: number
-  watchlist: BandMix[]
-  discovered: BandMix[]
-  monitored?: BandMix[]
-}
-
-export interface BandMixPick {
-  prediction_id: number
-  model_version?: string
+export interface AccaPrice {
   match_id: number
-  home_team: string
-  away_team: string
-  competition: string
-  kickoff_at: string
   market: string
   selection: string
-  model_probability: number
-  market_probability: number
-  odds: number
-  edge: number | null
-  q_score: number
-  q_grade: string
-  qwantej_band: string
-  market_band: string
-  mix_source: 'dynamic' | 'watchlist' | 'discovered'
-  mix_rank: number | null
-  mix_sample_size: number
-  mix_hit_rate: number | null
-  mix_roi: number | null
-  pre_kickoff_quote: boolean
-  match_status: string
-  home_goals: number | null
-  away_goals: number | null
-  live_phase: string | null
-  elapsed_minutes: number | null
-  result: 'won' | 'lost' | 'void' | null
+  quote_id: number
+  bookmaker: string
+  decimal_odds: number
+  fetched_at: string
+  pricing_mode: 'betway' | 'closest_observed' | 'market_reference'
+  comparison_fixtures: number
+  median_relative_gap: number | null
 }
 
-export interface BandMixSummary {
-  picks: number; matches: number; settled: number; wins: number; losses: number; voids: number; pending: number
-  profit_loss: number; roi: number | null
-}
-
-export interface BandMixLifecycleEvent {
-  qwantej_band: string
-  market_band: string
-  status: 'active' | 'inactive'
-  transition: 'promoted' | 'demoted' | 'unchanged' | 'initial_inactive'
-  sample_size: number
-  roi: number | null
-  reason: string | null
-}
-
-export interface BandMixSelections {
-  scan: BandMixScan
-  lifecycle_events?: BandMixLifecycleEvent[]
-  ledger_backed?: boolean
-  summary: BandMixSummary
-  rows: BandMixPick[]
-}
-
-export async function fetchBandMixSelections(date: string): Promise<BandMixSelections> {
-  const res = await fetch(`/api/v1/selections/band-mix?${new URLSearchParams({ date })}`)
-  if (!res.ok) throw new Error(`API error ${res.status}`)
-  return res.json()
-}
-
-export interface BandMixPerformanceMetrics {
-  picks: number; matches: number; settled: number; pending: number
-  wins: number; losses: number; voids: number
-  settled_stake_units: number; pending_stake_units: number
-  gross_returns_units: number; net_pnl_units: number
-  roi: number | null; hit_rate: number | null
-  longest_losing_streak: number; max_drawdown_units: number
-}
-
-export interface BandMixPerformanceReport {
-  date_from: string
-  date_to: string
-  cohort: string
-  accounting: string
-  excluded_late_or_unknown_capture: number
-  summary: BandMixPerformanceMetrics
-  by_model_version: (BandMixPerformanceMetrics & { model_version: string })[]
-  by_target_date: (BandMixPerformanceMetrics & { target_date: string })[]
-}
-
-export async function fetchBandMixPerformance(dateFrom: string, dateTo: string): Promise<BandMixPerformanceReport> {
-  const params = new URLSearchParams({ date_from: dateFrom, date_to: dateTo })
-  const res = await fetch(`/api/v1/selections/band-mix/performance?${params}`)
-  if (!res.ok) throw new Error(`API error ${res.status}`)
+export async function fetchAccaPrices(date: string, signal: AbortSignal): Promise<AccaPrice[]> {
+  const res = await fetch(`/api/v1/selections/acca-prices?${new URLSearchParams({ date })}`, { signal })
+  if (!res.ok) throw new Error(`Unable to load ACCA prices (${res.status})`)
   return res.json()
 }
 

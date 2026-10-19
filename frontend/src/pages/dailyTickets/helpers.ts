@@ -1,4 +1,5 @@
 import type { CustomAccumulator as ApiCustomAccumulator, SelectionSummary } from "../../lib/api";
+import { dateStringInProductTimeZone } from "../../utils";
 import type {
   CustomAccumulator,
   MatchDisplayState,
@@ -6,10 +7,7 @@ import type {
 } from "./types";
 
 export function localDateString(d = new Date()): string {
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return dateStringInProductTimeZone(d);
 }
 
 export const TODAY = localDateString();

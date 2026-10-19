@@ -1,0 +1,29 @@
+.acca-analysis { display: grid; gap: 18px; min-width: 0; }
+.acca-analysis__heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+.acca-analysis__heading > div { max-width: 800px; }
+.acca-analysis__heading h2 { margin: 4px 0 0; font-size: 22px; font-weight: 600; }
+.acca-analysis__heading p { margin: 7px 0 0; color: var(--text-secondary, #687386); line-height: 1.5; font-size: var(--type-body); }
+.acca-analysis__date { color: var(--text-secondary, #687386); font-size: var(--type-body); }
+.acca-analysis__notice { padding: 11px 14px; border-left: 3px solid #6985bb; border-radius: 5px; background: var(--surface-muted, #f5f7fa); color: var(--text-secondary, #596579); font-size: var(--type-body); line-height: 1.5; }
+.acca-analysis__tickets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.acca-analysis__ticket, .acca-analysis__table-wrap { min-width: 0; border: 1px solid var(--border, #e4e8ef); border-radius: 10px; background: var(--surface, #fff); }
+.acca-analysis__ticket { padding: 15px; }
+.acca-analysis__ticket-head { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.acca-analysis__ticket-head h3 { margin: 0; font-size: var(--type-body); font-weight: 600; }
+.acca-analysis__ticket-head span { display: block; margin-top: 4px; color: var(--text-secondary, #687386); font-size: var(--type-small); }
+.acca-analysis__ticket-head strong { white-space: nowrap; font-size: 17px; }
+.acca-analysis__ticket ol { display: grid; gap: 10px; margin: 14px 0 0; padding-left: 22px; }
+.acca-analysis__ticket li { padding-left: 2px; font-size: var(--type-body); }
+.acca-analysis__ticket li > div, .acca-analysis__ticket li > small { display: grid; gap: 3px; }
+.acca-analysis__ticket li span, .acca-analysis__ticket li small { color: var(--text-secondary, #687386); line-height: 1.45; }
+.acca-analysis__empty { margin: 14px 0 0; color: var(--text-secondary, #687386); font-size: var(--type-body); line-height: 1.5; }
+.acca-analysis__table-wrap { overflow-x: auto; }
+.acca-analysis__table { width: 100%; min-width: 930px; border-collapse: collapse; font-size: var(--type-body); }
+.acca-analysis__table th, .acca-analysis__table td { padding: 11px 12px; border-bottom: 1px solid var(--border, #edf0f4); text-align: left; vertical-align: top; }
+.acca-analysis__table th { color: var(--text-secondary, #687386); font-size: var(--type-small); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+.acca-analysis__table tr:last-child td { border-bottom: 0; }
+.acca-analysis__table td > b, .acca-analysis__table td > span { display: block; }
+.acca-analysis__table td > span { margin-top: 4px; color: var(--text-secondary, #687386); line-height: 1.45; }
+.acca-analysis__table td > em { display: block; margin-top: 5px; color: #a36518; font-style: normal; line-height: 1.45; }
+@media (max-width: 900px) { .acca-analysis__tickets { grid-template-columns: 1fr; } }
+@media (max-width: 650px) { .acca-analysis__heading { display: grid; } }

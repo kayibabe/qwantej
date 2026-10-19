@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Q minimum and odds range — ROI comparison</title>
+  <style>
+    :root { color-scheme: light; --ink: #172235; --muted: #657187; --line: #e3e8ef; --blue: #3459a5; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 36px 20px; background: #f5f7fb; color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 1020px; margin: 0 auto; }
+    .card { overflow: hidden; background: #fff; border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 12px 36px #2436530c; }
+    header { padding: 26px 28px 20px; border-bottom: 1px solid var(--line); }
+    .eyebrow { margin: 0 0 5px; color: var(--blue); font-size: 11px; font-weight: 750; letter-spacing: .11em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: clamp(22px, 4vw, 29px); letter-spacing: -.025em; }
+    .sub { margin: 7px 0 0; color: var(--muted); }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+    caption { padding: 14px 28px; color: var(--muted); text-align: left; font-size: 13px; }
+    th, td { padding: 13px 18px; border-bottom: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; }
+    th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+    thead th { padding-top: 10px; padding-bottom: 10px; background: #f8f9fc; color: #4e5b71; font-size: 12px; font-weight: 700; }
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: #f7f9fd; }
+    .sort { display: inline-flex; align-items: center; gap: 5px; padding: 4px 0; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+    .sort:hover, .sort:focus-visible { color: var(--blue); }
+    .sort:focus-visible { outline: 2px solid #91a9e3; outline-offset: 3px; border-radius: 3px; }
+    .arrow { width: 10px; color: #9aa5b6; }
+    th[aria-sort="ascending"] .arrow, th[aria-sort="descending"] .arrow { color: var(--blue); }
+    .positive { color: #147448; font-weight: 650; }
+    .negative { color: #b33c45; font-weight: 650; }
+    footer { padding: 13px 28px 17px; color: var(--muted); font-size: 12px; }
+    @media (max-width: 600px) { body { padding: 18px 10px; } header { padding: 20px 18px 16px; } th, td { padding: 12px 14px; } caption, footer { padding-left: 18px; padding-right: 18px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card" aria-labelledby="title">
+      <header>
+        <p class="eyebrow">Cohort comparison</p>
+        <h1 id="title">Q minimum and odds range</h1>
+        <p class="sub">Earlier and later sample sizes and ROI. Select a column heading to sort.</p>
+      </header>
+      <div class="table-wrap">
+        <table>
+          <caption>12 combinations · ROI shown as percentages</caption>
+          <thead><tr id="headers"></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <footer>Sorting is available on every column. On narrow screens, scroll the table horizontally.</footer>
+    </section>
+  </main>
+  <script>
+    const data = [
+      { q: 60, oddsMin: 1.5, oddsMax: 3, earlierN: 81, earlierRoi: 22.90, laterN: 67, laterRoi: -17.00 },
+      { q: 60, oddsMin: 1.8, oddsMax: 3, earlierN: 69, earlierRoi: 27.80, laterN: 57, laterRoi: -19.98 },
+      { q: 60, oddsMin: 2, oddsMax: 3, earlierN: 59, earlierRoi: 26.85, laterN: 52, laterRoi: -15.88 },
+      { q: 60, oddsMin: 1.8, oddsMax: 4, earlierN: 104, earlierRoi: 15.69, laterN: 98, laterRoi: -19.00 },
+      { q: 65, oddsMin: 1.5, oddsMax: 3, earlierN: 49, earlierRoi: 40.51, laterN: 37, laterRoi: 4.11 },
+      { q: 65, oddsMin: 1.8, oddsMax: 3, earlierN: 42, earlierRoi: 44.24, laterN: 36, laterRoi: 7.00 },
+      { q: 65, oddsMin: 2, oddsMax: 3, earlierN: 36, earlierRoi: 47.17, laterN: 33, laterRoi: 16.73 },
+      { q: 65, oddsMin: 1.8, oddsMax: 4, earlierN: 63, earlierRoi: 29.21, laterN: 66, laterRoi: -0.55 },
+      { q: 70, oddsMin: 1.5, oddsMax: 3, earlierN: 27, earlierRoi: 41.52, laterN: 26, laterRoi: 18.50 },
+      { q: 70, oddsMin: 1.8, oddsMax: 3, earlierN: 24, earlierRoi: 44.75, laterN: 25, laterRoi: 23.24 },
+      { q: 70, oddsMin: 2, oddsMax: 3, earlierN: 22, earlierRoi: 49.09, laterN: 22, laterRoi: 40.05 },
+      { q: 70, oddsMin: 1.8, oddsMax: 4, earlierN: 41, earlierRoi: 18.71, laterN: 47, laterRoi: 8.43 },
+    ];
+    const columns = [
+      { key: "q", label: "Q minimum", value: row => row.q, show: row => `Q ≥ ${row.q}` },
+      { key: "odds", label: "Odds range", value: row => row.oddsMin * 10 + row.oddsMax, show: row => `${row.oddsMin} ≤ odds < ${row.oddsMax}` },
+      { key: "earlierN", label: "Earlier N", value: row => row.earlierN, show: row => row.earlierN },
+      { key: "earlierRoi", label: "Earlier ROI", value: row => row.earlierRoi, show: row => roi(row.earlierRoi) },
+      { key: "laterN", label: "Later N", value: row => row.laterN, show: row => row.laterN },
+      { key: "laterRoi", label: "Later ROI", value: row => row.laterRoi, show: row => roi(row.laterRoi) },
+    ];
+    let sortKey = "q";
+    let direction = 1;
+    const headers = document.getElementById("headers");
+    const body = document.getElementById("rows");
+    function roi(value) { return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`; }
+    function drawHeaders() {
+      headers.innerHTML = "";
+      for (const column of columns) {
+        const th = document.createElement("th");
+        th.scope = "col";
+        th.setAttribute("aria-sort", column.key === sortKey ? (direction === 1 ? "ascending" : "descending") : "none");
+        const button = document.createElement("button");
+        button.className = "sort";
+        button.type = "button";
+        button.setAttribute("aria-label", `Sort by ${column.label}${column.key === sortKey ? (direction === 1 ? ", ascending" : ", descending") : ""}`);
+        button.innerHTML = `<span>${column.label}</span><span class="arrow" aria-hidden="true">${column.key === sortKey ? (direction === 1 ? "↑" : "↓") : "↕"}</span>`;
+        button.addEventListener("click", () => {
+          if (sortKey === column.key) direction *= -1;
+          else { sortKey = column.key; direction = 1; }
+          render();
+        });
+        th.append(button);
+        headers.append(th);
+      }
+    }
+    function render() {
+      drawHeaders();
+      const column = columns.find(item => item.key === sortKey);
+      const sorted = [...data].sort((a, b) => {
+        const av = column.value(a), bv = column.value(b);
+        return (typeof av === "number" ? av - bv : String(av).localeCompare(String(bv), undefined, { numeric: true })) * direction;
+      });
+      body.innerHTML = "";
+      for (const row of sorted) {
+        const tr = document.createElement("tr");
+        for (const col of columns) {
+          const td = document.createElement("td");
+          td.textContent = col.show(row);
+          if (col.key.endsWith("Roi")) td.className = row[col.key] >= 0 ? "positive" : "negative";
+          tr.append(td);
+        }
+        body.append(tr);
+      }
+    }
+    render();
+  </script>
+</body>
+</html>

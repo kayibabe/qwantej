@@ -12,6 +12,27 @@ function latestAccumulatorKickoff(ticket: CustomAccumulator): string {
   );
 }
 
+function groupedAccumulatorHistory(tickets: CustomAccumulator[]) {
+  const years = new Map<string, Map<string, Map<string, CustomAccumulator[]>>>();
+  for (const ticket of tickets) {
+    const [year, month] = ticket.date.split("-");
+    const yearGroup = years.get(year) ?? new Map<string, Map<string, CustomAccumulator[]>>();
+    const monthGroup = yearGroup.get(month) ?? new Map<string, CustomAccumulator[]>();
+    const dayGroup = monthGroup.get(ticket.date) ?? [];
+    dayGroup.push(ticket);
+    monthGroup.set(ticket.date, dayGroup);
+    yearGroup.set(month, monthGroup);
+    years.set(year, yearGroup);
+  }
+  return [...years.entries()].sort(([left], [right]) => right.localeCompare(left)).map(([year, months]) => ({
+    year,
+    months: [...months.entries()].sort(([left], [right]) => right.localeCompare(left)).map(([month, dates]) => ({
+      month: new Date(`${year}-${month}-01T00:00:00Z`).toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" }),
+      dates: [...dates.entries()].sort(([left], [right]) => right.localeCompare(left)),
+    })),
+  }));
+}
+
 export function CustomAccumulatorPanel({
   date,
   tickets,
@@ -29,9 +50,10 @@ export function CustomAccumulatorPanel({
   onNavigate?: (tab: DailyTab) => void;
   onOpenPicks?: () => void;
 }) {
-  const openPicks = () => onOpenPicks ? onOpenPicks() : onNavigate?.("best-mix");
+  const openPicks = () => onOpenPicks ? onOpenPicks() : onNavigate?.("daily-match-picks");
   const [name, setName] = useState("");
   const [stakeDrafts, setStakeDrafts] = useState<Record<number, string>>({});
+  const history = groupedAccumulatorHistory(tickets);
   const create = async () => {
     const title = name.trim() || `${formatDate(date)} accumulator`;
     try {
@@ -98,15 +120,22 @@ export function CustomAccumulatorPanel({
       </div>
       {tickets.length === 0 ? (
         <div className="custom-empty-state">
-          <strong>No accumulators for this date</strong>
-          <p>Create a draft, then add selections from qualifying Best-mix picks.</p>
+          <strong>No accumulators yet</strong>
+          <p>Create a draft for the selected date, then review the qualifying Daily Match Picks.</p>
           <div className="custom-empty-actions">
-            <button className="btn-ghost btn-sm" onClick={openPicks}>{onOpenPicks ? "Open Research" : "View qualifying picks"}</button>
+            <button className="btn-ghost btn-sm" onClick={openPicks}>{onOpenPicks ? "Open Research" : "View Daily Match Picks"}</button>
           </div>
         </div>
       ) : (
-        <div className="custom-ticket-list">
-          {tickets.map((ticket) => {
+        <div className="custom-accumulator-history">
+          {history.map(({ year, months }) => <section className="custom-accumulator-year" key={year}>
+            <h3>{year}</h3>
+            {months.map(({ month, dates }) => <section className="custom-accumulator-month" key={`${year}-${month}`}>
+              <h4>{month} {year}</h4>
+              {dates.map(([day, dayTickets]) => <section className="custom-accumulator-day" key={day}>
+                <h5><span>{formatDate(day)}</span><small>{dayTickets.length} ticket{dayTickets.length === 1 ? "" : "s"}</small></h5>
+                <div className="custom-ticket-list">
+                  {dayTickets.map((ticket) => {
             const odds = ticket.legs.reduce(
               (total, leg) => total * (leg.best_odds ?? 1),
               1,
@@ -243,8 +272,12 @@ export function CustomAccumulatorPanel({
                 )}
                 {isLocked && <p className="custom-ticket-locked">Placed accumulator locked · settlement will happen automatically when all matches finish.</p>}
               </article>
-            );
-          })}
+                  );
+                  })}
+                </div>
+              </section>)}
+            </section>)}
+          </section>)}
         </div>
       )}
     </section>

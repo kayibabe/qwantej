@@ -1,7 +1,7 @@
 .overview-date {
   margin: -5px 0 5px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--type-body);
 }
 
 .published-selections {
@@ -29,7 +29,7 @@
 
 .published-selection-count {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--type-body);
   white-space: nowrap;
 }
 
@@ -37,7 +37,7 @@
 .ticket-tier-section-heading p {
   margin: 7px 0 13px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--type-body);
 }
 
 .published-selection-list {
@@ -75,20 +75,20 @@
 .published-selection-main,
 .published-selection-pick,
 .published-selection-details { display: grid; gap: 4px; min-width: 0; }
-.published-selection-match { font-size: 13px; font-weight: 600; }
+.published-selection-match { font-size: var(--type-body); font-weight: 600; }
 .published-selection-match > span { color: var(--muted); font-weight: 400; }
 .published-selection-meta,
-.published-selection-odds { color: var(--muted); font-size: 11px; }
+.published-selection-odds { color: var(--muted); font-size: var(--type-small); }
 .published-selection-pick { justify-items: start; }
 .published-selection-pick .leg-market { max-width: 100%; overflow-wrap: anywhere; }
-.published-selection-result { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; }
+.published-selection-result { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--type-small); }
 .published-selection-result.won { color: var(--positive); }
 .published-selection-result.lost { color: var(--negative); }
 .published-selection-result.void { color: var(--warning); }
 .published-selection-result b { color: var(--text); font-weight: 600; }
-.published-selection-tiers { font-size: 11px; font-weight: 600; overflow-wrap: anywhere; }
+.published-selection-tiers { font-size: var(--type-small); font-weight: 600; overflow-wrap: anywhere; }
 .published-selection-open { color: var(--muted); font-size: 20px; }
-.published-selections-empty { margin: 0; padding: 14px; border-radius: 9px; color: var(--muted); background: var(--bg); font-size: 13px; }
+.published-selections-empty { margin: 0; padding: 14px; border-radius: 9px; color: var(--muted); background: var(--bg); font-size: var(--type-body); }
 .ticket-tier-section-heading { margin: 0 14px 8px; }
 .ticket-tier-section-heading p { margin-bottom: 2px; }
 

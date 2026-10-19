@@ -6,7 +6,7 @@ from app.models.prediction import Prediction, QGrade
 from app.models.bet import Bet, BetStatus
 from app.models.custom_accumulator import CustomAccumulator, CustomAccumulatorLeg, CustomAccumulatorStatus
 from app.models.automation_alert import AutomationAlert
-from app.models.auth import AuthEvent, User, UserMatchFavorite, UserMatchFilterPreset, UserSession
+from app.models.auth import AuthEvent, BillingOrder, BillingPayment, BillingSubscription, User, UserMatchFavorite, UserMatchFilterPreset, UserSession
 from app.models.research import (
     RunStatus,
     TicketType,
@@ -38,7 +38,10 @@ from app.models.research import (
     BandMixDailyPick,
 )
 
+from app.models.sweet_spot import SweetSpotEvent
+
 __all__ = [
+    "SweetSpotEvent",
     "Competition", "LeagueTier",
     "Team",
     "Match", "MatchStatus", "TeamStats",
@@ -48,6 +51,7 @@ __all__ = [
     "CustomAccumulator", "CustomAccumulatorLeg", "CustomAccumulatorStatus",
     "AutomationAlert",
     "User", "UserSession", "UserMatchFavorite", "UserMatchFilterPreset", "AuthEvent",
+    "BillingOrder", "BillingPayment", "BillingSubscription",
     "RunStatus", "TicketType", "TicketStatus", "SelectionResult",
     "ModelRun", "ModelLearningRun", "MarketLearningProfile", "ModelLearningPromotion", "StrongestSelectionSnapshot", "TicketGeneration", "AccumulatorTicket", "TicketSelection", "TicketResult",
     "AuditEvent", "ModelPerformance", "LeaguePerformance", "EdgeBandCalibration", "CorrelationCoefficient",

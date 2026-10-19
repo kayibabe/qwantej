@@ -218,31 +218,9 @@ async def performance_summary(db: AsyncSession, date_from: date | None = None, d
         "profit_loss": accumulator_pnl,
     }
 
-    official_tickets = tickets
     official_settled_ids = {ticket.id for ticket, _ in settled}
-    overlap = []
-    tickets_by_date: dict[date, list[AccumulatorTicket]] = {}
-    for ticket in official_tickets:
-        tickets_by_date.setdefault(ticket.target_date, []).append(ticket)
-    for target_date, day_tickets in sorted(tickets_by_date.items()):
-        for index, left in enumerate(day_tickets):
-            for right in day_tickets[index + 1:]:
-                left_matches = {selection.match_id for selection in left.selections}
-                right_matches = {selection.match_id for selection in right.selections}
-                shared = len(left_matches & right_matches)
-                overlap.append({
-                    "target_date": target_date.isoformat(),
-                    "left_ticket_type": left.ticket_type.value,
-                    "right_ticket_type": right.ticket_type.value,
-                    "shared_matches": shared,
-                    "left_legs": len(left_matches),
-                    "right_legs": len(right_matches),
-                    "overlap_ratio_of_smaller": round(
-                        shared / min(len(left_matches), len(right_matches)), 4
-                    ) if left_matches and right_matches else 0.0,
-                })
     official_selections: dict[tuple[date, int, str, str], TicketSelection] = {}
-    for ticket in official_tickets:
+    for ticket in tickets:
         for selection in ticket.selections:
             official_selections.setdefault(
                 (ticket.target_date, selection.match_id, selection.market, selection.selection),
@@ -279,12 +257,11 @@ async def performance_summary(db: AsyncSession, date_from: date | None = None, d
         "selection_sample_size": len(outcomes),
         "by_ticket_type": breakdown,
         "my_accumulators": my_accumulators,
-        "ticket_overlap": overlap,
         "evidence_gate": {
-            "official_latest_cohorts": len(official_tickets),
+            "official_latest_cohorts": len(tickets),
             "official_settled_cohorts": len(official_settled_ids),
-            "published_days": len({ticket.target_date for ticket in official_tickets}),
-            "settled_days": len({ticket.target_date for ticket in official_tickets if ticket.id in official_settled_ids}),
+            "published_days": len({ticket.target_date for ticket in tickets}),
+            "settled_days": len({ticket.target_date for ticket in tickets if ticket.id in official_settled_ids}),
             "unique_official_selections": len(official_selections),
             "priced_selections": priced_selections,
             "pre_kickoff_odds_selections": pre_kickoff_odds,

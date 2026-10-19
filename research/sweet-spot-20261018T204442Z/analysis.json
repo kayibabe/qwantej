@@ -1,0 +1,3909 @@
+{
+  "as_at": "2026-10-18T20:44:42.797544+00:00",
+  "source_sha256": "5fd5528ff2638d5225cecaaf3ea169b83ef80814ecfbd681d66d847d1fead8f3",
+  "raw_rows": 46400,
+  "exclusions": {
+    "missing_or_invalid_odds": 4218,
+    "later_repeat": 32144,
+    "current_or_future_day": 28,
+    "no_final_result": 28,
+    "timing_or_replay": 3710
+  },
+  "eligible": {
+    "n": 6272,
+    "matches": 448,
+    "wins": 3141,
+    "losses": 3131,
+    "voids": 0,
+    "days": 20,
+    "hit": 50.079719387755105,
+    "roi": -4.166294642857143,
+    "profit": -261.31,
+    "haircut_roi": -6.453993941326533
+  },
+  "date_range": [
+    "2026-09-14",
+    "2026-10-15"
+  ],
+  "complete_context_count": 0,
+  "missing_provider_count": 0,
+  "candidate": {
+    "earlier": {
+      "n": 39,
+      "matches": 39,
+      "wins": 24,
+      "losses": 15,
+      "voids": 0,
+      "days": 10,
+      "hit": 61.53846153846154,
+      "roi": 44.58974358974359,
+      "profit": 17.39,
+      "haircut_roi": 40.43717948717948
+    },
+    "later": {
+      "n": 12,
+      "matches": 12,
+      "wins": 7,
+      "losses": 5,
+      "voids": 0,
+      "days": 4,
+      "hit": 58.333333333333336,
+      "roi": 56.333333333333336,
+      "profit": 6.76,
+      "haircut_roi": 51.43333333333333
+    }
+  },
+  "candidate_later_interval": [
+    13.399999999999999,
+    153.0
+  ],
+  "candidate_complete_context": {
+    "earlier": {
+      "n": 0,
+      "matches": 0,
+      "wins": 0,
+      "losses": 0,
+      "voids": 0,
+      "days": 0,
+      "hit": null,
+      "roi": null,
+      "profit": 0,
+      "haircut_roi": null
+    },
+    "later": {
+      "n": 0,
+      "matches": 0,
+      "wins": 0,
+      "losses": 0,
+      "voids": 0,
+      "days": 0,
+      "hit": null,
+      "roi": null,
+      "profit": 0,
+      "haircut_roi": null
+    }
+  },
+  "candidate_by_day": {
+    "2026-09-14": {
+      "n": 2,
+      "matches": 2,
+      "wins": 1,
+      "losses": 1,
+      "voids": 0,
+      "days": 1,
+      "hit": 50.0,
+      "roi": 7.499999999999996,
+      "profit": 0.1499999999999999,
+      "haircut_roi": 4.62499999999999
+    },
+    "2026-09-15": {
+      "n": 1,
+      "matches": 1,
+      "wins": 0,
+      "losses": 1,
+      "voids": 0,
+      "days": 1,
+      "hit": 0.0,
+      "roi": -100.0,
+      "profit": -1,
+      "haircut_roi": -100.0
+    },
+    "2026-09-17": {
+      "n": 1,
+      "matches": 1,
+      "wins": 1,
+      "losses": 0,
+      "voids": 0,
+      "days": 1,
+      "hit": 100.0,
+      "roi": 181.0,
+      "profit": 1.81,
+      "haircut_roi": 171.95
+    },
+    "2026-09-20": {
+      "n": 4,
+      "matches": 4,
+      "wins": 1,
+      "losses": 3,
+      "voids": 0,
+      "days": 1,
+      "hit": 25.0,
+      "roi": -38.74999999999999,
+      "profit": -1.5499999999999998,
+      "haircut_roi": -40.56249999999999
+    },
+    "2026-09-25": {
+      "n": 1,
+      "matches": 1,
+      "wins": 0,
+      "losses": 1,
+      "voids": 0,
+      "days": 1,
+      "hit": 0.0,
+      "roi": -100.0,
+      "profit": -1,
+      "haircut_roi": -100.0
+    },
+    "2026-09-29": {
+      "n": 3,
+      "matches": 3,
+      "wins": 3,
+      "losses": 0,
+      "voids": 0,
+      "days": 1,
+      "hit": 100.0,
+      "roi": 92.0,
+      "profit": 2.76,
+      "haircut_roi": 87.39999999999999
+    },
+    "2026-10-07": {
+      "n": 1,
+      "matches": 1,
+      "wins": 0,
+      "losses": 1,
+      "voids": 0,
+      "days": 1,
+      "hit": 0.0,
+      "roi": -100.0,
+      "profit": -1,
+      "haircut_roi": -100.0
+    },
+    "2026-10-08": {
+      "n": 2,
+      "matches": 2,
+      "wins": 2,
+      "losses": 0,
+      "voids": 0,
+      "days": 1,
+      "hit": 100.0,
+      "roi": 123.49999999999999,
+      "profit": 2.4699999999999998,
+      "haircut_roi": 117.32499999999999
+    },
+    "2026-10-09": {
+      "n": 4,
+      "matches": 4,
+      "wins": 2,
+      "losses": 2,
+      "voids": 0,
+      "days": 1,
+      "hit": 50.0,
+      "roi": 9.999999999999998,
+      "profit": 0.3999999999999999,
+      "haircut_roi": 6.999999999999995
+    },
+    "2026-10-10": {
+      "n": 20,
+      "matches": 20,
+      "wins": 14,
+      "losses": 6,
+      "voids": 0,
+      "days": 1,
+      "hit": 70.0,
+      "roi": 71.75,
+      "profit": 14.35,
+      "haircut_roi": 66.6625
+    },
+    "2026-10-11": {
+      "n": 6,
+      "matches": 6,
+      "wins": 3,
+      "losses": 3,
+      "voids": 0,
+      "days": 1,
+      "hit": 50.0,
+      "roi": 37.5,
+      "profit": 2.25,
+      "haircut_roi": 33.12499999999999
+    },
+    "2026-10-12": {
+      "n": 3,
+      "matches": 3,
+      "wins": 1,
+      "losses": 2,
+      "voids": 0,
+      "days": 1,
+      "hit": 33.333333333333336,
+      "roi": -2.666666666666669,
+      "profit": -0.08000000000000007,
+      "haircut_roi": -5.866666666666672
+    },
+    "2026-10-13": {
+      "n": 2,
+      "matches": 2,
+      "wins": 2,
+      "losses": 0,
+      "voids": 0,
+      "days": 1,
+      "hit": 100.0,
+      "roi": 177.0,
+      "profit": 3.54,
+      "haircut_roi": 168.14999999999998
+    },
+    "2026-10-15": {
+      "n": 1,
+      "matches": 1,
+      "wins": 1,
+      "losses": 0,
+      "voids": 0,
+      "days": 1,
+      "hit": 100.0,
+      "roi": 104.99999999999999,
+      "profit": 1.0499999999999998,
+      "haircut_roi": 99.74999999999999
+    }
+  },
+  "candidate_by_competition": {
+    "Argentine Primera": {
+      "earlier": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      },
+      "later": {
+        "n": 1,
+        "matches": 1,
+        "wins": 0,
+        "losses": 1,
+        "voids": 0,
+        "days": 1,
+        "hit": 0.0,
+        "roi": -100.0,
+        "profit": -1,
+        "haircut_roi": -100.0
+      }
+    },
+    "Brasileir\u00e3o S\u00e9rie A": {
+      "earlier": {
+        "n": 2,
+        "matches": 2,
+        "wins": 2,
+        "losses": 0,
+        "voids": 0,
+        "days": 2,
+        "hit": 100.0,
+        "roi": 148.5,
+        "profit": 2.97,
+        "haircut_roi": 141.07500000000002
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "Brasileir\u00e3o S\u00e9rie B": {
+      "earlier": {
+        "n": 1,
+        "matches": 1,
+        "wins": 1,
+        "losses": 0,
+        "voids": 0,
+        "days": 1,
+        "hit": 100.0,
+        "roi": 95.0,
+        "profit": 0.95,
+        "haircut_roi": 90.25
+      },
+      "later": {
+        "n": 1,
+        "matches": 1,
+        "wins": 1,
+        "losses": 0,
+        "voids": 0,
+        "days": 1,
+        "hit": 100.0,
+        "roi": 175.0,
+        "profit": 1.75,
+        "haircut_roi": 166.25
+      }
+    },
+    "Bundesliga": {
+      "earlier": {
+        "n": 1,
+        "matches": 1,
+        "wins": 0,
+        "losses": 1,
+        "voids": 0,
+        "days": 1,
+        "hit": 0.0,
+        "roi": -100.0,
+        "profit": -1,
+        "haircut_roi": -100.0
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "Championship": {
+      "earlier": {
+        "n": 1,
+        "matches": 1,
+        "wins": 1,
+        "losses": 0,
+        "voids": 0,
+        "days": 1,
+        "hit": 100.0,
+        "roi": 163.0,
+        "profit": 1.63,
+        "haircut_roi": 154.84999999999997
+      },
+      "later": {
+        "n": 1,
+        "matches": 1,
+        "wins": 1,
+        "losses": 0,
+        "voids": 0,
+        "days": 1,
+        "hit": 100.0,
+        "roi": 187.0,
+        "profit": 1.87,
+        "haircut_roi": 177.65
+      }
+    },
+    "Colombian Primera A": {
+      "earlier": {
+        "n": 1,
+        "matches": 1,
+        "wins": 1,
+        "losses": 0,
+        "voids": 0,
+        "days": 1,
+        "hit": 100.0,
+        "roi": 90.99999999999999,
+        "profit": 0.9099999999999999,
+        "haircut_roi": 86.44999999999999
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "Eerste Divisie": {
+      "earlier": {
+        "n": 4,
+        "matches": 4,
+        "wins": 2,
+        "losses": 2,
+        "voids": 0,
+        "days": 2,
+        "hit": 50.0,
+        "roi": 9.999999999999998,
+        "profit": 0.3999999999999999,
+        "haircut_roi": 6.999999999999995
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "Ekstraklasa": {
+      "earlier": {
+        "n": 1,
+        "matches": 1,
+        "wins": 1,
+        "losses": 0,
+        "voids": 0,
+        "days": 1,
+        "hit": 100.0,
+        "roi": 170.00000000000003,
+        "profit": 1.7000000000000002,
+        "haircut_roi": 161.5
+      },
+      "later": {
+        "n": 1,
+        "matches": 1,
+        "wins": 1,
+        "losses": 0,
+        "voids": 0,
+        "days": 1,
+        "hit": 100.0,
+        "roi": 192.0,
+        "profit": 1.92,
+        "haircut_roi": 182.39999999999998
+      }
+    },
+    "Eredivisie": {
+      "earlier": {
+        "n": 1,
+        "matches": 1,
+        "wins": 0,
+        "losses": 1,
+        "voids": 0,
+        "days": 1,
+        "hit": 0.0,
+        "roi": -100.0,
+        "profit": -1,
+        "haircut_roi": -100.0
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "Jupiler Pro League": {
+      "earlier": {
+        "n": 3,
+        "matches": 3,
+        "wins": 2,
+        "losses": 1,
+        "voids": 0,
+        "days": 2,
+        "hit": 66.66666666666667,
+        "roi": 56.333333333333336,
+        "profit": 1.69,
+        "haircut_roi": 51.849999999999994
+      },
+      "later": {
+        "n": 2,
+        "matches": 2,
+        "wins": 1,
+        "losses": 1,
+        "voids": 0,
+        "days": 1,
+        "hit": 50.0,
+        "roi": 25.49999999999999,
+        "profit": 0.5099999999999998,
+        "haircut_roi": 21.724999999999984
+      }
+    },
+    "La Liga": {
+      "earlier": {
+        "n": 1,
+        "matches": 1,
+        "wins": 0,
+        "losses": 1,
+        "voids": 0,
+        "days": 1,
+        "hit": 0.0,
+        "roi": -100.0,
+        "profit": -1,
+        "haircut_roi": -100.0
+      },
+      "later": {
+        "n": 1,
+        "matches": 1,
+        "wins": 0,
+        "losses": 1,
+        "voids": 0,
+        "days": 1,
+        "hit": 0.0,
+        "roi": -100.0,
+        "profit": -1,
+        "haircut_roi": -100.0
+      }
+    },
+    "League One": {
+      "earlier": {
+        "n": 2,
+        "matches": 2,
+        "wins": 2,
+        "losses": 0,
+        "voids": 0,
+        "days": 1,
+        "hit": 100.0,
+        "roi": 178.0,
+        "profit": 3.56,
+        "haircut_roi": 169.1
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "League Two": {
+      "earlier": {
+        "n": 2,
+        "matches": 2,
+        "wins": 1,
+        "losses": 1,
+        "voids": 0,
+        "days": 1,
+        "hit": 50.0,
+        "roi": 30.000000000000004,
+        "profit": 0.6000000000000001,
+        "haircut_roi": 26.0
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "League of Ireland": {
+      "earlier": {
+        "n": 1,
+        "matches": 1,
+        "wins": 1,
+        "losses": 0,
+        "voids": 0,
+        "days": 1,
+        "hit": 100.0,
+        "roi": 114.99999999999999,
+        "profit": 1.15,
+        "haircut_roi": 109.24999999999999
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "Ligue 1": {
+      "earlier": {
+        "n": 2,
+        "matches": 2,
+        "wins": 0,
+        "losses": 2,
+        "voids": 0,
+        "days": 2,
+        "hit": 0.0,
+        "roi": -100.0,
+        "profit": -2,
+        "haircut_roi": -100.0
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "Major League Soccer": {
+      "earlier": {
+        "n": 1,
+        "matches": 1,
+        "wins": 0,
+        "losses": 1,
+        "voids": 0,
+        "days": 1,
+        "hit": 0.0,
+        "roi": -100.0,
+        "profit": -1,
+        "haircut_roi": -100.0
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "National League": {
+      "earlier": {
+        "n": 4,
+        "matches": 4,
+        "wins": 4,
+        "losses": 0,
+        "voids": 0,
+        "days": 2,
+        "hit": 100.0,
+        "roi": 102.0,
+        "profit": 4.08,
+        "haircut_roi": 96.89999999999999
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "Premier League": {
+      "earlier": {
+        "n": 2,
+        "matches": 2,
+        "wins": 1,
+        "losses": 1,
+        "voids": 0,
+        "days": 1,
+        "hit": 50.0,
+        "roi": 18.999999999999993,
+        "profit": 0.3799999999999999,
+        "haircut_roi": 15.549999999999997
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "Premiership": {
+      "earlier": {
+        "n": 1,
+        "matches": 1,
+        "wins": 0,
+        "losses": 1,
+        "voids": 0,
+        "days": 1,
+        "hit": 0.0,
+        "roi": -100.0,
+        "profit": -1,
+        "haircut_roi": -100.0
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "Primeira Liga": {
+      "earlier": {
+        "n": 2,
+        "matches": 2,
+        "wins": 1,
+        "losses": 1,
+        "voids": 0,
+        "days": 2,
+        "hit": 50.0,
+        "roi": -3.0000000000000027,
+        "profit": -0.06000000000000005,
+        "haircut_roi": -5.350000000000005
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "Primera RFEF - Group 2": {
+      "earlier": {
+        "n": 1,
+        "matches": 1,
+        "wins": 0,
+        "losses": 1,
+        "voids": 0,
+        "days": 1,
+        "hit": 0.0,
+        "roi": -100.0,
+        "profit": -1,
+        "haircut_roi": -100.0
+      },
+      "later": {
+        "n": 1,
+        "matches": 1,
+        "wins": 0,
+        "losses": 1,
+        "voids": 0,
+        "days": 1,
+        "hit": 0.0,
+        "roi": -100.0,
+        "profit": -1,
+        "haircut_roi": -100.0
+      }
+    },
+    "Scottish Championship": {
+      "earlier": {
+        "n": 2,
+        "matches": 2,
+        "wins": 1,
+        "losses": 1,
+        "voids": 0,
+        "days": 1,
+        "hit": 50.0,
+        "roi": 47.50000000000001,
+        "profit": 0.9500000000000002,
+        "haircut_roi": 42.625
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "Segunda Divisi\u00f3n": {
+      "earlier": {
+        "n": 1,
+        "matches": 1,
+        "wins": 1,
+        "losses": 0,
+        "voids": 0,
+        "days": 1,
+        "hit": 100.0,
+        "roi": 135.0,
+        "profit": 1.35,
+        "haircut_roi": 128.25
+      },
+      "later": {
+        "n": 1,
+        "matches": 1,
+        "wins": 0,
+        "losses": 1,
+        "voids": 0,
+        "days": 1,
+        "hit": 0.0,
+        "roi": -100.0,
+        "profit": -1,
+        "haircut_roi": -100.0
+      }
+    },
+    "Serie C - Girone A": {
+      "earlier": {
+        "n": 1,
+        "matches": 1,
+        "wins": 1,
+        "losses": 0,
+        "voids": 0,
+        "days": 1,
+        "hit": 100.0,
+        "roi": 131.99999999999997,
+        "profit": 1.3199999999999998,
+        "haircut_roi": 125.39999999999998
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "Serie C - Girone C": {
+      "earlier": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      },
+      "later": {
+        "n": 1,
+        "matches": 1,
+        "wins": 1,
+        "losses": 0,
+        "voids": 0,
+        "days": 1,
+        "hit": 100.0,
+        "roi": 199.00000000000003,
+        "profit": 1.9900000000000002,
+        "haircut_roi": 189.05
+      }
+    },
+    "UEFA Champions League": {
+      "earlier": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      },
+      "later": {
+        "n": 1,
+        "matches": 1,
+        "wins": 1,
+        "losses": 0,
+        "voids": 0,
+        "days": 1,
+        "hit": 100.0,
+        "roi": 167.0,
+        "profit": 1.67,
+        "haircut_roi": 158.64999999999998
+      }
+    },
+    "UEFA Europa League": {
+      "earlier": {
+        "n": 1,
+        "matches": 1,
+        "wins": 1,
+        "losses": 0,
+        "voids": 0,
+        "days": 1,
+        "hit": 100.0,
+        "roi": 181.0,
+        "profit": 1.81,
+        "haircut_roi": 171.95
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "USL Championship": {
+      "earlier": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      },
+      "later": {
+        "n": 1,
+        "matches": 1,
+        "wins": 1,
+        "losses": 0,
+        "voids": 0,
+        "days": 1,
+        "hit": 100.0,
+        "roi": 104.99999999999999,
+        "profit": 1.0499999999999998,
+        "haircut_roi": 99.74999999999999
+      }
+    }
+  },
+  "candidate_by_model": {
+    "0.2.1": {
+      "earlier": {
+        "n": 4,
+        "matches": 4,
+        "wins": 2,
+        "losses": 2,
+        "voids": 0,
+        "days": 3,
+        "hit": 50.0,
+        "roi": 24.0,
+        "profit": 0.96,
+        "haircut_roi": 20.299999999999997
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "0.3.0": {
+      "earlier": {
+        "n": 35,
+        "matches": 35,
+        "wins": 22,
+        "losses": 13,
+        "voids": 0,
+        "days": 7,
+        "hit": 62.857142857142854,
+        "roi": 46.94285714285714,
+        "profit": 16.43,
+        "haircut_roi": 42.738571428571426
+      },
+      "later": {
+        "n": 12,
+        "matches": 12,
+        "wins": 7,
+        "losses": 5,
+        "voids": 0,
+        "days": 4,
+        "hit": 58.333333333333336,
+        "roi": 56.333333333333336,
+        "profit": 6.76,
+        "haircut_roi": 51.43333333333333
+      }
+    }
+  },
+  "market_comparison": {
+    "away_win": {
+      "earlier": {
+        "n": 330,
+        "matches": 330,
+        "wins": 109,
+        "losses": 221,
+        "voids": 0,
+        "days": 16,
+        "hit": 33.03030303030303,
+        "roi": -4.154545454545454,
+        "profit": -13.709999999999999,
+        "haircut_roi": -7.2953030303030335
+      },
+      "later": {
+        "n": 118,
+        "matches": 118,
+        "wins": 33,
+        "losses": 85,
+        "voids": 0,
+        "days": 4,
+        "hit": 27.966101694915253,
+        "roi": -1.152542372881356,
+        "profit": -1.36,
+        "haircut_roi": -4.696610169491531
+      }
+    },
+    "btts_no": {
+      "earlier": {
+        "n": 330,
+        "matches": 330,
+        "wins": 144,
+        "losses": 186,
+        "voids": 0,
+        "days": 16,
+        "hit": 43.63636363636363,
+        "roi": -4.390909090909091,
+        "profit": -14.49,
+        "haircut_roi": -6.989545454545456
+      },
+      "later": {
+        "n": 118,
+        "matches": 118,
+        "wins": 48,
+        "losses": 70,
+        "voids": 0,
+        "days": 4,
+        "hit": 40.67796610169491,
+        "roi": -11.59322033898305,
+        "profit": -13.68,
+        "haircut_roi": -13.979661016949153
+      }
+    },
+    "btts_yes": {
+      "earlier": {
+        "n": 330,
+        "matches": 330,
+        "wins": 186,
+        "losses": 144,
+        "voids": 0,
+        "days": 16,
+        "hit": 56.36363636363637,
+        "roi": -2.584848484848484,
+        "profit": -8.529999999999998,
+        "haircut_roi": -4.6374242424242444
+      },
+      "later": {
+        "n": 118,
+        "matches": 118,
+        "wins": 70,
+        "losses": 48,
+        "voids": 0,
+        "days": 4,
+        "hit": 59.32203389830509,
+        "roi": 4.389830508474577,
+        "profit": 5.1800000000000015,
+        "haircut_roi": 2.1364406779661005
+      }
+    },
+    "double_chance_1x": {
+      "earlier": {
+        "n": 330,
+        "matches": 330,
+        "wins": 221,
+        "losses": 109,
+        "voids": 0,
+        "days": 16,
+        "hit": 66.96969696969697,
+        "roi": -6.5212121212121215,
+        "profit": -21.52,
+        "haircut_roi": -7.846666666666667
+      },
+      "later": {
+        "n": 118,
+        "matches": 118,
+        "wins": 85,
+        "losses": 33,
+        "voids": 0,
+        "days": 4,
+        "hit": 72.03389830508475,
+        "roi": 5.813559322033897,
+        "profit": 6.8599999999999985,
+        "haircut_roi": 4.124576271186438
+      }
+    },
+    "double_chance_x2": {
+      "earlier": {
+        "n": 330,
+        "matches": 330,
+        "wins": 179,
+        "losses": 151,
+        "voids": 0,
+        "days": 16,
+        "hit": 54.24242424242424,
+        "roi": -8.893939393939394,
+        "profit": -29.35,
+        "haircut_roi": -10.737121212121213
+      },
+      "later": {
+        "n": 118,
+        "matches": 118,
+        "wins": 63,
+        "losses": 55,
+        "voids": 0,
+        "days": 4,
+        "hit": 53.389830508474574,
+        "roi": -8.14406779661017,
+        "profit": -9.61,
+        "haircut_roi": -10.067372881355935
+      }
+    },
+    "draw": {
+      "earlier": {
+        "n": 330,
+        "matches": 330,
+        "wins": 70,
+        "losses": 260,
+        "voids": 0,
+        "days": 16,
+        "hit": 21.21212121212121,
+        "roi": -14.44848484848485,
+        "profit": -47.68,
+        "haircut_roi": -17.665454545454548
+      },
+      "later": {
+        "n": 118,
+        "matches": 118,
+        "wins": 30,
+        "losses": 88,
+        "voids": 0,
+        "days": 4,
+        "hit": 25.423728813559322,
+        "roi": 3.2203389830508478,
+        "profit": 3.8000000000000007,
+        "haircut_roi": -0.669491525423733
+      }
+    },
+    "home_win": {
+      "earlier": {
+        "n": 330,
+        "matches": 330,
+        "wins": 151,
+        "losses": 179,
+        "voids": 0,
+        "days": 16,
+        "hit": 45.75757575757576,
+        "roi": -3.0303030303030303,
+        "profit": -10.0,
+        "haircut_roi": -5.5909090909090935
+      },
+      "later": {
+        "n": 118,
+        "matches": 118,
+        "wins": 55,
+        "losses": 63,
+        "voids": 0,
+        "days": 4,
+        "hit": 46.610169491525426,
+        "roi": 1.7372881355932195,
+        "profit": 2.049999999999999,
+        "haircut_roi": -1.0190677966101727
+      }
+    },
+    "over_1.5": {
+      "earlier": {
+        "n": 330,
+        "matches": 330,
+        "wins": 261,
+        "losses": 69,
+        "voids": 0,
+        "days": 16,
+        "hit": 79.0909090909091,
+        "roi": -1.2454545454545454,
+        "profit": -4.109999999999999,
+        "haircut_roi": -2.2286363636363644
+      },
+      "later": {
+        "n": 118,
+        "matches": 118,
+        "wins": 92,
+        "losses": 26,
+        "voids": 0,
+        "days": 4,
+        "hit": 77.96610169491525,
+        "roi": -0.5084745762711871,
+        "profit": -0.6000000000000008,
+        "haircut_roi": -1.5847457627118662
+      }
+    },
+    "over_2.5": {
+      "earlier": {
+        "n": 330,
+        "matches": 330,
+        "wins": 184,
+        "losses": 146,
+        "voids": 0,
+        "days": 16,
+        "hit": 55.75757575757576,
+        "roi": -1.8424242424242432,
+        "profit": -6.080000000000003,
+        "haircut_roi": -3.9624242424242455
+      },
+      "later": {
+        "n": 118,
+        "matches": 118,
+        "wins": 62,
+        "losses": 56,
+        "voids": 0,
+        "days": 4,
+        "hit": 52.54237288135593,
+        "roi": -4.093220338983051,
+        "profit": -4.83,
+        "haircut_roi": -6.261440677966105
+      }
+    },
+    "over_3.5": {
+      "earlier": {
+        "n": 330,
+        "matches": 330,
+        "wins": 108,
+        "losses": 222,
+        "voids": 0,
+        "days": 16,
+        "hit": 32.72727272727273,
+        "roi": -9.036363636363637,
+        "profit": -29.82,
+        "haircut_roi": -11.948181818181821
+      },
+      "later": {
+        "n": 118,
+        "matches": 118,
+        "wins": 43,
+        "losses": 75,
+        "voids": 0,
+        "days": 4,
+        "hit": 36.440677966101696,
+        "roi": 11.76271186440678,
+        "profit": 13.879999999999999,
+        "haircut_roi": 7.996610169491519
+      }
+    },
+    "over_4.5": {
+      "earlier": {
+        "n": 330,
+        "matches": 330,
+        "wins": 52,
+        "losses": 278,
+        "voids": 0,
+        "days": 16,
+        "hit": 15.757575757575758,
+        "roi": -20.451515151515153,
+        "profit": -67.49000000000001,
+        "haircut_roi": -23.641060606060613
+      },
+      "later": {
+        "n": 118,
+        "matches": 118,
+        "wins": 24,
+        "losses": 94,
+        "voids": 0,
+        "days": 4,
+        "hit": 20.338983050847457,
+        "roi": 17.449152542372882,
+        "profit": 20.59,
+        "haircut_roi": 12.593644067796603
+      }
+    },
+    "under_2.5": {
+      "earlier": {
+        "n": 330,
+        "matches": 330,
+        "wins": 146,
+        "losses": 184,
+        "voids": 0,
+        "days": 16,
+        "hit": 44.24242424242424,
+        "roi": -2.7909090909090915,
+        "profit": -9.210000000000003,
+        "haircut_roi": -5.439242424242428
+      },
+      "later": {
+        "n": 118,
+        "matches": 118,
+        "wins": 56,
+        "losses": 62,
+        "voids": 0,
+        "days": 4,
+        "hit": 47.45762711864407,
+        "roi": -3.0084745762711878,
+        "profit": -3.5500000000000016,
+        "haircut_roi": -5.4851694915254265
+      }
+    },
+    "under_3.5": {
+      "earlier": {
+        "n": 330,
+        "matches": 330,
+        "wins": 222,
+        "losses": 108,
+        "voids": 0,
+        "days": 16,
+        "hit": 67.27272727272727,
+        "roi": -0.25454545454545435,
+        "profit": -0.8399999999999994,
+        "haircut_roi": -1.8781818181818197
+      },
+      "later": {
+        "n": 118,
+        "matches": 118,
+        "wins": 75,
+        "losses": 43,
+        "voids": 0,
+        "days": 4,
+        "hit": 63.559322033898304,
+        "roi": -9.635593220338983,
+        "profit": -11.37,
+        "haircut_roi": -10.97584745762712
+      }
+    },
+    "under_4.5": {
+      "earlier": {
+        "n": 330,
+        "matches": 330,
+        "wins": 278,
+        "losses": 52,
+        "voids": 0,
+        "days": 16,
+        "hit": 84.24242424242425,
+        "roi": 0.8939393939393938,
+        "profit": 2.9499999999999993,
+        "haircut_roi": 0.061363636363635427
+      },
+      "later": {
+        "n": 118,
+        "matches": 118,
+        "wins": 94,
+        "losses": 24,
+        "voids": 0,
+        "days": 4,
+        "hit": 79.66101694915254,
+        "roi": -7.44915254237288,
+        "profit": -8.789999999999997,
+        "haircut_roi": -8.093644067796609
+      }
+    }
+  },
+  "market_odds_comparison": {
+    "away_win; odds [1, 1.5)": {
+      "earlier": {
+        "n": 11,
+        "matches": 11,
+        "wins": 8,
+        "losses": 3,
+        "voids": 0,
+        "days": 5,
+        "hit": 72.72727272727273,
+        "roi": -1.6363636363636338,
+        "profit": -0.17999999999999972,
+        "haircut_roi": -2.918181818181817
+      },
+      "later": {
+        "n": 2,
+        "matches": 2,
+        "wins": 1,
+        "losses": 1,
+        "voids": 0,
+        "days": 1,
+        "hit": 50.0,
+        "roi": -35.0,
+        "profit": -0.7,
+        "haircut_roi": -35.75
+      }
+    },
+    "away_win; odds [1.5, 2)": {
+      "earlier": {
+        "n": 28,
+        "matches": 28,
+        "wins": 16,
+        "losses": 12,
+        "voids": 0,
+        "days": 9,
+        "hit": 57.142857142857146,
+        "roi": 1.9285714285714286,
+        "profit": 0.54,
+        "haircut_roi": -0.3107142857142872
+      },
+      "later": {
+        "n": 6,
+        "matches": 6,
+        "wins": 2,
+        "losses": 4,
+        "voids": 0,
+        "days": 2,
+        "hit": 33.333333333333336,
+        "roi": -40.0,
+        "profit": -2.4,
+        "haircut_roi": -41.333333333333336
+      }
+    },
+    "away_win; odds [2, 3)": {
+      "earlier": {
+        "n": 95,
+        "matches": 95,
+        "wins": 47,
+        "losses": 48,
+        "voids": 0,
+        "days": 14,
+        "hit": 49.473684210526315,
+        "roi": 21.557894736842105,
+        "profit": 20.48,
+        "haircut_roi": 17.953684210526312
+      },
+      "later": {
+        "n": 33,
+        "matches": 33,
+        "wins": 12,
+        "losses": 21,
+        "voids": 0,
+        "days": 4,
+        "hit": 36.36363636363637,
+        "roi": -7.060606060606062,
+        "profit": -2.3300000000000005,
+        "haircut_roi": -9.889393939393944
+      }
+    },
+    "away_win; odds [3, inf)": {
+      "earlier": {
+        "n": 196,
+        "matches": 196,
+        "wins": 38,
+        "losses": 158,
+        "voids": 0,
+        "days": 15,
+        "hit": 19.387755102040817,
+        "roi": -17.627551020408163,
+        "profit": -34.55,
+        "haircut_roi": -20.77678571428572
+      },
+      "later": {
+        "n": 77,
+        "matches": 77,
+        "wins": 18,
+        "losses": 59,
+        "voids": 0,
+        "days": 3,
+        "hit": 23.376623376623378,
+        "roi": 5.285714285714286,
+        "profit": 4.07,
+        "haircut_roi": 1.190259740259735
+      }
+    },
+    "btts_no; odds [1, 1.5)": {
+      "earlier": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "btts_no; odds [1.5, 2)": {
+      "earlier": {
+        "n": 96,
+        "matches": 96,
+        "wins": 50,
+        "losses": 46,
+        "voids": 0,
+        "days": 15,
+        "hit": 52.083333333333336,
+        "roi": -5.614583333333332,
+        "profit": -5.389999999999999,
+        "haircut_roi": -7.729687500000002
+      },
+      "later": {
+        "n": 43,
+        "matches": 43,
+        "wins": 20,
+        "losses": 23,
+        "voids": 0,
+        "days": 3,
+        "hit": 46.51162790697674,
+        "roi": -15.069767441860465,
+        "profit": -6.48,
+        "haircut_roi": -16.99069767441861
+      }
+    },
+    "btts_no; odds [2, 3)": {
+      "earlier": {
+        "n": 217,
+        "matches": 217,
+        "wins": 86,
+        "losses": 131,
+        "voids": 0,
+        "days": 15,
+        "hit": 39.63133640552996,
+        "roi": -8.580645161290322,
+        "profit": -18.62,
+        "haircut_roi": -11.170046082949314
+      },
+      "later": {
+        "n": 73,
+        "matches": 73,
+        "wins": 26,
+        "losses": 47,
+        "voids": 0,
+        "days": 3,
+        "hit": 35.61643835616438,
+        "roi": -15.616438356164384,
+        "profit": -11.4,
+        "haircut_roi": -18.054794520547947
+      }
+    },
+    "btts_no; odds [3, inf)": {
+      "earlier": {
+        "n": 17,
+        "matches": 17,
+        "wins": 8,
+        "losses": 9,
+        "voids": 0,
+        "days": 6,
+        "hit": 47.05882352941177,
+        "roi": 56.0,
+        "profit": 9.52,
+        "haircut_roi": 50.55294117647059
+      },
+      "later": {
+        "n": 2,
+        "matches": 2,
+        "wins": 2,
+        "losses": 0,
+        "voids": 0,
+        "days": 2,
+        "hit": 100.0,
+        "roi": 210.0,
+        "profit": 4.2,
+        "haircut_roi": 199.5
+      }
+    },
+    "btts_yes; odds [1, 1.5)": {
+      "earlier": {
+        "n": 37,
+        "matches": 37,
+        "wins": 18,
+        "losses": 19,
+        "voids": 0,
+        "days": 7,
+        "hit": 48.648648648648646,
+        "roi": -31.783783783783782,
+        "profit": -11.76,
+        "haircut_roi": -32.76216216216216
+      },
+      "later": {
+        "n": 9,
+        "matches": 9,
+        "wins": 6,
+        "losses": 3,
+        "voids": 0,
+        "days": 4,
+        "hit": 66.66666666666667,
+        "roi": -2.888888888888891,
+        "profit": -0.26000000000000023,
+        "haircut_roi": -4.411111111111115
+      }
+    },
+    "btts_yes; odds [1.5, 2)": {
+      "earlier": {
+        "n": 235,
+        "matches": 235,
+        "wins": 142,
+        "losses": 93,
+        "voids": 0,
+        "days": 15,
+        "hit": 60.42553191489362,
+        "roi": 2.3574468085106393,
+        "profit": 5.540000000000002,
+        "haircut_roi": 0.2608510638297859
+      },
+      "later": {
+        "n": 92,
+        "matches": 92,
+        "wins": 58,
+        "losses": 34,
+        "voids": 0,
+        "days": 3,
+        "hit": 63.04347826086956,
+        "roi": 10.728260869565219,
+        "profit": 9.870000000000001,
+        "haircut_roi": 8.344021739130433
+      }
+    },
+    "btts_yes; odds [2, 3)": {
+      "earlier": {
+        "n": 58,
+        "matches": 58,
+        "wins": 26,
+        "losses": 32,
+        "voids": 0,
+        "days": 13,
+        "hit": 44.827586206896555,
+        "roi": -3.982758620689654,
+        "profit": -2.309999999999999,
+        "haircut_roi": -6.542241379310346
+      },
+      "later": {
+        "n": 17,
+        "matches": 17,
+        "wins": 6,
+        "losses": 11,
+        "voids": 0,
+        "days": 3,
+        "hit": 35.294117647058826,
+        "roi": -26.058823529411764,
+        "profit": -4.43,
+        "haircut_roi": -27.991176470588233
+      }
+    },
+    "btts_yes; odds [3, inf)": {
+      "earlier": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "double_chance_1x; odds [1, 1.5)": {
+      "earlier": {
+        "n": 212,
+        "matches": 212,
+        "wins": 166,
+        "losses": 46,
+        "voids": 0,
+        "days": 16,
+        "hit": 78.30188679245283,
+        "roi": -2.995283018867924,
+        "profit": -6.349999999999999,
+        "haircut_roi": -3.9304245283018875
+      },
+      "later": {
+        "n": 87,
+        "matches": 87,
+        "wins": 64,
+        "losses": 23,
+        "voids": 0,
+        "days": 3,
+        "hit": 73.5632183908046,
+        "roi": -5.908045977011495,
+        "profit": -5.1400000000000015,
+        "haircut_roi": -6.934482758620692
+      }
+    },
+    "double_chance_1x; odds [1.5, 2)": {
+      "earlier": {
+        "n": 88,
+        "matches": 88,
+        "wins": 44,
+        "losses": 44,
+        "voids": 0,
+        "days": 13,
+        "hit": 50.0,
+        "roi": -17.306818181818183,
+        "profit": -15.23,
+        "haircut_roi": -18.941477272727273
+      },
+      "later": {
+        "n": 24,
+        "matches": 24,
+        "wins": 16,
+        "losses": 8,
+        "voids": 0,
+        "days": 4,
+        "hit": 66.66666666666667,
+        "roi": 7.166666666666668,
+        "profit": 1.7200000000000004,
+        "haircut_roi": 5.141666666666666
+      }
+    },
+    "double_chance_1x; odds [2, 3)": {
+      "earlier": {
+        "n": 20,
+        "matches": 20,
+        "wins": 8,
+        "losses": 12,
+        "voids": 0,
+        "days": 5,
+        "hit": 40.0,
+        "roi": -10.950000000000001,
+        "profit": -2.1900000000000004,
+        "haircut_roi": -13.402500000000007
+      },
+      "later": {
+        "n": 5,
+        "matches": 5,
+        "wins": 4,
+        "losses": 1,
+        "voids": 0,
+        "days": 2,
+        "hit": 80.0,
+        "roi": 73.6,
+        "profit": 3.6799999999999997,
+        "haircut_roi": 68.91999999999999
+      }
+    },
+    "double_chance_1x; odds [3, inf)": {
+      "earlier": {
+        "n": 10,
+        "matches": 10,
+        "wins": 3,
+        "losses": 7,
+        "voids": 0,
+        "days": 4,
+        "hit": 30.0,
+        "roi": 22.500000000000007,
+        "profit": 2.2500000000000004,
+        "haircut_roi": 17.875
+      },
+      "later": {
+        "n": 2,
+        "matches": 2,
+        "wins": 1,
+        "losses": 1,
+        "voids": 0,
+        "days": 1,
+        "hit": 50.0,
+        "roi": 330.0,
+        "profit": 6.6,
+        "haircut_roi": 311.0
+      }
+    },
+    "double_chance_x2; odds [1, 1.5)": {
+      "earlier": {
+        "n": 102,
+        "matches": 102,
+        "wins": 81,
+        "losses": 21,
+        "voids": 0,
+        "days": 14,
+        "hit": 79.41176470588235,
+        "roi": 4.333333333333332,
+        "profit": 4.419999999999999,
+        "haircut_roi": 3.0872549019607822
+      },
+      "later": {
+        "n": 25,
+        "matches": 25,
+        "wins": 18,
+        "losses": 7,
+        "voids": 0,
+        "days": 4,
+        "hit": 72.0,
+        "roi": -5.000000000000002,
+        "profit": -1.2500000000000004,
+        "haircut_roi": -6.150000000000003
+      }
+    },
+    "double_chance_x2; odds [1.5, 2)": {
+      "earlier": {
+        "n": 117,
+        "matches": 117,
+        "wins": 59,
+        "losses": 58,
+        "voids": 0,
+        "days": 16,
+        "hit": 50.427350427350426,
+        "roi": -14.632478632478632,
+        "profit": -17.12,
+        "haircut_roi": -16.37948717948718
+      },
+      "later": {
+        "n": 62,
+        "matches": 62,
+        "wins": 37,
+        "losses": 25,
+        "voids": 0,
+        "days": 3,
+        "hit": 59.67741935483871,
+        "roi": 0.24193548387096797,
+        "profit": 0.15000000000000013,
+        "haircut_roi": -1.7862903225806466
+      }
+    },
+    "double_chance_x2; odds [2, 3)": {
+      "earlier": {
+        "n": 77,
+        "matches": 77,
+        "wins": 35,
+        "losses": 42,
+        "voids": 0,
+        "days": 14,
+        "hit": 45.45454545454545,
+        "roi": 4.999999999999999,
+        "profit": 3.8499999999999996,
+        "haircut_roi": 2.022727272727269
+      },
+      "later": {
+        "n": 27,
+        "matches": 27,
+        "wins": 6,
+        "losses": 21,
+        "voids": 0,
+        "days": 3,
+        "hit": 22.22222222222222,
+        "roi": -47.48148148148148,
+        "profit": -12.82,
+        "haircut_roi": -48.9962962962963
+      }
+    },
+    "double_chance_x2; odds [3, inf)": {
+      "earlier": {
+        "n": 34,
+        "matches": 34,
+        "wins": 4,
+        "losses": 30,
+        "voids": 0,
+        "days": 8,
+        "hit": 11.764705882352942,
+        "roi": -60.294117647058826,
+        "profit": -20.5,
+        "haircut_roi": -61.69117647058823
+      },
+      "later": {
+        "n": 4,
+        "matches": 4,
+        "wins": 2,
+        "losses": 2,
+        "voids": 0,
+        "days": 2,
+        "hit": 50.0,
+        "roi": 107.75000000000001,
+        "profit": 4.3100000000000005,
+        "haircut_roi": 99.8625
+      }
+    },
+    "draw; odds [1, 1.5)": {
+      "earlier": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "draw; odds [1.5, 2)": {
+      "earlier": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "draw; odds [2, 3)": {
+      "earlier": {
+        "n": 1,
+        "matches": 1,
+        "wins": 0,
+        "losses": 1,
+        "voids": 0,
+        "days": 1,
+        "hit": 0.0,
+        "roi": -100.0,
+        "profit": -1,
+        "haircut_roi": -100.0
+      },
+      "later": {
+        "n": 2,
+        "matches": 2,
+        "wins": 1,
+        "losses": 1,
+        "voids": 0,
+        "days": 1,
+        "hit": 50.0,
+        "roi": 47.50000000000001,
+        "profit": 0.9500000000000002,
+        "haircut_roi": 42.625
+      }
+    },
+    "draw; odds [3, inf)": {
+      "earlier": {
+        "n": 329,
+        "matches": 329,
+        "wins": 70,
+        "losses": 259,
+        "voids": 0,
+        "days": 16,
+        "hit": 21.27659574468085,
+        "roi": -14.188449848024316,
+        "profit": -46.68,
+        "haircut_roi": -17.41519756838906
+      },
+      "later": {
+        "n": 116,
+        "matches": 116,
+        "wins": 29,
+        "losses": 87,
+        "voids": 0,
+        "days": 4,
+        "hit": 25.0,
+        "roi": 2.4568965517241383,
+        "profit": 2.8500000000000005,
+        "haircut_roi": -1.4159482758620732
+      }
+    },
+    "home_win; odds [1, 1.5)": {
+      "earlier": {
+        "n": 45,
+        "matches": 45,
+        "wins": 36,
+        "losses": 9,
+        "voids": 0,
+        "days": 9,
+        "hit": 80.0,
+        "roi": 7.088888888888887,
+        "profit": 3.189999999999999,
+        "haircut_roi": 5.734444444444441
+      },
+      "later": {
+        "n": 7,
+        "matches": 7,
+        "wins": 4,
+        "losses": 3,
+        "voids": 0,
+        "days": 3,
+        "hit": 57.142857142857146,
+        "roi": -22.571428571428573,
+        "profit": -1.58,
+        "haircut_roi": -23.58571428571429
+      }
+    },
+    "home_win; odds [1.5, 2)": {
+      "earlier": {
+        "n": 82,
+        "matches": 82,
+        "wins": 45,
+        "losses": 37,
+        "voids": 0,
+        "days": 13,
+        "hit": 54.8780487804878,
+        "roi": -4.670731707317072,
+        "profit": -3.8299999999999996,
+        "haircut_roi": -6.693292682926831
+      },
+      "later": {
+        "n": 30,
+        "matches": 30,
+        "wins": 19,
+        "losses": 11,
+        "voids": 0,
+        "days": 3,
+        "hit": 63.333333333333336,
+        "roi": 5.066666666666667,
+        "profit": 1.5200000000000002,
+        "haircut_roi": 2.979999999999999
+      }
+    },
+    "home_win; odds [2, 3)": {
+      "earlier": {
+        "n": 121,
+        "matches": 121,
+        "wins": 53,
+        "losses": 68,
+        "voids": 0,
+        "days": 15,
+        "hit": 43.80165289256198,
+        "roi": 2.8925619834710745,
+        "profit": 3.5,
+        "haircut_roi": -0.06198347107438316
+      },
+      "later": {
+        "n": 63,
+        "matches": 63,
+        "wins": 27,
+        "losses": 36,
+        "voids": 0,
+        "days": 3,
+        "hit": 42.857142857142854,
+        "roi": 0.30158730158729863,
+        "profit": 0.18999999999999817,
+        "haircut_roi": -2.570634920634925
+      }
+    },
+    "home_win; odds [3, inf)": {
+      "earlier": {
+        "n": 82,
+        "matches": 82,
+        "wins": 17,
+        "losses": 65,
+        "voids": 0,
+        "days": 14,
+        "hit": 20.73170731707317,
+        "roi": -15.682926829268293,
+        "profit": -12.86,
+        "haircut_roi": -18.862195121951224
+      },
+      "later": {
+        "n": 18,
+        "matches": 18,
+        "wins": 5,
+        "losses": 13,
+        "voids": 0,
+        "days": 4,
+        "hit": 27.77777777777778,
+        "roi": 10.666666666666668,
+        "profit": 1.9200000000000004,
+        "haircut_roi": 6.522222222222222
+      }
+    },
+    "over_1.5; odds [1, 1.5)": {
+      "earlier": {
+        "n": 314,
+        "matches": 314,
+        "wins": 251,
+        "losses": 63,
+        "voids": 0,
+        "days": 16,
+        "hit": 79.93630573248407,
+        "roi": -1.2292993630573248,
+        "profit": -3.86,
+        "haircut_roi": -2.1710191082802557
+      },
+      "later": {
+        "n": 114,
+        "matches": 114,
+        "wins": 90,
+        "losses": 24,
+        "voids": 0,
+        "days": 4,
+        "hit": 78.94736842105263,
+        "roi": 0.20175438596491146,
+        "profit": 0.2299999999999991,
+        "haircut_roi": -0.8609649122807036
+      }
+    },
+    "over_1.5; odds [1.5, 2)": {
+      "earlier": {
+        "n": 16,
+        "matches": 16,
+        "wins": 10,
+        "losses": 6,
+        "voids": 0,
+        "days": 6,
+        "hit": 62.5,
+        "roi": -1.5625,
+        "profit": -0.25,
+        "haircut_roi": -3.3593750000000018
+      },
+      "later": {
+        "n": 4,
+        "matches": 4,
+        "wins": 2,
+        "losses": 2,
+        "voids": 0,
+        "days": 2,
+        "hit": 50.0,
+        "roi": -20.749999999999996,
+        "profit": -0.8299999999999998,
+        "haircut_roi": -22.2125
+      }
+    },
+    "over_1.5; odds [2, 3)": {
+      "earlier": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "over_1.5; odds [3, inf)": {
+      "earlier": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "over_2.5; odds [1, 1.5)": {
+      "earlier": {
+        "n": 58,
+        "matches": 58,
+        "wins": 39,
+        "losses": 19,
+        "voids": 0,
+        "days": 9,
+        "hit": 67.24137931034483,
+        "roi": -7.862068965517242,
+        "profit": -4.5600000000000005,
+        "haircut_roi": -9.106896551724141
+      },
+      "later": {
+        "n": 7,
+        "matches": 7,
+        "wins": 4,
+        "losses": 3,
+        "voids": 0,
+        "days": 3,
+        "hit": 57.142857142857146,
+        "roi": -25.571428571428577,
+        "profit": -1.7900000000000003,
+        "haircut_roi": -26.435714285714287
+      }
+    },
+    "over_2.5; odds [1.5, 2)": {
+      "earlier": {
+        "n": 184,
+        "matches": 184,
+        "wins": 105,
+        "losses": 79,
+        "voids": 0,
+        "days": 15,
+        "hit": 57.06521739130435,
+        "roi": -2.3043478260869565,
+        "profit": -4.24,
+        "haircut_roi": -4.335869565217393
+      },
+      "later": {
+        "n": 65,
+        "matches": 65,
+        "wins": 39,
+        "losses": 26,
+        "voids": 0,
+        "days": 3,
+        "hit": 60.0,
+        "roi": 3.2,
+        "profit": 2.08,
+        "haircut_roi": 1.039999999999998
+      }
+    },
+    "over_2.5; odds [2, 3)": {
+      "earlier": {
+        "n": 86,
+        "matches": 86,
+        "wins": 39,
+        "losses": 47,
+        "voids": 0,
+        "days": 15,
+        "hit": 45.348837209302324,
+        "roi": 1.9651162790697654,
+        "profit": 1.6899999999999982,
+        "haircut_roi": -0.8656976744186093
+      },
+      "later": {
+        "n": 45,
+        "matches": 45,
+        "wins": 19,
+        "losses": 26,
+        "voids": 0,
+        "days": 3,
+        "hit": 42.22222222222222,
+        "roi": -9.155555555555559,
+        "profit": -4.120000000000001,
+        "haircut_roi": -11.586666666666671
+      }
+    },
+    "over_2.5; odds [3, inf)": {
+      "earlier": {
+        "n": 2,
+        "matches": 2,
+        "wins": 1,
+        "losses": 1,
+        "voids": 0,
+        "days": 2,
+        "hit": 50.0,
+        "roi": 51.49999999999999,
+        "profit": 1.0299999999999998,
+        "haircut_roi": 46.42499999999998
+      },
+      "later": {
+        "n": 1,
+        "matches": 1,
+        "wins": 0,
+        "losses": 1,
+        "voids": 0,
+        "days": 1,
+        "hit": 0.0,
+        "roi": -100.0,
+        "profit": -1,
+        "haircut_roi": -100.0
+      }
+    },
+    "over_3.5; odds [1, 1.5)": {
+      "earlier": {
+        "n": 2,
+        "matches": 2,
+        "wins": 1,
+        "losses": 1,
+        "voids": 0,
+        "days": 2,
+        "hit": 50.0,
+        "roi": -30.000000000000004,
+        "profit": -0.6000000000000001,
+        "haircut_roi": -31.000000000000007
+      },
+      "later": {
+        "n": 1,
+        "matches": 1,
+        "wins": 1,
+        "losses": 0,
+        "voids": 0,
+        "days": 1,
+        "hit": 100.0,
+        "roi": 41.99999999999999,
+        "profit": 0.41999999999999993,
+        "haircut_roi": 39.89999999999999
+      }
+    },
+    "over_3.5; odds [1.5, 2)": {
+      "earlier": {
+        "n": 29,
+        "matches": 29,
+        "wins": 13,
+        "losses": 16,
+        "voids": 0,
+        "days": 7,
+        "hit": 44.827586206896555,
+        "roi": -19.275862068965516,
+        "profit": -5.59,
+        "haircut_roi": -21.070689655172412
+      },
+      "later": {
+        "n": 3,
+        "matches": 3,
+        "wins": 1,
+        "losses": 2,
+        "voids": 0,
+        "days": 2,
+        "hit": 33.333333333333336,
+        "roi": -47.666666666666664,
+        "profit": -1.43,
+        "haircut_roi": -48.61666666666667
+      }
+    },
+    "over_3.5; odds [2, 3)": {
+      "earlier": {
+        "n": 156,
+        "matches": 156,
+        "wins": 61,
+        "losses": 95,
+        "voids": 0,
+        "days": 14,
+        "hit": 39.1025641025641,
+        "roi": -3.134615384615384,
+        "profit": -4.89,
+        "haircut_roi": -6.022756410256413
+      },
+      "later": {
+        "n": 51,
+        "matches": 51,
+        "wins": 20,
+        "losses": 31,
+        "voids": 0,
+        "days": 3,
+        "hit": 39.21568627450981,
+        "roi": 0.8823529411764692,
+        "profit": 0.4499999999999993,
+        "haircut_roi": -2.2009803921568665
+      }
+    },
+    "over_3.5; odds [3, inf)": {
+      "earlier": {
+        "n": 143,
+        "matches": 143,
+        "wins": 33,
+        "losses": 110,
+        "voids": 0,
+        "days": 15,
+        "hit": 23.076923076923077,
+        "roi": -13.104895104895107,
+        "profit": -18.740000000000002,
+        "haircut_roi": -16.2958041958042
+      },
+      "later": {
+        "n": 63,
+        "matches": 63,
+        "wins": 21,
+        "losses": 42,
+        "voids": 0,
+        "days": 3,
+        "hit": 33.333333333333336,
+        "roi": 22.92063492063492,
+        "profit": 14.44,
+        "haircut_roi": 18.441269841269836
+      }
+    },
+    "over_4.5; odds [1, 1.5)": {
+      "earlier": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "over_4.5; odds [1.5, 2)": {
+      "earlier": {
+        "n": 2,
+        "matches": 2,
+        "wins": 0,
+        "losses": 2,
+        "voids": 0,
+        "days": 2,
+        "hit": 0.0,
+        "roi": -100.0,
+        "profit": -2,
+        "haircut_roi": -100.0
+      },
+      "later": {
+        "n": 1,
+        "matches": 1,
+        "wins": 1,
+        "losses": 0,
+        "voids": 0,
+        "days": 1,
+        "hit": 100.0,
+        "roi": 99.0,
+        "profit": 0.99,
+        "haircut_roi": 94.05
+      }
+    },
+    "over_4.5; odds [2, 3)": {
+      "earlier": {
+        "n": 17,
+        "matches": 17,
+        "wins": 5,
+        "losses": 12,
+        "voids": 0,
+        "days": 6,
+        "hit": 29.41176470588235,
+        "roi": -24.705882352941178,
+        "profit": -4.2,
+        "haircut_roi": -27.000000000000004
+      },
+      "later": {
+        "n": 2,
+        "matches": 2,
+        "wins": 1,
+        "losses": 1,
+        "voids": 0,
+        "days": 1,
+        "hit": 50.0,
+        "roi": 11.00000000000001,
+        "profit": 0.2200000000000002,
+        "haircut_roi": 7.950000000000001
+      }
+    },
+    "over_4.5; odds [3, inf)": {
+      "earlier": {
+        "n": 311,
+        "matches": 311,
+        "wins": 47,
+        "losses": 264,
+        "voids": 0,
+        "days": 16,
+        "hit": 15.112540192926046,
+        "roi": -19.707395498392284,
+        "profit": -61.29,
+        "haircut_roi": -22.96639871382637
+      },
+      "later": {
+        "n": 115,
+        "matches": 115,
+        "wins": 22,
+        "losses": 93,
+        "voids": 0,
+        "days": 4,
+        "hit": 19.130434782608695,
+        "roi": 16.85217391304348,
+        "profit": 19.38,
+        "haircut_roi": 11.966086956521734
+      }
+    },
+    "under_2.5; odds [1, 1.5)": {
+      "earlier": {
+        "n": 4,
+        "matches": 4,
+        "wins": 2,
+        "losses": 2,
+        "voids": 0,
+        "days": 3,
+        "hit": 50.0,
+        "roi": -30.0,
+        "profit": -1.2,
+        "haircut_roi": -31.0
+      },
+      "later": {
+        "n": 2,
+        "matches": 2,
+        "wins": 2,
+        "losses": 0,
+        "voids": 0,
+        "days": 1,
+        "hit": 100.0,
+        "roi": 42.49999999999999,
+        "profit": 0.8499999999999999,
+        "haircut_roi": 40.37499999999999
+      }
+    },
+    "under_2.5; odds [1.5, 2)": {
+      "earlier": {
+        "n": 112,
+        "matches": 112,
+        "wins": 61,
+        "losses": 51,
+        "voids": 0,
+        "days": 15,
+        "hit": 54.464285714285715,
+        "roi": -2.9553571428571432,
+        "profit": -3.3100000000000005,
+        "haircut_roi": -5.084375000000002
+      },
+      "later": {
+        "n": 54,
+        "matches": 54,
+        "wins": 30,
+        "losses": 24,
+        "voids": 0,
+        "days": 3,
+        "hit": 55.55555555555556,
+        "roi": -1.555555555555556,
+        "profit": -0.8400000000000003,
+        "haircut_roi": -3.700000000000003
+      }
+    },
+    "under_2.5; odds [2, 3)": {
+      "earlier": {
+        "n": 175,
+        "matches": 175,
+        "wins": 72,
+        "losses": 103,
+        "voids": 0,
+        "days": 14,
+        "hit": 41.142857142857146,
+        "roi": -4.245714285714286,
+        "profit": -7.4300000000000015,
+        "haircut_roi": -6.9762857142857175
+      },
+      "later": {
+        "n": 56,
+        "matches": 56,
+        "wins": 22,
+        "losses": 34,
+        "voids": 0,
+        "days": 3,
+        "hit": 39.285714285714285,
+        "roi": -7.250000000000001,
+        "profit": -4.0600000000000005,
+        "haircut_roi": -9.923214285714291
+      }
+    },
+    "under_2.5; odds [3, inf)": {
+      "earlier": {
+        "n": 39,
+        "matches": 39,
+        "wins": 11,
+        "losses": 28,
+        "voids": 0,
+        "days": 7,
+        "hit": 28.205128205128204,
+        "roi": 6.999999999999998,
+        "profit": 2.7299999999999995,
+        "haircut_roi": 3.0602564102564047
+      },
+      "later": {
+        "n": 6,
+        "matches": 6,
+        "wins": 2,
+        "losses": 4,
+        "voids": 0,
+        "days": 3,
+        "hit": 33.333333333333336,
+        "roi": 8.333333333333334,
+        "profit": 0.5,
+        "haircut_roi": 4.583333333333332
+      }
+    },
+    "under_3.5; odds [1, 1.5)": {
+      "earlier": {
+        "n": 188,
+        "matches": 188,
+        "wins": 139,
+        "losses": 49,
+        "voids": 0,
+        "days": 15,
+        "hit": 73.93617021276596,
+        "roi": -1.3723404255319152,
+        "profit": -2.5800000000000005,
+        "haircut_roi": -2.6069148936170228
+      },
+      "later": {
+        "n": 78,
+        "matches": 78,
+        "wins": 52,
+        "losses": 26,
+        "voids": 0,
+        "days": 3,
+        "hit": 66.66666666666667,
+        "roi": -12.423076923076923,
+        "profit": -9.69,
+        "haircut_roi": -13.468589743589742
+      }
+    },
+    "under_3.5; odds [1.5, 2)": {
+      "earlier": {
+        "n": 124,
+        "matches": 124,
+        "wins": 73,
+        "losses": 51,
+        "voids": 0,
+        "days": 13,
+        "hit": 58.87096774193548,
+        "roi": -2.2258064516129026,
+        "profit": -2.7599999999999993,
+        "haircut_roi": -4.170967741935486
+      },
+      "later": {
+        "n": 37,
+        "matches": 37,
+        "wins": 22,
+        "losses": 15,
+        "voids": 0,
+        "days": 4,
+        "hit": 59.45945945945946,
+        "roi": -2.0540540540540535,
+        "profit": -0.7599999999999998,
+        "haircut_roi": -3.9783783783783804
+      }
+    },
+    "under_3.5; odds [2, 3)": {
+      "earlier": {
+        "n": 16,
+        "matches": 16,
+        "wins": 9,
+        "losses": 7,
+        "voids": 0,
+        "days": 6,
+        "hit": 56.25,
+        "roi": 21.875000000000004,
+        "profit": 3.5000000000000004,
+        "haircut_roi": 18.593749999999996
+      },
+      "later": {
+        "n": 2,
+        "matches": 2,
+        "wins": 1,
+        "losses": 1,
+        "voids": 0,
+        "days": 1,
+        "hit": 50.0,
+        "roi": 4.0000000000000036,
+        "profit": 0.08000000000000007,
+        "haircut_roi": 1.3000000000000012
+      }
+    },
+    "under_3.5; odds [3, inf)": {
+      "earlier": {
+        "n": 2,
+        "matches": 2,
+        "wins": 1,
+        "losses": 1,
+        "voids": 0,
+        "days": 2,
+        "hit": 50.0,
+        "roi": 50.0,
+        "profit": 1.0,
+        "haircut_roi": 44.99999999999999
+      },
+      "later": {
+        "n": 1,
+        "matches": 1,
+        "wins": 0,
+        "losses": 1,
+        "voids": 0,
+        "days": 1,
+        "hit": 0.0,
+        "roi": -100.0,
+        "profit": -1,
+        "haircut_roi": -100.0
+      }
+    },
+    "under_4.5; odds [1, 1.5)": {
+      "earlier": {
+        "n": 317,
+        "matches": 317,
+        "wins": 269,
+        "losses": 48,
+        "voids": 0,
+        "days": 16,
+        "hit": 84.85804416403785,
+        "roi": 0.32176656151419536,
+        "profit": 1.0199999999999994,
+        "haircut_roi": -0.45141955835962233
+      },
+      "later": {
+        "n": 116,
+        "matches": 116,
+        "wins": 94,
+        "losses": 22,
+        "voids": 0,
+        "days": 4,
+        "hit": 81.03448275862068,
+        "roi": -5.853448275862067,
+        "profit": -6.789999999999997,
+        "haircut_roi": -6.5090517241379295
+      }
+    },
+    "under_4.5; odds [1.5, 2)": {
+      "earlier": {
+        "n": 13,
+        "matches": 13,
+        "wins": 9,
+        "losses": 4,
+        "voids": 0,
+        "days": 6,
+        "hit": 69.23076923076923,
+        "roi": 14.846153846153843,
+        "profit": 1.9299999999999997,
+        "haircut_roi": 12.565384615384612
+      },
+      "later": {
+        "n": 2,
+        "matches": 2,
+        "wins": 0,
+        "losses": 2,
+        "voids": 0,
+        "days": 1,
+        "hit": 0.0,
+        "roi": -100.0,
+        "profit": -2,
+        "haircut_roi": -100.0
+      }
+    },
+    "under_4.5; odds [2, 3)": {
+      "earlier": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    },
+    "under_4.5; odds [3, inf)": {
+      "earlier": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      },
+      "later": {
+        "n": 0,
+        "matches": 0,
+        "wins": 0,
+        "losses": 0,
+        "voids": 0,
+        "days": 0,
+        "hit": null,
+        "roi": null,
+        "profit": 0,
+        "haircut_roi": null
+      }
+    }
+  },
+  "q_comparison": {
+    "away_win; Q [0, 50)": {
+      "earlier": {
+        "n": 38,
+        "matches": 38,
+        "wins": 11,
+        "losses": 27,
+        "voids": 0,
+        "days": 9,
+        "hit": 28.94736842105263,
+        "roi": 21.342105263157894,
+        "profit": 8.11,
+        "haircut_roi": 16.722368421052625
+      },
+      "later": {
+        "n": 19,
+        "matches": 19,
+        "wins": 3,
+        "losses": 16,
+        "voids": 0,
+        "days": 3,
+        "hit": 15.789473684210526,
+        "roi": -36.631578947368425,
+        "profit": -6.960000000000001,
+        "haircut_roi": -39.01052631578948
+      }
+    },
+    "away_win; Q [50, 60)": {
+      "earlier": {
+        "n": 129,
+        "matches": 129,
+        "wins": 35,
+        "losses": 94,
+        "voids": 0,
+        "days": 15,
+        "hit": 27.131782945736433,
+        "roi": -16.0,
+        "profit": -20.64,
+        "haircut_roi": -18.84341085271318
+      },
+      "later": {
+        "n": 47,
+        "matches": 47,
+        "wins": 14,
+        "losses": 33,
+        "voids": 0,
+        "days": 3,
+        "hit": 29.78723404255319,
+        "roi": -2.46808510638298,
+        "profit": -1.1600000000000006,
+        "haircut_roi": -5.855319148936176
+      }
+    },
+    "away_win; Q [60, 70)": {
+      "earlier": {
+        "n": 103,
+        "matches": 103,
+        "wins": 43,
+        "losses": 60,
+        "voids": 0,
+        "days": 13,
+        "hit": 41.74757281553398,
+        "roi": 2.0097087378640786,
+        "profit": 2.0700000000000007,
+        "haircut_roi": -1.0033980582524296
+      },
+      "later": {
+        "n": 30,
+        "matches": 30,
+        "wins": 9,
+        "losses": 21,
+        "voids": 0,
+        "days": 3,
+        "hit": 30.0,
+        "roi": -19.066666666666666,
+        "profit": -5.72,
+        "haircut_roi": -21.613333333333337
+      }
+    },
+    "away_win; Q [70, 80)": {
+      "earlier": {
+        "n": 48,
+        "matches": 48,
+        "wins": 19,
+        "losses": 29,
+        "voids": 0,
+        "days": 10,
+        "hit": 39.583333333333336,
+        "roi": 11.354166666666666,
+        "profit": 5.45,
+        "haircut_roi": 7.765624999999997
+      },
+      "later": {
+        "n": 20,
+        "matches": 20,
+        "wins": 7,
+        "losses": 13,
+        "voids": 0,
+        "days": 4,
+        "hit": 35.0,
+        "roi": 72.4,
+        "profit": 14.48,
+        "haircut_roi": 65.53
+      }
+    },
+    "away_win; Q [80, 101)": {
+      "earlier": {
+        "n": 12,
+        "matches": 12,
+        "wins": 1,
+        "losses": 11,
+        "voids": 0,
+        "days": 5,
+        "hit": 8.333333333333334,
+        "roi": -72.49999999999999,
+        "profit": -8.7,
+        "haircut_roi": -73.45833333333334
+      },
+      "later": {
+        "n": 2,
+        "matches": 2,
+        "wins": 0,
+        "losses": 2,
+        "voids": 0,
+        "days": 2,
+        "hit": 0.0,
+        "roi": -100.0,
+        "profit": -2,
+        "haircut_roi": -100.0
+      }
+    }
+  },
+  "sensitivity": {
+    "away_win; Q>=60; odds [1.8,3); quote <=3h": {
+      "earlier": {
+        "n": 67,
+        "matches": 67,
+        "wins": 36,
+        "losses": 31,
+        "voids": 0,
+        "days": 12,
+        "hit": 53.73134328358209,
+        "roi": 26.059701492537314,
+        "profit": 17.46,
+        "haircut_roi": 22.44328358208955
+      },
+      "later": {
+        "n": 18,
+        "matches": 18,
+        "wins": 8,
+        "losses": 10,
+        "voids": 0,
+        "days": 4,
+        "hit": 44.44444444444444,
+        "roi": 20.222222222222218,
+        "profit": 3.6399999999999997,
+        "haircut_roi": 16.433333333333326
+      }
+    },
+    "away_win; Q>=65; odds [1.8,3); quote <=3h": {
+      "earlier": {
+        "n": 39,
+        "matches": 39,
+        "wins": 24,
+        "losses": 15,
+        "voids": 0,
+        "days": 10,
+        "hit": 61.53846153846154,
+        "roi": 44.58974358974359,
+        "profit": 17.39,
+        "haircut_roi": 40.43717948717948
+      },
+      "later": {
+        "n": 12,
+        "matches": 12,
+        "wins": 7,
+        "losses": 5,
+        "voids": 0,
+        "days": 4,
+        "hit": 58.333333333333336,
+        "roi": 56.333333333333336,
+        "profit": 6.76,
+        "haircut_roi": 51.43333333333333
+      }
+    },
+    "away_win; Q>=70; odds [1.8,3); quote <=3h": {
+      "earlier": {
+        "n": 20,
+        "matches": 20,
+        "wins": 12,
+        "losses": 8,
+        "voids": 0,
+        "days": 7,
+        "hit": 60.0,
+        "roi": 45.35,
+        "profit": 9.07,
+        "haircut_roi": 41.082499999999996
+      },
+      "later": {
+        "n": 6,
+        "matches": 6,
+        "wins": 4,
+        "losses": 2,
+        "voids": 0,
+        "days": 4,
+        "hit": 66.66666666666667,
+        "roi": 77.16666666666667,
+        "profit": 4.63,
+        "haircut_roi": 71.64166666666667
+      }
+    },
+    "away_win; Q>=65; odds [1.8,4); quote <=3h": {
+      "earlier": {
+        "n": 58,
+        "matches": 58,
+        "wins": 30,
+        "losses": 28,
+        "voids": 0,
+        "days": 11,
+        "hit": 51.724137931034484,
+        "roi": 33.48275862068965,
+        "profit": 19.419999999999998,
+        "haircut_roi": 29.39482758620689
+      },
+      "later": {
+        "n": 23,
+        "matches": 23,
+        "wins": 8,
+        "losses": 15,
+        "voids": 0,
+        "days": 4,
+        "hit": 34.78260869565217,
+        "roi": -3.0000000000000018,
+        "profit": -0.6900000000000004,
+        "haircut_roi": -6.110869565217396
+      }
+    }
+  },
+  "calibration": [
+    {
+      "market": "away_win",
+      "probability_band": "0-10%",
+      "n": 4,
+      "predicted_pct": 8.546615361432037,
+      "observed_pct": 0.0
+    },
+    {
+      "market": "away_win",
+      "probability_band": "10-20%",
+      "n": 16,
+      "predicted_pct": 16.16375571493194,
+      "observed_pct": 12.5
+    },
+    {
+      "market": "away_win",
+      "probability_band": "20-30%",
+      "n": 27,
+      "predicted_pct": 25.000281585483663,
+      "observed_pct": 25.925925925925927
+    },
+    {
+      "market": "away_win",
+      "probability_band": "30-40%",
+      "n": 31,
+      "predicted_pct": 34.81557041945391,
+      "observed_pct": 29.032258064516128
+    },
+    {
+      "market": "away_win",
+      "probability_band": "40-50%",
+      "n": 20,
+      "predicted_pct": 44.252336358408634,
+      "observed_pct": 35.0
+    },
+    {
+      "market": "away_win",
+      "probability_band": "50-60%",
+      "n": 11,
+      "predicted_pct": 53.3377295849752,
+      "observed_pct": 45.45454545454545
+    },
+    {
+      "market": "away_win",
+      "probability_band": "60-70%",
+      "n": 6,
+      "predicted_pct": 65.69093412675741,
+      "observed_pct": 16.666666666666668
+    },
+    {
+      "market": "away_win",
+      "probability_band": "70-80%",
+      "n": 1,
+      "predicted_pct": 72.9614778516851,
+      "observed_pct": 100.0
+    },
+    {
+      "market": "away_win",
+      "probability_band": "80-90%",
+      "n": 2,
+      "predicted_pct": 81.97917024828921,
+      "observed_pct": 50.0
+    },
+    {
+      "market": "btts_no",
+      "probability_band": "10-20%",
+      "n": 2,
+      "predicted_pct": 15.86966456169175,
+      "observed_pct": 50.0
+    },
+    {
+      "market": "btts_no",
+      "probability_band": "20-30%",
+      "n": 7,
+      "predicted_pct": 23.29252119231074,
+      "observed_pct": 28.571428571428573
+    },
+    {
+      "market": "btts_no",
+      "probability_band": "30-40%",
+      "n": 19,
+      "predicted_pct": 35.467665998653345,
+      "observed_pct": 42.10526315789474
+    },
+    {
+      "market": "btts_no",
+      "probability_band": "40-50%",
+      "n": 24,
+      "predicted_pct": 44.61702679606315,
+      "observed_pct": 41.666666666666664
+    },
+    {
+      "market": "btts_no",
+      "probability_band": "50-60%",
+      "n": 28,
+      "predicted_pct": 55.381069485885995,
+      "observed_pct": 35.714285714285715
+    },
+    {
+      "market": "btts_no",
+      "probability_band": "60-70%",
+      "n": 24,
+      "predicted_pct": 64.73312141196803,
+      "observed_pct": 41.666666666666664
+    },
+    {
+      "market": "btts_no",
+      "probability_band": "70-80%",
+      "n": 11,
+      "predicted_pct": 74.3694823748658,
+      "observed_pct": 45.45454545454545
+    },
+    {
+      "market": "btts_no",
+      "probability_band": "80-90%",
+      "n": 3,
+      "predicted_pct": 80.77847631710854,
+      "observed_pct": 66.66666666666667
+    },
+    {
+      "market": "btts_yes",
+      "probability_band": "10-20%",
+      "n": 3,
+      "predicted_pct": 19.22152368289147,
+      "observed_pct": 33.333333333333336
+    },
+    {
+      "market": "btts_yes",
+      "probability_band": "20-30%",
+      "n": 11,
+      "predicted_pct": 25.630517625134203,
+      "observed_pct": 54.54545454545455
+    },
+    {
+      "market": "btts_yes",
+      "probability_band": "30-40%",
+      "n": 24,
+      "predicted_pct": 35.26687858803198,
+      "observed_pct": 58.333333333333336
+    },
+    {
+      "market": "btts_yes",
+      "probability_band": "40-50%",
+      "n": 28,
+      "predicted_pct": 44.618930514114005,
+      "observed_pct": 64.28571428571429
+    },
+    {
+      "market": "btts_yes",
+      "probability_band": "50-60%",
+      "n": 24,
+      "predicted_pct": 55.382973203936864,
+      "observed_pct": 58.333333333333336
+    },
+    {
+      "market": "btts_yes",
+      "probability_band": "60-70%",
+      "n": 19,
+      "predicted_pct": 64.53233400134667,
+      "observed_pct": 57.89473684210526
+    },
+    {
+      "market": "btts_yes",
+      "probability_band": "70-80%",
+      "n": 7,
+      "predicted_pct": 76.70747880768927,
+      "observed_pct": 71.42857142857143
+    },
+    {
+      "market": "btts_yes",
+      "probability_band": "80-90%",
+      "n": 2,
+      "predicted_pct": 84.13033543830825,
+      "observed_pct": 50.0
+    },
+    {
+      "market": "double_chance_1x",
+      "probability_band": "10-20%",
+      "n": 2,
+      "predicted_pct": 12.167873035827503,
+      "observed_pct": 50.0
+    },
+    {
+      "market": "double_chance_1x",
+      "probability_band": "20-30%",
+      "n": 5,
+      "predicted_pct": 25.280816234244075,
+      "observed_pct": 60.0
+    },
+    {
+      "market": "double_chance_1x",
+      "probability_band": "30-40%",
+      "n": 6,
+      "predicted_pct": 36.48456997308853,
+      "observed_pct": 83.33333333333333
+    },
+    {
+      "market": "double_chance_1x",
+      "probability_band": "40-50%",
+      "n": 12,
+      "predicted_pct": 46.46112443018732,
+      "observed_pct": 58.333333333333336
+    },
+    {
+      "market": "double_chance_1x",
+      "probability_band": "50-60%",
+      "n": 23,
+      "predicted_pct": 55.968241329156264,
+      "observed_pct": 69.56521739130434
+    },
+    {
+      "market": "double_chance_1x",
+      "probability_band": "60-70%",
+      "n": 25,
+      "predicted_pct": 66.03610806568348,
+      "observed_pct": 72.0
+    },
+    {
+      "market": "double_chance_1x",
+      "probability_band": "70-80%",
+      "n": 22,
+      "predicted_pct": 75.03148755003595,
+      "observed_pct": 68.18181818181819
+    },
+    {
+      "market": "double_chance_1x",
+      "probability_band": "80-90%",
+      "n": 17,
+      "predicted_pct": 84.74904984589335,
+      "observed_pct": 82.3529411764706
+    },
+    {
+      "market": "double_chance_1x",
+      "probability_band": "90-100%",
+      "n": 6,
+      "predicted_pct": 91.82739048120379,
+      "observed_pct": 100.0
+    },
+    {
+      "market": "double_chance_x2",
+      "probability_band": "10-20%",
+      "n": 2,
+      "predicted_pct": 17.285050392384015,
+      "observed_pct": 50.0
+    },
+    {
+      "market": "double_chance_x2",
+      "probability_band": "20-30%",
+      "n": 3,
+      "predicted_pct": 24.838629059446166,
+      "observed_pct": 0.0
+    },
+    {
+      "market": "double_chance_x2",
+      "probability_band": "30-40%",
+      "n": 10,
+      "predicted_pct": 37.1353922313995,
+      "observed_pct": 30.0
+    },
+    {
+      "market": "double_chance_x2",
+      "probability_band": "40-50%",
+      "n": 15,
+      "predicted_pct": 45.3688171513522,
+      "observed_pct": 26.666666666666668
+    },
+    {
+      "market": "double_chance_x2",
+      "probability_band": "50-60%",
+      "n": 18,
+      "predicted_pct": 55.15345106119681,
+      "observed_pct": 61.111111111111114
+    },
+    {
+      "market": "double_chance_x2",
+      "probability_band": "60-70%",
+      "n": 26,
+      "predicted_pct": 65.16108901542967,
+      "observed_pct": 50.0
+    },
+    {
+      "market": "double_chance_x2",
+      "probability_band": "70-80%",
+      "n": 27,
+      "predicted_pct": 74.81345483709494,
+      "observed_pct": 74.07407407407408
+    },
+    {
+      "market": "double_chance_x2",
+      "probability_band": "80-90%",
+      "n": 14,
+      "predicted_pct": 84.30129113064997,
+      "observed_pct": 64.28571428571429
+    },
+    {
+      "market": "double_chance_x2",
+      "probability_band": "90-100%",
+      "n": 3,
+      "predicted_pct": 93.35892748275673,
+      "observed_pct": 66.66666666666667
+    },
+    {
+      "market": "draw",
+      "probability_band": "0-10%",
+      "n": 3,
+      "predicted_pct": 9.276418492733223,
+      "observed_pct": 33.333333333333336
+    },
+    {
+      "market": "draw",
+      "probability_band": "10-20%",
+      "n": 15,
+      "predicted_pct": 17.289735955860213,
+      "observed_pct": 6.666666666666667
+    },
+    {
+      "market": "draw",
+      "probability_band": "20-30%",
+      "n": 77,
+      "predicted_pct": 25.290600502698393,
+      "observed_pct": 25.974025974025974
+    },
+    {
+      "market": "draw",
+      "probability_band": "30-40%",
+      "n": 21,
+      "predicted_pct": 33.4498566573932,
+      "observed_pct": 38.095238095238095
+    },
+    {
+      "market": "draw",
+      "probability_band": "40-50%",
+      "n": 2,
+      "predicted_pct": 41.881476057488456,
+      "observed_pct": 0.0
+    },
+    {
+      "market": "home_win",
+      "probability_band": "0-10%",
+      "n": 2,
+      "predicted_pct": 8.736493460611781,
+      "observed_pct": 0.0
+    },
+    {
+      "market": "home_win",
+      "probability_band": "10-20%",
+      "n": 6,
+      "predicted_pct": 15.42388508247402,
+      "observed_pct": 66.66666666666667
+    },
+    {
+      "market": "home_win",
+      "probability_band": "20-30%",
+      "n": 30,
+      "predicted_pct": 25.66396762075286,
+      "observed_pct": 23.333333333333332
+    },
+    {
+      "market": "home_win",
+      "probability_band": "30-40%",
+      "n": 26,
+      "predicted_pct": 34.992837434248216,
+      "observed_pct": 38.46153846153846
+    },
+    {
+      "market": "home_win",
+      "probability_band": "40-50%",
+      "n": 25,
+      "predicted_pct": 44.342072867670964,
+      "observed_pct": 48.0
+    },
+    {
+      "market": "home_win",
+      "probability_band": "50-60%",
+      "n": 20,
+      "predicted_pct": 55.36531858231943,
+      "observed_pct": 75.0
+    },
+    {
+      "market": "home_win",
+      "probability_band": "60-70%",
+      "n": 4,
+      "predicted_pct": 62.395806732063576,
+      "observed_pct": 75.0
+    },
+    {
+      "market": "home_win",
+      "probability_band": "70-80%",
+      "n": 5,
+      "predicted_pct": 74.82479811057692,
+      "observed_pct": 80.0
+    },
+    {
+      "market": "over_1.5",
+      "probability_band": "30-40%",
+      "n": 3,
+      "predicted_pct": 35.29504410856949,
+      "observed_pct": 33.333333333333336
+    },
+    {
+      "market": "over_1.5",
+      "probability_band": "40-50%",
+      "n": 8,
+      "predicted_pct": 45.371559654822946,
+      "observed_pct": 75.0
+    },
+    {
+      "market": "over_1.5",
+      "probability_band": "50-60%",
+      "n": 11,
+      "predicted_pct": 55.625584770545125,
+      "observed_pct": 72.72727272727273
+    },
+    {
+      "market": "over_1.5",
+      "probability_band": "60-70%",
+      "n": 25,
+      "predicted_pct": 64.74418312313571,
+      "observed_pct": 88.0
+    },
+    {
+      "market": "over_1.5",
+      "probability_band": "70-80%",
+      "n": 27,
+      "predicted_pct": 75.14303076042619,
+      "observed_pct": 77.77777777777777
+    },
+    {
+      "market": "over_1.5",
+      "probability_band": "80-90%",
+      "n": 32,
+      "predicted_pct": 84.13745610411199,
+      "observed_pct": 81.25
+    },
+    {
+      "market": "over_1.5",
+      "probability_band": "90-100%",
+      "n": 12,
+      "predicted_pct": 94.60241736307033,
+      "observed_pct": 66.66666666666667
+    },
+    {
+      "market": "over_2.5",
+      "probability_band": "10-20%",
+      "n": 4,
+      "predicted_pct": 16.157491010261264,
+      "observed_pct": 0.0
+    },
+    {
+      "market": "over_2.5",
+      "probability_band": "20-30%",
+      "n": 13,
+      "predicted_pct": 24.186976948573484,
+      "observed_pct": 61.53846153846154
+    },
+    {
+      "market": "over_2.5",
+      "probability_band": "30-40%",
+      "n": 26,
+      "predicted_pct": 35.57350832303093,
+      "observed_pct": 53.84615384615385
+    },
+    {
+      "market": "over_2.5",
+      "probability_band": "40-50%",
+      "n": 20,
+      "predicted_pct": 46.22060515646617,
+      "observed_pct": 55.0
+    },
+    {
+      "market": "over_2.5",
+      "probability_band": "50-60%",
+      "n": 20,
+      "predicted_pct": 55.753241132597054,
+      "observed_pct": 45.0
+    },
+    {
+      "market": "over_2.5",
+      "probability_band": "60-70%",
+      "n": 20,
+      "predicted_pct": 64.31491100353671,
+      "observed_pct": 55.0
+    },
+    {
+      "market": "over_2.5",
+      "probability_band": "70-80%",
+      "n": 4,
+      "predicted_pct": 74.87381455625766,
+      "observed_pct": 75.0
+    },
+    {
+      "market": "over_2.5",
+      "probability_band": "80-90%",
+      "n": 9,
+      "predicted_pct": 84.3909595024995,
+      "observed_pct": 44.44444444444444
+    },
+    {
+      "market": "over_2.5",
+      "probability_band": "90-100%",
+      "n": 2,
+      "predicted_pct": 91.55487748304006,
+      "observed_pct": 100.0
+    },
+    {
+      "market": "over_3.5",
+      "probability_band": "0-10%",
+      "n": 10,
+      "predicted_pct": 7.883264426392328,
+      "observed_pct": 30.0
+    },
+    {
+      "market": "over_3.5",
+      "probability_band": "10-20%",
+      "n": 32,
+      "predicted_pct": 15.694269709130115,
+      "observed_pct": 40.625
+    },
+    {
+      "market": "over_3.5",
+      "probability_band": "20-30%",
+      "n": 22,
+      "predicted_pct": 24.98518981094087,
+      "observed_pct": 36.36363636363637
+    },
+    {
+      "market": "over_3.5",
+      "probability_band": "30-40%",
+      "n": 25,
+      "predicted_pct": 35.019646674188905,
+      "observed_pct": 32.0
+    },
+    {
+      "market": "over_3.5",
+      "probability_band": "40-50%",
+      "n": 14,
+      "predicted_pct": 44.228500188566834,
+      "observed_pct": 28.571428571428573
+    },
+    {
+      "market": "over_3.5",
+      "probability_band": "50-60%",
+      "n": 3,
+      "predicted_pct": 54.27277855046856,
+      "observed_pct": 33.333333333333336
+    },
+    {
+      "market": "over_3.5",
+      "probability_band": "60-70%",
+      "n": 4,
+      "predicted_pct": 64.8155538457975,
+      "observed_pct": 75.0
+    },
+    {
+      "market": "over_3.5",
+      "probability_band": "70-80%",
+      "n": 6,
+      "predicted_pct": 72.57360812403553,
+      "observed_pct": 16.666666666666668
+    },
+    {
+      "market": "over_3.5",
+      "probability_band": "80-90%",
+      "n": 2,
+      "predicted_pct": 84.03878931836113,
+      "observed_pct": 100.0
+    },
+    {
+      "market": "over_4.5",
+      "probability_band": "0-10%",
+      "n": 45,
+      "predicted_pct": 5.748863861592533,
+      "observed_pct": 20.0
+    },
+    {
+      "market": "over_4.5",
+      "probability_band": "10-20%",
+      "n": 38,
+      "predicted_pct": 14.653240035449905,
+      "observed_pct": 13.157894736842104
+    },
+    {
+      "market": "over_4.5",
+      "probability_band": "20-30%",
+      "n": 19,
+      "predicted_pct": 24.401913625702157,
+      "observed_pct": 26.31578947368421
+    },
+    {
+      "market": "over_4.5",
+      "probability_band": "30-40%",
+      "n": 4,
+      "predicted_pct": 34.530265409234254,
+      "observed_pct": 25.0
+    },
+    {
+      "market": "over_4.5",
+      "probability_band": "40-50%",
+      "n": 3,
+      "predicted_pct": 45.55904625949611,
+      "observed_pct": 0.0
+    },
+    {
+      "market": "over_4.5",
+      "probability_band": "50-60%",
+      "n": 5,
+      "predicted_pct": 54.0973992770549,
+      "observed_pct": 40.0
+    },
+    {
+      "market": "over_4.5",
+      "probability_band": "60-70%",
+      "n": 2,
+      "predicted_pct": 61.702659098265315,
+      "observed_pct": 0.0
+    },
+    {
+      "market": "over_4.5",
+      "probability_band": "70-80%",
+      "n": 2,
+      "predicted_pct": 74.92969077651426,
+      "observed_pct": 100.0
+    },
+    {
+      "market": "under_2.5",
+      "probability_band": "0-10%",
+      "n": 2,
+      "predicted_pct": 8.445122516959955,
+      "observed_pct": 0.0
+    },
+    {
+      "market": "under_2.5",
+      "probability_band": "10-20%",
+      "n": 9,
+      "predicted_pct": 15.609040497500517,
+      "observed_pct": 55.55555555555556
+    },
+    {
+      "market": "under_2.5",
+      "probability_band": "20-30%",
+      "n": 4,
+      "predicted_pct": 25.12618544374235,
+      "observed_pct": 25.0
+    },
+    {
+      "market": "under_2.5",
+      "probability_band": "30-40%",
+      "n": 20,
+      "predicted_pct": 35.68508899646329,
+      "observed_pct": 45.0
+    },
+    {
+      "market": "under_2.5",
+      "probability_band": "40-50%",
+      "n": 20,
+      "predicted_pct": 44.24675886740294,
+      "observed_pct": 55.0
+    },
+    {
+      "market": "under_2.5",
+      "probability_band": "50-60%",
+      "n": 20,
+      "predicted_pct": 53.77939484353384,
+      "observed_pct": 45.0
+    },
+    {
+      "market": "under_2.5",
+      "probability_band": "60-70%",
+      "n": 26,
+      "predicted_pct": 64.42649167696908,
+      "observed_pct": 46.15384615384615
+    },
+    {
+      "market": "under_2.5",
+      "probability_band": "70-80%",
+      "n": 13,
+      "predicted_pct": 75.81302305142653,
+      "observed_pct": 38.46153846153846
+    },
+    {
+      "market": "under_2.5",
+      "probability_band": "80-90%",
+      "n": 4,
+      "predicted_pct": 83.84250898973875,
+      "observed_pct": 100.0
+    },
+    {
+      "market": "under_3.5",
+      "probability_band": "10-20%",
+      "n": 2,
+      "predicted_pct": 15.961210681638875,
+      "observed_pct": 0.0
+    },
+    {
+      "market": "under_3.5",
+      "probability_band": "20-30%",
+      "n": 6,
+      "predicted_pct": 27.426391875964494,
+      "observed_pct": 83.33333333333333
+    },
+    {
+      "market": "under_3.5",
+      "probability_band": "30-40%",
+      "n": 4,
+      "predicted_pct": 35.18444615420251,
+      "observed_pct": 25.0
+    },
+    {
+      "market": "under_3.5",
+      "probability_band": "40-50%",
+      "n": 3,
+      "predicted_pct": 45.72722144953144,
+      "observed_pct": 66.66666666666667
+    },
+    {
+      "market": "under_3.5",
+      "probability_band": "50-60%",
+      "n": 14,
+      "predicted_pct": 55.771499811433166,
+      "observed_pct": 71.42857142857143
+    },
+    {
+      "market": "under_3.5",
+      "probability_band": "60-70%",
+      "n": 25,
+      "predicted_pct": 64.9803533258111,
+      "observed_pct": 68.0
+    },
+    {
+      "market": "under_3.5",
+      "probability_band": "70-80%",
+      "n": 22,
+      "predicted_pct": 75.01481018905913,
+      "observed_pct": 63.63636363636363
+    },
+    {
+      "market": "under_3.5",
+      "probability_band": "80-90%",
+      "n": 32,
+      "predicted_pct": 84.30573029086989,
+      "observed_pct": 59.375
+    },
+    {
+      "market": "under_3.5",
+      "probability_band": "90-100%",
+      "n": 10,
+      "predicted_pct": 92.11673557360768,
+      "observed_pct": 70.0
+    },
+    {
+      "market": "under_4.5",
+      "probability_band": "20-30%",
+      "n": 2,
+      "predicted_pct": 25.070309223485737,
+      "observed_pct": 0.0
+    },
+    {
+      "market": "under_4.5",
+      "probability_band": "30-40%",
+      "n": 2,
+      "predicted_pct": 38.2973409017347,
+      "observed_pct": 100.0
+    },
+    {
+      "market": "under_4.5",
+      "probability_band": "40-50%",
+      "n": 5,
+      "predicted_pct": 45.90260072294511,
+      "observed_pct": 60.0
+    },
+    {
+      "market": "under_4.5",
+      "probability_band": "50-60%",
+      "n": 3,
+      "predicted_pct": 54.44095374050392,
+      "observed_pct": 100.0
+    },
+    {
+      "market": "under_4.5",
+      "probability_band": "60-70%",
+      "n": 4,
+      "predicted_pct": 65.46973459076575,
+      "observed_pct": 75.0
+    },
+    {
+      "market": "under_4.5",
+      "probability_band": "70-80%",
+      "n": 19,
+      "predicted_pct": 75.59808637429785,
+      "observed_pct": 73.6842105263158
+    },
+    {
+      "market": "under_4.5",
+      "probability_band": "80-90%",
+      "n": 38,
+      "predicted_pct": 85.34675996455012,
+      "observed_pct": 86.84210526315789
+    },
+    {
+      "market": "under_4.5",
+      "probability_band": "90-100%",
+      "n": 45,
+      "predicted_pct": 94.25113613840747,
+      "observed_pct": 80.0
+    }
+  ]
+}

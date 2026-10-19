@@ -6,14 +6,13 @@ import { SortableTh, bandSortValue, useSortableRows } from '../components/Sortab
 import './Analytics.css'
 
 interface ResearchBreakdown { ticket_type: string; tickets: number; wins: number; hit_rate: number; roi: number; profit_loss: number }
-interface TicketOverlap { target_date: string; left_ticket_type: string; right_ticket_type: string; shared_matches: number; left_legs: number; right_legs: number; overlap_ratio_of_smaller: number }
 interface ResearchSummary {
   current_model_version: string
   published_tickets: number; settled_tickets: number; wins: number; losses: number
   hit_rate: number; hit_rate_confidence_interval_95: [number, number]
   stake: number; return: number; profit_loss: number; roi: number; yield: number
   max_drawdown_units: number; brier_score: number | null; calibration_error: number | null
-  selection_sample_size: number; by_ticket_type: ResearchBreakdown[]; my_accumulators: ResearchBreakdown; ticket_overlap: TicketOverlap[]
+  selection_sample_size: number; by_ticket_type: ResearchBreakdown[]; my_accumulators: ResearchBreakdown
 }
 interface IndividualRow { label: string; selections: number; settled: number; wins: number; losses: number; voids: number; staked: number; returned: number; pnl: number; roi: number; hit_rate: number }
 interface IndividualSummary { stake: number; unique_selections: number; settled_selections: number; eligible_predictions?: number; settled_predictions?: number; excluded_missing_odds?: number; excluded_post_kickoff_information?: number; excluded_post_kickoff_odds?: number; overall: IndividualRow; by_date: IndividualRow[]; by_month: IndividualRow[]; by_year: IndividualRow[]; by_market: IndividualRow[]; by_competition: IndividualRow[]; by_odds_band?: IndividualRow[]; by_probability_band?: IndividualRow[]; by_grade?: IndividualRow[] }
@@ -559,17 +558,7 @@ function ResearchPerformance({ data }: { data: ResearchSummary | null }) {
         <p>Small samples can make ROI and hit rate look unusually strong or weak. Read confidence and drawdown alongside headline returns.</p>
       </section>
     </div>
-    <section className="analytics-card journal-table-card">
-      <div className="section-header"><div><span className="eyebrow">Exposure control</span><h2 className="section-title">Ticket overlap</h2></div><span className="section-subtitle">Shared matches between official tiers</span></div>
-      {data.ticket_overlap.length === 0 ? <AnalyticsEmpty title="No overlapping ticket pairs" body="Overlap is calculated when two public ticket tiers exist for the same day." compact /> : <TicketOverlapTable rows={data.ticket_overlap} />}
-      <p className="matrix-note">This is exposure overlap, not independent evidence. Shared matches can make multiple winning or losing tickets look like separate trials when they are not.</p>
-    </section>
   </>
-}
-
-function TicketOverlapTable({ rows }: { rows: TicketOverlap[] }) {
-  const { sorted, header } = useSortableRows(rows, { date: row => row.target_date, pair: row => `${formatTicketType(row.left_ticket_type)} ${formatTicketType(row.right_ticket_type)}`, shared: row => row.shared_matches, legs: row => row.left_legs + row.right_legs, overlap: row => row.overlap_ratio_of_smaller })
-  return <div className="analytics-table-wrap"><table className="analytics-table"><thead><tr>{header('date', 'Date')}{header('pair', 'Ticket pair')}{header('shared', 'Shared matches')}{header('legs', 'Legs')}{header('overlap', 'Overlap of smaller')}</tr></thead><tbody>{sorted.map(row => <tr key={`${row.target_date}-${row.left_ticket_type}-${row.right_ticket_type}`}><td><span className="event-date">{row.target_date}</span></td><td><strong>{formatTicketType(row.left_ticket_type)} + {formatTicketType(row.right_ticket_type)}</strong></td><td>{row.shared_matches}</td><td>{row.left_legs} / {row.right_legs}</td><td className={row.overlap_ratio_of_smaller > 0.5 ? 'negative' : ''}>{pct(row.overlap_ratio_of_smaller)}</td></tr>)}</tbody></table></div>
 }
 
 function BacktestPanel({ currentModelVersion }: { currentModelVersion: string }) {

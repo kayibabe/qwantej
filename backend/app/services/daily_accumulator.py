@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from datetime import date
 
 from sqlalchemy import select
@@ -10,6 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models import (
     AccumulatorTicket,
+    AuditEvent,
     CustomAccumulator,
     CustomAccumulatorLeg,
     CustomAccumulatorStatus,
@@ -111,6 +113,14 @@ async def create_daily_accumulator(
         ticket_type.value: source_by_type[ticket_type].id for ticket_type in required
     }
     source_ticket_snapshots = daily_accumulator_source_snapshots(source_by_type, required)
+    selections = merged_source_selection_provenance(list(source_by_type.values()))
+    if not selections:
+        return {
+            "status": "no_source_selections",
+            "target_date": target_date.isoformat(),
+            "source_ticket_ids": source_ticket_ids,
+        }
+
     existing_rows = (
         await db.execute(
             select(CustomAccumulator)
@@ -124,13 +134,66 @@ async def create_daily_accumulator(
     existing = next((row for row in existing_rows if is_daily_accumulator(row)), None)
     if existing is not None:
         current_snapshots = (existing.settlement_details or {}).get("source_ticket_snapshots") or {}
-        if current_snapshots == source_ticket_snapshots:
+        expected_legs = Counter(
+            (
+                selection.match_id,
+                selection.prediction_id,
+                source_ticket.id,
+                source_ticket.ticket_type.value,
+                source_ticket.version,
+                source_conflict,
+                selection.market,
+                selection.selection,
+                selection.odds_snapshot,
+            )
+            for selection, source_ticket, source_conflict in selections
+        )
+        saved_legs = Counter(
+            (
+                leg.match_id,
+                leg.prediction_id,
+                leg.source_ticket_id,
+                leg.source_ticket_type,
+                leg.source_ticket_version,
+                leg.source_conflict,
+                leg.market,
+                leg.selection,
+                leg.odds_snapshot,
+            )
+            for leg in existing.legs
+        )
+        legs_match_sources = saved_legs == expected_legs
+        if current_snapshots == source_ticket_snapshots and legs_match_sources:
             return {
                 "status": "already_exists",
                 "target_date": target_date.isoformat(),
                 "accumulator_id": existing.id,
                 "leg_count": len(existing.legs),
             }
+        if current_snapshots == source_ticket_snapshots and not legs_match_sources:
+            if existing.status != CustomAccumulatorStatus.DRAFT:
+                return {
+                    "status": "source_legs_mismatch_locked",
+                    "target_date": target_date.isoformat(),
+                    "accumulator_id": existing.id,
+                    "source_ticket_ids": source_ticket_ids,
+                    "existing_leg_count": len(existing.legs),
+                    "source_leg_count": len(selections),
+                }
+            db.add(
+                AuditEvent(
+                    entity_type="custom_accumulator",
+                    entity_id=str(existing.id),
+                    event_type="source_legs_reconciled",
+                    actor="daily_accumulator",
+                    reason="Saved draft legs did not match its immutable source ticket selections.",
+                    payload={
+                        "source_ticket_ids": source_ticket_ids,
+                        "previous_leg_count": len(existing.legs),
+                        "source_leg_count": len(selections),
+                    },
+                )
+            )
         if existing.status not in {
             CustomAccumulatorStatus.DRAFT,
             CustomAccumulatorStatus.PLACED,
@@ -157,14 +220,6 @@ async def create_daily_accumulator(
         row.settled_at = None
     else:
         row = None
-
-    selections = merged_source_selection_provenance(list(source_by_type.values()))
-    if not selections:
-        return {
-            "status": "no_source_selections",
-            "target_date": target_date.isoformat(),
-            "source_ticket_ids": {ticket_type.value: source_by_type[ticket_type].id for ticket_type in required},
-        }
 
     if row is None:
         row = CustomAccumulator(
@@ -207,7 +262,7 @@ async def create_daily_accumulator(
                 source_ticket_type=source_ticket.ticket_type.value,
                 source_ticket_version=source_ticket.version,
                 source_conflict=source_conflict,
-                result=SelectionResult.PENDING,
+                result=getattr(selection, "result", SelectionResult.PENDING),
             )
         )
     row.combined_odds = round(combined_odds, 4)

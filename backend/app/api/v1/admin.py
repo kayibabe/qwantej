@@ -145,6 +145,8 @@ async def update_user(user_id: int, payload: AdminUserUpdate, db=Depends(get_db)
         if duplicate:
             raise HTTPException(status_code=409, detail="Username or email already exists")
     await _ensure_active_admin_continuity(db, user, changes)
+    if "plan" in changes:
+        changes["plan_source"] = "manual"
     for key, value in changes.items():
         setattr(user, key, value)
     if "password_hash" in changes or changes.get("account_status") in {"suspended", "pending"}:

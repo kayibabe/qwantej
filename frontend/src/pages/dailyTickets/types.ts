@@ -7,7 +7,7 @@ export interface DailyTicketsPageProps {
 }
 
 export type DailyTab =
-  "tickets" | "matches" | "best-mix" | "odds-policy" | "market-roi" | "passed";
+  "tickets" | "matches" | "odds-policy" | "market-roi" | "daily-match-picks" | "passed" | "acca-analysis";
 
 export type MatchDisplayState =
   "finished" | "live" | "scheduled" | "postponed" | "cancelled";

@@ -21,10 +21,10 @@ import TicketCard from "../../components/TicketCard";
 import SelectionDetail, {
   type DetailSelection,
 } from "../../components/SelectionDetail";
-import { BandMixPicks } from "./BandMixPicks";
 import { ParameterSweepPicks } from "./ParameterSweepPicks";
-import { fetchDailyMarketRoi, MarketRoiDaily, type MarketRoiDailyData } from "./MarketRoiDaily";
+import { fetchDailyMarketRoi, DailyMatchPicks, MarketRoiDaily, type MarketRoiDailyData } from "./MarketRoiDaily";
 import { TicketGridSkeleton } from "./TicketGridSkeleton";
+import { AccumulatorAnalysis } from "./AccumulatorAnalysis";
 import { AllMatches } from "./AllMatches";
 import { FixtureExplorer } from "./FixtureExplorer";
 import PublishedSelections from "./PublishedSelections";
@@ -194,12 +194,18 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
   const dailyTabs: [DailyTab, string][] = [
     ...(initialTab === "tickets" ? [["tickets", "Recommendations"] as [DailyTab, string]] : []),
     ...(initialTab === "matches" ? [["matches", "Match explorer"] as [DailyTab, string]] : []),
-    ...(isAdmin && initialTab === "odds-policy" ? [
-      ["best-mix", "Best-mix picks"],
-      ["odds-policy", "Research policy"],
+    ...(isAdmin && ["odds-policy", "market-roi", "daily-match-picks", "passed"].includes(initialTab) ? [
       ["market-roi", "Market ROI"],
-      ["passed", "Passed / why"],
+      ["daily-match-picks", "Daily Match Picks"],
+      ["passed", "Passed / Why"],
+      ["odds-policy", "Research Policy"],
     ] as [DailyTab, string][] : []),
+    ...(canExploreMarkets && ["tickets", "matches"].includes(initialTab)
+      ? [["acca-analysis", "Acca analysis"] as [DailyTab, string]]
+      : []),
+    ...(isAdmin && initialTab === "market-roi"
+      ? [["acca-analysis", "Acca analysis"] as [DailyTab, string]]
+      : []),
   ];
   const publicationTimes = publicPublishedTickets
     .map((ticket) => ticket.published_at)
@@ -382,12 +388,12 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
           {tab === "matches" && canExploreMarkets && <div className="view-intro"><div><span className="eyebrow">Research candidates</span><h2 className="section-title">Qualified match markets</h2></div><p>These candidate signals are for inspection. A match appearing here does not mean it was selected for a published ticket.</p></div>}
           {isAdmin && tab === "matches" && marketRoi && (
             <div className="market-roi-match-gate" role="status">
-              <b>Daily ROI market gate</b>
+              <b>Daily market report screen</b>
               <span>
-                Showing today’s Q-score matches only when the exact market and selection have a valid pre-kickoff BET/WATCH quote and their historical market ROI is at least 20%. Quote age is shown in Market ROI.
+                Showing every available match that meets Q ≥ {marketRoi.min_q_score}, decimal odds {marketRoi.min_decimal_odds.toFixed(2)} to below {marketRoi.max_decimal_odds_exclusive.toFixed(2)}, and a valid pre-kickoff price in a market with historical hit rate above {Math.round(marketRoi.hit_rate_threshold * 100)}% and ROI above {Math.round(marketRoi.roi_threshold * 100)}%.
                 {qualifyingMarketLabels.length > 0
                   ? ` Qualifying markets: ${qualifyingMarketLabels.join(", ")}.`
-                  : " No market currently clears the ROI threshold."}
+                  : " No market in the current history meets both thresholds."}
               </span>
             </div>
           )}
@@ -401,14 +407,6 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
           )}
           {tab === "matches" && canExploreMarkets && <AllMatches rows={matchGroups} onSelect={openSelection} onAdd={addToAccumulator} allowAdd={isAdmin} />}
           {tab === "matches" && !canExploreMarkets && <FixtureExplorer fixtures={fixtures} />}
-          {isAdmin && tab === "best-mix" && (
-            <BandMixPicks
-              date={date}
-              rejectedRows={rejected}
-              onSelect={openSelection}
-              onAdd={addToAccumulator}
-            />
-          )}
           {isAdmin && tab === "odds-policy" && (
             <ParameterSweepPicks
               date={date}
@@ -417,6 +415,8 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
             />
           )}
           {isAdmin && tab === "market-roi" && <MarketRoiDaily data={marketRoi} error={marketRoiError} />}
+          {canExploreMarkets && tab === "acca-analysis" && <AccumulatorAnalysis rows={matches} date={date} />}
+          {isAdmin && tab === "daily-match-picks" && <DailyMatchPicks data={marketRoi} error={marketRoiError} />}
           {isAdmin && tab === "passed" && (
             <PassedMatches rows={rejected} onSelect={openSelection} />
           )}
@@ -480,6 +480,13 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
                   <strong>Latest versions shown.</strong> Earlier published tickets remain immutable in history; regenerated tickets may have different legs.
                 </div>
               )}
+
+              {publicPublishedTickets.length > 0 && (
+                <PublishedSelections tickets={publicTiers.flatMap((tier) => {
+                  const ticket = data?.[tier.key] ?? null;
+                  return ticket ? [{ tierName: tier.name, ticket }] : [];
+                })} onSelect={openTicketLeg} canViewSelections={user?.plan === "pro" || isAdmin} />
+              )}
               {publicPublishedTickets.length > 0 && (
                 <details className="stake-planner">
                   <summary>
@@ -501,12 +508,6 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
                     <span>Planning estimate only · half-Kelly sizing, capped at 5% of bankroll · does not place a bet.</span>
                   </div>
                 </details>
-              )}
-              {publicPublishedTickets.length > 0 && (
-                <PublishedSelections tickets={publicTiers.flatMap((tier) => {
-                  const ticket = data?.[tier.key] ?? null;
-                  return ticket ? [{ tierName: tier.name, ticket }] : [];
-                })} onSelect={openTicketLeg} canViewSelections={user?.plan === "pro" || isAdmin} />
               )}
               {publicPublishedTickets.length > 0 && <div className="ticket-tier-section-heading">
                 <div><span className="eyebrow">Immutable published records</span><h2>Ticket tier totals</h2></div>
@@ -567,7 +568,7 @@ function PassedMatches({ rows, onSelect }: { rows: SelectionSummary[]; onSelect:
     </div>
     {rows.length === 0 ? <div className="decision-empty"><strong>No rejected candidates recorded</strong><span>When the candidate ledger is empty, there is no pass explanation to display.</span></div> : <div className="decision-table-wrap passed-matches-table-wrap">
       <table className="decision-table passed-matches-table">
-        <thead><tr><th>Match</th><th>Selection</th><th>Q-score · Odds · Edge</th><th>Rejection reason</th><th>Match result</th><th>Rejection check</th></tr></thead>
+        <thead><tr><th>Match</th><th>Selection</th><th>Q-score</th><th>Odds</th><th data-sort-default-direction="descending">Edge</th><th>Rejection reason</th><th>Match result</th><th>Rejection check</th></tr></thead>
         <tbody>{rows.map(row => {
           const outcome = rejectionOutcome(row.result);
           const score = row.home_goals != null && row.away_goals != null
@@ -579,7 +580,9 @@ function PassedMatches({ rows, onSelect }: { rows: SelectionSummary[]; onSelect:
           return <tr key={row.prediction_id}>
             <td><button className="decision-match" onClick={() => onSelect(row)}>{row.home_team} vs {row.away_team}<small>{row.competition} · <span className="match-date">{formatDate(row.kickoff_at)}</span> · <span className="match-kickoff">{formatKickoff(row.kickoff_at)}</span></small></button></td>
             <td>{!selectionRepeatsMarket(row.market, row.selection) && <span className="decision-market">{formatMarket(row.market)}</span>}<span className={`market-pick ${selectionTone(row.selection)}`}>{formatSelection(row.selection)}</span></td>
-            <td><div className="passed-match-metrics"><span><small>Q-score</small><b>{row.q_score.toFixed(1)}</b></span><span><small>Odds</small><b>{row.best_odds == null ? "Unavailable" : row.best_odds.toFixed(2)}</b></span><span><small>Edge</small><b>{row.edge == null ? "Unavailable" : `${(row.edge * 100).toFixed(1)}%`}</b></span></div></td>
+            <td className="passed-match-metric">{row.q_score.toFixed(1)}</td>
+            <td className="passed-match-metric">{row.best_odds == null ? "Unavailable" : row.best_odds.toFixed(2)}</td>
+            <td className="passed-match-metric">{row.edge == null ? "Unavailable" : `${(row.edge * 100).toFixed(1)}%`}</td>
             <td className="passed-match-reason-cell">{(row.reason_codes?.length ? row.reason_codes : ["Publication gate did not pass"]).map(reasonLabel).join(" · ")}</td>
             <td><span className={`result-pill ${row.result ?? "pending"}`}>{resultLabel}</span>{score && <small className="result-score">{score}</small>}</td>
             <td><span className={`rejection-outcome-pill ${outcome.tone}`}>{outcome.label}</span></td>

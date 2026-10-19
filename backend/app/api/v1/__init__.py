@@ -20,10 +20,11 @@ from app.api.v1 import (
     match_filters,
     insights,
 )
-from app.api import auth
+from app.api import auth, billing
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(auth.router)
+router.include_router(billing.router)
 router.include_router(ingest.router)
 router.include_router(models.router)
 router.include_router(selections.router)
@@ -40,6 +41,8 @@ router.include_router(pipeline.router)
 router.include_router(backtests.router)
 router.include_router(custom_accumulators.router)
 router.include_router(singles.router)
+from app.api.v1 import sweet_spot
+router.include_router(sweet_spot.router)
 router.include_router(match_favorites.router)
 router.include_router(match_filters.router)
 router.include_router(insights.router)

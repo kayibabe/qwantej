@@ -1,3 +1,16 @@
+const PRODUCT_TIME_ZONE = 'Africa/Blantyre'
+
+export function dateStringInProductTimeZone(d = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en', {
+    timeZone: PRODUCT_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d)
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(item => item.type === type)?.value ?? ''
+  return `${part('year')}-${part('month')}-${part('day')}`
+}
+
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', {
     weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
@@ -45,11 +58,11 @@ export function marketLabel(market: string): string {
 }
 
 export function addDays(dateStr: string, n: number): string {
-  const d = new Date(dateStr)
-  d.setDate(d.getDate() + n)
+  const [year, month, day] = dateStr.split('-').map(Number)
+  const d = new Date(Date.UTC(year, month - 1, day + n))
   return d.toISOString().slice(0, 10)
 }
 
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10)
+  return dateStringInProductTimeZone()
 }

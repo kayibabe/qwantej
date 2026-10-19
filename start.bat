@@ -8,6 +8,7 @@ echo.
 
 cd /d "%~dp0"
 set "FRONTEND_PORT=3011"
+set "PORTFOLIO_ENV=%~dp0..\local-server\config\portfolio.env"
 
 echo [1/4] Checking Docker Desktop...
 docker info >nul 2>&1
@@ -47,13 +48,22 @@ if "%DOCKER_READY%" neq "1" (
 )
 
 echo [2/4] Starting backend services (Postgres, Redis, API, Celery)...
-docker compose build backend
+docker network inspect local-portfolio-read >nul 2>&1
+if errorlevel 1 (
+    docker network create local-portfolio-read >nul
+    if errorlevel 1 (
+        echo ERROR: Could not create the shared Portfolio read network.
+        pause
+        exit /b 1
+    )
+)
+docker compose --env-file "%PORTFOLIO_ENV%" build backend
 if errorlevel 1 (
     echo ERROR: Backend image build failed.
     pause
     exit /b 1
 )
-docker compose up -d
+docker compose --env-file "%PORTFOLIO_ENV%" up -d
 if errorlevel 1 (
     echo ERROR: Docker Compose failed.
     docker compose logs --tail=50 migrate backend

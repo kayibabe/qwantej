@@ -84,6 +84,7 @@ export default function App() {
   const { user, loading: authLoading } = useAuth()
   const isInternal = user?.role === 'admin'
   const [page, setPage] = useState<Page>(() => routePage(window.location.pathname))
+  const [researchVisit, setResearchVisit] = useState(0)
   const [workspace, setWorkspace] = useState<Workspace>(() => workspaceForPage(routePage(window.location.pathname)) ?? 'football')
   const [matchId, setMatchId] = useState<number | null>(() => routeMatchId(window.location.pathname))
   const [date, setDate] = useState(() => dateFromSearch(window.location.search))
@@ -140,6 +141,7 @@ export default function App() {
   }, [authLoading, page, user])
 
   function navigate(next: Page, _requested?: ModulePage, replace = false) {
+    if (next === 'research') setResearchVisit(visit => visit + 1)
     setPage(next)
     const nextWorkspace = workspaceForPage(next)
     if (nextWorkspace) setWorkspace(nextWorkspace)
@@ -280,7 +282,7 @@ export default function App() {
         {page === 'insights' && (user.plan === 'pro' || isInternal
           ? <InsightsPage />
           : <section className="insights-access-card"><h1>Stats &amp; trends</h1><p>League results and team tables are available on Pro.</p><button className="btn-primary" onClick={() => navigate('upgrade')}>View Pro access</button></section>)}
-        {isInternal && page === 'research' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab="odds-policy" onOpenMatch={navigateToMatch} />}
+        {isInternal && page === 'research' && <DailyTicketsPage key={`${date}-${page}-${researchVisit}`} date={date} initialTab="market-roi" onOpenMatch={navigateToMatch} />}
         {page === 'match' && matchId != null && (isInternal || authLoading) && <MatchIntelligencePage matchId={matchId} onBack={() => navigate('tickets')} />}
         {isInternal && page === 'tracker' && <TrackerPage onOpenTickets={(targetDate) => { if (targetDate) setDate(targetDate); goTo('tickets') }} onOpenResearch={() => goTo('research')} onOpenValidation={() => goTo('analytics')} />}
         {isInternal && page === 'analytics' && <AnalyticsPage />}

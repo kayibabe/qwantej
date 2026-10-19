@@ -35,7 +35,9 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./backend:/app
+      - ./backend/app:/app/app
+      - ./backend/migrations:/app/migrations
+      - ./backend/alembic.ini:/app/alembic.ini
     command: alembic upgrade head
 
   backend:
@@ -51,13 +53,21 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://lohela:lohela_pass@postgres:5432/lohela
       REDIS_URL: redis://redis:6379/0
+      PORTFOLIO_EXPORT_TOKEN: ${PORTFOLIO_EXPORT_TOKEN:-}
+      FLUTTERWAVE_SECRET_KEY: ${FLUTTERWAVE_SECRET_KEY:-}
+      FLUTTERWAVE_SECRET_HASH: ${FLUTTERWAVE_SECRET_HASH:-}
+      FLUTTERWAVE_PRO_MONTHLY_PLAN_ID: ${FLUTTERWAVE_PRO_MONTHLY_PLAN_ID:-}
+      FLUTTERWAVE_PRO_MONTHLY_PRICE_MWK: ${FLUTTERWAVE_PRO_MONTHLY_PRICE_MWK:-20000}
+      PUBLIC_APP_BASE_URL: ${PUBLIC_APP_BASE_URL:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
     volumes:
-      - ./backend:/app
+      - ./backend/app:/app/app
+      - ./backend/migrations:/app/migrations
+      - ./backend/alembic.ini:/app/alembic.ini
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     restart: unless-stopped
     healthcheck:
@@ -65,6 +75,10 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+    networks:
+      default: {}
+      portfolio-read:
+        aliases: [qwantej-api]
 
   celery_worker:
     image: qwantej-backend:latest
@@ -79,10 +93,18 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ./backend:/app
+      - ./backend/app:/app/app
+      - ./backend/migrations:/app/migrations
+      - ./backend/alembic.ini:/app/alembic.ini
     command: celery -A app.tasks.pipeline worker --loglevel=info
     restart: unless-stopped
 
 volumes:
   postgres_data:
   redis_data:
+
+networks:
+  default: {}
+  portfolio-read:
+    external: true
+    name: local-portfolio-read

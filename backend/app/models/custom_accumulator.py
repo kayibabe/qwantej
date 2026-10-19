@@ -5,7 +5,7 @@ from __future__ import annotations
 import enum
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Enum as SAEnum, Float, ForeignKey, Integer, JSON, String
+from sqlalchemy import Boolean, Date, DateTime, Enum as SAEnum, Float, ForeignKey, Integer, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -52,6 +52,9 @@ class CustomAccumulator(Base):
 
 class CustomAccumulatorLeg(Base):
     __tablename__ = "custom_accumulator_legs"
+    __table_args__ = (
+        UniqueConstraint("accumulator_id", "match_id", name="uq_custom_accumulator_one_leg_per_match"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     accumulator_id: Mapped[int] = mapped_column(

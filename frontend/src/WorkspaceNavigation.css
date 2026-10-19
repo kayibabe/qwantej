@@ -16,7 +16,7 @@
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--type-body);
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
@@ -39,4 +39,11 @@
   .bottom-nav.football { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .bottom-nav.research { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .bottom-nav.internal button { min-width: 0; flex: initial; }
+}
+
+@media (max-width: 360px) {
+  .app-header .date-nav { gap: 3px; }
+  .app-header .date-btn { flex: 0 0 36px; }
+  .app-header .date-strip { flex: 1 1 auto; min-width: 0; }
+  .app-header .date-strip-day { flex: 1 1 0; min-width: 26px; padding-inline: 1px; }
 }

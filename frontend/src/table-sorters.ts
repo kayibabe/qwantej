@@ -45,6 +45,21 @@ function enhanceTable(table: HTMLTableElement) {
     button.appendChild(indicator)
     header.appendChild(button)
 
+    const defaultDirection = header.dataset.sortDefaultDirection
+    if (defaultDirection === "ascending" || defaultDirection === "descending") {
+      table.dataset.sortColumn = String(columnIndex)
+      table.dataset.sortDirection = defaultDirection
+      header.setAttribute("aria-sort", defaultDirection)
+      button.dataset.sortDirection = defaultDirection
+      indicator.textContent = defaultDirection === "ascending" ? "↑" : "↓"
+      for (const body of Array.from(table.tBodies)) {
+        Array.from(body.rows)
+          .map((row, index) => ({ row, index, value: readValue(row.cells[columnIndex]) }))
+          .sort((left, right) => compareValues(left.value, right.value, defaultDirection) || left.index - right.index)
+          .forEach(({ row }) => body.appendChild(row))
+      }
+    }
+
     button.addEventListener("click", () => {
       const direction = table.dataset.sortColumn === String(columnIndex) && table.dataset.sortDirection === "ascending"
         ? "descending"

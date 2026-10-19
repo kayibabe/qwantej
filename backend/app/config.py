@@ -65,6 +65,14 @@ class Settings(BaseSettings):
     auth_allow_registration: bool = True
     log_level: str = "INFO"
 
+    # Flutterwave Pro checkout stays disabled until its server-side keys and
+    # monthly payment plan are configured. The amount is expressed in MWK.
+    flutterwave_secret_key: str = ""
+    flutterwave_secret_hash: str = ""
+    flutterwave_pro_monthly_plan_id: str = ""
+    flutterwave_pro_monthly_price_mwk: int = 20000
+    public_app_base_url: str = ""
+
     # Pipeline windows: 00:15 CAT (22:15 UTC previous day) and 05:00 CAT (03:00 UTC).
     pipeline_early_cron_hour: int = 22
     pipeline_early_cron_minute: int = 15
@@ -277,6 +285,9 @@ class Settings(BaseSettings):
 
     # Football-Data.co.uk (historical odds CSVs — no key required)
     football_data_base_url: str = "https://www.football-data.co.uk/mmz4281"
+
+    # Explicit local opt-in; never enable a new experiment on another deployment implicitly.
+    sweet_spot_tracking_enabled: bool = False
 
     # Cache TTLs (seconds)
     cache_ttl_fixtures: int = 86400   # 24 h — retain pulled fixture lists for reference

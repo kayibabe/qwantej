@@ -3,6 +3,7 @@ import { createCustomAccumulator, deleteCustomAccumulator, fetchCustomAccumulato
 import { fmt, fmtPnl } from '../utils/currency'
 import PaperLedger from '../components/PaperLedger'
 import MatchHistory from '../components/MatchHistory'
+import SweetSpotTracker from '../components/SweetSpotTracker'
 import { groupJournalBets, type Bet } from '../lib/trackerGrouping'
 import { CustomAccumulatorPanel } from './dailyTickets/CustomAccumulatorPanel'
 import { apiAccumulatorToUi, TODAY } from './dailyTickets/helpers'
@@ -28,7 +29,7 @@ async function responseError(response: Response) {
 }
 
 export default function TrackerPage({ onOpenTickets, onOpenResearch, onOpenValidation }: { onOpenTickets?: (date?: string) => void; onOpenResearch?: () => void; onOpenValidation?: () => void }) {
-  const [view, setView] = useState<'paper' | 'matches' | 'accumulators' | 'manual'>('paper')
+  const [view, setView] = useState<'paper' | 'sweet' | 'matches' | 'accumulators' | 'manual'>('paper')
   const [bets, setBets] = useState<Bet[]>([])
   const [summary, setSummary] = useState<BetSummary | null>(null)
   const [loading, setLoading] = useState(true)
@@ -115,25 +116,26 @@ export default function TrackerPage({ onOpenTickets, onOpenResearch, onOpenValid
   }
 
   const accumulatorRoi = accumulatorSummary ? roiFromTotals(accumulatorSummary.profitLoss, accumulatorSummary.settledStake) : null
-  const badge = view === 'paper' ? 'Production paper evidence' : view === 'matches' ? 'Published selection evidence' : view === 'accumulators' ? 'Personal accumulators' : 'Confirmed and manual journal'
+  const badge = view === 'sweet' ? 'Prospective paper experiment' : view === 'paper' ? 'Production paper evidence' : view === 'matches' ? 'Published selection evidence' : view === 'accumulators' ? 'Personal accumulators' : 'Confirmed and manual journal'
 
   return <div className="page-content tracker-page">
     <div className="analytics-hero tracker-hero"><div><span className="eyebrow">Auditable portfolio</span><h1>Tracker</h1><p>Keep production paper evidence, published match outcomes and personal journal records in clearly separated views.</p></div><span className={`ledger-chip tracker-chip ${view}`}><span /> {badge}</span></div>
     <div className="analytics-tabs tracker-view-tabs" role="tablist" aria-label="Tracker views">
       <button role="tab" aria-selected={view === 'paper'} className={view === 'paper' ? 'active' : ''} onClick={() => setView('paper')}>Paper ledger</button>
+      <button role="tab" aria-selected={view === 'sweet'} className={view === 'sweet' ? 'active' : ''} onClick={() => setView('sweet')}>Sweet-spot test</button>
       <button role="tab" aria-selected={view === 'matches'} className={view === 'matches' ? 'active' : ''} onClick={() => setView('matches')}>Match history</button>
       <button role="tab" aria-selected={view === 'accumulators'} className={view === 'accumulators' ? 'active' : ''} onClick={() => setView('accumulators')}>My accumulators</button>
       <button role="tab" aria-selected={view === 'manual'} className={view === 'manual' ? 'active' : ''} onClick={() => setView('manual')}>My journal</button>
     </div>
 
-    {view === 'paper' ? <PaperLedger onOpenValidation={onOpenValidation} /> : view === 'matches' ? <MatchHistory /> : view === 'accumulators' ? <>
+    {view === 'sweet' ? <SweetSpotTracker /> : view === 'paper' ? <PaperLedger onOpenValidation={onOpenValidation} /> : view === 'matches' ? <MatchHistory /> : view === 'accumulators' ? <>
       <div className="journal-note"><strong>Personal accumulators</strong><span>Draft and placed accumulators stay separate from the production paper ledger and personal journal totals.</span></div>
       {accumulatorSummary && accumulatorSummary.tickets > 0 && <section className="accumulator-performance-card"><div className="accumulator-performance-heading"><div><span className="eyebrow">All personal accumulators</span><strong>Performance</strong><p>Open stakes remain exposure; settled returns count only after every leg finishes.</p></div><span className="accumulator-performance-count">{accumulatorSummary.tickets} ticket{accumulatorSummary.tickets === 1 ? '' : 's'}</span></div><div className="accumulator-performance-grid"><AccumulatorMetric label="Open" value={accumulatorSummary.open.toString()} note={accumulatorSummary.exposure ? `${fmt(accumulatorSummary.exposure)} exposed` : 'No open exposure'} /><AccumulatorMetric label="Settled" value={accumulatorSummary.settled.toString()} note={`${accumulatorSummary.won} won · ${accumulatorSummary.lost} lost · ${accumulatorSummary.void} void`} /><AccumulatorMetric label="Settled P&L" value={accumulatorSummary.settled ? fmtPnl(accumulatorSummary.profitLoss) : '—'} note={accumulatorSummary.settled ? `${fmt(accumulatorSummary.returned)} returned` : 'Settles after all legs finish'} tone={accumulatorSummary.profitLoss >= 0 ? 'positive' : 'negative'} /><AccumulatorMetric label="Settled ROI" value={accumulatorRoi == null ? '—' : `${(accumulatorRoi * 100).toFixed(1)}%`} note={accumulatorSummary.settled ? `${fmt(accumulatorSummary.settledStake)} settled stake` : 'No settled stake yet'} tone={accumulatorRoi == null ? undefined : accumulatorRoi >= 0 ? 'positive' : 'negative'} /></div></section>}
-      <div className="tracker-toolbar"><label className="form-group"><span>Accumulator date</span><input type="date" value={accumulatorDate} onChange={(event) => setAccumulatorDate(event.target.value)} /></label><button className="btn-ghost btn-sm" onClick={() => void loadAccumulators()} disabled={accumulatorsLoading}>Refresh</button></div>
+      <div className="tracker-toolbar"><label className="form-group"><span>New accumulator date</span><input type="date" value={accumulatorDate} onChange={(event) => setAccumulatorDate(event.target.value)} /></label><button className="btn-ghost btn-sm" onClick={() => void loadAccumulators()} disabled={accumulatorsLoading}>Refresh</button></div>
       {accumulatorError && <div className="tracker-message error" role="alert">{accumulatorError}</div>}
       {accumulatorsLoading && !accumulators.length ? <div className="empty-state" aria-busy="true">Loading accumulators…</div> : <CustomAccumulatorPanel
         date={accumulatorDate}
-        tickets={accumulators.filter((ticket) => ticket.date === accumulatorDate)}
+        tickets={accumulators}
         onCreate={async (name) => saveAccumulator(null, {}, name)}
         onUpdate={async (ticket, update) => saveAccumulator(ticket, update)}
         onDelete={async (ticket) => { await deleteCustomAccumulator(ticket.id); setAccumulators((current) => current.filter((item) => item.id !== ticket.id)); await loadAccumulators() }}

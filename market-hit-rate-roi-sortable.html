@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Combined market hit rate and ROI</title>
+  <style>
+    :root { color-scheme: light; --ink: #172235; --muted: #657187; --line: #e3e8ef; --blue: #3459a5; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 36px 20px; background: #f5f7fb; color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 980px; margin: 0 auto; }
+    .card { overflow: hidden; background: #fff; border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 12px 36px #2436530c; }
+    header { padding: 26px 28px 20px; border-bottom: 1px solid var(--line); }
+    .eyebrow { margin: 0 0 5px; color: var(--blue); font-size: 11px; font-weight: 750; letter-spacing: .11em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: clamp(22px, 4vw, 29px); letter-spacing: -.025em; }
+    .sub { margin: 7px 0 0; color: var(--muted); }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+    caption { padding: 14px 28px; color: var(--muted); text-align: left; font-size: 13px; }
+    th, td { padding: 13px 18px; border-bottom: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; }
+    th:first-child, td:first-child { text-align: left; }
+    thead th { padding-top: 10px; padding-bottom: 10px; background: #f8f9fc; color: #4e5b71; font-size: 12px; font-weight: 700; }
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: #f7f9fd; }
+    .sort { display: inline-flex; align-items: center; gap: 6px; padding: 4px 0; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+    .sort:hover, .sort:focus-visible { color: var(--blue); }
+    .sort:focus-visible { outline: 2px solid #91a9e3; outline-offset: 3px; border-radius: 3px; }
+    .arrow { width: 10px; color: #9aa5b6; }
+    th[aria-sort="ascending"] .arrow, th[aria-sort="descending"] .arrow { color: var(--blue); }
+    .positive { color: #147448; font-weight: 650; }
+    .negative { color: #b33c45; font-weight: 650; }
+    .note { margin: 0; padding: 14px 28px 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+    @media (max-width: 600px) { body { padding: 18px 10px; } header { padding: 20px 18px 16px; } th, td { padding: 12px 14px; } caption, .note { padding-left: 18px; padding-right: 18px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card" aria-labelledby="title">
+      <header>
+        <p class="eyebrow">Earlier + later combined</p>
+        <h1 id="title">Hit rate and ROI by market</h1>
+        <p class="sub">Q ≥ 70 · decimal odds 2.00 to below 3.00 · quote age ≤ 3 hours</p>
+      </header>
+      <div class="table-wrap">
+        <table>
+          <caption>Click a column heading to sort · 11 markets</caption>
+          <thead><tr id="headers"></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <p class="note">Hit rate = wins ÷ (wins + losses). ROI = net profit ÷ total stakes. Market picks can overlap on the same fixture; small samples are uncertain.</p>
+    </section>
+  </main>
+  <script>
+    const data = [
+      { market: "Away win", n: 44, wins: 25, losses: 19, hit: 56.82, roi: 44.57 },
+      { market: "Both teams to score: No", n: 120, wins: 47, losses: 73, hit: 39.17, roi: -10.73 },
+      { market: "Both teams to score: Yes", n: 4, wins: 3, losses: 1, hit: 75.00, roi: 55.00 },
+      { market: "Double chance: 1X", n: 7, wins: 4, losses: 3, hit: 57.14, roi: 36.29 },
+      { market: "Double chance: X2", n: 50, wins: 19, losses: 31, hit: 38.00, roi: -11.98 },
+      { market: "Home win", n: 28, wins: 10, losses: 18, hit: 35.71, roi: -14.29 },
+      { market: "Over 2.5 goals", n: 16, wins: 12, losses: 4, hit: 75.00, roi: 66.62 },
+      { market: "Over 3.5 goals", n: 59, wins: 23, losses: 36, hit: 38.98, roi: -6.15 },
+      { market: "Over 4.5 goals", n: 3, wins: 2, losses: 1, hit: 66.67, roi: 79.00 },
+      { market: "Under 2.5 goals", n: 97, wins: 35, losses: 62, hit: 36.08, roi: -18.74 },
+      { market: "Under 3.5 goals", n: 6, wins: 3, losses: 3, hit: 50.00, roi: 4.17 },
+    ];
+    const columns = [
+      { key: "market", label: "Market", value: row => row.market, show: row => row.market },
+      { key: "n", label: "N", value: row => row.n, show: row => row.n },
+      { key: "record", label: "Wins–losses", value: row => row.wins - row.losses / 1000, show: row => `${row.wins}–${row.losses}` },
+      { key: "hit", label: "Hit rate", value: row => row.hit, show: row => `${row.hit.toFixed(1)}%` },
+      { key: "roi", label: "ROI", value: row => row.roi, show: row => `${row.roi >= 0 ? "+" : "−"}${Math.abs(row.roi).toFixed(1)}%` },
+    ];
+    let sortKey = "n";
+    let direction = -1;
+    const headers = document.getElementById("headers");
+    const body = document.getElementById("rows");
+    function drawHeaders() {
+      headers.innerHTML = "";
+      for (const column of columns) {
+        const th = document.createElement("th");
+        th.scope = "col";
+        th.setAttribute("aria-sort", column.key === sortKey ? (direction === 1 ? "ascending" : "descending") : "none");
+        const button = document.createElement("button");
+        button.className = "sort";
+        button.type = "button";
+        button.setAttribute("aria-label", `Sort by ${column.label}${column.key === sortKey ? (direction === 1 ? ", ascending" : ", descending") : ""}`);
+        button.innerHTML = `<span>${column.label}</span><span class="arrow" aria-hidden="true">${column.key === sortKey ? (direction === 1 ? "↑" : "↓") : "↕"}</span>`;
+        button.addEventListener("click", () => {
+          if (sortKey === column.key) direction *= -1;
+          else { sortKey = column.key; direction = 1; }
+          render();
+        });
+        th.append(button);
+        headers.append(th);
+      }
+    }
+    function render() {
+      drawHeaders();
+      const column = columns.find(item => item.key === sortKey);
+      const sorted = [...data].sort((a, b) => {
+        const av = column.value(a), bv = column.value(b);
+        return (typeof av === "number" ? av - bv : String(av).localeCompare(String(bv), undefined, { numeric: true })) * direction;
+      });
+      body.innerHTML = "";
+      for (const row of sorted) {
+        const tr = document.createElement("tr");
+        for (const col of columns) {
+          const td = document.createElement("td");
+          td.textContent = col.show(row);
+          if (col.key === "roi") td.className = row.roi >= 0 ? "positive" : "negative";
+          tr.append(td);
+        }
+        body.append(tr);
+      }
+    }
+    render();
+  </script>
+</body>
+</html>

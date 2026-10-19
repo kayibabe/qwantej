@@ -68,7 +68,7 @@ export function ParameterSweepPicks({
   const rows = data?.rows ?? [];
 
   return (
-    <section className="selection-panel band-mix-panel">
+    <section className="selection-panel policy-sweep-panel">
       <div className="section-heading">
         <div>
           <h2>Dynamic odds policy</h2>
@@ -81,7 +81,7 @@ export function ParameterSweepPicks({
       {!scan && !error && <p className="panel-empty" role="status">{data?.message ?? "Loading the saved policy scan…"}</p>}
       {scan && (
         <>
-          <div className={`band-mix-scan${scan.provisional ? " provisional" : ""}`} role="status">
+          <div className={`policy-sweep-scan${scan.provisional ? " provisional" : ""}`} role="status">
             <strong>{scan.reconstructed ? "Historical reconstruction" : scan.provisional ? "Provisional scan" : "Daily policy frozen"}</strong>
             <span>
               {scan.status === "qualified"
@@ -92,7 +92,7 @@ export function ParameterSweepPicks({
           </div>
 
           {policy && scan.chosen_train && scan.chosen_validation && (
-            <div className="band-mix-kpis" aria-label="Dynamic policy evidence">
+            <div className="policy-sweep-kpis" aria-label="Dynamic policy evidence">
               <span><small>Minimum odds</small><b>{policy.min_odds.toFixed(2)}</b></span>
               <span><small>Probability floor</small><b>{pct(policy.min_probability)}</b></span>
               <span><small>Train ROI / N</small><b>{pct(scan.chosen_train.roi)} / {scan.chosen_train.resolved}</b></span>
@@ -123,7 +123,7 @@ function SweepTable({ rows, onSelect, onAdd }: { rows: ParameterSweepPick[]; onS
 
   return (
     <div className="analytics-table-wrap">
-      <table className="analytics-table band-mix-table">
+      <table className="analytics-table">
         <caption className="sr-only">Matches selected by the dynamic odds policy</caption>
         <thead><tr>{header('kickoff', 'Kickoff')}{header('match', 'Match / league')}{header('market', 'Market')}{header('probability', 'Probability')}{header('odds', 'Odds')}{header('qScore', 'Q-score')}<th><span className="sr-only">Actions</span></th></tr></thead>
         <tbody>{sorted.map(row => {
@@ -136,7 +136,7 @@ function SweepTable({ rows, onSelect, onAdd }: { rows: ParameterSweepPick[]; onS
             <td>{pct(row.model_probability)}</td>
             <td><b>{row.odds.toFixed(2)}</b></td>
             <td><b className={`grade-badge grade-${gradeTone(row.q_grade)}`}>{row.q_grade}</b> {row.q_score.toFixed(1)}</td>
-            <td><div className="band-mix-actions"><button type="button" className="btn-ghost btn-sm" onClick={() => onSelect(selection)}>Details</button><button type="button" className="btn-ghost btn-sm" onClick={() => onAdd(selection)} disabled={blockers.length > 0} title={blockers.length > 0 ? `Unavailable: ${blockers.map(reasonLabel).join(", ")}` : "Add to personal accumulator"}>Add</button></div></td>
+            <td><div className="policy-sweep-actions"><button type="button" className="btn-ghost btn-sm" onClick={() => onSelect(selection)}>Details</button><button type="button" className="btn-ghost btn-sm" onClick={() => onAdd(selection)} disabled={blockers.length > 0} title={blockers.length > 0 ? `Unavailable: ${blockers.map(reasonLabel).join(", ")}` : "Add to personal accumulator"}>Add</button></div></td>
           </tr>;
         })}</tbody>
       </table>

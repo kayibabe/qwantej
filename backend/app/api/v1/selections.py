@@ -1,6 +1,6 @@
 """Q-score candidate selections for the daily research workspace."""
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timezone, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -12,22 +12,31 @@ from pydantic import BaseModel, Field
 
 from app.database import get_db
 from app.api.security import require_authenticated_user, require_pro_access, require_research_access
-from app.models import BandMixPairState, MarketPolicyShadowSnapshot, Prediction, Match, MatchStatus, Team, Competition, Odds, ModelRun, RunStatus, TicketType
+from app.models import MarketPolicyShadowSnapshot, Prediction, Match, MatchStatus, Team, Competition, Odds, ModelRun, RunStatus, TicketType
 from app.config import cat_day_bounds_utc, cat_today
 from app.services.accumulator_builder import AccumulatorBuilder
-from app.services.band_mix_picks import (
-    band_mix_candidates,
-    band_mix_ledger_rows,
-    band_mix_lifecycle_history,
-    band_mix_performance_report,
-    get_or_capture_scan,
-    summarize_picks,
-)
 from app.services.parameter_sweep import parameter_sweep_candidates
 from app.services.parameter_sweep_jobs import ready_scan, enqueue_scan
 from app.services.settlement import evaluate_selection
 
 router = APIRouter(prefix="/selections", tags=["selections"])
+
+
+@router.get("/acca-prices", dependencies=[Depends(require_pro_access)])
+async def get_acca_prices(
+    date: date = Query(...), db: AsyncSession = Depends(get_db),
+):
+    from app.services.acca_pricing import acca_prices
+
+    now = datetime.now(timezone.utc)
+    start, end = cat_day_bounds_utc(date)
+    result = await db.execute(
+        select(Odds, Match.kickoff_at).join(Match, Odds.match_id == Match.id)
+        .where(Match.kickoff_at >= start, Match.kickoff_at < end,
+               Match.status == MatchStatus.SCHEDULED,
+               Odds.fetched_at >= now - timedelta(hours=2))
+    )
+    return acca_prices(result.all(), now)
 
 
 class MatchFixtureOut(BaseModel):
@@ -482,73 +491,6 @@ async def get_match_intelligence(match_id: int, db: AsyncSession = Depends(get_d
         context=await get_match_context(match_id, db),
         evidence_note="Probabilities and prices are stored snapshots; missing odds are not treated as value.",
     )
-
-
-@router.get("/band-mix", dependencies=[Depends(require_research_access)])
-async def get_band_mix_selections(
-    date: Optional[date] = Query(default=None, description="Target date (default: today)"),
-    db: AsyncSession = Depends(get_db),
-):
-    """Selections in a currently best-performing Qwantej × market band mix.
-
-    The day's mix scan is frozen on first capture (by the pipeline or this
-    endpoint) from evidence dated before the target day; see
-    app.services.band_mix_picks.
-    """
-    target = date or cat_today()
-    scan = await get_or_capture_scan(db, target)
-    computed_rows = await band_mix_candidates(db, target, scan)
-    ledger_rows = await band_mix_ledger_rows(db, target)
-    rows = ledger_rows if ledger_rows else computed_rows
-    return {
-        "scan": scan,
-        "lifecycle_events": scan.get("lifecycle_events", []),
-        "ledger_backed": bool(ledger_rows),
-        "summary": summarize_picks(rows),
-        "rows": rows,
-    }
-
-
-@router.get("/band-mix/lifecycle", dependencies=[Depends(require_research_access)])
-async def get_band_mix_lifecycle(
-    date_from: Optional[date] = Query(default=None),
-    date_to: Optional[date] = Query(default=None),
-    db: AsyncSession = Depends(get_db),
-):
-    """Return immutable daily promotion/demotion evidence for band pairs."""
-    events = await band_mix_lifecycle_history(db, date_from=date_from, date_to=date_to)
-    states = (await db.execute(select(BandMixPairState).where(
-        BandMixPairState.policy_version == "dynamic-roi-v1",
-    ))).scalars().all()
-    return {
-        "policy_version": "dynamic-roi-v1",
-        "events": events,
-        "current_states": [{
-            "qwantej_band": state.qwantej_band,
-            "market_band": state.market_band,
-            "status": state.status,
-            "first_promoted_at": state.first_promoted_at.isoformat() if state.first_promoted_at else None,
-            "last_evaluated_at": state.last_evaluated_at.isoformat(),
-            "last_evidence_through": state.last_evidence_through.isoformat(),
-            "last_sample_size": state.last_sample_size,
-            "last_roi": state.last_roi,
-            "last_reason": state.last_reason,
-        } for state in states],
-    }
-
-
-@router.get("/band-mix/performance", dependencies=[Depends(require_research_access)])
-async def get_band_mix_performance(
-    date_from: Optional[date] = Query(default=None),
-    date_to: Optional[date] = Query(default=None),
-    db: AsyncSession = Depends(get_db),
-):
-    """Summarize only frozen daily ledger picks, excluding reconstructed history."""
-    end = date_to or cat_today()
-    start = date_from or (end - timedelta(days=29))
-    if start > end:
-        raise HTTPException(status_code=422, detail="date_from must be on or before date_to")
-    return await band_mix_performance_report(db, start, end)
 
 
 @router.get("/market-policy-shadow", dependencies=[Depends(require_research_access)])

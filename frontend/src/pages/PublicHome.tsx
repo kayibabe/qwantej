@@ -40,6 +40,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
   const [activeStatus, setActiveStatus] = useState<'all' | 'live' | 'scheduled' | 'finished'>('all')
   const [search, setSearch] = useState('')
   const [selectedLeague, setSelectedLeague] = useState('')
+  const [showAllMatches, setShowAllMatches] = useState(false)
   const [sortKey, setSortKey] = useState<FixtureSortKey>('kickoff')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
 
@@ -59,13 +60,13 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
     finished: matches.filter((match) => match.status.toLowerCase() === 'finished').length,
     upcoming: matches.filter((match) => match.status.toLowerCase() === 'scheduled').length,
   }), [matches])
-  const leagues = useMemo(() => {
-    const counts = new Map<string, number>()
-    matches.forEach((match) => counts.set(match.competition, (counts.get(match.competition) ?? 0) + 1))
-    return [...counts.entries()].sort((left, right) => right[1] - left[1]).slice(0, 6)
-  }, [matches])
   const today = TODAY
   const availableLeagues = useMemo(() => [...new Set(matches.map((match) => match.competition))].sort((a, b) => a.localeCompare(b)), [matches])
+  const leagueMatchCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const match of matches) counts.set(match.competition, (counts.get(match.competition) ?? 0) + 1)
+    return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+  }, [matches])
   const visibleMatches = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase()
     const filtered = matches.filter((match) => {
@@ -85,6 +86,11 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
       return order * direction || a.kickoff_at.localeCompare(b.kickoff_at)
     })
   }, [matches, activeStatus, selectedLeague, search, sortKey, sortDirection])
+  const displayedMatches = showAllMatches ? visibleMatches : visibleMatches.slice(0, 10)
+
+  useEffect(() => {
+    setShowAllMatches(false)
+  }, [date, activeStatus, search, selectedLeague])
 
   const sortHeader = (key: FixtureSortKey, label: string) => {
     const active = sortKey === key
@@ -105,49 +111,69 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
           </picture>
           <span><strong>QWANTEJ</strong><small>FOOTBALL INTELLIGENCE</small></span>
         </a>
-        <nav className="public-page-nav" aria-label="Explore Qwantej">
-          <a href="#public-product">How it works</a>
-          <a href="#public-matches">Fixtures</a>
-          <a href="#public-faq">FAQs</a>
-        </nav>
         <nav className="public-top-actions" aria-label="Account">
           <button className="public-link-button" onClick={onSignIn}>Sign in</button>
           <button className="public-cta" onClick={onCreateAccount}>Create free account <span aria-hidden="true">→</span></button>
         </nav>
       </header>
 
-      <div className="public-dashboard" id="public-matches">
-        <aside className="public-dashboard-rail" aria-label="Public Qwantej tools">
-          <nav className="public-tool-nav" aria-label="Tools">
-            <span className="public-rail-heading">EXPLORE</span>
-            <a className="is-active" href="#public-matches" aria-current="page"><span aria-hidden="true">◉</span>Matches</a>
-            <a href="#public-product"><span aria-hidden="true">▤</span>How Qwantej works</a>
-            <a href="#public-faq"><span aria-hidden="true">ⓘ</span>FAQs</a>
-          </nav>
-          <section className="public-side-card public-rail-card">
-            <div className="public-side-title"><span className="public-section-kicker">ON THIS DATE</span><strong>Top leagues</strong></div>
-            {leagues.length ? leagues.map(([league, count]) => <button className={`public-league-row ${selectedLeague === league ? 'is-selected' : ''}`} key={league} onClick={() => setSelectedLeague(current => current === league ? '' : league)} aria-pressed={selectedLeague === league}><span>{league}</span><b>{count}</b></button>) : <p className="public-side-empty">League coverage appears with the fixture list.</p>}
-            {selectedLeague && <button className="public-clear-filter" onClick={() => setSelectedLeague('')}>Clear league filter</button>}
-          </section>
-          <section className="public-rail-note"><span className="public-section-kicker">FOOTBALL, WITH CONTEXT</span><p>Follow fixtures, live status and completed scores. Recommendations remain distinct from match results.</p><button className="public-link-button" onClick={onCreateAccount}>Open your workspace →</button></section>
+      <section className="public-hero" aria-labelledby="public-hero-title">
+        <div className="public-hero-copy">
+          <span className="public-eyebrow">EVIDENCE-LED FOOTBALL RESEARCH</span>
+          <h1 id="public-hero-title">Football picks, <em>with a record.</em></h1>
+          <p>See what was published, the price context when captured, and the settled result when available. Research candidates stay separate from published selections.</p>
+          <div className="public-hero-actions">
+            <button className="public-cta public-cta-large" onClick={onCreateAccount}>Follow the daily slate</button>
+            <a className="public-quiet-button" href="#public-matches">Browse fixtures</a>
+          </div>
+          <div className="public-hero-promises">
+            <span>Dated published records</span>
+            <span>Price evidence when available</span>
+            <span>Results kept in context</span>
+          </div>
+        </div>
+        <aside className="public-hero-card" aria-label="How a published selection is reviewed">
+          <div className="public-hero-card-head"><span>FOLLOW THE RECORD</span><span>From pick to result</span></div>
+          <ol className="public-evidence-flow">
+            <li><span>01</span><div><strong>Published selection</strong><small>What was selected, and when</small></div></li>
+            <li><span>02</span><div><strong>Price context</strong><small>Captured odds when available</small></div></li>
+            <li><span>03</span><div><strong>Settled outcome</strong><small>Final score and pick result</small></div></li>
+          </ol>
+          <div className="public-hero-card-foot">Past outcomes describe their sample; they do not predict the next match.</div>
         </aside>
+      </section>
 
+      <nav className="public-section-nav" aria-label="Page sections">
+        <a className="is-active" href="#public-matches" aria-current="page">Matches</a>
+        <a href="#public-product">How Qwantej works</a>
+        <a href="#public-faq">FAQs</a>
+      </nav>
+
+      <div className="public-dashboard" id="public-matches">
         <section className="public-content" aria-labelledby="public-matches-title">
           <div className="public-dashboard-heading">
-            <div><span className="public-section-kicker">MATCH CENTRE</span><h1 id="public-matches-title">Fixtures &amp; scores</h1><p>Browse public fixtures and follow the matchday as it unfolds.</p></div>
-          </div>
-
-          <div className="public-date-strip" aria-label="Choose fixture date">
-            <button className={`public-date-live ${activeStatus === 'live' ? 'is-active' : ''}`} onClick={() => setActiveStatus(current => current === 'live' ? 'all' : 'live')} aria-pressed={activeStatus === 'live'}><span className="public-live-dot" />Live <b>{counts.live}</b></button>
-            {[-2, -1, 0, 1, 2].map((offset) => {
-              const tabDate = offset === 0 ? date : shiftDate(date, offset)
-              const value = new Date(`${tabDate}T12:00:00`)
-              return <button key={offset} className={`public-date-tab ${offset === 0 ? 'is-selected' : ''}`} onClick={() => onDateChange(tabDate)} aria-current={offset === 0 ? 'date' : undefined}><span>{value.toLocaleDateString('en-GB', { weekday: 'short' })}</span><strong>{value.getDate()}</strong>{tabDate === today && <small>TODAY</small>}</button>
-            })}
-          </div>
-
-          <div className="public-status-filters" role="group" aria-label="Filter matches by status">
-            {([['all', 'All matches', matches.length], ['scheduled', 'Upcoming', counts.upcoming], ['finished', 'Finished', counts.finished]] as const).map(([status, label, count]) => <button key={status} className={`public-filter-chip ${activeStatus === status ? 'is-active' : ''}`} onClick={() => setActiveStatus(status)} aria-pressed={activeStatus === status}>{label}<span>{loading ? '—' : count}</span></button>)}
+            <div><span className="public-section-kicker">MATCH CENTRE</span><h2 id="public-matches-title">Fixtures &amp; scores</h2><p>Browse public fixtures and follow the matchday as it unfolds.</p></div>
+            <div className="public-match-controls">
+              <div className="public-date-strip" aria-label="Choose fixture date">
+                <button className={`public-date-live ${activeStatus === 'live' ? 'is-active' : ''}`} onClick={() => setActiveStatus(current => current === 'live' ? 'all' : 'live')} aria-pressed={activeStatus === 'live'}><span className="public-live-dot" />Live <b>{counts.live}</b></button>
+                {[-2, -1, 0, 1, 2].map((offset) => {
+                  const tabDate = offset === 0 ? date : shiftDate(date, offset)
+                  const value = new Date(`${tabDate}T12:00:00`)
+                  return <button key={offset} className={`public-date-tab ${offset === 0 ? 'is-selected' : ''}`} onClick={() => onDateChange(tabDate)} aria-current={offset === 0 ? 'date' : undefined}><span>{value.toLocaleDateString('en-GB', { weekday: 'short' })}</span><strong>{value.getDate()}</strong>{tabDate === today && <small>TODAY</small>}</button>
+                })}
+              </div>
+              <div className="public-status-filters" role="group" aria-label="Filter matches by status">
+                {([['all', 'All matches', matches.length], ['scheduled', 'Upcoming', counts.upcoming], ['finished', 'Finished', counts.finished]] as const).map(([status, label, count]) => <button key={status} className={`public-filter-chip ${activeStatus === status ? 'is-active' : ''}`} onClick={() => setActiveStatus(status)} aria-pressed={activeStatus === status}>{label}<span>{loading ? '—' : count}</span></button>)}
+              </div>
+            </div>
+            <aside className="public-league-overview" aria-label="Filter fixtures by league">
+              <div className="public-league-overview-heading"><strong>{date === today ? 'Leagues today' : 'Leagues on this date'}</strong><span>{loading ? '—' : `${matches.length} matches`}</span></div>
+              <div className="public-league-overview-list">
+                <button className={`public-league-overview-row${selectedLeague === '' ? ' is-selected' : ''}`} onClick={() => setSelectedLeague('')} aria-pressed={selectedLeague === ''}><span>All leagues</span><b>{loading ? '—' : matches.length}</b></button>
+                {leagueMatchCounts.map(([league, count]) => <button key={league} className={`public-league-overview-row${selectedLeague === league ? ' is-selected' : ''}`} onClick={() => setSelectedLeague(current => current === league ? '' : league)} aria-pressed={selectedLeague === league}><span title={league}>{league}</span><b>{loading ? '—' : count}</b></button>)}
+                {!loading && leagueMatchCounts.length === 0 && <span className="public-league-overview-empty">No league fixtures for this date</span>}
+              </div>
+            </aside>
           </div>
 
           <div className="public-fixture-toolbar">
@@ -162,19 +188,25 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
                 : visibleMatches.length === 0 ? <div className="public-empty"><strong>No matches match these filters</strong><span>Try another date, league or search.</span></div>
                   : <div className="public-fixture-table-wrap"><table className="public-fixture-table">
                     <thead><tr>{sortHeader('kickoff', 'Kickoff Time')}{sortHeader('league', 'League')}{sortHeader('match', 'Match')}{sortHeader('statusScore', 'Status/Score')}</tr></thead>
-                    <tbody>{visibleMatches.map((match) => {
+                    <tbody>{displayedMatches.map((match) => {
                       const status = match.status.toLowerCase()
                       const hasScore = match.home_goals != null && match.away_goals != null
                       return <tr className="public-fixture-table-row" key={match.match_id}>
                         <td className="public-fixture-time"><time dateTime={match.kickoff_at}>{kickoffLabel(match.kickoff_at)}</time></td>
                         <td className="public-fixture-league" title={match.competition}>{match.competition}</td>
-                        <td><div className="public-fixture-match" title={`${match.home_team} vs ${match.away_team}`}><span>{match.home_team}</span><small>vs</small><span>{match.away_team}</span></div></td>
+                        <td><div className="public-fixture-match" title={`${match.home_team} vs ${match.away_team}`}><span>{match.home_team}</span><small className="public-fixture-matchup-vs">vs</small><span>{match.away_team}</span><small className="public-fixture-competition">{match.competition}</small></div></td>
                         <td><div className="public-fixture-status-score"><span className={`public-fixture-state ${status === 'live' ? 'is-live' : ''}`}>{matchStatus(match)}</span>{hasScore && <strong>{match.home_goals} : {match.away_goals}</strong>}</div></td>
                       </tr>
                     })}</tbody>
                   </table></div>}
             <div className="public-match-panel-foot">Scores and match states are shown when available. No outcome is guaranteed.</div>
           </div>
+          {!loading && !error && visibleMatches.length > 10 && (
+            <button className="public-show-matches" onClick={() => setShowAllMatches(current => !current)} aria-expanded={showAllMatches}>
+              {showAllMatches ? 'Show fewer fixtures' : `Show all ${visibleMatches.length} fixtures`}
+              <span aria-hidden="true">{showAllMatches ? '−' : '+'}</span>
+            </button>
+          )}
         </section>
       </div>
 
@@ -236,7 +268,6 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
         <div className="public-faq-list">
           <details><summary>What can I see without an account?</summary><p>Public fixtures include the competition, teams, kickoff or live status, and scores when available. Personal account information and workspace tools stay behind sign-in.</p></details>
           <details><summary>What does Qwantej do with recommendations?</summary><p>Qwantej presents dated published selections separately from research. Where captured price evidence exists, it can be reviewed alongside the selection. A recommendation is never a promise of a result.</p></details>
-          <details><summary>Is Qwantej free to use?</summary><p>Public fixture browsing is open. A free account unlocks the daily workspace; Pro adds detailed odds, expanded ticket history and Stats &amp; Trends.</p></details>
           <details><summary>Does Qwantej guarantee wins or profit?</summary><p>No. Football outcomes are uncertain. Any historical result is a record of completed matches, not a guarantee or forecast of future performance.</p></details>
         </div>
         <div className="public-faq-cta"><div><strong>Ready to follow the next matchday?</strong><span>Create a free account to open your Qwantej workspace.</span></div><button className="public-cta" onClick={onCreateAccount}>Get started for free <span aria-hidden="true">→</span></button></div>

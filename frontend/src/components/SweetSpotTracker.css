@@ -1,0 +1,13 @@
+.sweet-spot { color: var(--text); line-height: 1.6; }
+.sweet-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.sweet-heading h2 { margin: .4rem 0; }
+.sweet-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+.sweet-metrics > div { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; }
+.sweet-metrics span, .sweet-metrics strong, .sweet-metrics small, .sweet-table small { display: block; }
+.sweet-metrics strong { font-size: 1.4rem; margin: .4rem 0; }
+.sweet-metrics small, .sweet-table small { color: var(--muted); }
+.sweet-table { overflow-x: auto; width: 100%; }
+.sweet-table table { width: 100%; border-collapse: collapse; text-align: left; }
+.sweet-table th, .sweet-table td { padding: .8rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.sweet-spot details { margin: 1rem 0; padding: 1rem; border: 1px solid var(--border); border-radius: 10px; }
+.sweet-spot summary { cursor: pointer; font-weight: 600; }

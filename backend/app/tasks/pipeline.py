@@ -283,16 +283,7 @@ def generate_tickets(
     model_run_id = model_result.get("model_run_id") if isinstance(model_result, dict) else None
 
     async def _run():
-        from app.services.band_mix_picks import get_or_capture_scan
         from app.services.ticket_horizon import resolve_horizon_dates_safely
-
-        # Freeze the day's best-performing band-mix scan before any picks are
-        # produced. Best-effort: it must never block ticket publication.
-        try:
-            async with AsyncSessionLocal() as db:
-                await get_or_capture_scan(db, date.fromisoformat(target_date), capture_source="pipeline")
-        except Exception:
-            logger.exception("Band-mix scan capture failed for %s", target_date)
 
         horizon_dates, horizon_reports = await resolve_horizon_dates_safely(
             AsyncSessionLocal, date.fromisoformat(target_date), model_run_id, pipeline_run_id
@@ -378,13 +369,17 @@ def generate_tickets(
 def generate_daily_accumulator(self, target_date: str):
     """Merge the committed Conservative and Balanced tickets once published."""
     from app.database import AsyncSessionLocal
+    from app.services import cache
     from app.services.daily_accumulator import create_daily_accumulator
 
     async def _run():
-        async with AsyncSessionLocal() as db:
-            result = await create_daily_accumulator(db, date.fromisoformat(target_date))
-            await db.commit()
-            return result
+        async with cache.lock(
+            f"daily-accumulator:{target_date}", timeout=120, blocking_timeout=180
+        ):
+            async with AsyncSessionLocal() as db:
+                result = await create_daily_accumulator(db, date.fromisoformat(target_date))
+                await db.commit()
+                return result
 
     try:
         result = _run_async(_run())
@@ -432,14 +427,10 @@ def settle_results(
                 result = await SettlementService(db).settle_finished_matches(
                     source=f"automatic_{trigger_source}", since=period_start
                 )
-                from app.services.band_mix_picks import refresh_band_mix_ledger
-
-                band_mix_ledger_updated = await refresh_band_mix_ledger(db, since=period_start)
                 await db.commit()
                 report = {
                     **result,
                     "fixtures_refreshed": refreshed,
-                    "band_mix_ledger_updated": band_mix_ledger_updated,
                     "period_start": period_start.isoformat(),
                     "period_end": today.isoformat(),
                     "trigger_source": trigger_source,
@@ -757,6 +748,25 @@ def train_shadow_challenger(self):
     except Exception as exc:
         logger.exception("Weekly shadow learning failed")
         raise self.retry(exc=exc, countdown=300)
+
+
+@celery_app.task(name="pipeline.track_sweet_spot", bind=True, max_retries=2)
+def track_sweet_spot(self):
+    if not settings.sweet_spot_tracking_enabled:
+        return {"status": "disabled"}
+    from app.database import AsyncSessionLocal
+    from app.services.sweet_spot import tick
+
+    async def _run():
+        async with AsyncSessionLocal() as db:
+            result = await tick(db)
+            await db.commit()
+            return result
+    try:
+        return _run_async(_run())
+    except Exception as exc:
+        logger.exception("Sweet-spot paper tracking failed")
+        raise self.retry(exc=exc, countdown=60)
 
 
 @celery_app.task(name="pipeline.capture_singles_ledger", bind=True, max_retries=1)

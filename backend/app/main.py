@@ -4,6 +4,7 @@ FastAPI application entry point — spec §32, §35.
 """
 
 import logging
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -135,6 +136,12 @@ async def lifespan(app: FastAPI):
             replace_existing=True,
             coalesce=True,
             max_instances=1,
+        )
+    if settings.sweet_spot_tracking_enabled:
+        scheduler.add_job(
+            _trigger_sweet_spot, IntervalTrigger(minutes=5),
+            id="sweet_spot_paper_tracker", replace_existing=True,
+            coalesce=True, max_instances=1, next_run_time=datetime.now(timezone.utc),
         )
     scheduler.start()
     early_cat_minutes = (settings.pipeline_early_cron_hour * 60 + settings.pipeline_early_cron_minute + 120) % (24 * 60)
@@ -340,6 +347,13 @@ async def _queue_shadow_learning():
 
     train_shadow_challenger.delay()
     logger.info("Weekly shadow model-learning task queued")
+
+
+async def _trigger_sweet_spot():
+    async with _scheduler_leadership("sweet_spot_paper_tracker") as leader:
+        if leader:
+            from app.tasks.pipeline import track_sweet_spot
+            track_sweet_spot.delay()
 
 
 async def _trigger_singles_ledger_capture():

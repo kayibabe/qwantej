@@ -1,0 +1,27 @@
+{
+  "rule_version": "away-q65-odds180-300-v1",
+  "frozen_at": "2026-10-18T20:44:42+00:00",
+  "status": "PAPER ONLY; prospective collection is not scheduled by this script",
+  "earliest_kickoff_date": "2026-10-19",
+  "market": "away_win",
+  "q_min": 65,
+  "odds_min_inclusive": 1.8,
+  "odds_max_exclusive": 3,
+  "maximum_quote_age_hours": 3,
+  "minimum_edge": null,
+  "stake_units": 1,
+  "selection": "First stored prediction per match/market/selection; never substitute later captures",
+  "required_evidence": [
+    "Pre-kickoff decision and capture",
+    "Quote <= decision; no fallback or replay",
+    "Persist original features, model version, source and rule version",
+    "Capture qualifying and excluded opportunities before kickoff",
+    "Report missing decisions/results and changed model regimes separately"
+  ],
+  "minimum_review_date": "2027-01-16",
+  "review_requires": {
+    "settled_fixtures": 300,
+    "distinct_matchdays": 30
+  },
+  "review_policy": "Review only after date and both counts are met; these are planning floors, not proof. No interim rule tuning. Report net ROI, day-cluster uncertainty, drawdown, coverage, and model/league concentration. No automatic promotion to real-money use."
+}
