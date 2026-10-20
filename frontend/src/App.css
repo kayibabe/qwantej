@@ -2275,6 +2275,14 @@ th[aria-sort="descending"] .table-sort span,
 .data-quality-pill.weak { background: color-mix(in srgb, var(--negative) 10%, var(--surface)); color: var(--negative); }
 .decision-pill { min-width: 55px; padding: 5px 8px; }
 .passed-matches-panel { margin: 0 0 24px; padding: 18px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow); }
+.passed-matches-tools { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 14px; margin-top: 16px; }
+.passed-matches-filters { display: grid; grid-template-columns: repeat(6, minmax(110px, 1fr)); gap: 9px; }
+.passed-matches-filters label { display: grid; gap: 5px; color: var(--muted); font-size: var(--type-small); }
+.passed-matches-filters select { width: 100%; min-width: 0; height: 38px; padding: 0 9px; border: 1px solid var(--border); border-radius: var(--r-sm); color: var(--text); background: var(--surface2); font: inherit; font-size: var(--type-small); }
+.passed-matches-summary { display: flex; align-items: center; gap: 14px; padding: 8px 11px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface2); }
+.passed-matches-summary > div { display: grid; gap: 2px; }
+.passed-matches-summary span, .passed-matches-summary small { color: var(--muted); font-size: var(--type-small); white-space: nowrap; }
+.passed-matches-summary strong { color: var(--text); font-size: var(--type-body); font-variant-numeric: tabular-nums; }
 .passed-matches-table-wrap { margin-top: 14px; }
 .passed-matches-table { min-width: 1160px; }
 .passed-matches-table td:nth-child(2) { display: table-cell; }
@@ -2296,7 +2304,14 @@ th[aria-sort="descending"] .table-sort span,
 .explainability-grid strong { display: block; margin-bottom: 6px; font-size: var(--type-body); }
 .explainability-grid ul { display: grid; gap: 5px; padding-left: 15px; list-style: disc; color: var(--text2); font-size: var(--type-small); }
 .explainability-grid span { color: var(--muted); font-size: var(--type-small); }
+@media (max-width: 1100px) {
+  .passed-matches-tools { grid-template-columns: 1fr; }
+  .passed-matches-summary { justify-content: flex-start; }
+}
 @media (max-width: 720px) {
+  .passed-matches-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .passed-matches-summary { flex-wrap: wrap; gap: 10px 16px; }
+  .passed-matches-summary small { flex-basis: 100%; }
   .decision-summary { padding: 14px; }
   .decision-summary-header { flex-direction: column; }
   .decision-status { align-self: flex-start; }
@@ -4275,10 +4290,10 @@ html[data-theme="dark"] .topbar-logo-dark { display: block; }
 
 /* Compact selectable match dates in the header. */
 .app-header .date-nav { gap: 5px; }
-.date-strip { display: flex; align-items: center; gap: 3px; padding: 3px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface2); }
-.date-strip-day { display: grid; place-items: center; gap: 1px; min-width: 42px; height: 42px; padding: 2px 5px; border: 1px solid transparent; border-radius: 8px; color: var(--muted); background: transparent; cursor: pointer; line-height: 1.1; }
-.date-strip-day span { font-size: var(--type-small); text-transform: uppercase; font-weight: 600; }
-.date-strip-day b { font-size: var(--type-body); color: var(--text); }
+.date-strip { display: flex; align-items: center; gap: 2px; height: 36px; padding: 2px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface2); }
+.date-strip-day { display: grid; flex: 0 0 42px; place-items: center; gap: 1px; min-width: 42px; height: 30px; padding: 0; border: 1px solid transparent; border-radius: 8px; color: var(--muted); background: transparent; cursor: pointer; line-height: 1; }
+.date-strip-day span { font-size: 10px; text-transform: uppercase; font-weight: 500; letter-spacing: .02em; }
+.date-strip-day b { font-size: 13px; line-height: 1; font-weight: 600; color: var(--text); }
 .date-strip-day:not(.active) b { color: var(--date-accent); }
 .date-strip-day.today span { color: var(--accent); }
 .date-strip-day.active { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
@@ -4291,10 +4306,10 @@ html[data-theme="dark"] .topbar-logo-dark { display: block; }
 .date-nav-tools { display: flex; align-items: center; gap: 5px; }
 .date-picker-control { position: relative; display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid var(--border); border-radius: var(--r-sm); color: var(--text2); background: var(--surface2); cursor: pointer; }
 .date-picker-control > span { pointer-events: none; font-size: 15px; }
-.date-picker-control .date-input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.date-picker-control .date-input { position: absolute; inset: 0; width: 100%; min-width: 0; max-width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 .app-header .today-btn:disabled { opacity: .55; cursor: default; }
 @media (max-width: 1100px) {
-  .date-strip-day { min-width: 37px; }
+  .date-strip-day { flex-basis: 37px; min-width: 37px; }
   .date-nav-tools .today-btn { display: none; }
 }
 @media (max-width: 760px) {

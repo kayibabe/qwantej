@@ -243,7 +243,7 @@ export default function App() {
               })}
             </div>
             <div className="date-nav-tools">
-              <button className="today-btn" onClick={() => setDate(TODAY)} disabled={date === TODAY}>Today</button>
+              {date !== TODAY && <button className="today-btn" onClick={() => setDate(TODAY)}>Today</button>}
               <label className="date-picker-control" title="Choose any date">
                 <span aria-hidden="true">▦</span>
               <input

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchAccaPrices, type AccaPrice, type SelectionSummary } from "../../lib/api";
 import "./AccumulatorAnalysis.css";
+import { matchStatusText, selectionDisplayState, selectionStatusLabel } from "./helpers";
 
 type TicketBand = { key: string; title: string; min: number; max: number; hint: string };
 type ScoredPick = { row: SelectionSummary; score: number; reasons: string[]; risks: string[] };
@@ -93,6 +94,11 @@ function marketName(value: string) {
 export function AccumulatorAnalysis({ rows, date }: { rows: SelectionSummary[]; date: string }) {
   const [pricing, setPricing] = useState<{ date: string; prices: AccaPrice[] } | null>(null);
   const [priceError, setPriceError] = useState<string | null>(null);
+  const [activeAnalysis, setActiveAnalysis] = useState<ScoredPick | null>(null);
+  const analysisDialogRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (activeAnalysis) analysisDialogRef.current?.focus();
+  }, [activeAnalysis]);
   useEffect(() => {
     const controller = new AbortController();
     setPricing(null);
@@ -160,15 +166,38 @@ export function AccumulatorAnalysis({ rows, date }: { rows: SelectionSummary[]; 
         </li>)}</ol> : <p className="acca-analysis__empty">There are not enough eligible picks in this odds band. The module leaves it empty rather than relaxing the evidence gates.</p>}
       </article>)}
     </div>
-    <div className="acca-analysis__table-wrap"><table className="acca-analysis__table"><thead><tr><th>Fixture and pick</th><th>Price / implied</th><th>Model / edge</th><th>Quality</th><th>Analysis and risks</th></tr></thead>
+    <div className="acca-analysis__table-wrap"><table className="acca-analysis__table"><thead><tr><th>Fixture</th><th>Market selection</th><th>Price / implied</th><th>Model / edge</th><th>Quality</th><th>Match status</th><th>Analysis</th></tr></thead>
       <tbody>{picks.map(({ row, score, reasons, risks }) => <tr key={row.prediction_id}>
-        <td><b>{row.home_team} vs {row.away_team}</b><span>{row.competition} · {marketName(row.market)}: {row.selection}</span></td>
+        <td><b>{row.home_team} vs {row.away_team}</b><span>{row.competition}</span></td>
+        <td><b>{marketName(row.market)}</b><span>{row.selection}</span></td>
         <td>{row.best_odds?.toFixed(2) ?? "—"}<span>{row.best_odds && row.best_odds > 1 ? `${(100 / row.best_odds).toFixed(1)}% break-even` : "No valid price"}</span></td>
         <td>{row.model_probability != null ? `${(row.model_probability * 100).toFixed(1)}%` : "—"}<span>{row.edge != null ? `${row.edge >= 0 ? "+" : ""}${(row.edge * 100).toFixed(1)} pp edge` : "Edge unavailable"}</span></td>
         <td><b>{row.recommendation_status ?? "Unrated"}</b><span>Q {Math.round(row.q_score)} · score {score.toFixed(0)}</span></td>
-        <td><span>{reasons.join(" ")}</span>{risks.length > 0 && <em>{risks.join(" ")}</em>}</td>
+        <td><span className={`acca-analysis__status acca-analysis__status--${(row.match_status ?? "unknown").toLowerCase()}`}>{row.match_status?.toLowerCase() === "finished" ? matchStatusText(row) : marketName(row.match_status ?? "unknown")}</span>
+          {row.match_status?.toLowerCase() === "finished" && <>
+            {(row.home_goals == null || row.away_goals == null) && <span>Score unavailable</span>}
+            <span className={`acca-analysis__result acca-analysis__result--${selectionDisplayState(row)}`}>
+              {row.result ? `Selection: ${selectionStatusLabel(selectionDisplayState(row))}` : "Selection result unavailable"}
+            </span>
+          </>}
+        </td>
+        <td><button type="button" className="acca-analysis__details-button" onClick={() => setActiveAnalysis({ row, score, reasons, risks })}>View analysis</button></td>
       </tr>)}</tbody></table>
       {picks.length === 0 && <p className="acca-analysis__empty">No candidate picks are available for this date.</p>}
     </div>
+    {activeAnalysis && <div className="acca-analysis__dialog-backdrop" onClick={(event) => { if (event.target === event.currentTarget) setActiveAnalysis(null); }}>
+      <section ref={analysisDialogRef} className="acca-analysis__dialog" role="dialog" aria-modal="true" aria-labelledby="acca-analysis-dialog-title" onKeyDown={(event) => { if (event.key === "Escape") setActiveAnalysis(null); }} tabIndex={-1}>
+        <header className="acca-analysis__dialog-header">
+          <div><span className="eyebrow">Analysis and risks</span><h3 id="acca-analysis-dialog-title">{activeAnalysis.row.home_team} vs {activeAnalysis.row.away_team}</h3>
+            <p>{activeAnalysis.row.competition} · {marketName(activeAnalysis.row.market)}: {activeAnalysis.row.selection}</p></div>
+          <button type="button" className="acca-analysis__dialog-close" aria-label="Close analysis" onClick={() => setActiveAnalysis(null)}>×</button>
+        </header>
+        <div className="acca-analysis__dialog-content">
+          <div><h4>Analysis</h4><p>{activeAnalysis.reasons.join(" ")}</p></div>
+          <div><h4>Risks</h4>{activeAnalysis.risks.length ? <ul>{activeAnalysis.risks.map((risk) => <li key={risk}>{risk}</li>)}</ul> : <p>No listed risk flags.</p>}</div>
+        </div>
+        <footer className="acca-analysis__dialog-footer"><button type="button" className="acca-analysis__details-button" onClick={() => setActiveAnalysis(null)}>Close</button></footer>
+      </section>
+    </div>}
   </section>;
 }

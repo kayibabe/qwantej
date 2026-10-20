@@ -554,6 +554,7 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
 }
 
 function PassedMatches({ rows, onSelect }: { rows: SelectionSummary[]; onSelect: (row: SelectionSummary) => void }) {
+  const [filters, setFilters] = useState({ selection: "all", qScore: "all", odds: "all", edge: "all", result: "all", rejection: "all" });
   const rejectionOutcome = (result: SelectionSummary["result"]) => {
     if (result === "lost") return { label: "Passed", tone: "passed" };
     if (result === "won") return { label: "Failed", tone: "failed" };
@@ -561,15 +562,64 @@ function PassedMatches({ rows, onSelect }: { rows: SelectionSummary[]; onSelect:
     return { label: "Pending", tone: "pending" };
   };
 
+  const filteredRows = rows.filter(row => {
+    const outcome = rejectionOutcome(row.result).tone;
+    const qScoreMatches = filters.qScore === "all"
+      || (filters.qScore === "under-50" && row.q_score < 50)
+      || (filters.qScore === "50-59" && row.q_score >= 50 && row.q_score < 60)
+      || (filters.qScore === "60-69" && row.q_score >= 60 && row.q_score < 70)
+      || (filters.qScore === "70-plus" && row.q_score >= 70);
+    const oddsMatches = filters.odds === "all"
+      || (filters.odds === "unavailable" && row.best_odds == null)
+      || (filters.odds === "under-1-5" && row.best_odds != null && row.best_odds < 1.5)
+      || (filters.odds === "1-5-2" && row.best_odds != null && row.best_odds >= 1.5 && row.best_odds < 2)
+      || (filters.odds === "2-3" && row.best_odds != null && row.best_odds >= 2 && row.best_odds < 3)
+      || (filters.odds === "3-plus" && row.best_odds != null && row.best_odds >= 3);
+    const edgeMatches = filters.edge === "all"
+      || (filters.edge === "unavailable" && row.edge == null)
+      || (filters.edge === "negative" && row.edge != null && row.edge < 0)
+      || (filters.edge === "0-2" && row.edge != null && row.edge >= 0 && row.edge < 0.02)
+      || (filters.edge === "2-5" && row.edge != null && row.edge >= 0.02 && row.edge < 0.05)
+      || (filters.edge === "5-plus" && row.edge != null && row.edge >= 0.05);
+    const resultValue = row.result ?? (row.match_status?.toLowerCase() === "finished" ? "unavailable" : "pending");
+    return (filters.selection === "all" || row.selection === filters.selection)
+      && qScoreMatches && oddsMatches && edgeMatches
+      && (filters.result === "all" || resultValue === filters.result)
+      && (filters.rejection === "all" || outcome === filters.rejection);
+  });
+  const settledRows = filteredRows.filter(row => row.result === "won" || row.result === "lost" || row.result === "void");
+  const wins = settledRows.filter(row => row.result === "won").length;
+  const losses = settledRows.filter(row => row.result === "lost").length;
+  const roiRows = settledRows.filter(row => row.best_odds != null && row.best_odds > 1);
+  const netUnits = roiRows.reduce((total, row) => total + (row.result === "won" ? (row.best_odds ?? 1) - 1 : row.result === "lost" ? -1 : 0), 0);
+  const hitRate = wins + losses > 0 ? `${((wins / (wins + losses)) * 100).toFixed(1)}%` : "—";
+  const roi = roiRows.length ? `${((netUnits / roiRows.length) * 100).toFixed(1)}%` : "—";
+
   return <section className="passed-matches-panel" aria-labelledby="passed-matches-title">
     <div className="section-heading">
       <div><span className="eyebrow">Transparent rejection ledger</span><h2 id="passed-matches-title">Rejected opportunities and why</h2><span className="section-note">A passed rejection avoided a losing selection; a failed rejection excluded a winning selection.</span></div>
       <span className="section-note"><b>{rows.length}</b> reviewed</span>
     </div>
-    {rows.length === 0 ? <div className="decision-empty"><strong>No rejected candidates recorded</strong><span>When the candidate ledger is empty, there is no pass explanation to display.</span></div> : <div className="decision-table-wrap passed-matches-table-wrap">
+    <div className="passed-matches-tools" aria-label="Filter rejection ledger and summary">
+      <div className="passed-matches-filters">
+        <label>Selection<select value={filters.selection} onChange={event => setFilters(current => ({ ...current, selection: event.target.value }))}><option value="all">All selections</option>{Array.from(new Set(rows.map(row => row.selection))).sort().map(selection => <option key={selection} value={selection}>{formatSelection(selection)}</option>)}</select></label>
+        <label>Q-score<select value={filters.qScore} onChange={event => setFilters(current => ({ ...current, qScore: event.target.value }))}><option value="all">Any score</option><option value="under-50">Under 50</option><option value="50-59">50–59.9</option><option value="60-69">60–69.9</option><option value="70-plus">70+</option></select></label>
+        <label>Odds<select value={filters.odds} onChange={event => setFilters(current => ({ ...current, odds: event.target.value }))}><option value="all">Any odds</option><option value="unavailable">Unavailable</option><option value="under-1-5">Under 1.50</option><option value="1-5-2">1.50–1.99</option><option value="2-3">2.00–2.99</option><option value="3-plus">3.00+</option></select></label>
+        <label>Edge<select value={filters.edge} onChange={event => setFilters(current => ({ ...current, edge: event.target.value }))}><option value="all">Any edge</option><option value="unavailable">Unavailable</option><option value="negative">Below 0%</option><option value="0-2">0–1.9%</option><option value="2-5">2–4.9%</option><option value="5-plus">5%+</option></select></label>
+        <label>Match result<select value={filters.result} onChange={event => setFilters(current => ({ ...current, result: event.target.value }))}><option value="all">All results</option><option value="won">Won</option><option value="lost">Lost</option><option value="void">Void</option><option value="pending">Pending</option><option value="unavailable">Unavailable</option></select></label>
+        <label>Rejection check<select value={filters.rejection} onChange={event => setFilters(current => ({ ...current, rejection: event.target.value }))}><option value="all">All checks</option><option value="passed">Passed</option><option value="failed">Failed</option><option value="void">Void</option><option value="pending">Pending</option></select></label>
+      </div>
+      <div className="passed-matches-summary" aria-label="Filtered record summary">
+        <div><span>W–L</span><strong>{wins}–{losses}</strong></div>
+        <div><span>Hit rate</span><strong>{hitRate}</strong></div>
+        <div><span>ROI</span><strong>{roi}</strong></div>
+        <small>{filteredRows.length} shown · {settledRows.length} settled · {roiRows.length} priced</small>
+      </div>
+    </div>
+    {rows.length === 0 ? <div className="decision-empty"><strong>No rejected candidates recorded</strong><span>When the candidate ledger is empty, there is no pass explanation to display.</span></div> : filteredRows.length === 0 ? <div className="decision-empty"><strong>No records match these filters</strong><span>Adjust one or more filters to show rejection ledger records.</span></div> : <div className="decision-table-wrap passed-matches-table-wrap">
       <table className="decision-table passed-matches-table">
         <thead><tr><th>Match</th><th>Selection</th><th>Q-score</th><th>Odds</th><th data-sort-default-direction="descending">Edge</th><th>Rejection reason</th><th>Match result</th><th>Rejection check</th></tr></thead>
-        <tbody>{rows.map(row => {
+        <tbody>{filteredRows.map(row => {
           const outcome = rejectionOutcome(row.result);
           const score = row.home_goals != null && row.away_goals != null
             ? `${row.home_goals}–${row.away_goals}`

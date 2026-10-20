@@ -18,12 +18,31 @@
 .acca-analysis__ticket li span, .acca-analysis__ticket li small { color: var(--text-secondary, #687386); line-height: 1.45; }
 .acca-analysis__empty { margin: 14px 0 0; color: var(--text-secondary, #687386); font-size: var(--type-body); line-height: 1.5; }
 .acca-analysis__table-wrap { overflow-x: auto; }
-.acca-analysis__table { width: 100%; min-width: 930px; border-collapse: collapse; font-size: var(--type-body); }
+.acca-analysis__table { width: 100%; min-width: 1080px; border-collapse: collapse; font-size: var(--type-body); }
 .acca-analysis__table th, .acca-analysis__table td { padding: 11px 12px; border-bottom: 1px solid var(--border, #edf0f4); text-align: left; vertical-align: top; }
-.acca-analysis__table th { color: var(--text-secondary, #687386); font-size: var(--type-small); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+.acca-analysis__table th { color: var(--text-secondary, #687386); font-size: var(--type-small); font-weight: 600; letter-spacing: normal; text-transform: none; white-space: nowrap; }
 .acca-analysis__table tr:last-child td { border-bottom: 0; }
 .acca-analysis__table td > b, .acca-analysis__table td > span { display: block; }
 .acca-analysis__table td > span { margin-top: 4px; color: var(--text-secondary, #687386); line-height: 1.45; }
-.acca-analysis__table td > em { display: block; margin-top: 5px; color: #a36518; font-style: normal; line-height: 1.45; }
+.acca-analysis__status { display: inline-block !important; width: fit-content; padding: 3px 8px; border: 1px solid var(--border, #e4e8ef); border-radius: 999px; background: var(--surface-muted, #f5f7fa); color: var(--text-secondary, #596579) !important; font-size: var(--type-small); }
+.acca-analysis__status--finished { border-color: #b8dfc7; background: #edf8f0; color: #246b3c !important; }
+.acca-analysis__status--live { border-color: #f1d2a0; background: #fff7e8; color: #935700 !important; }
+.acca-analysis__table td > .acca-analysis__result--won { color: var(--success, #246b3c); }
+.acca-analysis__table td > .acca-analysis__result--lost { color: var(--danger, #b42318); }
+.acca-analysis__details-button, .acca-analysis__dialog-close { border: 1px solid var(--border, #d9dee8); border-radius: 7px; background: var(--surface, #fff); color: var(--text-primary, #263247); font: inherit; cursor: pointer; }
+.acca-analysis__details-button { padding: 7px 10px; white-space: nowrap; }
+.acca-analysis__details-button:hover, .acca-analysis__dialog-close:hover { background: var(--surface-muted, #f5f7fa); }
+.acca-analysis__dialog-backdrop { position: fixed; z-index: 1200; inset: 0; display: grid; place-items: center; padding: 20px; background: rgb(18 27 43 / 48%); }
+.acca-analysis__dialog { width: min(680px, 100%); max-height: min(80vh, 760px); overflow: auto; border: 1px solid var(--border, #e4e8ef); border-radius: 14px; background: var(--surface, #fff); color: var(--text-primary, #263247); box-shadow: 0 24px 80px rgb(14 24 42 / 28%); outline: none; }
+.acca-analysis__dialog-header { position: sticky; top: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 20px 22px 16px; border-bottom: 1px solid var(--border, #e4e8ef); background: var(--surface, #fff); }
+.acca-analysis__dialog-header h3 { margin: 5px 0 0; font-size: 18px; font-weight: 600; }
+.acca-analysis__dialog-header p { margin: 5px 0 0; color: var(--text-secondary, #687386); line-height: 1.45; }
+.acca-analysis__dialog-close { width: 34px; height: 34px; flex: 0 0 auto; font-size: 22px; line-height: 1; }
+.acca-analysis__dialog-content { display: grid; gap: 18px; padding: 18px 22px; }
+.acca-analysis__dialog-content h4 { margin: 0 0 6px; font-size: var(--type-body); font-weight: 600; }
+.acca-analysis__dialog-content p, .acca-analysis__dialog-content ul { margin: 0; color: var(--text-secondary, #596579); line-height: 1.6; }
+.acca-analysis__dialog-content ul { padding-left: 20px; }
+.acca-analysis__dialog-content li + li { margin-top: 5px; }
+.acca-analysis__dialog-footer { display: flex; justify-content: flex-end; padding: 0 22px 20px; }
 @media (max-width: 900px) { .acca-analysis__tickets { grid-template-columns: 1fr; } }
 @media (max-width: 650px) { .acca-analysis__heading { display: grid; } }
