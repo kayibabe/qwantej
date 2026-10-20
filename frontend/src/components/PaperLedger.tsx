@@ -133,6 +133,9 @@ export default function PaperLedger({ onOpenValidation }: { onOpenValidation?: (
     (typeFilter === 'all' || row.ticket_type === typeFilter)
     && (resultFilter === 'all' || (row.result ?? 'pending') === resultFilter)
   ), [scopeRows, typeFilter, resultFilter])
+  const settledRows = filtered.filter(row => row.result === 'won' || row.result === 'lost' || row.result === 'void')
+  const pendingCount = filtered.filter(row => !row.result || row.result === 'pending').length
+  const settledPnl = settledRows.reduce((total, row) => total + (row.profit_loss ?? 0), 0)
 
   const groupedRows = useMemo(() => {
     const years = new Map<string, Map<string, Map<string, TicketHistoryItem[]>>>()
@@ -191,9 +194,16 @@ export default function PaperLedger({ onOpenValidation }: { onOpenValidation?: (
       <label>To<input aria-label="Tickets to date" type="date" value={dateTo} onChange={event => setDateTo(event.target.value)} /></label>
     </div>
 
-    {filtered.length === 0 ? <div className="analytics-empty"><strong>No tickets match these filters</strong><span>Try another tier, outcome, model version or date range.</span></div> : <div className="paper-ledger-list">{groupedRows.map(yearGroup => <details className="paper-year-group" key={yearGroup.year} open>
+    <div className="paper-ledger-summary" aria-label="Current ledger summary">
+      <div><span>Latest ticket cohorts</span><strong>{filtered.length}</strong><small>After current filters</small></div>
+      <div><span>Settled</span><strong>{settledRows.length}</strong><small>Won, lost, or void</small></div>
+      <div><span>Pending</span><strong>{pendingCount}</strong><small>Awaiting a final result</small></div>
+      <div><span>Settled paper P&amp;L</span><strong className={settledPnl >= 0 ? 'positive' : 'negative'}>{fmtPnl(settledPnl)}</strong><small>Current filtered cohorts</small></div>
+    </div>
+
+    {filtered.length === 0 ? <div className="analytics-empty"><strong>No tickets match these filters</strong><span>Try another tier, outcome, model version or date range.</span></div> : <div className="paper-ledger-list">{groupedRows.map((yearGroup, yearIndex) => <details className="paper-year-group" key={yearGroup.year} open={yearIndex === 0}>
       <summary className="paper-year-heading">{yearGroup.year}</summary>
-      <div className="paper-year-body">{yearGroup.months.map(monthGroup => <details className="paper-month-group" key={`${yearGroup.year}-${monthGroup.month}`} open>
+      <div className="paper-year-body">{yearGroup.months.map(monthGroup => <details className="paper-month-group" key={`${yearGroup.year}-${monthGroup.month}`}>
         <summary className="paper-month-heading">{monthGroup.monthLabel}</summary>
         <div className="paper-month-body">{monthGroup.dates.map(dayGroup => <section className="paper-date-group" key={dayGroup.date}>
           <div className="paper-date-heading"><strong>{dayGroup.label}</strong><span>{dayGroup.rows.length} latest cohort{dayGroup.rows.length === 1 ? '' : 's'}</span></div>

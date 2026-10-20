@@ -898,6 +898,10 @@ body {
 .paper-ledger-filters select { padding-right: 28px; }
 .paper-ledger-filters select:focus,
 .paper-ledger-filters input:focus { border-color: var(--accent); }
+.paper-ledger-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0 0 16px; }
+.paper-ledger-summary > div { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); }
+.paper-ledger-summary span, .paper-ledger-summary small { color: var(--muted); font-size: var(--type-small); }
+.paper-ledger-summary strong { font-size: 18px; }
 .stake-simulator-filter-controls { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 14px; }
 .stake-simulator-filter-controls label { display: grid; gap: 4px; color: var(--muted); font-size: var(--type-small); font-weight: 600; }
 .stake-simulator-filter-controls select,
@@ -915,7 +919,7 @@ body {
 .stake-simulator-metrics span { overflow: hidden; color: var(--muted); font-size: var(--type-small); text-overflow: ellipsis; text-transform: uppercase; letter-spacing: .08em; white-space: nowrap; }
 .stake-simulator-metrics strong { font-size: var(--type-body); }
 @media (max-width: 760px) { .stake-simulator { grid-template-columns: 1fr; gap: 12px; } }
-@media (max-width: 760px) { .paper-ledger-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stake-simulator-filter-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .paper-ledger-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .paper-ledger-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stake-simulator-filter-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 520px) { .stake-simulator-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; } }
 
 .leg-outcome {
@@ -2063,6 +2067,7 @@ th[aria-sort="descending"] .table-sort span,
   line-height: 1.5;
   min-height: 38px;
 }
+.tool-method-note { margin: 10px 0 0; color: var(--muted); font-size: var(--type-small); line-height: 1.45; }
 
 .tool-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; align-items: end; }
 .tool-inputs .form-group { min-width: 0; }
@@ -2178,6 +2183,19 @@ th[aria-sort="descending"] .table-sort span,
 }
 
 .admin-info-list { display: flex; flex-direction: column; }
+.admin-safety-definition { margin: 10px 0 0; line-height: 1.45; }
+.admin-record-links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 5px 0 9px; font-size: var(--type-small); }
+.admin-record-links small { flex-basis: 100%; color: var(--muted); }
+.admin-record-links a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.admin-alert-group { border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); }
+.admin-alert-group > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; cursor: pointer; list-style-position: inside; }
+.admin-alert-group > summary > span { display: grid; gap: 3px; min-width: 0; }
+.admin-alert-group > summary > span:last-child { justify-items: end; text-align: right; }
+.admin-alert-group > summary small, .admin-alert-item small { display: block; color: var(--muted); font-size: var(--type-small); }
+.admin-alert-items { display: grid; gap: 8px; padding: 0 12px 12px; }
+.admin-alert-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 10px; border-radius: var(--r-sm); background: var(--surface2); font-size: var(--type-small); }
+.admin-alert-item > span { min-width: 0; overflow-wrap: anywhere; }
+.admin-alert-item button { flex: 0 0 auto; }
 
 .admin-info-row {
   display: flex;
@@ -4471,4 +4489,7 @@ body small { font-size: var(--type-small); }
 
 @media (max-width: 480px) {
   .paper-ledger-filters, .stake-simulator-filter-controls { grid-template-columns: minmax(0, 1fr); }
+  .paper-ledger-summary { grid-template-columns: minmax(0, 1fr); }
+  .admin-alert-group > summary, .admin-alert-item { align-items: flex-start; flex-direction: column; }
+  .admin-alert-group > summary > span:last-child { justify-items: start; text-align: left; }
 }

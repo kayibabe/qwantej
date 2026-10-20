@@ -91,6 +91,12 @@
 .published-selections-empty { margin: 0; padding: 14px; border-radius: 9px; color: var(--muted); background: var(--bg); font-size: var(--type-body); }
 .ticket-tier-section-heading { margin: 0 14px 8px; }
 .ticket-tier-section-heading p { margin-bottom: 2px; }
+.published-ticket-tiers { margin-top: 18px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.published-ticket-tiers > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; cursor: pointer; list-style-position: inside; }
+.published-ticket-tiers > summary span { display: grid; gap: 3px; }
+.published-ticket-tiers > summary strong { font-size: var(--type-body); }
+.published-ticket-tiers > summary small { color: var(--muted); font-size: var(--type-small); }
+.published-ticket-tiers .ticket-grid { padding: 0 12px 12px; }
 
 @media (max-width: 760px) {
   .published-selections { margin: 14px 0 20px; padding: 14px; }

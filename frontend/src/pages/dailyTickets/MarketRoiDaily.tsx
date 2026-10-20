@@ -113,7 +113,7 @@ function MarketRoiDailyContent({ data, error, view }: { data: MarketRoiDailyData
     roi: (row: MarketCandidate) => row.market_roi,
     sample_size: (row: MarketCandidate) => row.market_sample_size,
   } satisfies Record<CandidateSortKey, (row: MarketCandidate) => string | number>;
-  const { sorted: sortedCandidates, header } = useSortableRows(
+  const { sorted: sortedCandidates, header, sort, toggle } = useSortableRows(
     filteredCandidates,
     sortAccessors,
     { key: "kickoff", direction: "asc" },
@@ -126,8 +126,8 @@ function MarketRoiDailyContent({ data, error, view }: { data: MarketRoiDailyData
           <span className="eyebrow">Daily market scan · research only</span>
           <h2 className="section-title">{view === "market-roi" ? "Hit rate and ROI by market" : `Daily Match Picks · ${data?.target_date ?? "selected date"}`}</h2>
           <p>{view === "market-roi"
-            ? `Markets qualify from all settled matches before ${data?.target_date ?? "the selected day"} when historical hit rate is above 50% and flat-stake ROI is above 30%. This view ranks those markets. Daily Match Picks lists every match in qualifying markets that meets Q ≥ 70 and odds from 2.00 to below 3.00. It refreshes automatically every five minutes.`
-            : `All matches on ${data?.target_date ?? "the selected date"} in markets that pass the historical hit rate and ROI gates, with Q ≥ 70 and decimal odds from 2.00 to below 3.00. It refreshes automatically every five minutes.`}</p>
+            ? "Compare historical market results, then inspect the selected date’s qualifying research candidates. Small samples remain exploratory."
+            : `Research candidates for ${data?.target_date ?? "the selected date"} from historically qualifying markets. Each row keeps the match, pick, current result, and quote status together.`}</p>
         </div>
         <div className="market-roi-refresh">
           <span>Auto refresh · 5 min</span>
@@ -140,24 +140,25 @@ function MarketRoiDailyContent({ data, error, view }: { data: MarketRoiDailyData
 
       {data && <>
         {view === "market-roi" && <div className="market-roi-kpis">
-          <span><small>Historical window through</small><b>{data.historical_through}</b></span>
-          <span><small>Historical selections</small><b>{data.historical_unique_selections}</b></span>
-          <span><small>Unique fixtures</small><b>{data.historical_fixture_summary.unique_fixtures}</b></span>
-          <span><small>Markets meeting both gates</small><b>{data.qualifying_markets.length}</b></span>
-          <span><small>Selected-day matches</small><b>{fixtures.length}</b></span>
-          <span><small>Eligible market selections</small><b>{fixtures.reduce((count, rows) => count + rows.length, 0)}</b></span>
+          <span><small>History through {data.historical_through}</small><b>{data.historical_unique_selections} selections</b></span>
+          <span><small>Historical fixtures</small><b>{data.historical_fixture_summary.unique_fixtures}</b></span>
+          <span><small>Markets meeting configured formula</small><b>{data.qualifying_markets.length}</b></span>
+          <span><small>{data.target_date} research set</small><b>{fixtures.length} matches · {fixtures.reduce((count, rows) => count + rows.length, 0)} picks</b></span>
         </div>}
 
-        {view === "market-roi" && <div className="market-roi-fixture-summary" aria-label="Historical results grouped by unique fixture">
-          <b>Historical fixture outcomes</b>
-          <span>{data.historical_fixture_summary.all_won} all selections won</span>
-          <span>{data.historical_fixture_summary.all_lost} all selections lost</span>
-          <span>{data.historical_fixture_summary.mixed} mixed outcomes</span>
-        </div>}
-
-        {view === "market-roi" && <div className="market-roi-note" role="note">
-          Historical performance uses the latest valid pre-kickoff prediction per fixture, market and selection, across all stored predictions. A market qualifies only when hit rate &gt; {pct(data.hit_rate_threshold)} and ROI &gt; {pct(data.roi_threshold)}. Daily picks require Q ≥ {data.min_q_score}, odds ≥ {data.min_decimal_odds.toFixed(2)} and &lt; {data.max_decimal_odds_exclusive.toFixed(2)}, and a bookmaker quote captured before kickoff and within {data.max_quote_age_hours} hours of the prediction decision. Quote age at refresh is shown for context. These are historical research results, not a profitability claim.
-        </div>}
+        {view === "market-roi" && <details className="market-roi-method-details">
+          <summary>Qualification and sample details</summary>
+          <div className="market-roi-method-content">
+            <p>Historical performance uses the latest valid pre-kickoff prediction per fixture, market and selection. A market meets the configured formula when hit rate is above {pct(data.hit_rate_threshold)} and flat-stake ROI is above {pct(data.roi_threshold)}. This formula does not set a minimum sample size; check the evidence label and pick count before interpreting a result.</p>
+            <p>Daily picks require Q ≥ {data.min_q_score}, odds ≥ {data.min_decimal_odds.toFixed(2)} and &lt; {data.max_decimal_odds_exclusive.toFixed(2)}, and a bookmaker quote captured before kickoff and within {data.max_quote_age_hours} hours of the prediction decision. Quote age at refresh describes how old that saved quote is now. These are historical research results, not a profitability claim.</p>
+            <div className="market-roi-fixture-summary" aria-label="Historical results grouped by unique fixture">
+              <b>Historical fixture outcomes</b>
+              <span>{data.historical_fixture_summary.all_won} all selections won</span>
+              <span>{data.historical_fixture_summary.all_lost} all selections lost</span>
+              <span>{data.historical_fixture_summary.mixed} mixed outcomes</span>
+            </div>
+          </div>
+        </details>}
 
         {view === "market-roi" && <div className="market-roi-table-wrap">
           <h3>Historical market ranking</h3>
@@ -170,7 +171,7 @@ function MarketRoiDailyContent({ data, error, view }: { data: MarketRoiDailyData
                 <td>{row.wins}–{row.losses}</td><td>{pct(row.hit_rate)}</td>
                 <td className={row.flat_stake_pnl >= 0 ? "roi-positive" : "roi-negative"}>{row.flat_stake_pnl >= 0 ? "+" : ""}{row.flat_stake_pnl.toFixed(2)}</td>
                 <td>{row.sample_size}</td><td>{row.evidence_label}</td>
-                <td><span className={`market-roi-badge ${row.qualifies ? "qualifies" : ""}`}>{row.qualifies ? "Meets both gates" : "Below one or both gates"}</span></td>
+                <td><span className={`market-roi-badge ${row.qualifies ? "qualifies" : ""}`}>{row.qualifies ? "Meets configured gates" : "Below one or both gates"}</span></td>
               </tr>)}</tbody>
             </table>
           )}
@@ -199,14 +200,10 @@ function MarketRoiDailyContent({ data, error, view }: { data: MarketRoiDailyData
               <thead><tr>
                 {header("kickoff", "Kickoff")}
                 {header("match", "Match")}
-                <th>Competition</th>
                 {header("market", "Market pick")}
                 {header("odds", "Odds")}
                 {header("q_score", "Q-score")}
-                {header("hit_rate", "Historical hit rate")}
-                {header("roi", "Historical ROI")}
-                {header("sample_size", "History")}
-                <th>Bookmaker quote</th>
+                <th><details className="market-roi-evidence-sort"><summary>Historical and quote evidence</summary><div role="group" aria-label="Sort candidates by historical evidence"><button type="button" aria-pressed={sort?.key === "hit_rate"} onClick={() => toggle("hit_rate")}>Hit rate{sort?.key === "hit_rate" ? (sort.direction === "asc" ? " ↑" : " ↓") : ""}</button><button type="button" aria-pressed={sort?.key === "roi"} onClick={() => toggle("roi")}>ROI{sort?.key === "roi" ? (sort.direction === "asc" ? " ↑" : " ↓") : ""}</button><button type="button" aria-pressed={sort?.key === "sample_size"} onClick={() => toggle("sample_size")}>Sample{sort?.key === "sample_size" ? (sort.direction === "asc" ? " ↑" : " ↓") : ""}</button></div></details></th>
                 <th>Result</th>
               </tr></thead>
               <tbody>{sortedCandidates.map((row) => {
@@ -218,15 +215,11 @@ function MarketRoiDailyContent({ data, error, view }: { data: MarketRoiDailyData
                   : null;
                 return <tr key={row.prediction_id}>
                   <td data-label="Kickoff"><time dateTime={row.kickoff_at}>{localDateTime(row.kickoff_at)}</time></td>
-                  <td data-label="Match"><b>{row.home_team} vs {row.away_team}</b></td>
-                  <td data-label="Competition">{row.competition || "—"}</td>
+                  <td data-label="Match"><b>{row.home_team} vs {row.away_team}</b><small className="market-roi-cell-subtitle">{row.competition || "Competition unavailable"}</small></td>
                   <td data-label="Market pick"><span className="market-roi-selection-chip qualifies">{title(row.market)}</span><small className="market-roi-cell-subtitle">{title(row.selection)}</small></td>
                   <td data-label="Odds"><b>{row.odds.toFixed(2)}</b><small className="market-roi-cell-subtitle">{row.bookmaker || "Bookmaker unavailable"}</small></td>
                   <td data-label="Q-score"><b>{row.q_score.toFixed(1)}</b><small className="market-roi-cell-subtitle">{row.q_grade}</small></td>
-                  <td data-label="Historical hit rate"><b>{pct(row.market_hit_rate)}</b></td>
-                  <td data-label="Historical ROI" className={row.market_roi >= 0 ? "roi-positive" : "roi-negative"}><b>{pct(row.market_roi)}</b></td>
-                  <td data-label="History">{row.market_sample_size} picks</td>
-                  <td data-label="Bookmaker quote"><time dateTime={row.quote_at}>{localDateTime(row.quote_at)}</time><small className="market-roi-cell-subtitle">{ageAtRefresh(row.quote_age_minutes)} at refresh</small></td>
+                  <td data-label="Historical and quote evidence"><details className="market-roi-row-evidence"><summary>View evidence</summary><div><span>Historical hit rate <b>{pct(row.market_hit_rate)}</b></span><span>Historical ROI <b className={row.market_roi >= 0 ? "roi-positive" : "roi-negative"}>{pct(row.market_roi)}</b></span><span>History <b>{row.market_sample_size} picks</b></span><span>Bookmaker <b>{row.bookmaker || "Unavailable"}</b></span><span>Quote saved <time dateTime={row.quote_at}>{localDateTime(row.quote_at)}</time></span><span>Quote age <b>{ageAtRefresh(row.quote_age_minutes)} at refresh</b></span></div></details></td>
                   <td data-label="Result"><span className={`market-roi-result ${row.result ?? "pending"}`}>{resultLabel}</span>{score && <small className="market-roi-cell-subtitle">{score}</small>}</td>
                 </tr>;
               })}</tbody>

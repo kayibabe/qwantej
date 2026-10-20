@@ -36,8 +36,11 @@ function dateFromSearch(search: string): string {
     : TODAY
 }
 
-function datePath(path: string, date: string): string {
-  return date === TODAY ? path : `${path}?date=${encodeURIComponent(date)}`
+function datePath(path: string, date: string, extra?: Record<string, string>): string {
+  const params = new URLSearchParams(extra)
+  if (date !== TODAY) params.set('date', date)
+  const query = params.toString()
+  return query ? `${path}?${query}` : path
 }
 
 const NAV: { id: ModulePage; label: string }[] = [
@@ -87,9 +90,9 @@ export default function App() {
   const [researchVisit, setResearchVisit] = useState(0)
   const [workspace, setWorkspace] = useState<Workspace>(() => workspaceForPage(routePage(window.location.pathname)) ?? 'football')
   const [matchId, setMatchId] = useState<number | null>(() => routeMatchId(window.location.pathname))
+  const [predictionId, setPredictionId] = useState<number | null>(() => routePredictionId(window.location.search))
   const [date, setDate] = useState(() => dateFromSearch(window.location.search))
   const [theme, setTheme] = useState<Theme>('system')
-  const [lastUpdated, setLastUpdated] = useState(() => new Date())
 
   useEffect(() => {
     const url = new URL(window.location.href)
@@ -105,6 +108,7 @@ export default function App() {
       const nextWorkspace = workspaceForPage(nextPage)
       if (nextWorkspace) setWorkspace(nextWorkspace)
       setMatchId(routeMatchId(window.location.pathname))
+      setPredictionId(routePredictionId(window.location.search))
       setDate(dateFromSearch(window.location.search))
     }
     window.addEventListener('popstate', onPopState)
@@ -149,11 +153,12 @@ export default function App() {
     window.history[replace ? 'replaceState' : 'pushState']({}, '', datePath(path, date))
   }
 
-  function navigateToMatch(nextMatchId: number) {
+  function navigateToMatch(nextMatchId: number, nextPredictionId?: number) {
     setMatchId(nextMatchId)
+    setPredictionId(nextPredictionId ?? null)
     setPage('match')
     setWorkspace('research')
-    window.history.pushState({}, '', datePath(`/match/${nextMatchId}`, date))
+    window.history.pushState({}, '', datePath(`/match/${nextMatchId}`, date, nextPredictionId == null ? undefined : { prediction_id: String(nextPredictionId) }))
   }
 
   function goTo(next: ModulePage) {
@@ -268,8 +273,7 @@ export default function App() {
           <AuthControls onSignIn={() => navigate('login')} onSignedOut={() => navigate('login', undefined, true)} />
           <button className="premium-button" onClick={() => navigate('upgrade')}>{user?.plan === 'pro' ? 'Pro account' : 'Go Premium'}</button>
           <button className="theme-btn settings-btn" onClick={cycleTheme} title={`Theme: ${theme}`} aria-label={`Theme: ${theme}. Change theme`}>⚙</button>
-          <span className="global-updated">Refreshed {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-          <button className="global-refresh" onClick={() => { setLastUpdated(new Date()); window.location.reload() }} title="Refresh current page" aria-label="Refresh current page">↻ <span>Refresh</span></button>
+          <button className="global-refresh" onClick={() => window.location.reload()} title="Reload current page" aria-label="Reload current page">↻ <span>Reload</span></button>
         </div>
       </header>
 
@@ -283,7 +287,7 @@ export default function App() {
           ? <InsightsPage />
           : <section className="insights-access-card"><h1>Stats &amp; trends</h1><p>League results and team tables are available on Pro.</p><button className="btn-primary" onClick={() => navigate('upgrade')}>View Pro access</button></section>)}
         {isInternal && page === 'research' && <DailyTicketsPage key={`${date}-${page}-${researchVisit}`} date={date} initialTab="market-roi" onOpenMatch={navigateToMatch} />}
-        {page === 'match' && matchId != null && (isInternal || authLoading) && <MatchIntelligencePage matchId={matchId} onBack={() => navigate('tickets')} />}
+        {page === 'match' && matchId != null && (isInternal || authLoading) && <MatchIntelligencePage matchId={matchId} selectedPredictionId={predictionId} onBack={() => navigate('tickets')} />}
         {isInternal && page === 'tracker' && <TrackerPage onOpenTickets={(targetDate) => { if (targetDate) setDate(targetDate); goTo('tickets') }} onOpenResearch={() => goTo('research')} onOpenValidation={() => goTo('analytics')} />}
         {isInternal && page === 'analytics' && <AnalyticsPage />}
         {isInternal && page === 'tools' && <ToolsPage />}
@@ -342,5 +346,10 @@ function workspaceForPage(page: Page): Workspace | null {
 function routeMatchId(pathname: string): number | null {
   const match = pathname.replace(/\/$/, '').match(/^\/match\/(\d+)$/)
   return match ? Number(match[1]) : null
+}
+
+function routePredictionId(search: string): number | null {
+  const value = Number(new URLSearchParams(search).get('prediction_id'))
+  return Number.isInteger(value) && value > 0 ? value : null
 }
 

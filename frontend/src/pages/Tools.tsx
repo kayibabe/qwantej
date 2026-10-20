@@ -25,14 +25,14 @@ function KellyCalculator() {
   return (
     <div className="tool-card">
       <h3 className="tool-title">Kelly Criterion Staking</h3>
-      <p className="tool-desc">Calculates the optimal stake fraction based on your edge.</p>
+      <p className="tool-desc">Scenario calculator using your assumed odds, probability, and bankroll.</p>
       <div className="tool-inputs">
         <div className="form-group">
           <label>Decimal Odds</label>
           <input type="number" step="0.01" min="1.01" value={odds} onChange={e => setOdds(e.target.value)} placeholder="e.g. 2.50" />
         </div>
         <div className="form-group">
-          <label>Model Probability (%)</label>
+          <label>Your assumed win probability (%)</label>
           <input type="number" step="0.1" min="1" max="99" value={prob} onChange={e => setProb(e.target.value)} placeholder="e.g. 55" />
         </div>
         <div className="form-group">
@@ -43,15 +43,16 @@ function KellyCalculator() {
           <label>Fraction</label>
           <select value={fraction} onChange={e => setFraction(e.target.value as typeof fraction)}>
             <option value="full">Full Kelly</option>
-            <option value="half">Half Kelly (recommended)</option>
+            <option value="half">Half Kelly</option>
             <option value="quarter">Quarter Kelly (conservative)</option>
           </select>
         </div>
       </div>
+      <p className="tool-method-note">The probability is your input. This calculation does not account for estimation uncertainty or verify a Qwantej quote.</p>
       {!isNaN(kelly) && (
         <div className="tool-result">
           {kelly <= 0 ? (
-            <div className="result-neg">No edge — Kelly says don't bet.</div>
+            <div className="result-neg">No positive stake under these inputs.</div>
           ) : (
             <div className="result-grid">
               <div className="result-item">
@@ -64,7 +65,7 @@ function KellyCalculator() {
               </div>
               {!isNaN(stakeAmount) && (
                 <div className="result-item highlight">
-                  <div className="result-label">Recommended Stake</div>
+                <div className="result-label">Scenario stake</div>
                   <div className="result-value">{fmt(stakeAmount)}</div>
                 </div>
               )}
@@ -223,14 +224,14 @@ function EVCalculator() {
   return (
     <div className="tool-card">
       <h3 className="tool-title">Expected Value</h3>
-      <p className="tool-desc">Calculate the expected value of a bet given your estimated probability.</p>
+      <p className="tool-desc">Estimate expected value from a user-supplied probability and price.</p>
       <div className="tool-inputs">
         <div className="form-group">
           <label>Decimal Odds</label>
           <input type="number" step="0.01" min="1.01" value={odds} onChange={e => setOdds(e.target.value)} placeholder="e.g. 2.50" />
         </div>
         <div className="form-group">
-          <label>Your Probability (%)</label>
+          <label>Your assumed probability (%)</label>
           <input type="number" step="0.1" min="1" max="99" value={prob} onChange={e => setProb(e.target.value)} placeholder="e.g. 55" />
         </div>
         <div className="form-group">
@@ -238,6 +239,7 @@ function EVCalculator() {
           <input type="number" step="1" min="1" value={stake} onChange={e => setStake(e.target.value)} placeholder="e.g. 10" />
         </div>
       </div>
+      <p className="tool-method-note">Results are conditional on your inputs; no uncertainty range, calibration check, or stored quote is applied.</p>
       {!isNaN(ev) && (
         <div className="tool-result">
           <div className="result-grid">
@@ -254,7 +256,7 @@ function EVCalculator() {
             <div className="result-item">
               <div className="result-label">Verdict</div>
               <div className={`result-value ${ev > 0 ? 'positive' : 'negative'}`}>
-                {ev > 0 ? '+EV — bet has value' : '−EV — no value'}
+                {ev > 0 ? 'Positive under these inputs' : 'Not positive under these inputs'}
               </div>
             </div>
           </div>

@@ -25,13 +25,14 @@ interface PipelineSchedule {
   automation?: { startup_catchup_enabled: boolean; watchdog_interval_minutes: number; automatic_retry_limit: number; settlement_interval_minutes: number; settlement_startup_lookback_days: number; scheduler_leader_lock_enabled: boolean; scheduler_leader_lock_name: string; latest_due_window: string | null; latest_due_target_date: string | null }
 }
 interface PipelineStatus { id: number; target_date: string; run_type: string; trigger_source: string | null; scheduled_window: string | null; status: string; current_stage: string | null; error_details: string | null; started_at: string | null; completed_at: string | null; stages: { name: string; status: string; retry_count: number; input_count: number; output_count: number; error_details: string | null }[] }
-interface AutomationAlert { id: number; severity: string; task_name: string; target_date: string | null; title: string; detail: string; occurrence_count: number; resolved: boolean; last_seen_at: string }
+interface AutomationAlert { id: number; severity: string; task_name: string; target_date: string | null; title: string; detail: string; occurrence_count: number; resolved: boolean; first_seen_at: string; last_seen_at: string }
 interface OperationalStatus {
   observed_at: string
   latest_run: { id: number; target_date: string; run_type: string; status: string; current_stage: string | null; completed_at: string | null } | null
   latest_due_window: { name: string; target_date: string; needs_catchup: boolean; reason: string } | null
   upcoming_stale_odds_predictions: number
-  upcoming_recommendation_quote_coverage: { eligible: number; covered: number; fraction: number | null }
+  upcoming_stale_odds_records: { prediction_id: number; match_id: number }[]
+  upcoming_recommendation_quote_coverage: { eligible: number; covered: number; fraction: number | null; lookahead_hours: number; max_quote_age_hours: number; affected_records: { prediction_id: number; match_id: number }[] }
   api_football_quota: { daily_limit: number | null; daily_remaining: number | null; minute_limit: number | null; minute_remaining: number | null; observed_at: string; low: boolean } | null
   finished_match_refresh_lag: number
   active_alerts: number
@@ -182,6 +183,20 @@ export default function AdminPage() {
     }
   }
 
+  const alertGroups = Array.from(alerts.reduce((groups, alert) => {
+    const key = `${alert.task_name}\u0000${alert.title}\u0000${alert.detail}`
+    const group = groups.get(key) ?? []
+    group.push(alert)
+    groups.set(key, group)
+    return groups
+  }, new Map<string, AutomationAlert[]>()).values())
+    .map(rows => ({
+      rows: rows.sort((left, right) => right.last_seen_at.localeCompare(left.last_seen_at)),
+      lastSeen: rows.reduce((latest, row) => row.last_seen_at > latest ? row.last_seen_at : latest, rows[0]?.last_seen_at ?? ''),
+      occurrences: rows.reduce((total, row) => total + row.occurrence_count, 0),
+    }))
+    .sort((left, right) => right.lastSeen.localeCompare(left.lastSeen))
+
   async function triggerPipeline() {
     setTriggering(true)
     setTriggerMsg(null)
@@ -249,11 +264,14 @@ export default function AdminPage() {
               <div className="admin-info-row"><span className="admin-info-label">Observed</span><span className="admin-info-value">{new Date(operational.observed_at).toLocaleString()}</span></div>
               <div className="admin-info-row"><span className="admin-info-label">Latest pipeline</span><span className={`admin-info-value admin-run-status ${operational.latest_run?.status === 'failed' ? 'negative' : ''}`}>{operational.latest_run ? <><span className={`status-badge status-${operational.latest_run.status}`}>{formatStage(operational.latest_run.status)}</span> · <span className="event-date">{operational.latest_run.target_date}</span>{operational.latest_run.current_stage ? ` · ${formatStage(operational.latest_run.current_stage)}` : ''}</> : 'No run recorded'}</span></div>
               <div className="admin-info-row"><span className="admin-info-label">Scheduled catch-up</span><span className={`admin-info-value ${operational.latest_due_window?.needs_catchup ? 'negative' : ''}`}>{operational.latest_due_window ? operational.latest_due_window.needs_catchup ? `Required · ${operational.latest_due_window.reason}` : 'Current' : 'No window due'}</span></div>
-              <div className="admin-info-row"><span className="admin-info-label">Upcoming price freshness</span><span className={`admin-info-value ${operational.upcoming_stale_odds_predictions ? 'negative' : ''}`}>{operational.upcoming_stale_odds_predictions ? `${operational.upcoming_stale_odds_predictions} stale or missing` : 'Current'}</span></div>
-              <div className="admin-info-row"><span className="admin-info-label">Recommendation quote coverage</span><span className={`admin-info-value ${operational.upcoming_recommendation_quote_coverage.eligible > operational.upcoming_recommendation_quote_coverage.covered ? 'negative' : ''}`}>{operational.upcoming_recommendation_quote_coverage.fraction === null ? 'No upcoming recommendations' : `${operational.upcoming_recommendation_quote_coverage.covered}/${operational.upcoming_recommendation_quote_coverage.eligible} fresh (${Math.round(operational.upcoming_recommendation_quote_coverage.fraction * 100)}%)`}</span></div>
+              <div className="admin-info-row"><span className="admin-info-label">Upcoming model quote freshness</span><span className={`admin-info-value ${operational.upcoming_stale_odds_predictions ? 'negative' : ''}`}>{operational.upcoming_stale_odds_predictions ? `${operational.upcoming_stale_odds_predictions} stale or missing` : '0 stale or missing'}</span></div>
+              {operational.upcoming_stale_odds_predictions > 0 && <div className="admin-record-links"><small>Inspect stale scheduled predictions</small>{operational.upcoming_stale_odds_records.slice(0, 5).map(row => <a key={row.prediction_id} href={`/match/${row.match_id}?prediction_id=${row.prediction_id}`}>Match {row.match_id} · prediction {row.prediction_id}</a>)}</div>}
+              <div className="admin-info-row"><span className="admin-info-label">Fresh quote coverage · RECOMMEND predictions</span><span className={`admin-info-value ${operational.upcoming_recommendation_quote_coverage.eligible > operational.upcoming_recommendation_quote_coverage.covered ? 'negative' : ''}`}>{operational.upcoming_recommendation_quote_coverage.eligible === 0 ? `No RECOMMEND predictions due within ${operational.upcoming_recommendation_quote_coverage.lookahead_hours}h` : `${operational.upcoming_recommendation_quote_coverage.covered}/${operational.upcoming_recommendation_quote_coverage.eligible} fresh (${Math.round((operational.upcoming_recommendation_quote_coverage.fraction ?? 0) * 100)}%)`}</span></div>
+              {operational.upcoming_recommendation_quote_coverage.affected_records.length > 0 && <div className="admin-record-links"><small>Inspect RECOMMEND predictions missing a fresh pre-kickoff quote</small>{operational.upcoming_recommendation_quote_coverage.affected_records.slice(0, 5).map(row => <a key={row.prediction_id} href={`/match/${row.match_id}?prediction_id=${row.prediction_id}`}>Match {row.match_id} · prediction {row.prediction_id}</a>)}</div>}
+              <p className="admin-hint admin-safety-definition">Freshness covers scheduled prediction rows kicking off within {operational.upcoming_recommendation_quote_coverage.lookahead_hours} hours. Quote coverage counts only rows labelled RECOMMEND and requires a source quote no older than {operational.upcoming_recommendation_quote_coverage.max_quote_age_hours} hours, captured before kickoff. Published ticket legs are tracked separately.</p>
               <div className="admin-info-row"><span className="admin-info-label">API-Football daily quota</span><span className={`admin-info-value ${operational.api_football_quota?.low ? 'negative' : ''}`}>{operational.api_football_quota?.daily_limit && operational.api_football_quota.daily_remaining !== null ? `${operational.api_football_quota.daily_remaining}/${operational.api_football_quota.daily_limit} remaining` : 'No recent quota headers'}</span></div>
               <div className="admin-info-row"><span className="admin-info-label">Finished-result refresh</span><span className={`admin-info-value ${operational.finished_match_refresh_lag ? 'negative' : ''}`}>{operational.finished_match_refresh_lag ? `${operational.finished_match_refresh_lag} delayed` : 'Current'}</span></div>
-              <div className="admin-info-row"><span className="admin-info-label">Active alerts</span><span className={`admin-info-value ${operational.active_alerts ? 'negative' : ''}`}>{operational.active_alerts || 'None'}</span></div>
+              <div className="admin-info-row"><span className="admin-info-label">Active alert records</span><span className={`admin-info-value ${operational.active_alerts ? 'negative' : ''}`}>{operational.active_alerts || 'None'}</span></div>
             </div>
           ) : <div className="admin-loading">Could not load operational status</div>}
         </div>
@@ -355,15 +373,20 @@ export default function AdminPage() {
             <div className="admin-loading">No active automation alerts</div>
           ) : (
             <div className="admin-info-list">
-              {alerts.map(alert => (
-                <div className="admin-info-row" key={alert.id}>
-                  <span className="admin-info-label">{alert.title}</span>
-                  <span className="admin-info-value admin-run-status negative">
-                    {alert.detail} · {alert.occurrence_count} occurrence{alert.occurrence_count === 1 ? '' : 's'}
-                    <button className="btn-ghost btn-sm" style={{ marginLeft: 8 }} onClick={() => resolveAlert(alert.id)}>Resolve</button>
-                  </span>
-                </div>
-              ))}
+              {alertGroups.map(group => {
+                const first = group.rows[0]
+                const guardrail = group.rows.every(alert => /past-date scoring is not supported/i.test(alert.detail))
+                return <details className="admin-alert-group" key={`${first.task_name}-${first.title}-${first.detail}`}>
+                  <summary>
+                    <span><strong>{first.title}</strong><small>{first.task_name} · {guardrail ? 'Guardrail rejection' : first.severity}</small></span>
+                    <span><b>{group.rows.length} record{group.rows.length === 1 ? '' : 's'}</b> · {group.occurrences} occurrence{group.occurrences === 1 ? '' : 's'}<small>Last seen {new Date(group.lastSeen).toLocaleString()}</small></span>
+                  </summary>
+                  <div className="admin-alert-items">{group.rows.map(alert => <div className="admin-alert-item" key={alert.id}>
+                    <span>{alert.target_date ? `Target ${alert.target_date} · ` : ''}{alert.detail}<small>First seen {new Date(alert.first_seen_at).toLocaleString()} · Last seen {new Date(alert.last_seen_at).toLocaleString()} · {alert.occurrence_count} occurrence{alert.occurrence_count === 1 ? '' : 's'}</small></span>
+                    <button className="btn-ghost btn-sm" onClick={() => resolveAlert(alert.id)}>Resolve record</button>
+                  </div>)}</div>
+                </details>
+              })}
             </div>
           )}
         </div>

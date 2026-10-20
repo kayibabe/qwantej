@@ -4,6 +4,7 @@ import './Analytics.css'
 
 interface Props {
   matchId: number
+  selectedPredictionId?: number | null
   onBack: () => void
 }
 
@@ -16,7 +17,7 @@ function statusLabel(status: string) {
   return status.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase())
 }
 
-export default function MatchIntelligencePage({ matchId, onBack }: Props) {
+export default function MatchIntelligencePage({ matchId, selectedPredictionId, onBack }: Props) {
   const [data, setData] = useState<MatchIntelligence | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -33,7 +34,11 @@ export default function MatchIntelligencePage({ matchId, onBack }: Props) {
     return () => { active = false }
   }, [matchId])
 
-  const lead = useMemo(() => data?.predictions[0] ?? null, [data])
+  const selectedPrediction = useMemo(
+    () => data?.predictions.find(row => row.prediction_id === selectedPredictionId) ?? null,
+    [data, selectedPredictionId],
+  )
+  const lead = selectedPrediction ?? data?.predictions[0] ?? null
 
   if (loading) return <section className="analytics-page"><div className="analytics-empty"><strong>Loading match intelligence</strong><span>Reading the stored prediction, price, and pre-match context.</span></div></section>
   if (error || !data) return <section className="analytics-page"><div className="analytics-empty"><strong>Match intelligence unavailable</strong><span>{error ?? 'No persisted intelligence was found for this match.'}</span><button className="btn-secondary" onClick={onBack}>Back to Today</button></div></section>
@@ -44,7 +49,7 @@ export default function MatchIntelligencePage({ matchId, onBack }: Props) {
     <section className="analytics-page match-intelligence-page">
       <div className="page-intro match-intelligence-intro">
         <div><button className="text-button" onClick={onBack}>← Back to Today</button><span className="eyebrow">Match intelligence</span><h1>{data.home_team} <span>vs</span> {data.away_team}</h1><p>{data.competition} · <span className="event-date">{formatDate(data.kickoff_at)}</span> · <span className="kickoff-time">{formatKickoff(data.kickoff_at)}</span> · {statusLabel(data.status)}</p></div>
-        <div className="match-intelligence-verdict"><span>Primary stored verdict</span><strong className={`recommendation-badge ${(lead?.recommendation_status ?? 'WATCH').toLowerCase()}`}>{lead?.recommendation_status ?? 'WATCH'}</strong><small>{lead ? (selectionRepeatsMarket(lead.market, lead.selection) ? formatSelection(lead.selection) : <>{formatMarket(lead.market)} · {formatSelection(lead.selection)}</>) : 'No prediction snapshot'}</small></div>
+        <div className="match-intelligence-verdict"><span>{selectedPrediction ? 'Selected market evidence' : 'Top stored market'}</span><strong className={`recommendation-badge ${(lead?.recommendation_status ?? 'WATCH').toLowerCase()}`}>{lead?.recommendation_status ?? 'WATCH'}</strong><small>{lead ? (selectionRepeatsMarket(lead.market, lead.selection) ? formatSelection(lead.selection) : <>{formatMarket(lead.market)} · {formatSelection(lead.selection)}</>) : 'No prediction snapshot'}</small>{selectedPrediction && <small>Selected prediction {selectedPrediction.prediction_id} · odds captured {selectedPrediction.source_odds_at ? new Date(selectedPrediction.source_odds_at).toLocaleString() : 'timestamp unavailable'}</small>}{selectedPredictionId != null && !selectedPrediction && <small>The selected snapshot is unavailable; showing the top stored market.</small>}</div>
       </div>
 
       <div className="detail-metrics match-intelligence-metrics">
@@ -58,7 +63,7 @@ export default function MatchIntelligencePage({ matchId, onBack }: Props) {
 
       <section className="evidence-card match-intelligence-evidence"><div className="evidence-title"><h2>Executive decision summary</h2><span>Snapshot-backed · no recalculation</span></div><div className="explainability-grid"><div><strong>Why consider it</strong>{lead?.recommendation_reasons.length ? <ul>{lead.recommendation_reasons.slice(0, 5).map(reason => <li key={reason}>{statusLabel(reason)}</li>)}</ul> : <span>No positive reason was persisted.</span>}</div><div><strong>Risks and unknowns</strong>{lead?.recommendation_risks.length ? <ul>{lead.recommendation_risks.slice(0, 5).map(risk => <li key={risk}>{statusLabel(risk)}</li>)}</ul> : <span>No additional risk code was persisted.</span>}</div></div></section>
 
-      <section className="evidence-card"><div className="evidence-title"><h2>Ranked market probabilities</h2><span>{data.predictions.length} stored market snapshots</span></div>{data.predictions.length === 0 ? <div className="detail-empty-note">No prediction snapshot exists for this match.</div> : <div className="match-intelligence-table-wrap"><table className="match-intelligence-table"><thead><tr><th>Market</th><th>Probability</th><th>Odds</th><th>Edge</th><th>Q</th><th>Decision</th><th>Evidence</th></tr></thead><tbody>{data.predictions.map(row => <tr key={row.prediction_id}><td>{!selectionRepeatsMarket(row.market, row.selection) && <strong>{formatMarket(row.market)}</strong>}<small>{formatSelection(row.selection)}</small></td><td>{pct(row.model_probability)}</td><td>{row.best_odds?.toFixed(2) ?? 'Unavailable'}</td><td>{pct(row.edge, true)}</td><td>{row.q_score.toFixed(1)} · {row.q_grade}</td><td><span className={`recommendation-badge ${row.recommendation_status.toLowerCase()}`}>{row.recommendation_status}</span></td><td><small>{row.active_models.length ? `${row.active_models.length} active models` : 'Model set unavailable'}</small></td></tr>)}</tbody></table></div>}</section>
+      <section className="evidence-card"><div className="evidence-title"><h2>Ranked market probabilities</h2><span>{data.predictions.length} stored market snapshots</span></div>{data.predictions.length === 0 ? <div className="detail-empty-note">No prediction snapshot exists for this match.</div> : <div className="match-intelligence-table-wrap"><table className="match-intelligence-table"><thead><tr><th>Market</th><th>Probability</th><th>Odds</th><th>Edge</th><th>Q</th><th>Decision</th><th>Evidence</th></tr></thead><tbody>{data.predictions.map(row => <tr className={row.prediction_id === selectedPredictionId ? 'selected-market-row' : undefined} key={row.prediction_id}><td>{!selectionRepeatsMarket(row.market, row.selection) && <strong>{formatMarket(row.market)}</strong>}<small>{formatSelection(row.selection)}</small></td><td>{pct(row.model_probability)}</td><td>{row.best_odds?.toFixed(2) ?? 'Unavailable'}</td><td>{pct(row.edge, true)}</td><td>{row.q_score.toFixed(1)} · {row.q_grade}</td><td><span className={`recommendation-badge ${row.recommendation_status.toLowerCase()}`}>{row.recommendation_status}</span></td><td><small>{row.active_models.length ? `${row.active_models.length} active models` : 'Model set unavailable'}</small></td></tr>)}</tbody></table></div>}</section>
 
       <div className="match-intelligence-columns"><section className="evidence-card"><div className="evidence-title"><h2>Pre-match form</h2><span>Finished matches before kickoff</span></div><div className="form-teams"><TeamForm team={data.context.home} /><span className="form-vs">vs</span><TeamForm team={data.context.away} /></div></section><section className="evidence-card"><div className="evidence-title"><h2>Traceability</h2><span>Reproducibility fields</span></div><div className="audit-panel"><div><span>Match ID</span><code>{data.match_id}</code></div><div><span>Kickoff</span><code><span className="event-date">{formatDate(data.kickoff_at)}</span> <span className="kickoff-time">{formatKickoff(data.kickoff_at)}</span></code></div><div><span>Information set</span><code>{lead?.as_of_at ? new Date(lead.as_of_at).toLocaleString() : 'Unavailable'}</code></div><div><span>Odds timestamp</span><code>{lead?.source_odds_at ? new Date(lead.source_odds_at).toLocaleString() : 'Unavailable'}</code></div></div><p className="detail-disclaimer">{data.evidence_note}</p></section></div>
 

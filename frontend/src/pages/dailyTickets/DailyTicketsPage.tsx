@@ -38,7 +38,7 @@ import {
 } from "./helpers";
 import type { CustomAccumulator, DailyTab, DailyTicketsPageProps } from "./types";
 
-export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenMatch, onOpenTracker }: DailyTicketsPageProps & { onOpenMatch?: (matchId: number) => void }) {
+export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenMatch, onOpenTracker }: DailyTicketsPageProps & { onOpenMatch?: (matchId: number, predictionId?: number) => void }) {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const canExploreMarkets = isAdmin || user?.plan === "pro";
@@ -53,6 +53,7 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
     return [];
   });
   const [loading, setLoading] = useState(false);
+  const [dataCheckedAt, setDataCheckedAt] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<{
     selection: DetailSelection;
@@ -97,6 +98,7 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
             })
           : Promise.resolve(null),
       ]);
+      setDataCheckedAt(new Date());
       const evidencedRows = withRejectionEvidence(allRows, rejectedRows);
       setData(tickets);
       setFixtures(fixtureRows);
@@ -304,21 +306,13 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
               : "Recommendations are informational. Football outcomes are uncertain; no result is guaranteed."}
           </p>
         </div>
-        {isAdmin && data && (
+        {isAdmin && initialTab === "tickets" && data && (
           <div className="meta-context" aria-label="Publication context">
-            <span className="meta-pool">
-              {data.qualified_pool} strict candidates
+            <span className="meta-pool" title="Candidates that passed the strict publication quality gate before ticket construction">
+              {data.qualified_pool} strict publication candidates
             </span>
-            {(data.horizon_pool ?? 0) > 0 && (
-              <span title="Additional candidates admitted by the bounded rolling-horizon fallback">
-                +{data.horizon_pool} rolling-horizon
-              </span>
-            )}
-            {Object.keys(data.relaxed_ticket_types ?? {}).length > 0 && (
-              <span title="One or more tiers used the bounded relaxation policy">
-                Bounded relaxation
-              </span>
-            )}
+            {(data.horizon_pool ?? 0) > 0 && <span title="Additional candidates admitted by the bounded rolling-horizon fallback">+{data.horizon_pool} rolling-horizon</span>}
+            {Object.keys(data.relaxed_ticket_types ?? {}).length > 0 && <span title="One or more tiers used the bounded relaxation policy">Bounded relaxation</span>}
             {latestPublication && (
               <span>
                 Published{" "}
@@ -331,6 +325,7 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
             {modelVersions.length > 0 && (
               <span>Model {modelVersions.join(", ")}</span>
             )}
+            {dataCheckedAt && <span>Ticket data loaded {dataCheckedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>}
           </div>
         )}
       </div>
@@ -491,7 +486,7 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
                 <details className="stake-planner">
                   <summary>
                     <strong>Stake planner</strong>
-                    <span>Set a bankroll to see a suggested amount on eligible ticket cards.</span>
+                    <span>Set a bankroll to see an illustrative scenario amount on eligible ticket cards.</span>
                   </summary>
                   <div className="stake-planner-controls">
                     <label className="bankroll-input">
@@ -505,15 +500,13 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
                         placeholder="e.g. 1000"
                       />
                     </label>
-                    <span>Planning estimate only · half-Kelly sizing, capped at 5% of bankroll · does not place a bet.</span>
+                    <span>Illustrative half-Kelly estimate, capped at 5% of bankroll. It does not account for probability uncertainty or place a bet.</span>
                   </div>
                 </details>
               )}
-              {publicPublishedTickets.length > 0 && <div className="ticket-tier-section-heading">
-                <div><span className="eyebrow">Immutable published records</span><h2>Ticket tier totals</h2></div>
-                <p>Combined odds, estimated chance and full legs for each published tier.</p>
-              </div>}
-              {publicPublishedTickets.length > 0 && <div className="ticket-grid public-ticket-grid">
+              {publicPublishedTickets.length > 0 && <details className="published-ticket-tiers">
+                <summary><span><strong>Ticket tiers and full legs</strong><small>Combined odds, estimated chance, and immutable legs for {publicPublishedTickets.length} published tier{publicPublishedTickets.length === 1 ? "" : "s"}.</small></span></summary>
+                <div className="ticket-grid public-ticket-grid">
               {publicTiers.map((tier) => (
                 <TicketCard
                   key={tier.key}
@@ -526,7 +519,8 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
                   showMarketSelections={user?.plan === "pro" || isAdmin}
                 />
               ))}
-            </div>}
+                </div>
+              </details>}
             </>
           )}
 

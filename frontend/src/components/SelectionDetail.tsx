@@ -45,7 +45,7 @@ interface Props {
   /** 'market': the leg's probability is the bookmaker's fair price, not a model estimate. */
   pricing?: 'market' | 'model'
   onClose: () => void
-  onOpenMatch?: (matchId: number) => void
+  onOpenMatch?: (matchId: number, predictionId?: number) => void
 }
 
 const pct = (value: number | null | undefined, signed = false) => {
@@ -211,7 +211,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
             <h2 id="selection-detail-title">{selection.home_team} <span>vs</span> {selection.away_team}</h2>
             <p>{selection.competition} · <span className="event-date">{formatDate(selection.kickoff_at)}</span> · <span className="kickoff-time">{formatKickoff(selection.kickoff_at)}</span></p>
           </div>
-          <div className="detail-header-actions">{onOpenMatch && <button className="btn-secondary" onClick={() => onOpenMatch(selection.match_id)}>Open match intelligence</button>}<button ref={closeRef} className="detail-close" onClick={onClose} aria-label="Close selection details">×</button></div>
+          <div className="detail-header-actions">{onOpenMatch && <button className="btn-secondary" onClick={() => onOpenMatch(selection.match_id, selection.prediction_id)}>Open match intelligence</button>}<button ref={closeRef} className="detail-close" onClick={onClose} aria-label="Close selection details">×</button></div>
         </div>
 
         <div className="detail-status-row">

@@ -51,6 +51,17 @@ async def operational_snapshot(db: AsyncSession, now: datetime | None = None) ->
         .join(Match)
         .where(_upcoming_stale_odds_conditions(now))
     )
+    stale_rows = await db.execute(
+        select(Prediction.id, Match.id.label("match_id"))
+        .join(Match)
+        .where(_upcoming_stale_odds_conditions(now))
+        .order_by(Match.kickoff_at, Prediction.id)
+        .limit(10)
+    )
+    upcoming_stale_odds_records = [
+        {"prediction_id": prediction_id, "match_id": match_id}
+        for prediction_id, match_id in stale_rows.all()
+    ]
     finished_stale = await db.scalar(
         select(func.count()).select_from(Match).where(
             _finished_refresh_lag_conditions(now),
@@ -81,6 +92,25 @@ async def operational_snapshot(db: AsyncSession, now: datetime | None = None) ->
             Prediction.source_odds_at < Match.kickoff_at,
         )
     )
+    uncovered_quote_conditions = or_(
+        Prediction.source_odds_id.is_(None),
+        Prediction.source_decimal_odds.is_(None),
+        Prediction.source_decimal_odds <= 1.0,
+        Prediction.source_odds_at.is_(None),
+        Prediction.source_odds_at <= now - timedelta(hours=settings.max_selection_odds_age_hours),
+        Prediction.source_odds_at >= Match.kickoff_at,
+    )
+    uncovered_rows = await db.execute(
+        select(Prediction.id, Match.id.label("match_id"))
+        .join(Match)
+        .where(upcoming_recommendation_conditions, uncovered_quote_conditions)
+        .order_by(Match.kickoff_at, Prediction.id)
+        .limit(10)
+    )
+    uncovered_recommendation_records = [
+        {"prediction_id": prediction_id, "match_id": match_id}
+        for prediction_id, match_id in uncovered_rows.all()
+    ]
     active_alerts = await db.scalar(
         select(func.count()).select_from(AutomationAlert).where(AutomationAlert.resolved.is_(False))
     )
@@ -112,12 +142,16 @@ async def operational_snapshot(db: AsyncSession, now: datetime | None = None) ->
             "reason": due_decision.reason,
         },
         "upcoming_stale_odds_predictions": int(upcoming_stale_odds or 0),
+        "upcoming_stale_odds_records": upcoming_stale_odds_records,
         "upcoming_recommendation_quote_coverage": {
             "eligible": recommendation_count,
             "covered": covered_count,
             "fraction": round(covered_count / recommendation_count, 4)
             if recommendation_count
             else None,
+            "lookahead_hours": settings.max_selection_odds_age_hours,
+            "max_quote_age_hours": settings.max_selection_odds_age_hours,
+            "affected_records": uncovered_recommendation_records,
         },
         "api_football_quota": provider_quota,
         "finished_match_refresh_lag": int(finished_stale or 0),
