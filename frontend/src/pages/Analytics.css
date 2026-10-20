@@ -42,7 +42,7 @@
   gap: 24px;
   margin-bottom: 18px;
 }
-.analytics-hero h1 { font-size: 25px; letter-spacing: -.6px; line-height: 1.15; }
+.analytics-hero h1 { font-size: 24px; letter-spacing: -.6px; line-height: 1.15; }
 .analytics-hero p { margin-top: 6px; color: var(--muted); font-size: var(--type-body); }
 .ledger-chip {
   display: inline-flex;
@@ -153,7 +153,7 @@
 .skeleton-metric span:first-child { width: 55%; height: 9px; }
 .skeleton-metric span:last-child { width: 78%; height: 24px; margin-top: 12px; }
 .backtest-console { display: grid; grid-template-columns: minmax(260px, .8fr) minmax(560px, 1.6fr); gap: 28px; align-items: end; }
-.backtest-console h2 { margin-top: 3px; font-size: 18px; }
+.backtest-console h2 { margin-top: 3px; font-size: 17px; }
 .backtest-console p { margin-top: 7px; color: var(--muted); font-size: var(--type-small); line-height: 1.55; }
 .backtest-console form { display: grid; grid-template-columns: repeat(4, minmax(110px, 1fr)) auto; gap: 8px; align-items: end; }
 .backtest-console label { display: flex; flex-direction: column; gap: 5px; color: var(--muted); font-size: var(--type-small); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
@@ -169,7 +169,7 @@
 .monte-range > div { display: flex; flex-direction: column; gap: 6px; padding: 15px; background: var(--surface2); }
 .monte-range .median { background: var(--accent-bg); }
 .monte-range span { color: var(--muted); font-size: var(--type-small); text-transform: uppercase; letter-spacing: .05em; }
-.monte-range strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+.monte-range strong { font-size: 17px; font-variant-numeric: tabular-nums; }
 .journal-note { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 10px 13px; border-left: 3px solid var(--accent); background: var(--accent-bg); color: var(--muted); font-size: var(--type-small); }
 .journal-note strong { color: var(--accent); white-space: nowrap; }
 .journal-note > * { min-width: 0; }
@@ -181,7 +181,7 @@
 .pick-source-card:hover { border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
 .pick-source-card.active { border-color: var(--accent); background: var(--accent-bg); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 10%, transparent); }
 .pick-source-card span { color: var(--muted); font-size: var(--type-small); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
-.pick-source-card strong { color: var(--text); font-size: 20px; line-height: 1; font-variant-numeric: tabular-nums; }
+.pick-source-card strong { color: var(--text); font-size: 19px; line-height: 1; font-variant-numeric: tabular-nums; }
 .pick-source-card small { grid-column: 1 / -1; overflow: hidden; color: var(--muted); font-size: var(--type-small); line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
 .pick-ledger-filters { align-items: flex-end; padding: 12px; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface); }
 .pick-ledger-filters label { flex-direction: column; align-items: flex-start; gap: 4px; }
@@ -223,7 +223,7 @@
 .pick-period-group > summary::-webkit-details-marker { display: none; }
 .pick-period-summary { display: grid; grid-template-columns: minmax(145px, .7fr) minmax(0, 3fr); gap: 14px; align-items: center; min-width: 0; padding: 11px 14px; }
 .pick-period-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.pick-period-title::before { content: '›'; flex: 0 0 auto; color: var(--accent); font-size: 18px; line-height: 1; transition: transform .16s ease; }
+.pick-period-title::before { content: '›'; flex: 0 0 auto; color: var(--accent); font-size: 17px; line-height: 1; transition: transform .16s ease; }
 .pick-period-group[open] > summary > .pick-period-summary .pick-period-title::before { transform: rotate(90deg); }
 .pick-period-title span { color: var(--muted); font-size: var(--type-small); font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
 .pick-period-title strong { overflow: hidden; color: var(--text); font-size: var(--type-body); text-overflow: ellipsis; white-space: nowrap; }
@@ -235,7 +235,7 @@
 .pick-period-stats strong.negative { color: var(--negative); }
 .pick-year-group { overflow: hidden; border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border)); border-radius: var(--r-md); background: var(--surface); box-shadow: var(--shadow-sm); }
 .pick-year-group > summary > .pick-period-summary { background: linear-gradient(100deg, var(--accent-bg), var(--surface)); }
-.pick-year-group > summary .pick-period-title strong { font-size: 18px; }
+.pick-year-group > summary .pick-period-title strong { font-size: 17px; }
 .pick-year-body { display: grid; gap: 10px; padding: 12px; background: color-mix(in srgb, var(--surface2) 52%, var(--surface)); }
 .pick-month-group { overflow: hidden; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface); }
 .pick-month-group > summary > .pick-period-summary { background: var(--surface2); }
@@ -283,8 +283,8 @@
 }
 
 @media (max-width: 520px) {
-  .page-intro h1 { font-size: 22px; }
-  .analytics-hero h1 { font-size: 22px; }
+  .page-intro h1 { font-size: 21px; }
+  .analytics-hero h1 { font-size: 21px; }
   .validation-strip { align-items: flex-start; flex-direction: column; gap: 4px; }
   .research-kpis { grid-template-columns: 1fr 1fr; }
   .metric-card { padding: 13px; }

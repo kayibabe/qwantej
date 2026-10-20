@@ -15,7 +15,7 @@
 .public-brand-icon { display: block; width: 42px; height: 42px; flex: 0 0 42px; }
 .public-brand-icon img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .public-brand > span:last-child { display: grid; gap: 2px; }
-.public-brand strong { font-size: 17px; letter-spacing: .1em; }
+.public-brand strong { font-size: 16px; letter-spacing: .1em; }
 .public-brand small { color: var(--public-muted); font-size: var(--type-small); font-weight: 600; letter-spacing: .15em; }
 .public-top-actions { display: flex; align-items: center; gap: 24px; }
 .public-link-button, .public-quiet-button { border: 0; background: none; color: var(--public-ink); font: inherit; font-size: var(--type-body); font-weight: 600; cursor: pointer; }
@@ -43,7 +43,7 @@
 .public-hero-stat span { color: var(--public-muted); font-size: var(--type-body); }
 .public-hero-mini-stats { display: grid; grid-template-columns: repeat(3, 1fr); padding: 13px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .public-hero-mini-stats > div { display: flex; min-width: 0; flex-direction: column; align-items: center; gap: 2px; }
-.public-hero-mini-stats strong { display: inline-flex; align-items: center; gap: 7px; font-size: 17px; font-weight: 650; line-height: 1.2; }
+.public-hero-mini-stats strong { display: inline-flex; align-items: center; gap: 7px; font-size: 16px; font-weight: 650; line-height: 1.2; }
 .public-hero-mini-stats small { color: var(--muted); font-size: var(--type-small); letter-spacing: .1em; white-space: nowrap; }
 .public-hero-mini-stats .public-live-dot { width: 6px; height: 6px; box-shadow: none; }
 .public-hero-card-foot { padding-top: 14px; }
@@ -74,16 +74,16 @@
 .public-access-card { display: flex; min-height: 140px; flex-direction: column; align-items: flex-start; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
 .public-access-card.is-featured { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); box-shadow: 0 7px 20px color-mix(in srgb, var(--accent) 9%, transparent); }
 .public-access-label { color: var(--accent); font-size: var(--type-small); font-weight: 700; letter-spacing: .12em; }
-.public-access-card h3 { margin: 7px 0 0; color: var(--text); font-size: 16px; font-weight: 650; letter-spacing: -.025em; }
+.public-access-card h3 { margin: 7px 0 0; color: var(--text); font-size: 15px; font-weight: 650; letter-spacing: -.025em; }
 .public-access-card p { margin: 8px 0 12px; color: var(--text2); font-size: var(--type-small); line-height: 1.55; }
 .public-access-card a, .public-access-card button { display: inline-flex; align-items: center; gap: 8px; margin-top: auto; padding: 0; border: 0; background: transparent; color: var(--accent); font: inherit; font-size: var(--type-small); font-weight: 650; text-decoration: none; cursor: pointer; }
 .public-access-card a:hover, .public-access-card button:hover { text-decoration: underline; }
 .public-content { max-width: 1240px; margin: 0 auto; padding: 36px 28px 43px; }
 .public-section-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 14px; }
-.public-section-heading h2 { margin: 6px 0 4px; font-size: 25px; font-weight: 650; letter-spacing: -.035em; }
+.public-section-heading h2 { margin: 6px 0 4px; font-size: 24px; font-weight: 650; letter-spacing: -.035em; }
 .public-section-heading p { margin: 0; color: var(--public-muted); font-size: var(--type-body); }
 .public-date-control { display: flex; align-items: center; gap: 11px; min-height: 38px; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
-.public-date-control button { display: grid; width: 26px; height: 26px; place-items: center; border: 0; border-radius: 5px; background: transparent; color: var(--text2); font-size: 23px; cursor: pointer; }
+.public-date-control button { display: grid; width: 26px; height: 26px; place-items: center; border: 0; border-radius: 5px; background: transparent; color: var(--text2); font-size: 22px; cursor: pointer; }
 .public-date-control button:hover { background: var(--public-pale); color: var(--public-accent); }
 .public-date-control span { min-width: 83px; text-align: center; color: var(--text2); font-size: var(--type-small); font-weight: 600; }
 .public-match-layout { display: grid; grid-template-columns: minmax(0, 1fr) 270px; align-items: start; gap: 18px; }
@@ -130,7 +130,7 @@
 .public-side-empty { margin: 0; color: var(--muted); font-size: var(--type-small); line-height: 1.5; }
 .public-signin-card { padding: 18px; border-radius: 10px; background: #123a62; color: #fff; }
 .public-signin-card .public-section-kicker { color: #9ac9ff; }
-.public-signin-card h3 { margin: 10px 0 7px; font-size: 17px; font-weight: 600; letter-spacing: -.02em; }
+.public-signin-card h3 { margin: 10px 0 7px; font-size: 16px; font-weight: 600; letter-spacing: -.02em; }
 .public-signin-card p { margin: 0; color: #d4e5f8; font-size: var(--type-small); line-height: 1.55; }
 .public-signin-card button { display: flex; align-items: center; justify-content: space-between; width: 100%; margin-top: 15px; padding: 10px 12px; border: 1px solid #9ac9ff60; border-radius: 6px; background: #ffffff0d; color: #fff; font: inherit; font-size: var(--type-small); font-weight: 600; cursor: pointer; }
 .public-signin-card button:hover { background: #ffffff1b; }
@@ -140,7 +140,7 @@
 .public-faq-list details { border-bottom: 1px solid var(--border); }
 .public-faq-list summary { position: relative; padding: 11px 34px 11px 0; color: var(--text); font-size: var(--type-body); font-weight: 600; cursor: pointer; list-style: none; }
 .public-faq-list summary::-webkit-details-marker { display: none; }
-.public-faq-list summary::after { position: absolute; right: 5px; color: var(--accent); content: '+'; font-size: 18px; font-weight: 400; line-height: 1; }
+.public-faq-list summary::after { position: absolute; right: 5px; color: var(--accent); content: '+'; font-size: 17px; font-weight: 400; line-height: 1; }
 .public-faq-list details[open] summary::after { content: '−'; }
 .public-faq-list details p { max-width: 760px; margin: -3px 30px 16px 0; color: var(--muted); font-size: var(--type-small); line-height: 1.7; }
 .public-faq-cta { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 16px; padding: 13px 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
@@ -253,7 +253,7 @@
 .public-fixture-toolbar { display: flex; align-items: center; gap: 9px; margin-bottom: 6px; }
 .public-search-box, .public-league-select { display: flex; min-width: 0; min-height: 36px; align-items: center; gap: 8px; padding: 0 11px; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); color: var(--muted); }
 .public-search-box { flex: 1; }
-.public-search-box > span, .public-select-icon { color: var(--text2); font-size: 17px; line-height: 1; }
+.public-search-box > span, .public-select-icon { color: var(--text2); font-size: 16px; line-height: 1; }
 .public-search-box input { width: 100%; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--type-small); }
 .public-search-box input::placeholder { color: var(--muted); }
 .public-league-select select { max-width: 150px; border: 0; outline: 0; background: transparent; color: var(--text2); font: inherit; font-size: var(--type-small); cursor: pointer; }
@@ -309,7 +309,7 @@
 
 /* Landing-page hierarchy and progressive fixture disclosure. */
 .public-topbar { min-height: 72px; }
-.public-brand strong { font-size: 18px; }
+.public-brand strong { font-size: 17px; }
 .public-brand small { font-size: var(--type-small); }
 .public-hero { min-height: 370px; }
 .public-eyebrow, .public-section-kicker { font-size: var(--type-small); letter-spacing: .12em; }
@@ -352,7 +352,7 @@
 .public-show-matches { display: flex; width: 100%; min-height: 44px; align-items: center; justify-content: center; gap: 10px; margin-top: 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--accent); font: inherit; font-size: var(--type-body); font-weight: 650; cursor: pointer; transition: background .15s, border-color .15s; }
 .public-show-matches:hover { border-color: color-mix(in srgb, var(--accent) 44%, var(--border)); background: var(--accent-bg); }
 .public-show-matches:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.public-show-matches span { font-size: 17px; font-weight: 400; }
+.public-show-matches span { font-size: 16px; font-weight: 400; }
 .public-product { padding-top: 42px; padding-bottom: 46px; }
 .public-product-heading { margin-bottom: 20px; }
 .public-product-heading h2, .public-access-heading h2, .public-faq-heading h2 { font-size: clamp(27px, 3vw, 34px); }
@@ -360,14 +360,14 @@
 .public-product-grid, .public-access-grid { gap: 14px; }
 .public-product-card { min-height: 180px; padding: 20px; border-radius: 12px; }
 .public-product-number { width: 34px; height: 34px; font-size: var(--type-small); }
-.public-product-card h3 { font-size: 17px; }
+.public-product-card h3 { font-size: 16px; }
 .public-product-card p { font-size: var(--type-body); line-height: 1.7; }
 .public-product-card > a, .public-product-note { font-size: var(--type-small); line-height: 1.6; }
 .public-access { padding-top: 38px; padding-bottom: 40px; }
 .public-access-heading { margin-bottom: 20px; }
 .public-access-card { min-height: 166px; padding: 20px; border-radius: 12px; }
 .public-access-label { font-size: var(--type-small); }
-.public-access-card h3 { font-size: 18px; }
+.public-access-card h3 { font-size: 17px; }
 .public-access-card p { font-size: var(--type-body); line-height: 1.65; }
 .public-access-card a, .public-access-card button { font-size: var(--type-body); }
 .public-faq { padding-top: 38px; padding-bottom: 34px; }

@@ -23,7 +23,7 @@
 .published-selections-heading h2,
 .ticket-tier-section-heading h2 {
   margin: 3px 0 0;
-  font-size: 19px;
+  font-size: 18px;
   line-height: 1.25;
 }
 
@@ -87,7 +87,7 @@
 .published-selection-result.void { color: var(--warning); }
 .published-selection-result b { color: var(--text); font-weight: 600; }
 .published-selection-tiers { font-size: var(--type-small); font-weight: 600; overflow-wrap: anywhere; }
-.published-selection-open { color: var(--muted); font-size: 20px; }
+.published-selection-open { color: var(--muted); font-size: 19px; }
 .published-selections-empty { margin: 0; padding: 14px; border-radius: 9px; color: var(--muted); background: var(--bg); font-size: var(--type-body); }
 .ticket-tier-section-heading { margin: 0 14px 8px; }
 .ticket-tier-section-heading p { margin-bottom: 2px; }

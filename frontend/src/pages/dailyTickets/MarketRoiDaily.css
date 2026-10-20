@@ -7,7 +7,7 @@
 .market-roi-kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
 .market-roi-kpis > span { display: grid; gap: 5px; padding: 13px 15px; border: 1px solid var(--border, #e4e8ef); border-radius: 10px; background: var(--surface, #fff); }
 .market-roi-kpis small, .market-roi-pick small, .market-roi-fixture-title small { color: var(--text-secondary, #687386); font-size: var(--type-small); }
-.market-roi-kpis b { font-size: 18px; }
+.market-roi-kpis b { font-size: 17px; }
 .market-roi-note { padding: 12px 14px; border-left: 3px solid #6985bb; border-radius: 5px; background: var(--surface-muted, #f5f7fa); color: var(--text-secondary, #596579); font-size: var(--type-body); line-height: 1.5; }
 .market-roi-fixture-summary { display: flex; flex-wrap: wrap; gap: 12px 20px; padding: 11px 14px; border: 1px solid var(--border, #e4e8ef); border-radius: 8px; color: var(--text-secondary, #596579); font-size: var(--type-body); }
 .market-roi-fixture-summary b { color: var(--text-primary, #263144); }

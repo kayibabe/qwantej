@@ -1,7 +1,7 @@
 .acca-analysis { display: grid; gap: 18px; min-width: 0; }
 .acca-analysis__heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
 .acca-analysis__heading > div { max-width: 800px; }
-.acca-analysis__heading h2 { margin: 4px 0 0; font-size: 22px; font-weight: 600; }
+.acca-analysis__heading h2 { margin: 4px 0 0; font-size: 21px; font-weight: 600; }
 .acca-analysis__heading p { margin: 7px 0 0; color: var(--text-secondary, #687386); line-height: 1.5; font-size: var(--type-body); }
 .acca-analysis__date { color: var(--text-secondary, #687386); font-size: var(--type-body); }
 .acca-analysis__notice { padding: 11px 14px; border-left: 3px solid #6985bb; border-radius: 5px; background: var(--surface-muted, #f5f7fa); color: var(--text-secondary, #596579); font-size: var(--type-body); line-height: 1.5; }
@@ -11,7 +11,7 @@
 .acca-analysis__ticket-head { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
 .acca-analysis__ticket-head h3 { margin: 0; font-size: var(--type-body); font-weight: 600; }
 .acca-analysis__ticket-head span { display: block; margin-top: 4px; color: var(--text-secondary, #687386); font-size: var(--type-small); }
-.acca-analysis__ticket-head strong { white-space: nowrap; font-size: 17px; }
+.acca-analysis__ticket-head strong { white-space: nowrap; font-size: 16px; }
 .acca-analysis__ticket ol { display: grid; gap: 10px; margin: 14px 0 0; padding-left: 22px; }
 .acca-analysis__ticket li { padding-left: 2px; font-size: var(--type-body); }
 .acca-analysis__ticket li > div, .acca-analysis__ticket li > small { display: grid; gap: 3px; }
