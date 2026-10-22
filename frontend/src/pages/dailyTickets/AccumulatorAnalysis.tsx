@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchAccaPrices, type AccaPrice, type SelectionSummary } from "../../lib/api";
 import "./AccumulatorAnalysis.css";
-import { matchStatusText, selectionDisplayState, selectionStatusLabel } from "./helpers";
+import { selectionStatusLabel } from "./helpers";
 
 type TicketBand = { key: string; title: string; min: number; max: number; hint: string };
 type ScoredPick = { row: SelectionSummary; score: number; reasons: string[]; risks: string[] };
@@ -173,14 +173,11 @@ export function AccumulatorAnalysis({ rows, date }: { rows: SelectionSummary[]; 
         <td>{row.best_odds?.toFixed(2) ?? "—"}<span>{row.best_odds && row.best_odds > 1 ? `${(100 / row.best_odds).toFixed(1)}% break-even` : "No valid price"}</span></td>
         <td>{row.model_probability != null ? `${(row.model_probability * 100).toFixed(1)}%` : "—"}<span>{row.edge != null ? `${row.edge >= 0 ? "+" : ""}${(row.edge * 100).toFixed(1)} pp edge` : "Edge unavailable"}</span></td>
         <td><b>{row.recommendation_status ?? "Unrated"}</b><span>Q {Math.round(row.q_score)} · score {score.toFixed(0)}</span></td>
-        <td><span className={`acca-analysis__status acca-analysis__status--${(row.match_status ?? "unknown").toLowerCase()}`}>{row.match_status?.toLowerCase() === "finished" ? matchStatusText(row) : marketName(row.match_status ?? "unknown")}</span>
-          {row.match_status?.toLowerCase() === "finished" && <>
-            {(row.home_goals == null || row.away_goals == null) && <span>Score unavailable</span>}
-            <span className={`acca-analysis__result acca-analysis__result--${selectionDisplayState(row)}`}>
-              {row.result ? `Selection: ${selectionStatusLabel(selectionDisplayState(row))}` : "Selection result unavailable"}
-            </span>
-          </>}
-        </td>
+        <td><span className={`acca-analysis__status acca-analysis__status--${row.result ?? "pending"} acca-analysis__result--${row.result ?? "pending"}`}>
+          {row.result
+            ? `${selectionStatusLabel(row.result)}${row.home_goals != null && row.away_goals != null ? ` (${row.home_goals}-${row.away_goals})` : ""}`
+            : "Pending"}
+        </span></td>
         <td><button type="button" className="acca-analysis__details-button" onClick={() => setActiveAnalysis({ row, score, reasons, risks })}>View analysis</button></td>
       </tr>)}</tbody></table>
       {picks.length === 0 && <p className="acca-analysis__empty">No candidate picks are available for this date.</p>}
