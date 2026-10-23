@@ -91,10 +91,52 @@ function marketName(value: string) {
   return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function marketSelectionLabel(market: string, selection: string) {
+  const normalize = (value: string) => value.toLowerCase().replace(/[\s-]+/g, "_");
+  const selectionKey = normalize(selection);
+  const marketKey = normalize(market);
+  const describeCode = (value: string) => {
+    const known: Record<string, string> = {
+      home_win: "Home win",
+      away_win: "Away win",
+      draw: "Draw",
+      btts_yes: "Both teams to score: Yes",
+      btts_no: "Both teams to score: No",
+      double_chance_1x: "Double chance: Home or draw",
+      double_chance_x2: "Double chance: Draw or away",
+      double_chance_12: "Double chance: Home or away",
+    };
+    if (known[value]) return known[value];
+    const totalGoals = value.match(/^(over|under)_?(\d+(?:[._]\d+)?)$/);
+    if (totalGoals) return `${totalGoals[1] === "over" ? "Over" : "Under"} ${totalGoals[2].replace("_", ".")} goals`;
+    return null;
+  };
+  const marketDescription = describeCode(marketKey);
+  const selectionDescription = describeCode(selectionKey);
+  if (marketDescription && (marketKey === selectionKey || selectionKey.startsWith(`${marketKey}_`))) return marketDescription;
+  if (selectionDescription) return selectionDescription;
+  const marketLabels: Record<string, string> = {
+    btts: "Both teams to score",
+    double_chance: "Double chance",
+    match_result: "Match result",
+    "1x2": "Match result",
+    total_goals: "Total goals",
+  };
+  const readableMarket = marketLabels[marketKey] ?? marketName(market);
+  if (selectionKey === marketKey) return readableMarket;
+  if ((selectionKey === "yes" || selectionKey === "no") && (marketKey === "btts" || marketKey === "btts_yes" || marketKey === "btts_no")) {
+    return `Both teams to score: ${selectionKey === "yes" || marketKey === "btts_yes" ? "Yes" : "No"}`;
+  }
+  return `${readableMarket}: ${marketName(selection)}`;
+}
+
 export function AccumulatorAnalysis({ rows, date }: { rows: SelectionSummary[]; date: string }) {
   const [pricing, setPricing] = useState<{ date: string; prices: AccaPrice[] } | null>(null);
   const [priceError, setPriceError] = useState<string | null>(null);
   const [activeAnalysis, setActiveAnalysis] = useState<ScoredPick | null>(null);
+  const [marketFilter, setMarketFilter] = useState("all");
+  const [modelFilter, setModelFilter] = useState("all");
+  const [qScoreFilter, setQScoreFilter] = useState("all");
   const analysisDialogRef = useRef<HTMLElement>(null);
   useEffect(() => {
     if (activeAnalysis) analysisDialogRef.current?.focus();
@@ -132,6 +174,16 @@ export function AccumulatorAnalysis({ rows, date }: { rows: SelectionSummary[]; 
     }
     return pick;
   }).sort((a, b) => b.score - a.score), [rows, pricing, date]);
+  const marketOptions = useMemo(() => [...new Map(picks.map(({ row }) => {
+    const key = JSON.stringify([row.market, row.selection]);
+    return [key, marketSelectionLabel(row.market, row.selection)] as const;
+  })).entries()].sort((a, b) => a[1].localeCompare(b[1])), [picks]);
+  const tablePicks = useMemo(() => picks.filter(({ row }) => {
+    if (marketFilter !== "all" && JSON.stringify([row.market, row.selection]) !== marketFilter) return false;
+    if (qScoreFilter !== "all" && Math.min(90, Math.floor(row.q_score / 10) * 10) !== Number(qScoreFilter)) return false;
+    if (modelFilter !== "all" && (row.model_probability == null || row.model_probability * 100 < Number(modelFilter))) return false;
+    return true;
+  }), [picks, marketFilter, modelFilter, qScoreFilter]);
   const tickets = useMemo(() => {
     const used = new Set<number>();
     return BANDS.map((band) => {
@@ -166,21 +218,42 @@ export function AccumulatorAnalysis({ rows, date }: { rows: SelectionSummary[]; 
         </li>)}</ol> : <p className="acca-analysis__empty">There are not enough eligible picks in this odds band. The module leaves it empty rather than relaxing the evidence gates.</p>}
       </article>)}
     </div>
+    <div className="acca-analysis__filters" aria-label="Filter analysis table">
+      <label>Market selection
+        <select value={marketFilter} onChange={(event) => setMarketFilter(event.target.value)}>
+          <option value="all">All market selections</option>
+          {marketOptions.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+        </select>
+      </label>
+      <label>Model probability
+        <select value={modelFilter} onChange={(event) => setModelFilter(event.target.value)}>
+          <option value="all">All model probabilities</option>
+          {Array.from({ length: 9 }, (_, index) => (index + 1) * 10).map((threshold) => <option key={`model:${threshold}`} value={threshold}>{`\u2265 ${threshold}%`}</option>)}
+        </select>
+      </label>
+      <label>Q-Score
+        <select value={qScoreFilter} onChange={(event) => setQScoreFilter(event.target.value)}>
+          <option value="all">All Q-Scores</option>
+          {Array.from({ length: 10 }, (_, index) => index * 10).map((lower) => <option key={`q-score:${lower}`} value={lower}>{lower}–{lower === 90 ? 100 : `${lower + 9}.9`} points</option>)}
+        </select>
+      </label>
+      <span className="acca-analysis__filter-count" aria-live="polite">Showing {tablePicks.length} of {picks.length}</span>
+    </div>
     <div className="acca-analysis__table-wrap"><table className="acca-analysis__table"><thead><tr><th>Fixture</th><th>Market selection</th><th>Price / implied</th><th>Model / edge</th><th>Quality</th><th>Match status</th><th>Analysis</th></tr></thead>
-      <tbody>{picks.map(({ row, score, reasons, risks }) => <tr key={row.prediction_id}>
+      <tbody>{tablePicks.map(({ row, score, reasons, risks }) => <tr key={row.prediction_id}>
         <td><b>{row.home_team} vs {row.away_team}</b><span>{row.competition}</span></td>
-        <td><b>{marketName(row.market)}</b><span>{row.selection}</span></td>
+        <td><b>{marketName(row.market)}</b></td>
         <td>{row.best_odds?.toFixed(2) ?? "—"}<span>{row.best_odds && row.best_odds > 1 ? `${(100 / row.best_odds).toFixed(1)}% break-even` : "No valid price"}</span></td>
         <td>{row.model_probability != null ? `${(row.model_probability * 100).toFixed(1)}%` : "—"}<span>{row.edge != null ? `${row.edge >= 0 ? "+" : ""}${(row.edge * 100).toFixed(1)} pp edge` : "Edge unavailable"}</span></td>
         <td><b>{row.recommendation_status ?? "Unrated"}</b><span>Q {Math.round(row.q_score)} · score {score.toFixed(0)}</span></td>
-        <td><span className={`acca-analysis__status acca-analysis__status--${row.result ?? "pending"} acca-analysis__result--${row.result ?? "pending"}`}>
+        <td><span className={`acca-analysis__status acca-analysis__status--${row.result ?? "pending"}`}>
           {row.result
             ? `${selectionStatusLabel(row.result)}${row.home_goals != null && row.away_goals != null ? ` (${row.home_goals}-${row.away_goals})` : ""}`
             : "Pending"}
         </span></td>
         <td><button type="button" className="acca-analysis__details-button" onClick={() => setActiveAnalysis({ row, score, reasons, risks })}>View analysis</button></td>
       </tr>)}</tbody></table>
-      {picks.length === 0 && <p className="acca-analysis__empty">No candidate picks are available for this date.</p>}
+      {tablePicks.length === 0 && <p className="acca-analysis__empty">{picks.length === 0 ? "No candidate picks are available for this date." : "No rows match these filters. Adjust a filter to see more candidates."}</p>}
     </div>
     {activeAnalysis && <div className="acca-analysis__dialog-backdrop" onClick={(event) => { if (event.target === event.currentTarget) setActiveAnalysis(null); }}>
       <section ref={analysisDialogRef} className="acca-analysis__dialog" role="dialog" aria-modal="true" aria-labelledby="acca-analysis-dialog-title" onKeyDown={(event) => { if (event.key === "Escape") setActiveAnalysis(null); }} tabIndex={-1}>

@@ -1,3 +1,4 @@
+import { useSortableRows } from "../../components/SortableTable";
 import type { Leg, Ticket } from "../../lib/api";
 import { formatDate, formatKickoff, formatMarket, formatSelection, selectionRepeatsMarket, selectionTone } from "../../lib/api";
 
@@ -18,11 +19,12 @@ interface Props {
   canViewSelections: boolean;
 }
 
-function resultLabel(leg: Leg): string {
-  if (leg.result === "won") return "Pick won";
-  if (leg.result === "lost") return "Pick lost";
-  if (leg.result === "void") return "Pick void";
-  return leg.home_goals != null && leg.away_goals != null ? "Settlement pending" : "Pending";
+function matchStatus(leg: Leg): string {
+  const score = leg.home_goals != null && leg.away_goals != null ? ` (${leg.home_goals}-${leg.away_goals})` : "";
+  if (leg.result === "won") return `Won${score}`;
+  if (leg.result === "lost") return `Lost${score}`;
+  if (leg.result === "void") return "Void";
+  return "Pending";
 }
 
 export default function PublishedSelections({ tickets, onSelect, canViewSelections }: Props) {
@@ -43,6 +45,21 @@ export default function PublishedSelections({ tickets, onSelect, canViewSelectio
   }
 
   const rows = [...selections.values()].sort((a, b) => Date.parse(a.leg.kickoff_at) - Date.parse(b.leg.kickoff_at));
+  const { sorted: sortedRows, sort, toggle } = useSortableRows(rows, {
+    fixture: ({ leg }) => `${leg.home_team} vs ${leg.away_team} ${leg.competition}`,
+    marketPick: ({ leg }) => selectionRepeatsMarket(leg.market, leg.selection)
+      ? formatSelection(leg.selection)
+      : `${formatMarket(leg.market)} ${formatSelection(leg.selection)}`,
+    matchStatus: ({ leg }) => matchStatus(leg),
+    ticketOdds: ({ leg }) => leg.best_odds,
+  });
+  const sortHeader = (key: NonNullable<typeof sort>["key"], label: string) => {
+    const direction = sort?.key === key ? sort.direction : null;
+    const action = direction ? `Currently ${direction === "asc" ? "ascending" : "descending"}; activate to reverse` : "Activate to sort";
+    return <button className="published-selection-sort" type="button" aria-label={`Sort by ${label}. ${action}`} aria-pressed={direction != null} onClick={() => toggle(key)}>
+      {label}<span aria-hidden="true">{direction === "asc" ? " ↑" : direction === "desc" ? " ↓" : " ↕"}</span>
+    </button>;
+  };
 
   return (
     <section className="published-selections" aria-labelledby="published-selections-title">
@@ -60,11 +77,17 @@ export default function PublishedSelections({ tickets, onSelect, canViewSelectio
         <p className="published-selections-empty">No match selections are available in the published tickets for this date.</p>
       ) : (
         <ul className="published-selection-list">
-          {rows.map(({ leg, ticket, tiers }) => {
+          <li className="published-selection-header">
+            {sortHeader("fixture", "Fixture")}
+            {sortHeader("marketPick", "Market pick")}
+            {sortHeader("matchStatus", "Match Status")}
+            {sortHeader("ticketOdds", "Ticket tier and odds")}
+            <span />
+          </li>
+          {sortedRows.map(({ leg, ticket, tiers }) => {
             const selection = selectionRepeatsMarket(leg.market, leg.selection)
               ? formatSelection(leg.selection)
               : `${formatMarket(leg.market)} · ${formatSelection(leg.selection)}`;
-            const score = leg.home_goals != null && leg.away_goals != null ? `${leg.home_goals}–${leg.away_goals}` : null;
             return (
               <li className="published-selection-item" key={leg.prediction_id ?? `${leg.match_id}|${leg.market}|${leg.selection}`}>
                 <button className="published-selection-button" type="button" onClick={() => onSelect(leg, ticket)}>
@@ -74,8 +97,8 @@ export default function PublishedSelections({ tickets, onSelect, canViewSelectio
                   </span>
                   <span className="published-selection-pick">
                     <span className={`leg-market market-pick ${selectionTone(leg.selection)}`}>{selection}</span>
-                    <span className={`published-selection-result ${leg.result ?? "pending"}`}>{score && <b>{score}</b>}{resultLabel(leg)}</span>
                   </span>
+                  <span className={`published-selection-status ${leg.result ?? "pending"}`}>{matchStatus(leg)}</span>
                   <span className="published-selection-details">
                     <span className="published-selection-tiers">In {Array.from(tiers).join(" · ")}</span>
                     <span className="published-selection-odds">{leg.best_odds == null ? "Odds unavailable" : `${leg.best_odds.toFixed(2)} odds`}</span>

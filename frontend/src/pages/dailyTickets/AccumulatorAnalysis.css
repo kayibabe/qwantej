@@ -5,6 +5,11 @@
 .acca-analysis__heading p { margin: 7px 0 0; color: var(--text-secondary, #687386); line-height: 1.5; font-size: var(--type-body); }
 .acca-analysis__date { color: var(--text-secondary, #687386); font-size: var(--type-body); }
 .acca-analysis__notice { padding: 11px 14px; border-left: 3px solid #6985bb; border-radius: 5px; background: var(--surface-muted, #f5f7fa); color: var(--text-secondary, #596579); font-size: var(--type-body); line-height: 1.5; }
+.acca-analysis__filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 14px; border: 1px solid var(--border, #e4e8ef); border-radius: 10px; background: var(--surface, #fff); }
+.acca-analysis__filters label { display: grid; gap: 5px; min-width: 190px; color: var(--text-secondary, #596579); font-size: var(--type-small); font-weight: 600; }
+.acca-analysis__filters select { min-height: 38px; max-width: 100%; padding: 7px 32px 7px 10px; border: 1px solid var(--border, #d9dee8); border-radius: 7px; background: var(--surface, #fff); color: var(--text-primary, #263247); font: inherit; font-size: var(--type-body); }
+.acca-analysis__filters select:focus-visible { outline: 2px solid var(--focus, #5876b7); outline-offset: 2px; }
+.acca-analysis__filter-count { margin-left: auto; padding-bottom: 9px; color: var(--text-secondary, #687386); font-size: var(--type-body); white-space: nowrap; }
 .acca-analysis__tickets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .acca-analysis__ticket, .acca-analysis__table-wrap { min-width: 0; border: 1px solid var(--border, #e4e8ef); border-radius: 10px; background: var(--surface, #fff); }
 .acca-analysis__ticket { padding: 15px; }
@@ -25,10 +30,10 @@
 .acca-analysis__table td > b, .acca-analysis__table td > span { display: block; }
 .acca-analysis__table td > span { margin-top: 4px; color: var(--text-secondary, #687386); line-height: 1.45; }
 .acca-analysis__status { display: inline-block !important; width: fit-content; padding: 3px 8px; border: 1px solid var(--border, #e4e8ef); border-radius: 999px; background: var(--surface-muted, #f5f7fa); color: var(--text-secondary, #596579) !important; font-size: var(--type-small); }
-.acca-analysis__status--finished { border-color: #b8dfc7; background: #edf8f0; color: #246b3c !important; }
-.acca-analysis__status--live { border-color: #f1d2a0; background: #fff7e8; color: #935700 !important; }
-.acca-analysis__table td > .acca-analysis__result--won { color: var(--success, #246b3c); }
-.acca-analysis__table td > .acca-analysis__result--lost { color: var(--danger, #b42318); }
+.acca-analysis__status--won { border-color: #a6f4c5; background: #ecfdf3; color: #166534 !important; }
+.acca-analysis__status--lost { border-color: #fecdca; background: #fef3f2; color: #b42318 !important; }
+.acca-analysis__status--pending { border-color: #fedf89; background: #fffaeb; color: #92400e !important; }
+.acca-analysis__status--void { border-color: #d0d5dd; background: #f2f4f7; color: #475467 !important; }
 .acca-analysis__details-button, .acca-analysis__dialog-close { border: 1px solid var(--border, #d9dee8); border-radius: 7px; background: var(--surface, #fff); color: var(--text-primary, #263247); font: inherit; cursor: pointer; }
 .acca-analysis__details-button { padding: 7px 10px; white-space: nowrap; }
 .acca-analysis__details-button:hover, .acca-analysis__dialog-close:hover { background: var(--surface-muted, #f5f7fa); }
@@ -45,4 +50,4 @@
 .acca-analysis__dialog-content li + li { margin-top: 5px; }
 .acca-analysis__dialog-footer { display: flex; justify-content: flex-end; padding: 0 22px 20px; }
 @media (max-width: 900px) { .acca-analysis__tickets { grid-template-columns: 1fr; } }
-@media (max-width: 650px) { .acca-analysis__heading { display: grid; } }
+@media (max-width: 650px) { .acca-analysis__heading { display: grid; } .acca-analysis__filters { display: grid; grid-template-columns: 1fr; } .acca-analysis__filters label { min-width: 0; } .acca-analysis__filters select { width: 100%; } .acca-analysis__filter-count { margin-left: 0; padding-bottom: 0; } }

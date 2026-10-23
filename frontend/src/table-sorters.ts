@@ -89,7 +89,7 @@ function enhanceTable(table: HTMLTableElement) {
 }
 
 export function installTableSorters() {
-  const enhance = () => document.querySelectorAll<HTMLTableElement>("main table").forEach(enhanceTable)
+  const enhance = () => document.querySelectorAll<HTMLTableElement>("table").forEach(enhanceTable)
   enhance()
   const observer = new MutationObserver(enhance)
   const root = document.body
