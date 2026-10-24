@@ -36,7 +36,10 @@ from app.services.models.bayesian import _run_analytical, predict_market_from_po
 from app.services.decision_evidence import build_decision_evidence
 
 
-TOTALS = ("under_2.5", "under_3.5", "under_4.5")
+TOTALS = (
+    "under_0.5", "over_1.5", "under_1.5", "over_2.5", "under_2.5",
+    "over_3.5", "under_3.5", "over_4.5",
+)
 BINARY = ("home_win", "draw", "away_win", "btts_yes", "btts_no")
 ALL_MARKETS = TOTALS + BINARY
 
@@ -136,6 +139,7 @@ class HistoricalTotalsBackfill:
         skipped: dict[str, int] = defaultdict(int)
         written = 0
         current_day: date | None = None
+        pending_day_matches: list[Match] = []
         poisson: PoissonDixonColes | None = None
         zinb: ZINBModel | None = None
         bayes: dict[int, dict[str, float]] = {}
@@ -151,6 +155,14 @@ class HistoricalTotalsBackfill:
                 continue
             match_day = kickoff.date()
             if current_day != match_day:
+                # Freeze features for each UTC match day. Same-day results are
+                # not fed into later fixtures because the source data has no
+                # reliable final-whistle timestamp.
+                for prior_match in pending_day_matches:
+                    prior_kickoff = self._aware(prior_match.kickoff_at)
+                    history.append(self._history_row(prior_match, prior_kickoff))
+                    self._update_rolling(rolling, prior_match)
+                pending_day_matches = []
                 current_day = match_day
                 # Mirror ModelRunner._load_historical_matches: cap the fitting
                 # window at the most recent 2000 matches. Unbounded history
@@ -164,34 +176,45 @@ class HistoricalTotalsBackfill:
                     poisson = None
                     zinb = None
                     bayes = {}
+                    day_as_of = max((row["kickoff_at"] for row in prior), default=None)
                     skipped["insufficient_prior_history"] += 1
                 else:
-                    poisson = await asyncio.to_thread(PoissonDixonColes().fit, prior)
-                    zinb = await asyncio.to_thread(
-                        self._fit_zinb,
-                        [int(row["home_goals"] + row["away_goals"]) for row in prior],
-                    )
-                    bayes = await asyncio.to_thread(_run_analytical, prior)
+                    try:
+                        poisson = await asyncio.to_thread(PoissonDixonColes().fit, prior)
+                    except Exception:
+                        poisson = None
+                        skipped["poisson_fit_failed"] += 1
+                    try:
+                        zinb = await asyncio.to_thread(
+                            self._fit_zinb,
+                            [int(row["home_goals"] + row["away_goals"]) for row in prior],
+                        )
+                    except Exception:
+                        zinb = None
+                        skipped["zinb_fit_failed"] += 1
+                    try:
+                        bayes = await asyncio.to_thread(_run_analytical, prior)
+                    except Exception:
+                        bayes = {}
+                        skipped["bayes_fit_failed"] += 1
                     day_as_of = max(row["kickoff_at"] for row in prior)
 
-            if poisson is None:
-                history.append(self._history_row(match, kickoff))
-                self._update_rolling(rolling, match)
-                continue
             expected = _rolling_expected_goals(rolling, match.home_team_id, match.away_team_id)
             if expected is None:
                 skipped["missing_point_in_time_features"] += 1
-                history.append(self._history_row(match, kickoff))
-                self._update_rolling(rolling, match)
+                pending_day_matches.append(match)
                 continue
             odds = _odds_for_match(odds_by_match.get(match.id, []), kickoff, ALL_MARKETS)
             input_as_of = day_as_of
+            if input_as_of is None:
+                skipped["missing_point_in_time_cutoff"] += 1
+                pending_day_matches.append(match)
+                continue
             if odds:
                 input_as_of = max(input_as_of, max(self._aware(q.fetched_at) for q in odds.values()))
             if input_as_of >= kickoff:
                 skipped["non_pre_kickoff_inputs"] += 1
-                history.append(self._history_row(match, kickoff))
-                self._update_rolling(rolling, match)
+                pending_day_matches.append(match)
                 continue
 
             competition = competitions.get(match.competition_id)
@@ -202,14 +225,20 @@ class HistoricalTotalsBackfill:
                 if (match.id, market) in existing:
                     skipped["already_backfilled"] += 1
                     continue
-                poisson_probability = poisson.predict(match.home_team_id, match.away_team_id, market)
+                poisson_probability = (
+                    poisson.predict(match.home_team_id, match.away_team_id, market)
+                    if poisson is not None else None
+                )
                 if poisson_probability is None:
                     skipped["missing_poisson_parameters"] += 1
-                    continue
                 zinb_probability = None
                 if market in TOTALS and zinb is not None:
-                    threshold = float(market.rsplit("_", 1)[1])
-                    zinb_probability = 1.0 - zinb.predict_over(threshold)
+                    line = float(market.rsplit("_", 1)[1])
+                    over_probability = zinb.predict_over(line)
+                    zinb_probability = (
+                        over_probability if market.startswith("over_")
+                        else 1.0 - over_probability
+                    )
                 bayes_probability = None
                 if home_posterior is not None and away_posterior is not None and competition is not None:
                     home_adv_factor = 1.0 + (competition.home_advantage_elo / 1500.0)
@@ -276,6 +305,20 @@ class HistoricalTotalsBackfill:
                                         "elo": "excluded_no_point_in_time_history"},
                     active_models=ensemble.active_models,
                     data_quality_snapshot={"historical_backfill": True, "as_of_at": input_as_of.isoformat()},
+                    feature_snapshot={
+                        "schema_version": "qwantej.model-features.v1",
+                        "captured_at": input_as_of.isoformat(),
+                        "market": market,
+                        "context": {
+                            "expected_goals": [expected[0], expected[1]],
+                            "xg_source": "point_in_time_rolling_goal_history",
+                            "point_in_time": True,
+                        },
+                        "historical_backfill": {
+                            "point_in_time": True,
+                            "elo": "excluded_no_point_in_time_history",
+                        },
+                    },
                     source_odds_id=quote.id if quote else None,
                     source_odds_at=self._aware(quote.fetched_at) if quote else None,
                     source_decimal_odds=quote.decimal_odds if quote else None,
@@ -295,9 +338,14 @@ class HistoricalTotalsBackfill:
                 ))
                 existing.add((match.id, market))
                 written += 1
-            history.append(self._history_row(match, kickoff))
-            self._update_rolling(rolling, match)
+                if written % 5000 == 0:
+                    await self.db.flush()
+            pending_day_matches.append(match)
 
+        for prior_match in pending_day_matches:
+            prior_kickoff = self._aware(prior_match.kickoff_at)
+            history.append(self._history_row(prior_match, prior_kickoff))
+            self._update_rolling(rolling, prior_match)
         await self.db.flush()
         return {
             "status": "completed",

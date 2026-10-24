@@ -50,21 +50,56 @@ assessments. A missing/insufficient/rejected profile leaves the forecast
 uncalibrated and every policy rejects. Each market's independent promoted
 profile and evidence gates still apply after shared calibration.
 
-The historical data currently available in the local database is not enough to
-release selections: as of 2026-10-24, 535 finished fixtures have saved
-pre-match expected-goals snapshots across roughly 11 days, none has a persisted
-shared-forecast snapshot, and existing Over/Under market-learning profiles are
-`insufficient_evidence` or `validation_rejected`. There is no historical
-Under 0.5 market profile. Training a shared candidate from these records can
-produce a holdout report, but it must not be treated as qualification or
-promoted unless all checks pass; the separate market gates may still block it.
+## Operational data readiness (2026-10-24)
 
-A read-only dry run on model version `0.3.0` used 2026-10-13–19 for training
-(296 fixtures) and 2026-10-20–24 for validation (239 fixtures). The fitted rate
-scale was `1.07261594`. Holdout Brier changed from `0.177625` to `0.175885`,
-short of the required `0.0025` improvement; calibration worsened for at least
-one event; and the candidate ROI was `0.018932` with a 95% cluster-bootstrap
-interval of `[-0.180732, 0.216412]`. The profile therefore failed promotion.
+The detached historical replay now records all eight goal markets with the
+point-in-time rolling expected-goals inputs required by shared-goals learning.
+It uses only earlier UTC-day results, marks its rows as
+`historical_backfill`, creates no public model runs or tickets, and does not
+rewrite existing forecasts. A replay through 2026-10-19 wrote 216,866 detached
+market predictions across 16,682 fixtures; each supported total-goals market
+has the same fixture coverage. The replay also corrects the historical ZINB
+probability direction for Over markets.
+
+The already-reviewed 2026-10-20–24 holdout remains excluded from any release
+decision. Current live model code captures all eight shared goal markets, and
+fresh forecasts were recorded for 106 fixtures on 2026-10-25 and 19 on
+2026-10-26. This begins a new prospective holdout; those fixtures must finish
+before they can be evaluated. A shared calibration and every separate market
+profile must still pass their checks and receive the explicit promotion before
+selections can qualify. Until that happens, qualification remains blocked.
+The local database currently has 18 learning profiles marked
+`insufficient_evidence`, 14 marked `validation_rejected`, and no promotions.
+
+Historical odds snapshots begin on 2026-09-14, so the larger replay supplies
+probability-training examples while price/ROI validation continues to depend
+on eligible pre-kickoff odds and the fresh prospective period. Do not treat the
+backfill's fit as live performance or reuse the inspected October 20–24 window
+to tune a release candidate.
+
+When all 2026-10-25 and 2026-10-26 fixtures have settled and result ingestion is
+complete, evaluate once using the replay for training and those fresh dates for
+validation (`base_model_version=0.3.0`, train `2025-06-30` through `2026-10-19`,
+validation `2026-10-25` through `2026-10-26`). Review every goal-market profile
+and the `shared_total_goals` checks in `/api/v1/models/learning/status`. Promote
+only profiles that pass every gate, with an effective date after the validation
+window. If any goal-market profile or the shared profile fails, keep those
+selections blocked and wait for a new prospective validation window rather than
+adjusting thresholds against this holdout.
+
+The weekly shadow learner uses a 30-day validation window. It now skips
+scheduled runs whose validation begins before 2026-10-25, so its Oct 25 run
+cannot produce a candidate from the reviewed October window. Manual evaluation
+of the Oct 25–26 cohort remains available after settlement; scheduled rolling
+validation will resume only when the whole 30-day window is prospective.
+
+A pre-replay read-only dry run on model version `0.3.0` used 2026-10-13–19 for
+training (296 fixtures) and 2026-10-20–24 for validation (239 fixtures). The
+fitted rate scale was `1.07261594`. Holdout Brier changed from `0.177625` to
+`0.175885`, short of the required `0.0025` improvement; calibration worsened
+for at least one event; and the candidate ROI was `0.018932` with a 95%
+cluster-bootstrap interval of `[-0.180732, 0.216412]`. The profile therefore
+failed promotion.
 This dry run did not write a learning record or activate a profile. Since this
 holdout has now been inspected, use a later untouched period for any release
 decision rather than tuning against these dates.

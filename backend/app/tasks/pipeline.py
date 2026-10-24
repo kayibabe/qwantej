@@ -712,6 +712,16 @@ def train_shadow_challenger(self):
     validation_start = validation_end - timedelta(days=settings.learning_validation_days - 1)
     train_end = validation_start - timedelta(days=1)
     train_start = train_end - timedelta(days=settings.learning_train_days - 1)
+    if validation_start < settings.learning_validation_not_before:
+        result = {
+            "status": "skipped",
+            "reason": "validation window predates the configured prospective holdout start",
+            "validation_start": validation_start.isoformat(),
+            "validation_end": validation_end.isoformat(),
+            "validation_not_before": settings.learning_validation_not_before.isoformat(),
+        }
+        logger.info("Weekly shadow learning skipped: %s", result)
+        return result
 
     async def _run():
         async with AsyncSessionLocal() as db:

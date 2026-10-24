@@ -117,6 +117,9 @@ class Settings(BaseSettings):
     parameter_sweep_cron_minute: int = 0
     learning_train_days: int = 180
     learning_validation_days: int = 30
+    # Do not use the previously reviewed 2026-10-20–24 period in an automated
+    # shadow validation. Keep this release's validation entirely prospective.
+    learning_validation_not_before: date = date(2026, 10, 25)
 
     # Daily pg_dump to a Railway Volume (see .railway/railway.ts, mounted on
     # the worker service) — see docs/BACKUP_RESTORE_RUNBOOK.md. 01:00 UTC is
