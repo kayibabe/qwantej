@@ -140,7 +140,126 @@ export async function fetchDailyTickets(
   return res.json()
 }
 
+export interface Over45Qualification {
+  policy_version: string
+  status: 'QUALIFY' | 'REJECT'
+  provisional: boolean
+  grade: string | null
+  probability: number | null
+  calibrated: boolean
+  expected_value: number | null
+  fair_odds: number | null
+  sample_sizes: { home?: number; away?: number }
+  checks: { key: string; value: number | null; threshold: number; status: string; required: boolean }[]
+  reasons: string[]
+  warnings?: string[]
+  shared_distribution?: TotalGoalsBaseline | null
+  shared_goals_forecast?: TotalGoalsBaseline | null
+  probability_source?: string
+}
+
+export interface TotalGoalsBaseline {
+  schema_version?: string
+  forecast_id?: string
+  match_id?: number
+  model_run_id?: number | null
+  model_version?: string
+  created_at?: string
+  source: string
+  calibrated: boolean
+  home_projected_goals: number
+  away_projected_goals: number
+  combined_projected_goals: number
+  raw_home_projected_goals?: number | null
+  raw_away_projected_goals?: number | null
+  raw_combined_projected_goals?: number | null
+  markets: Record<'over_1.5' | 'over_2.5' | 'over_3.5' | 'over_4.5' | 'under_0.5' | 'under_1.5' | 'under_2.5' | 'under_3.5', number>
+  probability_checks?: { over_under_complements?: boolean; over_probabilities_monotone?: boolean; under_probabilities_monotone?: boolean }
+  calibration?: { status: string; profile_id: number | string | null; method?: string; scale?: number; checks: Record<string, boolean>; validation_metrics?: Record<string, unknown> }
+}
+
+export interface OverGoalsQualification {
+  policy_version: string
+  status: 'QUALIFY' | 'REJECT'
+  provisional: boolean
+  grade: string | null
+  selection_pool: 'primary' | 'conditional' | 'excluded'
+  probability: number | null
+  calibrated: boolean
+  expected_value: number | null
+  fair_odds: number | null
+  preferred_projection: boolean
+  sample_sizes: { home?: number; away?: number }
+  checks: { key: string; value: number | null; threshold: number | null; status: string; required: boolean; direction?: 'min' | 'max' }[]
+  reasons: string[]
+  warnings: string[]
+  poisson_baseline: number | null
+  descriptive_metrics?: Record<string, number | null>
+  shared_distribution?: TotalGoalsBaseline | null
+  shared_goals_forecast?: TotalGoalsBaseline | null
+  probability_source?: string
+}
+
+export interface Under25Qualification {
+  policy_version: string
+  provisional: boolean
+  status: 'QUALIFY' | 'REJECT'
+  grade: string | null
+  probability: number | null
+  calibrated: boolean
+  expected_value: number | null
+  fair_odds: number | null
+  preferred_projection: boolean
+  sample_sizes: { home?: number; away?: number }
+  checks: { key: string; value: number | null; threshold: number; direction: 'min' | 'max'; status: string }[]
+  reasons: string[]
+  shared_goals_forecast?: TotalGoalsBaseline | null
+  probability_source?: string
+}
+
+export interface Under35Qualification {
+  policy_version: string
+  provisional: boolean
+  status: 'QUALIFY' | 'REJECT'
+  grade: string | null
+  selection_pool: 'primary' | 'conditional' | 'excluded'
+  probability: number | null
+  four_plus_probability: number | null
+  calibrated: boolean
+  expected_value: number | null
+  fair_odds: number | null
+  preferred_projection: boolean
+  sample_sizes: { home?: number; away?: number }
+  checks: { key: string; value: number | null; threshold: number; direction: 'min' | 'max'; status: string; required: boolean }[]
+  reasons: string[]
+  warnings: string[]
+  shared_goals_forecast?: TotalGoalsBaseline | null
+  probability_source?: string
+}
+
+export interface Under15Qualification extends Omit<Under35Qualification, 'four_plus_probability'> {
+  two_plus_probability: number | null
+  low_score_model?: { source: string; calibrated: boolean; zero_goals: number; exactly_one_goal: number } | null
+}
+
+export interface Under05Qualification extends Omit<Under35Qualification, 'four_plus_probability'> {
+  one_plus_probability: number | null
+  stressed_probability: number | null
+  stressed_expected_value: number | null
+  probability_haircut: number
+  implied_probability: number | null
+  edge: number | null
+}
+
 export interface SelectionSummary {
+  over15_qualification?: OverGoalsQualification | null
+  over25_qualification?: OverGoalsQualification | null
+  over35_qualification?: OverGoalsQualification | null
+  under05_qualification?: Under05Qualification | null
+  under15_qualification?: Under15Qualification | null
+  under35_qualification?: Under35Qualification | null
+  under25_qualification?: Under25Qualification | null
+  over45_qualification?: Over45Qualification | null
   prediction_id: number
   match_id: number
   home_team: string
@@ -183,7 +302,25 @@ export interface SelectionSummary {
   recommendation_policy_version?: string | null
 }
 
+export interface GoalsEvidence {
+  metrics: Record<string, number | null>
+  sample_sizes: Record<string, number>
+  cutoff_at?: string
+  recent_matches?: Record<string, { id: number; kickoff_at?: string; home_team?: string; away_team?: string; home_goals?: number; away_goals?: number }[]>
+  context_review?: Record<string, string>
+}
+
 export interface MatchIntelligencePrediction {
+  over15_qualification?: OverGoalsQualification | null
+  over25_qualification?: OverGoalsQualification | null
+  over35_qualification?: OverGoalsQualification | null
+  goals_evidence?: GoalsEvidence | null
+  probability_model?: { model?: { model_version?: string; weights?: Record<string, number> }; model_inputs?: Record<string, number | null>; context?: { home_elo?: number; away_elo?: number; home_advantage_elo?: number } }
+  under05_qualification?: Under05Qualification | null
+  under15_qualification?: Under15Qualification | null
+  under35_qualification?: Under35Qualification | null
+  under25_qualification?: Under25Qualification | null
+  over45_qualification?: Over45Qualification | null
   prediction_id: number
   market: string
   selection: string
@@ -204,6 +341,7 @@ export interface MatchIntelligencePrediction {
 }
 
 export interface MatchIntelligence {
+  goals_evidence?: GoalsEvidence
   match_id: number
   home_team: string
   away_team: string
@@ -448,12 +586,30 @@ export interface LeagueInsights {
   }>
 }
 
+export interface CompletedMatchSearchResult {
+  match_id: number
+  kickoff_at: string
+  competition: string
+  season: string
+  home_team: string
+  away_team: string
+  home_goals: number
+  away_goals: number
+}
+
 export async function fetchLeagueInsights(competitionId?: number, season?: string): Promise<LeagueInsights> {
   const params = new URLSearchParams()
   if (competitionId != null) params.set('competition_id', String(competitionId))
   if (season) params.set('season', season)
   const query = params.toString()
   const res = await fetch(`/api/v1/insights${query ? `?${query}` : ''}`)
+  if (!res.ok) throw new Error(`API error ${res.status}`)
+  return res.json()
+}
+
+export async function searchCompletedMatches(query: string): Promise<CompletedMatchSearchResult[]> {
+  const params = new URLSearchParams({ query })
+  const res = await fetch(`/api/v1/insights/matches/search?${params}`)
   if (!res.ok) throw new Error(`API error ${res.status}`)
   return res.json()
 }
@@ -612,6 +768,10 @@ export function formatMarket(market: string): string {
     away_win: 'Away Win',
     over_1_5: 'Over 1.5',
     'over_1.5': 'Over 1.5',
+    under_1_5: 'Under 1.5',
+    'under_1.5': 'Under 1.5',
+    under_0_5: 'Under 0.5',
+    'under_0.5': 'Under 0.5',
     over_2_5: 'Over 2.5',
     'over_2.5': 'Over 2.5',
     under_2_5: 'Under 2.5',

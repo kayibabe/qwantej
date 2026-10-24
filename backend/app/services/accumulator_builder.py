@@ -729,6 +729,59 @@ class AccumulatorBuilder:
 
 
 def selection_rejection_reasons(leg: Leg, spec: TicketSpec, calibration: dict | None = None) -> list[str]:
+    if leg.market in ("over_1.5", "over_2.5", "over_3.5"):
+        from app.services.over_goals import qualify_over
+        assessment = qualify_over(
+            leg.market,
+            leg.raw_model_probability if leg.raw_model_probability is not None else leg.model_probability,
+            leg.best_odds,
+            leg.feature_snapshot.get({"over_1.5": "over15_evidence", "over_2.5": "over25_evidence",
+                                      "over_3.5": "over35_evidence"}[leg.market]),
+        )
+        if assessment["status"] != "QUALIFY":
+            return assessment["reasons"]
+    if leg.market == "under_0.5":
+        from app.services.under05 import qualify_under05
+        assessment = qualify_under05(
+            leg.raw_model_probability if leg.raw_model_probability is not None else leg.model_probability,
+            leg.best_odds, leg.feature_snapshot.get("under05_evidence"),
+        )
+        if assessment["status"] != "QUALIFY":
+            return assessment["reasons"]
+    if leg.market == "under_1.5":
+        from app.services.under15 import qualify_under15
+        assessment = qualify_under15(
+            leg.raw_model_probability if leg.raw_model_probability is not None else leg.model_probability,
+            leg.best_odds, leg.feature_snapshot.get("under15_evidence"),
+        )
+        if assessment["status"] != "QUALIFY":
+            return assessment["reasons"]
+    if leg.market == "under_3.5":
+        from app.services.under35 import qualify_under35
+        assessment = qualify_under35(
+            leg.raw_model_probability if leg.raw_model_probability is not None else leg.model_probability,
+            leg.best_odds, leg.feature_snapshot.get("under35_evidence"),
+        )
+        if assessment["status"] != "QUALIFY":
+            return assessment["reasons"]
+    if leg.market == "under_2.5":
+        from app.services.under25 import qualify_under25
+        assessment = qualify_under25(
+            leg.raw_model_probability if leg.raw_model_probability is not None else leg.model_probability,
+            leg.best_odds, leg.feature_snapshot.get("under25_evidence"),
+        )
+        if assessment["status"] != "QUALIFY":
+            return assessment["reasons"]
+    # This market-specific gate also applies to market pricing and every
+    # relaxation tier. Legacy snapshots without evidence cannot qualify.
+    if leg.market == "over_4.5":
+        from app.services.over45 import qualify_over45
+        assessment = qualify_over45(
+            leg.raw_model_probability if leg.raw_model_probability is not None else leg.model_probability,
+            leg.best_odds, leg.feature_snapshot.get("over45_evidence"),
+        )
+        if assessment["status"] != "QUALIFY":
+            return assessment["reasons"]
     if leg.source_odds_at is not None and _as_utc(leg.source_odds_at) >= _as_utc(leg.kickoff_at):
         return ["POST_KICKOFF_ODDS"]
     if leg.source_odds_at is not None and _as_utc(leg.source_odds_at) > datetime.now(timezone.utc):

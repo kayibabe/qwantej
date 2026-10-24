@@ -27,6 +27,12 @@ from app.models import (
 )
 from app.services.models.ensemble import DEFAULT_WEIGHTS
 from app.services.settlement import evaluate_selection
+from app.services.total_goals_engine import (
+    MARKETS as TOTAL_GOALS_MARKETS,
+    REQUIRED_SHARED_CHECKS,
+    SHARED_CALIBRATION_MARKET,
+    total_goals_distribution_from_mean,
+)
 
 
 MODEL_NAMES = tuple(DEFAULT_WEIGHTS)
@@ -41,6 +47,15 @@ class LearningExample:
     incumbent_probability: float
     model_probabilities: dict[str, float]
     decimal_odds: float | None
+
+
+@dataclass(frozen=True)
+class SharedGoalsExample:
+    match_id: int
+    kickoff_at: datetime
+    total_goals: int
+    expected_total: float
+    decimal_odds: dict[str, float]
 
 
 @dataclass(frozen=True)
@@ -327,6 +342,205 @@ async def _load_learning_examples(
     return list(latest.values())
 
 
+async def _load_shared_goals_examples(
+    db: AsyncSession, start: date, end: date, model_version: str
+) -> list[SharedGoalsExample]:
+    """Load one point-in-time shared goals vector per finished fixture.
+
+    Historical rows are eligible only when the original feature snapshot saved
+    both expected-goals inputs before kickoff. Current match/team state is never
+    used to reconstruct an old forecast.
+    """
+    start_at = cat_day_bounds_utc(start)[0]
+    end_at = cat_day_bounds_utc(end)[1]
+    markets = tuple(TOTAL_GOALS_MARKETS)
+    result = await db.execute(
+        select(Prediction, Match)
+        .join(Match, Prediction.match_id == Match.id)
+        .where(
+            Prediction.model_version == model_version,
+            Prediction.market.in_(markets),
+            func.coalesce(Prediction.as_of_at, Prediction.created_at) < Match.kickoff_at,
+            Match.status == MatchStatus.FINISHED,
+            Match.kickoff_at >= start_at,
+            Match.kickoff_at < end_at,
+            Match.home_goals.is_not(None),
+            Match.away_goals.is_not(None),
+        )
+        .order_by(Prediction.created_at.desc(), Prediction.id.desc())
+    )
+    grouped: dict[int, list[tuple[Prediction, Match, tuple[float, float]]]] = {}
+    for prediction, match in result.all():
+        context = (prediction.feature_snapshot or {}).get("context") or {}
+        projected = context.get("expected_goals")
+        if not isinstance(projected, (list, tuple)) or len(projected) != 2:
+            continue
+        if any(
+            not isinstance(value, (int, float)) or isinstance(value, bool)
+            or not math.isfinite(value) or value < 0 or value > 20
+            for value in projected
+        ):
+            continue
+        grouped.setdefault(match.id, []).append(
+            (prediction, match, (float(projected[0]), float(projected[1])))
+        )
+
+    examples: list[SharedGoalsExample] = []
+    for match_id, rows in grouped.items():
+        # The latest saved vector is the information set. All market prices are
+        # gathered only from rows that used the same saved vector.
+        selected_vector = rows[0][2]
+        match = rows[0][1]
+        odds: dict[str, float] = {}
+        for prediction, _, vector in rows:
+            if vector != selected_vector or prediction.market in odds:
+                continue
+            if _eligible_learning_quote(prediction, match):
+                odds[prediction.market] = float(prediction.source_decimal_odds)
+        examples.append(
+            SharedGoalsExample(
+                match_id=match_id,
+                kickoff_at=match.kickoff_at,
+                total_goals=int(match.home_goals) + int(match.away_goals),
+                expected_total=sum(selected_vector),
+                decimal_odds=odds,
+            )
+        )
+    return sorted(examples, key=lambda row: (row.kickoff_at, row.match_id))
+
+
+def _shared_goals_metrics(
+    examples: list[SharedGoalsExample], scale: float, minimum_edge: float
+) -> dict:
+    observations: list[tuple[float, float]] = []
+    observations_by_market: dict[str, list[tuple[float, float]]] = {
+        market: [] for market in TOTAL_GOALS_MARKETS
+    }
+    selected_profit_by_match: dict[int, list[float]] = {}
+    for example in examples:
+        forecast = total_goals_distribution_from_mean(example.expected_total * scale)
+        if forecast is None:
+            continue
+        for market, (direction, threshold) in TOTAL_GOALS_MARKETS.items():
+            probability = float(forecast["markets"][market])
+            outcome = float(
+                example.total_goals >= threshold
+                if direction == "over"
+                else example.total_goals <= threshold
+            )
+            observations.append((probability, outcome))
+            observations_by_market[market].append((probability, outcome))
+            odds = example.decimal_odds.get(market)
+            if odds is None or not math.isfinite(odds) or odds <= 1.0:
+                continue
+            if probability - 1.0 / odds >= minimum_edge:
+                selected_profit_by_match.setdefault(example.match_id, []).append(
+                    odds - 1.0 if outcome == 1.0 else -1.0
+                )
+
+    if not observations:
+        return {"sample_size": 0, "eligible_bets": 0, "roi": None, "roi_confidence_interval_95": None}
+    probabilities = [p for p, _ in observations]
+    outcomes = [y for _, y in observations]
+    profits = [profit for match_profits in selected_profit_by_match.values() for profit in match_profits]
+    roi_interval = None
+    if len(selected_profit_by_match) >= 2:
+        ids = list(selected_profit_by_match)
+        generator = np.random.default_rng(17)
+        samples = generator.integers(0, len(ids), size=(1000, len(ids)))
+        bootstrapped_roi = []
+        for draw in samples:
+            draw_profits = [profit for index in draw for profit in selected_profit_by_match[ids[index]]]
+            if draw_profits:
+                bootstrapped_roi.append(float(np.mean(draw_profits)))
+        if bootstrapped_roi:
+            low, high = np.quantile(bootstrapped_roi, [0.025, 0.975])
+            roi_interval = [round(float(low), 6), round(float(high), 6)]
+    by_market = {}
+    for market, market_rows in observations_by_market.items():
+        market_probabilities = [p for p, _ in market_rows]
+        market_outcomes = [y for _, y in market_rows]
+        by_market[market] = {
+            "sample_size": len(market_rows),
+            "brier_score": round(float(np.mean((np.asarray(market_probabilities) - np.asarray(market_outcomes)) ** 2)), 6)
+            if market_rows else None,
+            "calibration_error": round(float(_expected_calibration_error(market_probabilities, market_outcomes)), 6)
+            if market_rows else None,
+        }
+    return {
+        "sample_size": len(examples),
+        "event_observations": len(observations),
+        "brier_score": round(float(np.mean((np.asarray(probabilities) - np.asarray(outcomes)) ** 2)), 6),
+        "calibration_error": round(float(_expected_calibration_error(probabilities, outcomes)), 6),
+        "by_market": by_market,
+        "eligible_bets": len(profits),
+        "roi": round(float(np.mean(profits)), 6) if profits else None,
+        "roi_confidence_interval_95": roi_interval,
+    }
+
+
+def fit_shared_goals_calibration(
+    train: list[SharedGoalsExample], validation: list[SharedGoalsExample], *,
+    minimum_edge: float, min_validation_bets: int, min_brier_improvement: float,
+    max_calibration_regression: float, max_roi_regression: float,
+    max_brier_regression: float = 0.02,
+) -> dict:
+    """Fit one total-goals rate scale and score it on the untouched later window."""
+    expected_total = sum(row.expected_total for row in train)
+    observed_total = sum(row.total_goals for row in train)
+    scale = observed_total / expected_total if expected_total > 0 else 0.0
+    baseline = _shared_goals_metrics(validation, 1.0, minimum_edge)
+    candidate = _shared_goals_metrics(validation, scale, minimum_edge)
+    checks = {
+        "brier_improved": (
+            candidate.get("brier_score") is not None
+            and baseline.get("brier_score") is not None
+            and candidate["brier_score"] <= baseline["brier_score"] - min_brier_improvement
+        ),
+        "calibration_not_worse": (
+            candidate.get("calibration_error") is not None
+            and baseline.get("calibration_error") is not None
+            and candidate["calibration_error"] <= baseline["calibration_error"] + max_calibration_regression
+        ),
+        "enough_priced_bets": candidate.get("eligible_bets", 0) >= min_validation_bets,
+        "probability_ordering": all(
+            total_goals_distribution_from_mean(row.expected_total * scale)["probability_checks"][key]
+            for row in validation
+            if total_goals_distribution_from_mean(row.expected_total * scale) is not None
+            for key in ("over_under_complements", "over_probabilities_monotone", "under_probabilities_monotone")
+        ),
+        "positive_roi_evidence": _positive_profit_evidence(candidate),
+        "roi_not_worse": (
+            candidate.get("roi") is not None and baseline.get("roi") is not None
+            and candidate["roi"] >= baseline["roi"] - max_roi_regression
+        ),
+        "chronological_holdout_passed": bool(
+            train and validation and max(row.kickoff_at for row in train) < min(row.kickoff_at for row in validation)
+        ),
+        "market_brier_not_worse": all(
+            candidate.get("by_market", {}).get(market, {}).get("brier_score") is not None
+            and baseline.get("by_market", {}).get(market, {}).get("brier_score") is not None
+            and candidate["by_market"][market]["brier_score"]
+            <= baseline["by_market"][market]["brier_score"] + max_brier_regression
+            for market in TOTAL_GOALS_MARKETS
+        ),
+        "market_calibration_not_worse": all(
+            candidate.get("by_market", {}).get(market, {}).get("calibration_error") is not None
+            and baseline.get("by_market", {}).get(market, {}).get("calibration_error") is not None
+            and candidate["by_market"][market]["calibration_error"]
+            <= baseline["by_market"][market]["calibration_error"] + max_calibration_regression
+            for market in TOTAL_GOALS_MARKETS
+        ),
+    }
+    return {
+        "scale": round(scale, 8),
+        "train_metrics": _shared_goals_metrics(train, scale, minimum_edge),
+        "validation_metrics": {"uncalibrated": baseline, "calibrated": candidate},
+        "promotion_checks": checks,
+        "shadow_ready": all(checks.get(key) is True for key in REQUIRED_SHARED_CHECKS),
+    }
+
+
 async def train_learning_challenger(
     db: AsyncSession,
     *,
@@ -438,13 +652,64 @@ async def train_learning_challenger(
                     profile.rejection_reason = "failed checks: " + ", ".join(failed)
             db.add(profile)
 
+        shared_train = await _load_shared_goals_examples(
+            db, train_start, train_end, base_model_version
+        )
+        shared_validation = await _load_shared_goals_examples(
+            db, validation_start, validation_end, base_model_version
+        )
+        shared_profile = MarketLearningProfile(
+            learning_run_id=learning_run.id,
+            market=SHARED_CALIBRATION_MARKET,
+            train_sample_size=len(shared_train),
+            validation_sample_size=len(shared_validation),
+            weights={},
+            calibrator={"type": "identity"},
+        )
+        if len(shared_train) < min_train_samples or len(shared_validation) < min_validation_samples:
+            shared_profile.status = "insufficient_evidence"
+            shared_profile.rejection_reason = (
+                f"shared goals calibration requires {min_train_samples}/{min_validation_samples} "
+                f"fixture snapshots; found {len(shared_train)}/{len(shared_validation)}"
+            )
+        else:
+            fitted_shared = fit_shared_goals_calibration(
+                shared_train,
+                shared_validation,
+                minimum_edge=settings.min_selection_edge,
+                min_validation_bets=min_validation_bets,
+                min_brier_improvement=min_brier_improvement,
+                max_calibration_regression=max_calibration_regression,
+                max_roi_regression=max_roi_regression,
+            )
+            shared_profile.calibrator = {
+                "type": "total_goals_poisson_scale",
+                "scale": fitted_shared["scale"],
+            }
+            shared_profile.train_metrics = fitted_shared["train_metrics"]
+            shared_profile.validation_metrics = fitted_shared["validation_metrics"]
+            shared_profile.promotion_checks = fitted_shared["promotion_checks"]
+            shared_profile.status = "shadow_ready" if fitted_shared["shadow_ready"] else "validation_rejected"
+            if fitted_shared["shadow_ready"]:
+                ready += 1
+            else:
+                failed = [
+                    name for name, passed in fitted_shared["promotion_checks"].items()
+                    if passed is not True
+                ]
+                shared_profile.rejection_reason = "failed shared calibration checks: " + ", ".join(failed)
+        db.add(shared_profile)
+
         learning_run.status = RunStatus.COMPLETED
         learning_run.summary = {
-            "markets_evaluated": len(markets),
+            "markets_evaluated": len(markets) + 1,
             "shadow_ready_markets": ready,
-            "rejected_markets": len(markets) - ready,
+            "rejected_markets": len(markets) + 1 - ready,
             "train_rows": len(train_examples),
             "validation_rows": len(validation_examples),
+            "shared_goals_train_fixtures": len(shared_train),
+            "shared_goals_validation_fixtures": len(shared_validation),
+            "shared_goals_profile_status": shared_profile.status,
             "promotion_requires_explicit_action": True,
         }
         learning_run.completed_at = datetime.now(timezone.utc)

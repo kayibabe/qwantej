@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from 'react'
-import { fetchLeagueInsights, type LeagueInsights } from '../lib/api'
+import { fetchLeagueInsights, searchCompletedMatches, type CompletedMatchSearchResult, type LeagueInsights } from '../lib/api'
 
 function percent(value: number | null | undefined) {
   return value == null ? 'Unavailable' : `${value.toFixed(1)}%`
@@ -26,6 +26,10 @@ export default function InsightsPage() {
   const [season, setSeason] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [matchSearch, setMatchSearch] = useState('')
+  const [matchResults, setMatchResults] = useState<CompletedMatchSearchResult[]>([])
+  const [searchingMatches, setSearchingMatches] = useState(false)
+  const [matchSearchError, setMatchSearchError] = useState('')
 
   useEffect(() => {
     let current = true
@@ -45,6 +49,30 @@ export default function InsightsPage() {
     return () => { current = false }
   }, [competitionId, season])
 
+  useEffect(() => {
+    const query = matchSearch.trim()
+    if (query.length < 2) {
+      setMatchResults([])
+      setSearchingMatches(false)
+      setMatchSearchError('')
+      return
+    }
+
+    let current = true
+    setSearchingMatches(true)
+    setMatchSearchError('')
+    const timer = window.setTimeout(() => {
+      searchCompletedMatches(query)
+        .then((results) => { if (current) setMatchResults(results) })
+        .catch(() => { if (current) setMatchSearchError('Match search is temporarily unavailable. Please try again.') })
+        .finally(() => { if (current) setSearchingMatches(false) })
+    }, 250)
+    return () => {
+      current = false
+      window.clearTimeout(timer)
+    }
+  }, [matchSearch])
+
   const selectedCompetition = data?.competitions.find((item) => String(item.id) === competitionId)
   const summary = data?.summary
 
@@ -53,6 +81,29 @@ export default function InsightsPage() {
       <div className="section-heading">
         <div><h1>Stats &amp; trends</h1><p>League results and team form, calculated from completed matches in Qwantej’s database.</p></div>
       </div>
+      <section className="insights-search-card" aria-labelledby="insights-search-title">
+        <div className="insights-search-heading">
+          <div><h2 id="insights-search-title">Search completed matches</h2><p>Search across all competitions and seasons using complete words from either team name.</p></div>
+          {matchSearch.trim().length >= 2 && !searchingMatches && !matchSearchError && <span>{matchResults.length}{matchResults.length === 100 ? '+' : ''} {matchResults.length === 1 ? 'match' : 'matches'} found</span>}
+        </div>
+        <label className="insights-search-field">
+          <span className="sr-only">Search by team name</span>
+          <input value={matchSearch} onChange={(event) => setMatchSearch(event.target.value)} placeholder="For example, Bayern or Dortmund" type="search" />
+        </label>
+        {matchSearch.trim().length === 1 && <p className="insights-search-empty" role="status">Enter at least 2 characters to search all competitions.</p>}
+        {searchingMatches && <p className="insights-search-empty" role="status">Searching all completed matches…</p>}
+        {matchSearchError && <p className="insights-search-empty" role="alert">{matchSearchError}</p>}
+        {matchSearch.trim().length >= 2 && !searchingMatches && !matchSearchError && (matchResults.length ? (
+          <div className="insights-search-results" aria-live="polite">
+            {matchResults.map((match) => (
+              <article className="insights-search-result" key={match.match_id}>
+                <div><time dateTime={match.kickoff_at}>{new Date(match.kickoff_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</time><span className="insights-search-competition">{match.competition} · {match.season}</span></div>
+                <strong>{match.home_team} <span>{match.home_goals}–{match.away_goals}</span> {match.away_team}</strong>
+              </article>
+            ))}
+          </div>
+        ) : <p className="insights-search-empty" role="status">No completed matches found for “{matchSearch}”. Check the spelling and enter a complete team word.</p>)}
+      </section>
       <div className="insights-controls">
         <label>Competition
           <select value={competitionId} onChange={(event) => {

@@ -18,6 +18,7 @@ import {
   formatStage,
 } from "../../lib/api";
 import TicketCard from "../../components/TicketCard";
+import RejectionReasons from "../../components/RejectionReasons";
 import SelectionDetail, {
   type DetailSelection,
 } from "../../components/SelectionDetail";
@@ -199,14 +200,14 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
     ...(isAdmin && ["odds-policy", "market-roi", "daily-match-picks", "passed"].includes(initialTab) ? [
       ["market-roi", "Market ROI"],
       ["daily-match-picks", "Daily Match Picks"],
-      ["passed", "Passed / Why"],
+      ["passed", "Passed/Why"],
       ["odds-policy", "Research Policy"],
     ] as [DailyTab, string][] : []),
     ...(canExploreMarkets && ["tickets", "matches"].includes(initialTab)
-      ? [["acca-analysis", "Acca analysis"] as [DailyTab, string]]
+      ? [["acca-analysis", "Acca Analysis"] as [DailyTab, string]]
       : []),
     ...(isAdmin && initialTab === "market-roi"
-      ? [["acca-analysis", "Acca analysis"] as [DailyTab, string]]
+      ? [["acca-analysis", "Acca Analysis"] as [DailyTab, string]]
       : []),
   ];
   const publicationTimes = publicPublishedTickets
@@ -548,7 +549,7 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
 }
 
 function PassedMatches({ rows, onSelect }: { rows: SelectionSummary[]; onSelect: (row: SelectionSummary) => void }) {
-  const [filters, setFilters] = useState({ selection: "all", qScore: "all", odds: "all", edge: "all", result: "all", rejection: "all" });
+  const [filters, setFilters] = useState({ selection: "all", qScore: "all", odds: "all" });
   const rejectionOutcome = (result: SelectionSummary["result"]) => {
     if (result === "lost") return { label: "Passed", tone: "passed" };
     if (result === "won") return { label: "Failed", tone: "failed" };
@@ -557,7 +558,6 @@ function PassedMatches({ rows, onSelect }: { rows: SelectionSummary[]; onSelect:
   };
 
   const filteredRows = rows.filter(row => {
-    const outcome = rejectionOutcome(row.result).tone;
     const qScoreMatches = filters.qScore === "all"
       || (filters.qScore === "under-50" && row.q_score < 50)
       || (filters.qScore === "50-59" && row.q_score >= 50 && row.q_score < 60)
@@ -569,17 +569,8 @@ function PassedMatches({ rows, onSelect }: { rows: SelectionSummary[]; onSelect:
       || (filters.odds === "1-5-2" && row.best_odds != null && row.best_odds >= 1.5 && row.best_odds < 2)
       || (filters.odds === "2-3" && row.best_odds != null && row.best_odds >= 2 && row.best_odds < 3)
       || (filters.odds === "3-plus" && row.best_odds != null && row.best_odds >= 3);
-    const edgeMatches = filters.edge === "all"
-      || (filters.edge === "unavailable" && row.edge == null)
-      || (filters.edge === "negative" && row.edge != null && row.edge < 0)
-      || (filters.edge === "0-2" && row.edge != null && row.edge >= 0 && row.edge < 0.02)
-      || (filters.edge === "2-5" && row.edge != null && row.edge >= 0.02 && row.edge < 0.05)
-      || (filters.edge === "5-plus" && row.edge != null && row.edge >= 0.05);
-    const resultValue = row.result ?? (row.match_status?.toLowerCase() === "finished" ? "unavailable" : "pending");
     return (filters.selection === "all" || row.selection === filters.selection)
-      && qScoreMatches && oddsMatches && edgeMatches
-      && (filters.result === "all" || resultValue === filters.result)
-      && (filters.rejection === "all" || outcome === filters.rejection);
+      && qScoreMatches && oddsMatches;
   });
   const settledRows = filteredRows.filter(row => row.result === "won" || row.result === "lost" || row.result === "void");
   const wins = settledRows.filter(row => row.result === "won").length;
@@ -599,9 +590,6 @@ function PassedMatches({ rows, onSelect }: { rows: SelectionSummary[]; onSelect:
         <label>Selection<select value={filters.selection} onChange={event => setFilters(current => ({ ...current, selection: event.target.value }))}><option value="all">All selections</option>{Array.from(new Set(rows.map(row => row.selection))).sort().map(selection => <option key={selection} value={selection}>{formatSelection(selection)}</option>)}</select></label>
         <label>Q-score<select value={filters.qScore} onChange={event => setFilters(current => ({ ...current, qScore: event.target.value }))}><option value="all">Any score</option><option value="under-50">Under 50</option><option value="50-59">50–59.9</option><option value="60-69">60–69.9</option><option value="70-plus">70+</option></select></label>
         <label>Odds<select value={filters.odds} onChange={event => setFilters(current => ({ ...current, odds: event.target.value }))}><option value="all">Any odds</option><option value="unavailable">Unavailable</option><option value="under-1-5">Under 1.50</option><option value="1-5-2">1.50–1.99</option><option value="2-3">2.00–2.99</option><option value="3-plus">3.00+</option></select></label>
-        <label>Edge<select value={filters.edge} onChange={event => setFilters(current => ({ ...current, edge: event.target.value }))}><option value="all">Any edge</option><option value="unavailable">Unavailable</option><option value="negative">Below 0%</option><option value="0-2">0–1.9%</option><option value="2-5">2–4.9%</option><option value="5-plus">5%+</option></select></label>
-        <label>Match result<select value={filters.result} onChange={event => setFilters(current => ({ ...current, result: event.target.value }))}><option value="all">All results</option><option value="won">Won</option><option value="lost">Lost</option><option value="void">Void</option><option value="pending">Pending</option><option value="unavailable">Unavailable</option></select></label>
-        <label>Rejection check<select value={filters.rejection} onChange={event => setFilters(current => ({ ...current, rejection: event.target.value }))}><option value="all">All checks</option><option value="passed">Passed</option><option value="failed">Failed</option><option value="void">Void</option><option value="pending">Pending</option></select></label>
       </div>
       <div className="passed-matches-summary" aria-label="Filtered record summary">
         <div><span>W–L</span><strong>{wins}–{losses}</strong></div>
@@ -627,7 +615,7 @@ function PassedMatches({ rows, onSelect }: { rows: SelectionSummary[]; onSelect:
             <td className="passed-match-metric">{row.q_score.toFixed(1)}</td>
             <td className="passed-match-metric">{row.best_odds == null ? "Unavailable" : row.best_odds.toFixed(2)}</td>
             <td className="passed-match-metric">{row.edge == null ? "Unavailable" : `${(row.edge * 100).toFixed(1)}%`}</td>
-            <td className="passed-match-reason-cell">{(row.reason_codes?.length ? row.reason_codes : ["Publication gate did not pass"]).map(reasonLabel).join(" · ")}</td>
+            <td className="passed-match-reason-cell"><RejectionReasons reasons={row.reason_codes ?? []} /></td>
             <td><span className={`result-pill ${row.result ?? "pending"}`}>{resultLabel}</span>{score && <small className="result-score">{score}</small>}</td>
             <td><span className={`rejection-outcome-pill ${outcome.tone}`}>{outcome.label}</span></td>
           </tr>;

@@ -18,6 +18,12 @@ from app.services.accumulator_builder import AccumulatorBuilder
 from app.services.parameter_sweep import parameter_sweep_candidates
 from app.services.parameter_sweep_jobs import ready_scan, enqueue_scan
 from app.services.settlement import evaluate_selection
+from app.services.over45 import prediction_qualification
+from app.services.under25 import prediction_qualification as under25_qualification
+from app.services.under35 import prediction_qualification as under35_qualification
+from app.services.under15 import prediction_qualification as under15_qualification
+from app.services.under05 import prediction_qualification as under05_qualification
+from app.services.over_goals import prediction_qualification as over_goals_qualification
 
 router = APIRouter(prefix="/selections", tags=["selections"])
 
@@ -143,6 +149,14 @@ def _finished_selection_result(match: Match, market: str) -> str | None:
 
 
 class SelectionOut(BaseModel):
+    over15_qualification: dict | None = None
+    over25_qualification: dict | None = None
+    over35_qualification: dict | None = None
+    under05_qualification: dict | None = None
+    under15_qualification: dict | None = None
+    under35_qualification: dict | None = None
+    under25_qualification: dict | None = None
+    over45_qualification: dict | None = None
     model_config = {"protected_namespaces": ()}
     prediction_id: int
     match_id: int
@@ -237,6 +251,16 @@ class MatchContextOut(BaseModel):
 
 
 class MatchIntelligencePredictionOut(BaseModel):
+    goals_evidence: dict | None = None
+    probability_model: dict = Field(default_factory=dict)
+    under05_qualification: dict | None = None
+    under15_qualification: dict | None = None
+    under35_qualification: dict | None = None
+    under25_qualification: dict | None = None
+    over45_qualification: dict | None = None
+    over15_qualification: dict | None = None
+    over25_qualification: dict | None = None
+    over35_qualification: dict | None = None
     prediction_id: int
     market: str
     selection: str
@@ -257,6 +281,7 @@ class MatchIntelligencePredictionOut(BaseModel):
 
 
 class MatchIntelligenceOut(BaseModel):
+    goals_evidence: dict = Field(default_factory=dict)
     match_id: int
     home_team: str
     away_team: str
@@ -336,6 +361,15 @@ async def get_qualified_selections(
 
     output = []
     for pred in predictions:
+        over15 = over_goals_qualification(pred) if pred.market == "over_1.5" else None
+        over25 = over_goals_qualification(pred) if pred.market == "over_2.5" else None
+        over35 = over_goals_qualification(pred) if pred.market == "over_3.5" else None
+        over45 = prediction_qualification(pred)
+        under25 = under25_qualification(pred)
+        under35 = under35_qualification(pred)
+        under15 = under15_qualification(pred)
+        under05 = under05_qualification(pred)
+        totals_assessment = over15 or over25 or over35 or over45 or under25 or under35 or under15 or under05
         match = await db.get(Match, pred.match_id)
         if not match:
             continue
@@ -357,6 +391,14 @@ async def get_qualified_selections(
         quote_bookmaker_count = odds_provenance.get("bookmaker_count")
 
         output.append(SelectionOut(
+            over15_qualification=over15,
+            over25_qualification=over25,
+            over35_qualification=over35,
+            under05_qualification=under05,
+            under15_qualification=under15,
+            over45_qualification=over45,
+            under25_qualification=under25,
+            under35_qualification=under35,
             prediction_id=pred.id,
             match_id=pred.match_id,
             home_team=home_team.name,
@@ -392,9 +434,9 @@ async def get_qualified_selections(
             ),
             active_models=[str(model) for model in (pred.active_models or [])],
             data_quality_snapshot=pred.data_quality_snapshot or {},
-            recommendation_status=pred.recommendation_status or "WATCH",
+            recommendation_status="PASS" if totals_assessment and totals_assessment["status"] != "QUALIFY" else pred.recommendation_status or "WATCH",
             recommendation_reasons=[str(reason) for reason in (pred.recommendation_reasons or [])],
-            recommendation_risks=[str(risk) for risk in (pred.recommendation_risks or [])],
+            recommendation_risks=list(dict.fromkeys([str(risk) for risk in (pred.recommendation_risks or [])] + (totals_assessment["reasons"] if totals_assessment else []))),
             recommendation_policy_version=pred.recommendation_policy_version,
         ))
 
@@ -443,6 +485,15 @@ async def get_match_intelligence(match_id: int, db: AsyncSession = Depends(get_d
 
     rows = []
     for prediction in predictions:
+        over15 = over_goals_qualification(prediction) if prediction.market == "over_1.5" else None
+        over25 = over_goals_qualification(prediction) if prediction.market == "over_2.5" else None
+        over35 = over_goals_qualification(prediction) if prediction.market == "over_3.5" else None
+        over45 = prediction_qualification(prediction)
+        under25 = under25_qualification(prediction)
+        under35 = under35_qualification(prediction)
+        under15 = under15_qualification(prediction)
+        under05 = under05_qualification(prediction)
+        totals_assessment = over15 or over25 or over35 or over45 or under25 or under35 or under15 or under05
         quotes = [
             quote for quote in odds_by_market.get(prediction.market, [])
             if quote.selection == prediction.selection
@@ -453,6 +504,16 @@ async def get_match_intelligence(match_id: int, db: AsyncSession = Depends(get_d
             if quotes else None
         )
         rows.append(MatchIntelligencePredictionOut(
+            goals_evidence=(prediction.feature_snapshot or {}).get("goals_evidence"),
+            probability_model={key: (prediction.feature_snapshot or {}).get(key) for key in ("model", "model_inputs", "context")},
+            under05_qualification=under05,
+            under15_qualification=under15,
+            under35_qualification=under35,
+            under25_qualification=under25,
+            over45_qualification=over45,
+            over15_qualification=over15,
+            over25_qualification=over25,
+            over35_qualification=over35,
             prediction_id=prediction.id,
             market=prediction.market,
             selection=prediction.selection,
@@ -466,15 +527,20 @@ async def get_match_intelligence(match_id: int, db: AsyncSession = Depends(get_d
             model_agreement=prediction.model_agreement,
             source_odds_at=prediction.source_odds_at.isoformat() if prediction.source_odds_at else None,
             as_of_at=(prediction.as_of_at or prediction.created_at).isoformat(),
-            recommendation_status=prediction.recommendation_status or "WATCH",
+            recommendation_status="PASS" if totals_assessment and totals_assessment["status"] != "QUALIFY" else prediction.recommendation_status or "WATCH",
             recommendation_reasons=[str(item) for item in (prediction.recommendation_reasons or [])],
-            recommendation_risks=[str(item) for item in (prediction.recommendation_risks or [])],
+            recommendation_risks=list(dict.fromkeys([str(item) for item in (prediction.recommendation_risks or [])] + (totals_assessment["reasons"] if totals_assessment else []))),
             active_models=[str(item) for item in (prediction.active_models or [])],
         ))
 
     score = float(match.data_quality_score or 0)
     status = "good" if score >= 60 else "review" if score >= 40 else "weak"
+    from datetime import timezone
+    from app.services.over45 import load_recent_evidence
+    goals_evidence = await load_recent_evidence(db, match, datetime.now(timezone.utc))
+    goals_evidence["evidence_status"] = "current_history_not_decision_snapshot"
     return MatchIntelligenceOut(
+        goals_evidence=goals_evidence,
         match_id=match.id,
         home_team=home.name,
         away_team=away.name,

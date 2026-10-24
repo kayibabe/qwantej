@@ -11,6 +11,7 @@ import {
   spreadTone,
 } from "./helpers";
 import type { SelectionDisplayState } from "./types";
+import RejectionReasons from "../../components/RejectionReasons";
 
 export function SelectionPanel({
   title,
@@ -101,9 +102,7 @@ export function SelectionPanel({
                 </div>
                   {rejected && (
                     <div className="reason-codes">
-                      {row.reason_codes?.map((code) => (
-                        <span key={code}>{code.replace(/_/g, " ")}</span>
-                      ))}
+                      <RejectionReasons reasons={row.reason_codes ?? []} label="Why rejected" />
                     </div>
                   )}
                 <div className="selection-card-metrics">

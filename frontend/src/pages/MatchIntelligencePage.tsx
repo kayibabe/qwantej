@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { formatDate, formatKickoff, formatMarket, formatSelection, selectionRepeatsMarket, type MatchIntelligence } from '../lib/api'
 import './Analytics.css'
+import Over45Qualification from '../components/Over45Qualification'
+import OverGoalsQualification from '../components/OverGoalsQualification'
+import Under25Qualification from '../components/Under25Qualification'
+import Under35Qualification from '../components/Under35Qualification'
+import Under15Qualification from '../components/Under15Qualification'
+import Under05Qualification from '../components/Under05Qualification'
+import GoalsEvidence from '../components/GoalsEvidence'
 
 interface Props {
   matchId: number
@@ -60,6 +67,16 @@ export default function MatchIntelligencePage({ matchId, selectedPredictionId, o
         <Metric label="Data quality" value={`${data.data_quality_score.toFixed(0)}/100`} note={statusLabel(data.data_quality_status)} />
         <Metric label="Score" value={score} />
       </div>
+
+      <GoalsEvidence current={data.goals_evidence} prediction={lead} />
+      {data.predictions.filter(row => row.market === 'over_1.5').map(row => <OverGoalsQualification key={row.prediction_id} market="over_1.5" assessment={row.over15_qualification} />)}
+      {data.predictions.filter(row => row.market === 'over_2.5').map(row => <OverGoalsQualification key={row.prediction_id} market="over_2.5" assessment={row.over25_qualification} />)}
+      {data.predictions.filter(row => row.market === 'over_3.5').map(row => <OverGoalsQualification key={row.prediction_id} market="over_3.5" assessment={row.over35_qualification} />)}
+      {data.predictions.filter(row => row.market === 'over_4.5').map(row => <Over45Qualification key={row.prediction_id} assessment={row.over45_qualification} />)}
+      {data.predictions.filter(row => row.market === 'under_2.5').map(row => <Under25Qualification key={row.prediction_id} assessment={row.under25_qualification} />)}
+      {data.predictions.filter(row => row.market === 'under_3.5').map(row => <Under35Qualification key={row.prediction_id} assessment={row.under35_qualification} />)}
+      {data.predictions.filter(row => row.market === 'under_1.5').map(row => <Under15Qualification key={row.prediction_id} assessment={row.under15_qualification} />)}
+      {data.predictions.filter(row => row.market === 'under_0.5').map(row => <Under05Qualification key={row.prediction_id} assessment={row.under05_qualification} />)}
 
       <section className="evidence-card match-intelligence-evidence"><div className="evidence-title"><h2>Executive decision summary</h2><span>Snapshot-backed · no recalculation</span></div><div className="explainability-grid"><div><strong>Why consider it</strong>{lead?.recommendation_reasons.length ? <ul>{lead.recommendation_reasons.slice(0, 5).map(reason => <li key={reason}>{statusLabel(reason)}</li>)}</ul> : <span>No positive reason was persisted.</span>}</div><div><strong>Risks and unknowns</strong>{lead?.recommendation_risks.length ? <ul>{lead.recommendation_risks.slice(0, 5).map(risk => <li key={risk}>{statusLabel(risk)}</li>)}</ul> : <span>No additional risk code was persisted.</span>}</div></div></section>
 

@@ -1,11 +1,15 @@
 """Read-only league and team trends backed by completed match results."""
 
 from collections import defaultdict
+from datetime import datetime
+import re
+import unicodedata
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.api.security import require_pro_access
 from app.database import get_db
@@ -50,12 +54,111 @@ class LeagueSummary(BaseModel):
     xg_coverage_pct: float | None
 
 
+class MatchTrend(BaseModel):
+    kickoff_at: datetime
+    home_team: str
+    away_team: str
+    home_goals: int
+    away_goals: int
+
+
+class MatchSearchResult(MatchTrend):
+    competition: str
+    season: str
+    match_id: int
+
+
 class InsightsOut(BaseModel):
     competitions: list[CompetitionOption]
     competition_id: int | None
     season: str | None
     summary: LeagueSummary | None
     teams: list[TeamTrend]
+
+
+def _normalize_team_name(value: str) -> str:
+    normalized = unicodedata.normalize("NFD", value)
+    normalized = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", normalized.casefold()).split())
+
+
+def _team_name_matches_word(team_name: str, word: str) -> bool:
+    return word in _normalize_team_name(team_name).split()
+
+
+@router.get("/matches/search", response_model=list[MatchSearchResult])
+async def search_completed_matches(
+    query: str = Query(min_length=2, max_length=100),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_pro_access),
+):
+    query_words = _normalize_team_name(query).split()
+    if not query_words:
+        return []
+
+    team_ids_query = select(Match.home_team_id).where(
+        Match.status == MatchStatus.FINISHED,
+        Match.home_goals.is_not(None),
+        Match.away_goals.is_not(None),
+    ).union(
+        select(Match.away_team_id).where(
+            Match.status == MatchStatus.FINISHED,
+            Match.home_goals.is_not(None),
+            Match.away_goals.is_not(None),
+        )
+    )
+    team_rows = (await db.execute(
+        select(Team.id, Team.name).where(Team.id.in_(team_ids_query))
+    )).all()
+    matching_team_ids = [
+        {
+            team_id for team_id, team_name in team_rows
+            if _team_name_matches_word(team_name, word)
+        }
+        for word in query_words
+    ]
+    if any(not team_ids for team_ids in matching_team_ids):
+        return []
+
+    home_team = aliased(Team)
+    away_team = aliased(Team)
+    team_word_conditions = [
+        or_(Match.home_team_id.in_(team_ids), Match.away_team_id.in_(team_ids))
+        for team_ids in matching_team_ids
+    ]
+    rows = (await db.execute(
+        select(
+            Match.id,
+            Match.kickoff_at,
+            Match.season,
+            Competition.name,
+            home_team.name,
+            Match.home_goals,
+            Match.away_goals,
+            away_team.name,
+        )
+        .join(Competition, Competition.id == Match.competition_id)
+        .join(home_team, home_team.id == Match.home_team_id)
+        .join(away_team, away_team.id == Match.away_team_id)
+        .where(
+            Match.status == MatchStatus.FINISHED,
+            Match.home_goals.is_not(None),
+            Match.away_goals.is_not(None),
+            and_(*team_word_conditions),
+        )
+        .order_by(Match.kickoff_at.desc())
+        .limit(100)
+    )).all()
+    return [MatchSearchResult(
+        match_id=match_id,
+        kickoff_at=kickoff_at,
+        season=match_season,
+        competition=competition_name,
+        home_team=home_name,
+        home_goals=home_goals,
+        away_goals=away_goals,
+        away_team=away_name,
+    ) for match_id, kickoff_at, match_season, competition_name, home_name, home_goals, away_goals, away_name in rows]
 
 
 @router.get("", response_model=InsightsOut)

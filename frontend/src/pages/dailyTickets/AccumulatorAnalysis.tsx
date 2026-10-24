@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchAccaPrices, type AccaPrice, type SelectionSummary } from "../../lib/api";
 import "./AccumulatorAnalysis.css";
 import { selectionStatusLabel } from "./helpers";
+import { passesUnder05Value } from "./helpers";
 
 type TicketBand = { key: string; title: string; min: number; max: number; hint: string };
 type ScoredPick = { row: SelectionSummary; score: number; reasons: string[]; risks: string[] };
@@ -190,6 +191,15 @@ export function AccumulatorAnalysis({ rows, date }: { rows: SelectionSummary[]; 
       const eligible = picks.filter(({ row }) => {
         const age = ageHours(row.source_odds_at);
         return row.recommendation_status === "BET" && row.best_odds != null && row.best_odds > 1 &&
+          (row.market !== "over_1.5" || row.over15_qualification?.status === "QUALIFY") &&
+          (row.market !== "over_2.5" || row.over25_qualification?.status === "QUALIFY") &&
+          (row.market !== "over_3.5" || row.over35_qualification?.status === "QUALIFY") &&
+          (row.market !== "over_4.5" || row.over45_qualification?.status === "QUALIFY") &&
+          (row.market !== "under_2.5" || row.under25_qualification?.status === "QUALIFY") &&
+          (row.market !== "under_3.5" || row.under35_qualification?.status === "QUALIFY") &&
+          (row.market !== "under_1.5" || row.under15_qualification?.status === "QUALIFY") &&
+          (row.market !== "under_0.5" || row.under05_qualification?.status === "QUALIFY") &&
+          passesUnder05Value(row) &&
           row.data_quality_status === "good" && age != null && age <= 2 && (row.edge ?? 0) > 0 &&
           Date.parse(row.kickoff_at) > Date.now() &&
           row.match_status?.toLowerCase() === "scheduled" && !used.has(row.match_id);

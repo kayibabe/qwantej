@@ -40,12 +40,25 @@ from app.services.models import (
 )
 from app.services.models.ensemble import DEFAULT_WEIGHTS, Q_SCORE_WEIGHTS
 from app.services.decision_evidence import build_decision_evidence
+from app.services.over45 import load_recent_evidence, qualify_over45
+from app.services.under25 import initial_evidence, qualify_under25
+from app.services.under35 import qualify_under35
+from app.services.under15 import qualify_under15
+from app.services.over_goals import POLICIES as OVER_GOALS_POLICIES, initial_evidence as initial_over_evidence, qualify_over
+from app.services.total_goals_engine import (
+    SHARED_CALIBRATION_MARKET,
+    apply_shared_total_goals_calibration,
+    total_goals_distribution,
+)
+from app.services.under05 import qualify_under05
 
 logger = logging.getLogger(__name__)
 
 # Markets to score per match — spec §7, Appendix D
 TARGET_MARKETS: list[tuple[str, str]] = [
+    ("under_0.5", "under_0.5"),
     ("over_1.5", "over_1.5"),
+    ("under_1.5", "under_1.5"),
     ("over_2.5", "over_2.5"),
     ("under_2.5", "under_2.5"),
     ("over_3.5", "over_3.5"),
@@ -324,6 +337,8 @@ class ModelRunner:
 
         # Best odds per market from DB
         odds_map = await self._load_odds(match.id)
+        over45_evidence = await load_recent_evidence(self.db, match, datetime.now(timezone.utc))
+        under05_history = await load_recent_evidence(self.db, match, datetime.now(timezone.utc), sample_limit=15)
         # Pre-load form scores for both teams (reused across all markets)
         home_form = await self._team_form(match.id, match.home_team_id)
         away_form = await self._team_form(match.id, match.away_team_id)
@@ -336,6 +351,22 @@ class ModelRunner:
         expected_goals = expected_goals_proxy(home_team, away_team)
         if expected_goals is not None:
             xg_source = "rolling_goal_derived_expected_goals_proxy"
+        shared_goals_forecast = total_goals_distribution(*expected_goals) if expected_goals is not None else None
+        if shared_goals_forecast is not None:
+            shared_goals_forecast.update({
+                "forecast_id": f"tgf:{self.model_version}:{self._model_run.id if self._model_run else 'pending'}:{match.id}",
+                "match_id": match.id,
+                "model_run_id": self._model_run.id if self._model_run else None,
+                "model_version": self.model_version,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+            shared_calibration_profile = self._learning_profiles.get(SHARED_CALIBRATION_MARKET)
+            if shared_calibration_profile is not None:
+                shared_goals_forecast = apply_shared_total_goals_calibration(
+                    shared_goals_forecast, shared_calibration_profile
+                )
+        over45_evidence["shared_goals_forecast"] = shared_goals_forecast
+        over45_evidence["shared_distribution"] = shared_goals_forecast
 
         count = 0
         for market_key, market_label in TARGET_MARKETS:
@@ -482,6 +513,9 @@ class ModelRunner:
             feature_snapshot = {
                 "schema_version": "qwantej.model-features.v1",
                 "captured_at": decision_at.isoformat(),
+                "goals_evidence": over45_evidence,
+                "total_goals_baseline": shared_goals_forecast,
+                "shared_goals_forecast": shared_goals_forecast,
                 "market": market_key,
                 "model_inputs": {
                     "poisson": prob_inputs.poisson_prob,
@@ -533,6 +567,125 @@ class ModelRunner:
                     "bookmaker_count": bundle.bookmaker_count if bundle else 0,
                 },
             }
+
+            if market_key == "over_4.5":
+                over45_evidence["calibration"] = {
+                    "status": "promoted" if learning_profile else "unvalidated",
+                    "profile_id": learning_profile.id if learning_profile else None,
+                    "method": (learning_profile.calibrator or {}).get("type") if learning_profile else None,
+                    "checks": learning_profile.promotion_checks if learning_profile else {},
+                }
+                qualification = qualify_over45(ensemble.ensemble_probability, best_odds, over45_evidence)
+                feature_snapshot["over45_evidence"] = over45_evidence
+                feature_snapshot["over45_qualification"] = qualification
+                if qualification["status"] != "QUALIFY":
+                    decision_evidence["status"] = "PASS"
+                    decision_evidence["risks"].extend(qualification["reasons"])
+                decision_evidence["policy_version"] = qualification["policy_version"]
+
+            if market_key in OVER_GOALS_POLICIES:
+                evidence_key = {"over_1.5": "over15_evidence", "over_2.5": "over25_evidence",
+                                "over_3.5": "over35_evidence"}[market_key]
+                over_evidence = initial_over_evidence(over45_evidence)
+                over_evidence["shared_distribution"] = shared_goals_forecast
+                over_evidence["shared_goals_forecast"] = shared_goals_forecast
+                over_evidence["calibration"] = {
+                    "market": market_key,
+                    "status": "promoted" if learning_profile else "unvalidated",
+                    "profile_id": learning_profile.id if learning_profile else None,
+                    "method": (learning_profile.calibrator or {}).get("type") if learning_profile else None,
+                    "checks": learning_profile.promotion_checks if learning_profile else {},
+                }
+                qualification = qualify_over(market_key, ensemble.ensemble_probability, best_odds, over_evidence)
+                feature_snapshot[evidence_key] = over_evidence
+                feature_snapshot[f"{evidence_key.replace('_evidence', '_qualification')}"] = qualification
+                if qualification["status"] != "QUALIFY":
+                    decision_evidence["status"] = "PASS"
+                    decision_evidence["risks"].extend(qualification["reasons"])
+                decision_evidence["risks"].extend(qualification["warnings"])
+                decision_evidence["policy_version"] = qualification["policy_version"]
+
+            if market_key == "under_2.5":
+                under25_evidence = initial_evidence(over45_evidence)
+                under25_evidence["shared_goals_forecast"] = shared_goals_forecast
+                under25_evidence["calibration"] = {
+                    "status": "promoted" if learning_profile else "unvalidated",
+                    "profile_id": learning_profile.id if learning_profile else None,
+                    "method": (learning_profile.calibrator or {}).get("type") if learning_profile else None,
+                    "checks": learning_profile.promotion_checks if learning_profile else {},
+                }
+                qualification = qualify_under25(ensemble.ensemble_probability, best_odds, under25_evidence)
+                feature_snapshot["under25_evidence"] = under25_evidence
+                feature_snapshot["under25_qualification"] = qualification
+                if qualification["status"] != "QUALIFY":
+                    decision_evidence["status"] = "PASS"
+                    decision_evidence["risks"].extend(qualification["reasons"])
+                decision_evidence["policy_version"] = qualification["policy_version"]
+
+            if market_key == "under_3.5":
+                under35_evidence = initial_evidence(over45_evidence)
+                under35_evidence["shared_goals_forecast"] = shared_goals_forecast
+                under35_evidence["calibration"] = {
+                    "market": market_key,
+                    "status": "promoted" if learning_profile else "unvalidated",
+                    "profile_id": learning_profile.id if learning_profile else None,
+                    "method": (learning_profile.calibrator or {}).get("type") if learning_profile else None,
+                    "checks": learning_profile.promotion_checks if learning_profile else {},
+                }
+                qualification = qualify_under35(ensemble.ensemble_probability, best_odds, under35_evidence)
+                feature_snapshot["under35_evidence"] = under35_evidence
+                feature_snapshot["under35_qualification"] = qualification
+                if qualification["status"] != "QUALIFY":
+                    decision_evidence["status"] = "PASS"
+                    decision_evidence["risks"].extend(qualification["reasons"])
+                decision_evidence["risks"].extend(qualification["warnings"])
+                decision_evidence["policy_version"] = qualification["policy_version"]
+
+            if market_key == "under_1.5":
+                under15_evidence = initial_evidence(over45_evidence)
+                under15_evidence["shared_goals_forecast"] = shared_goals_forecast
+                under15_evidence["calibration"] = {
+                    "market": market_key,
+                    "status": "promoted" if learning_profile else "unvalidated",
+                    "profile_id": learning_profile.id if learning_profile else None,
+                    "method": (learning_profile.calibrator or {}).get("type") if learning_profile else None,
+                    "checks": learning_profile.promotion_checks if learning_profile else {},
+                }
+                if poisson_model and prob_inputs.poisson_prob is not None:
+                    zero = poisson_model.predict(match.home_team_id, match.away_team_id, "under_0.5")
+                    if zero is not None:
+                        under15_evidence["low_score_model"] = {
+                            "source": "poisson_dixon_coles_component", "calibrated": False,
+                            "zero_goals": zero,
+                            "exactly_one_goal": max(0.0, prob_inputs.poisson_prob - zero),
+                        }
+                qualification = qualify_under15(ensemble.ensemble_probability, best_odds, under15_evidence)
+                feature_snapshot["under15_evidence"] = under15_evidence
+                feature_snapshot["under15_qualification"] = qualification
+                if qualification["status"] != "QUALIFY":
+                    decision_evidence["status"] = "PASS"
+                    decision_evidence["risks"].extend(qualification["reasons"])
+                decision_evidence["risks"].extend(qualification["warnings"])
+                decision_evidence["policy_version"] = qualification["policy_version"]
+
+            if market_key == "under_0.5":
+                under05_evidence = initial_evidence(under05_history)
+                under05_evidence["shared_goals_forecast"] = shared_goals_forecast
+                under05_evidence["calibration"] = {
+                    "market": market_key,
+                    "status": "promoted" if learning_profile else "unvalidated",
+                    "profile_id": learning_profile.id if learning_profile else None,
+                    "method": (learning_profile.calibrator or {}).get("type") if learning_profile else None,
+                    "checks": learning_profile.promotion_checks if learning_profile else {},
+                }
+                qualification = qualify_under05(ensemble.ensemble_probability, best_odds, under05_evidence)
+                feature_snapshot["under05_evidence"] = under05_evidence
+                feature_snapshot["under05_qualification"] = qualification
+                if qualification["status"] != "QUALIFY":
+                    decision_evidence["status"] = "PASS"
+                    decision_evidence["risks"].extend(qualification["reasons"])
+                decision_evidence["risks"].extend(qualification["warnings"])
+                decision_evidence["policy_version"] = qualification["policy_version"]
 
             prediction = Prediction(
                 model_run_id=self._model_run.id if self._model_run else None,

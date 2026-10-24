@@ -1,9 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { fetchSelectionOdds, formatDate, formatKickoff, formatMarket, formatSelection, selectionRepeatsMarket, type OddsQuote } from '../lib/api'
 import GradeBadge from './GradeBadge'
+import Over45Qualification from './Over45Qualification'
+import OverGoalsQualification from './OverGoalsQualification'
+import Under25Qualification from './Under25Qualification'
+import Under35Qualification from './Under35Qualification'
+import Under15Qualification from './Under15Qualification'
+import Under05Qualification from './Under05Qualification'
+import type { Under05Qualification as Under05Assessment } from '../lib/api'
+import type { Under15Qualification as Under15Assessment } from '../lib/api'
+import type { Under35Qualification as Under35Assessment } from '../lib/api'
+import type { Under25Qualification as Under25Assessment } from '../lib/api'
+import type { Over45Qualification as Over45Assessment } from '../lib/api'
+import type { OverGoalsQualification as OverGoalsAssessment } from '../lib/api'
 import { useSortableRows } from './SortableTable'
 
 export interface DetailSelection {
+  over15_qualification?: OverGoalsAssessment | null
+  over25_qualification?: OverGoalsAssessment | null
+  over35_qualification?: OverGoalsAssessment | null
+  under05_qualification?: Under05Assessment | null
+  under15_qualification?: Under15Assessment | null
+  under35_qualification?: Under35Assessment | null
+  under25_qualification?: Under25Assessment | null
+  over45_qualification?: Over45Assessment | null
   selection_id?: number
   prediction_id: number
   match_id: number
@@ -231,6 +251,15 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
           {strength.cautions.length > 0 && <p className="decision-strength-note"><strong>Review before including:</strong> {strength.cautions.join(' · ')}.</p>}
           {strength.cautions.length === 0 && <p className="decision-strength-note positive"><strong>Passes the visible checks.</strong> Confirm the published odds before treating this as an acca leg.</p>}
         </section>
+
+        {selection.market === 'over_1.5' && <OverGoalsQualification market="over_1.5" assessment={selection.over15_qualification} />}
+        {selection.market === 'over_2.5' && <OverGoalsQualification market="over_2.5" assessment={selection.over25_qualification} />}
+        {selection.market === 'over_3.5' && <OverGoalsQualification market="over_3.5" assessment={selection.over35_qualification} />}
+        {selection.market === 'over_4.5' && <Over45Qualification assessment={selection.over45_qualification} />}
+        {selection.market === 'under_2.5' && <Under25Qualification assessment={selection.under25_qualification} />}
+        {selection.market === 'under_3.5' && <Under35Qualification assessment={selection.under35_qualification} />}
+        {selection.market === 'under_1.5' && <Under15Qualification assessment={selection.under15_qualification} />}
+        {selection.market === 'under_0.5' && <Under05Qualification assessment={selection.under05_qualification} />}
 
         <section className="explainability-card" aria-label="Recommendation explanation">
           <div className="evidence-title"><h3>Why this recommendation?</h3><span>Persisted decision evidence</span></div>

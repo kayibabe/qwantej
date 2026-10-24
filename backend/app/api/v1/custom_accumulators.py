@@ -171,7 +171,29 @@ async def _apply_payload(db: AsyncSession, row: CustomAccumulator, payload: Cust
     if len({match.id for _, match, _, _, _ in records}) != len(records):
         raise HTTPException(400, "An accumulator may contain only one selection per match")
     target = payload.target_date or row.target_date
-    for _, match, _, _, _ in records:
+    for prediction, match, _, _, _ in records:
+        if prediction.market in ("over_1.5", "over_2.5", "over_3.5"):
+            from app.services.over_goals import prediction_qualification as over_goals_qualification
+            assessment = over_goals_qualification(prediction)
+        else:
+            assessment = None
+        from app.services.over45 import prediction_qualification
+        if prediction.market == "over_4.5":
+            assessment = prediction_qualification(prediction)
+        if prediction.market == "under_0.5":
+            from app.services.under05 import prediction_qualification as under05_qualification
+            assessment = under05_qualification(prediction)
+        if prediction.market == "under_1.5":
+            from app.services.under15 import prediction_qualification as under15_qualification
+            assessment = under15_qualification(prediction)
+        if prediction.market == "under_2.5":
+            from app.services.under25 import prediction_qualification as under25_qualification
+            assessment = under25_qualification(prediction)
+        if prediction.market == "under_3.5":
+            from app.services.under35 import prediction_qualification as under35_qualification
+            assessment = under35_qualification(prediction)
+        if assessment and assessment["status"] != "QUALIFY":
+            raise HTTPException(400, "Total goals selection has not passed the qualification checks")
         if match.kickoff_at.date() != target:
             raise HTTPException(400, "All selections must belong to the accumulator date")
         if match.status != MatchStatus.SCHEDULED or match.kickoff_at <= datetime.now(match.kickoff_at.tzinfo):
