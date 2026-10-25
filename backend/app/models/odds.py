@@ -45,4 +45,12 @@ class OddsSnapshot(Base):
     selection: Mapped[str] = mapped_column(String(100), nullable=False)
     decimal_odds: Mapped[float] = mapped_column(Float, nullable=False)
     implied_probability: Mapped[float] = mapped_column(Float, nullable=False)
+    # Legacy captures remain NULL; new captures retain the raw provider mapping inputs.
+    source_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    provider_market_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    provider_selection_raw: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    provider_line_raw: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    market_catalog_version: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    market_contract_version: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    market_mapping_version: Mapped[str | None] = mapped_column(String(40), nullable=True)
     captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)

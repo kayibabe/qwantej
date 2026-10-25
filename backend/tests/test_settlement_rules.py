@@ -96,6 +96,7 @@ def test_catalogued_settlement_lines_match_supported_half_goal_contracts():
     )
     assert by_key["under_2.5"]["market_id"] == by_key["over_2.5"]["market_id"]
     assert by_key["under_2.5"]["qualification_probability_source"] == "shared_total_goals"
+    assert by_key["over_2.5"]["odds_source_mappings"][0]["mapping_version"] == "1.0.0"
     assert by_key["home_win"]["market_id"] == by_key["draw"]["market_id"]
 
 

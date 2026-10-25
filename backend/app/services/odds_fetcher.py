@@ -9,7 +9,11 @@ from app.models import (
     TicketSelection, TicketStatus,
 )
 from app.services.fixture_ingestor import APIFootballClient
-from app.services.market_catalog import API_FOOTBALL_BET_FAMILIES, map_api_football_value
+from app.services.market_catalog import (
+    API_FOOTBALL_BET_FAMILIES,
+    api_football_quote_provenance,
+    map_api_football_value,
+)
 from app.services import cache
 
 logger = logging.getLogger(__name__)
@@ -164,7 +168,16 @@ class LiveOddsFetcher:
                         if key in seen: continue
                         seen.add(key); opening_odd = float(opening.get(key, odd))
                         if previous.get(key) != odd or snapshot_unchanged:
-                            self.db.add(OddsSnapshot(match_id=match.id, bookmaker=name, market=market, selection=selection, decimal_odds=odd, implied_probability=round(1 / odd, 6), captured_at=captured_at))
+                            self.db.add(OddsSnapshot(
+                                match_id=match.id,
+                                bookmaker=name,
+                                market=market,
+                                selection=selection,
+                                decimal_odds=odd,
+                                implied_probability=round(1 / odd, 6),
+                                captured_at=captured_at,
+                                **api_football_quote_provenance(bet["id"], value, market),
+                            ))
                         self.db.add(Odds(match_id=match.id, bookmaker=name, market=market, selection=selection, decimal_odds=odd, implied_probability=round(1 / odd, 6), opening_odds=opening_odd, movement=round((odd - opening_odd) / opening_odd, 6), source_type="api_football", is_fallback=False, fetched_at=captured_at)); count += 1
         return count
 

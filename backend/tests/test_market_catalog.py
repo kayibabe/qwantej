@@ -3,6 +3,9 @@ import re
 import pytest
 
 from app.services.market_catalog import (
+    API_FOOTBALL_MAPPING_VERSION,
+    CATALOG_VERSION,
+    api_football_quote_provenance,
     market_catalog_payload,
     map_api_football_value,
 )
@@ -38,6 +41,7 @@ def test_odds_importer_uses_market_catalog_provider_ids():
     assert over_25["odds_source_mappings"] == [{
         "provider": "api_football",
         "provider_market_id": 5,
+        "mapping_version": API_FOOTBALL_MAPPING_VERSION,
         "selection_label_regex": r"(?i)^over\s*2[.,]5$",
         "line_fallback_field": "handicap",
     }]
@@ -51,6 +55,38 @@ def test_odds_importer_uses_market_catalog_provider_ids():
         row for row in catalog if row["legacy_key"] == "double_chance_1x"
     )
     assert double_chance["odds_source_mappings"][0]["provider_market_id"] == 12
+
+
+def test_api_football_snapshot_provenance_preserves_raw_mapping_inputs_and_versions():
+    provenance = api_football_quote_provenance(
+        5, {"value": "Over", "handicap": "2.5"}, "over_2.5",
+    )
+
+    assert provenance == {
+        "source_provider": "api_football",
+        "provider_market_id": 5,
+        "provider_selection_raw": "Over",
+        "provider_line_raw": "2.5",
+        "market_catalog_version": CATALOG_VERSION,
+        "market_contract_version": "1.0.0",
+        "market_mapping_version": API_FOOTBALL_MAPPING_VERSION,
+    }
+
+
+def test_odds_snapshot_model_exposes_additive_provenance_fields():
+    from app.models import OddsSnapshot
+
+    columns = set(OddsSnapshot.__table__.columns.keys())
+
+    assert {
+        "source_provider",
+        "provider_market_id",
+        "provider_selection_raw",
+        "provider_line_raw",
+        "market_catalog_version",
+        "market_contract_version",
+        "market_mapping_version",
+    } <= columns
 
 
 def test_catalog_does_not_imply_odds_coverage_for_unmapped_dnb():

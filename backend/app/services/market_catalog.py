@@ -153,6 +153,8 @@ API_FOOTBALL_BET_FAMILIES = {
     8: "both_teams_to_score",
     12: "double_chance",
 }
+CATALOG_VERSION = "1.0.0"
+API_FOOTBALL_MAPPING_VERSION = "1.0.0"
 
 SCORED_MARKETS = tuple(market for market in _SCORE_MARKETS if market.scored)
 SETTLEMENT_ONLY_MARKETS = (
@@ -182,6 +184,7 @@ def api_football_odds_mapping(market: MarketDefinition) -> dict | None:
         return {
             "provider": "api_football",
             "provider_market_id": 1,
+            "mapping_version": API_FOOTBALL_MAPPING_VERSION,
             "selection_labels": {
                 "home": ["Home"], "draw": ["Draw"], "away": ["Away"],
             }.get(market.selection_id, []),
@@ -194,6 +197,7 @@ def api_football_odds_mapping(market: MarketDefinition) -> dict | None:
         return {
             "provider": "api_football",
             "provider_market_id": 5,
+            "mapping_version": API_FOOTBALL_MAPPING_VERSION,
             "selection_label_regex": rf"(?i)^{market.selection_id}\s*{line_pattern}$",
             "line_fallback_field": "handicap",
         }
@@ -201,6 +205,7 @@ def api_football_odds_mapping(market: MarketDefinition) -> dict | None:
         return {
             "provider": "api_football",
             "provider_market_id": 8,
+            "mapping_version": API_FOOTBALL_MAPPING_VERSION,
             "selection_labels": [market.selection_id.title()],
         }
     if market.family == "double_chance":
@@ -213,9 +218,26 @@ def api_football_odds_mapping(market: MarketDefinition) -> dict | None:
             return {
                 "provider": "api_football",
                 "provider_market_id": 12,
+                "mapping_version": API_FOOTBALL_MAPPING_VERSION,
                 "selection_labels": aliases,
             }
     return None
+
+
+def api_football_quote_provenance(bet_id: int, value: dict, market_key: str) -> dict:
+    """Return source metadata for an accepted API-Football quote snapshot."""
+    definition = get_market_definition(market_key)
+    raw_selection = value.get("value")
+    raw_line = value.get("handicap")
+    return {
+        "source_provider": "api_football",
+        "provider_market_id": bet_id,
+        "provider_selection_raw": None if raw_selection is None else str(raw_selection),
+        "provider_line_raw": None if raw_line is None else str(raw_line),
+        "market_catalog_version": CATALOG_VERSION,
+        "market_contract_version": definition.contract_version if definition else None,
+        "market_mapping_version": API_FOOTBALL_MAPPING_VERSION,
+    }
 
 
 def map_api_football_value(bet_id: int, value: dict) -> tuple[str | None, str]:

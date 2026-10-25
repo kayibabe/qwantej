@@ -152,12 +152,13 @@ The UI now fetches this read-only catalogue at app startup and uses its
 shared formatter. Existing local labels remain the fallback if the catalogue
 request fails, and no stored keys or qualification rules change. Historical/API
 quote rows store the legacy market and selection keys, bookmaker, price, and
-timestamp; the mutable live
-quote row also stores a source type. Immutable odds snapshots do not currently
-store provider market ID, raw source label, or catalogue/mapping version.
-Historical CSV imports populate the quote table as fallbacks and do not create
-API quote snapshots. Richer historical provenance needs a separate additive
-schema and backfill proposal before it is used for point-in-time comparisons.
+timestamp; the mutable live quote row also stores a source type. Immutable
+snapshots now have additive fields for provider, provider market ID, raw
+selection/line, catalogue/contract versions, and mapping version. New API
+captures fill these fields; pre-migration snapshots remain NULL because their
+raw provider labels cannot be reconstructed reliably. Historical CSV imports
+populate the quote table as fallbacks and do not create API quote snapshots, so
+their actual source-as-of time remains unavailable for point-in-time comparisons.
 
 The shared joint-score implementation and its first detached replay are
 documented in
@@ -186,8 +187,9 @@ diagnosis and validation before it can support new decisions.
    settlement rules, and the currently used API-Football odds IDs now have
    machine-readable definitions, as does the current distinction between
    market-specific provisional and generic recommendation coverage. The UI
-   consumes the catalogue labels with its existing fallback. Finish the
-   historical-storage audit; keep current qualification behavior unchanged.
+    consumes catalogue labels with its existing fallback. New quote snapshots
+    retain source mapping provenance; legacy captures remain explicitly
+    incomplete. Keep current qualification behavior unchanged.
 2. **Validate the goal event layer.** Diagnose the current regulation-time joint
    home/away score probabilities, freeze candidate comparisons, and evaluate
    them chronologically before deriving additional score-based markets. Add
