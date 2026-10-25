@@ -9,6 +9,7 @@ model promotion.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import re
 
 
 @dataclass(frozen=True)
@@ -124,6 +125,16 @@ _SETTLEMENT_ONLY_MARKETS = (
     ),
 )
 
+# These are the provider market IDs the existing live odds importer reads.
+# Keep mappings explicit: unsupported bookmaker markets must not inherit a
+# superficially similar score-derived settlement contract.
+API_FOOTBALL_BET_FAMILIES = {
+    1: "match_result",
+    5: "total_goals",
+    8: "both_teams_to_score",
+    12: "double_chance",
+}
+
 SCORED_MARKETS = tuple(market for market in _SCORE_MARKETS if market.scored)
 SETTLEMENT_ONLY_MARKETS = (
     tuple(market for market in _SCORE_MARKETS if not market.scored)
@@ -146,9 +157,99 @@ def get_market_definition(value: str) -> MarketDefinition | None:
     return _MARKETS_BY_NORMALIZED_LEGACY_KEY.get(normalize_market_id(value))
 
 
+def api_football_odds_mapping(market: MarketDefinition) -> dict | None:
+    """Describe the current API-Football quote mapping for one selection."""
+    if market.family == "match_result":
+        return {
+            "provider": "api_football",
+            "provider_market_id": 1,
+            "selection_labels": {
+                "home": ["Home"], "draw": ["Draw"], "away": ["Away"],
+            }.get(market.selection_id, []),
+        }
+    if market.family == "total_goals":
+        line = f"{market.line:.1f}" if market.line is not None else None
+        if line is None:
+            return None
+        line_pattern = line.replace(".", "[.,]")
+        return {
+            "provider": "api_football",
+            "provider_market_id": 5,
+            "selection_label_regex": rf"(?i)^{market.selection_id}\s*{line_pattern}$",
+            "line_fallback_field": "handicap",
+        }
+    if market.family == "both_teams_to_score":
+        return {
+            "provider": "api_football",
+            "provider_market_id": 8,
+            "selection_labels": [market.selection_id.title()],
+        }
+    if market.family == "double_chance":
+        aliases = {
+            "home_or_draw": ["1X", "Home/Draw", "Home or Draw"],
+            "draw_or_away": ["X2", "Draw/Away", "Away or Draw"],
+            "either_team": ["12", "Home/Away", "Home or Away"],
+        }.get(market.selection_id)
+        if aliases is not None:
+            return {
+                "provider": "api_football",
+                "provider_market_id": 12,
+                "selection_labels": aliases,
+            }
+    return None
+
+
+def map_api_football_value(bet_id: int, value: dict) -> tuple[str | None, str]:
+    """Map supported API-Football bet values to registered legacy keys."""
+    label = str(value.get("value", "")).strip()
+    low = label.lower()
+    family = API_FOOTBALL_BET_FAMILIES.get(bet_id)
+    if family == "match_result":
+        market_key = {"home": "home_win", "draw": "draw", "away": "away_win"}.get(low)
+        definition = get_market_definition(market_key) if market_key else None
+        if definition and definition.family == family:
+            return definition.legacy_key, definition.legacy_key
+    elif family == "total_goals":
+        found = re.search(r"(over|under)\s*([0-9]+(?:[.,][0-9]+)?)", low)
+        direction = found.group(1) if found else low
+        point = found.group(2).replace(",", ".") if found else str(
+            value.get("handicap", "")
+        ).strip()
+        if direction in {"over", "under"} and point:
+            definition = get_market_definition(f"{direction}_{point}")
+            if definition and definition.family == family:
+                return definition.legacy_key, definition.legacy_key
+    elif family == "both_teams_to_score" and low in {"yes", "no"}:
+        key = f"btts_{low}"
+        definition = get_market_definition(key)
+        if definition:
+            return definition.legacy_key, definition.legacy_key
+    elif family == "double_chance":
+        normalized = low.replace(" ", "")
+        market_key = {
+            "1x": "double_chance_1x", "home/draw": "double_chance_1x",
+            "homeordraw": "double_chance_1x", "x2": "double_chance_x2",
+            "draw/away": "double_chance_x2", "awayordraw": "double_chance_x2",
+            "12": "double_chance_12", "home/away": "double_chance_12",
+            "homeoraway": "double_chance_12",
+        }.get(normalized)
+        definition = get_market_definition(market_key) if market_key else None
+        if definition:
+            return definition.legacy_key, definition.legacy_key
+    return None, label
+
+
 def market_catalog_payload() -> list[dict]:
     """Return JSON-friendly market contracts for diagnostics and future APIs."""
     return [
-        {**asdict(market), "required_events": list(market.required_events)}
+        {
+            **asdict(market),
+            "required_events": list(market.required_events),
+            "odds_source_mappings": (
+                [api_football_odds_mapping(market)]
+                if api_football_odds_mapping(market) is not None
+                else []
+            ),
+        }
         for market in ALL_MARKETS
     ]

@@ -1,6 +1,5 @@
 """Bookmaker odds ingestion from API-Football v3 /odds."""
 import logging
-import re
 from datetime import date, datetime, timedelta, timezone
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,10 +9,11 @@ from app.models import (
     TicketSelection, TicketStatus,
 )
 from app.services.fixture_ingestor import APIFootballClient
+from app.services.market_catalog import API_FOOTBALL_BET_FAMILIES, map_api_football_value
 from app.services import cache
 
 logger = logging.getLogger(__name__)
-BET_IDS = {1, 5, 8, 12}
+BET_IDS = set(API_FOOTBALL_BET_FAMILIES)
 CLOSING_REFRESH_HORIZON = timedelta(hours=3)
 CLOSING_REFRESH_INTERVAL = timedelta(minutes=15)
 CLOSING_REFRESH_LIMIT = 8
@@ -169,20 +169,7 @@ class LiveOddsFetcher:
         return count
 
 def _map_value(bet_id: int, value: dict) -> tuple[str | None, str]:
-    label = str(value.get("value", "")).strip(); low = label.lower()
-    if bet_id == 1:
-        mapped = {"home": "home_win", "draw": "draw", "away": "away_win"}.get(low); return mapped, mapped or low
-    if bet_id == 5:
-        found = re.search(r"(over|under)\s*([0-9]+(?:[.,][0-9]+)?)", low)
-        direction = found.group(1) if found else low
-        point = found.group(2).replace(",", ".") if found else str(value.get("handicap", "")).strip()
-        if direction in {"over", "under"} and point: return f"{direction}_{point}", f"{direction}_{point}"
-    if bet_id == 8 and low in {"yes", "no"}: return f"btts_{low}", f"btts_{low}"
-    if bet_id == 12:
-        normalized = low.replace(" ", "")
-        mapped = {"1x": "double_chance_1x", "home/draw": "double_chance_1x", "homeordraw": "double_chance_1x", "x2": "double_chance_x2", "draw/away": "double_chance_x2", "awayordraw": "double_chance_x2", "12": "double_chance_12", "home/away": "double_chance_12", "homeoraway": "double_chance_12"}.get(normalized)
-        return mapped, mapped or label
-    return None, label
+    return map_api_football_value(bet_id, value)
 
 
 def _map_outcome(market_key: str, outcome: dict, event: dict) -> tuple[str | None, str]:

@@ -134,9 +134,13 @@ model runner derives its scored targets from this registry, settlement dispatch
 reads the registered settlement rule, and `GET /api/v1/markets/catalog`
 exposes the machine-readable contracts. The catalog keeps 18 scored selections
 distinct from additional registered settlement-only goal lines and
-`double_chance_12`. Qualification policies, model adapters, odds mapping, and UI
-presentation still contain market-specific logic; the registry is a shared
-contract layer, not yet a single engine.
+`double_chance_12`. It now describes the API-Football bet IDs and selection
+labels used by the existing odds importer for 1X2, total goals, BTTS, and
+double chance; the importer delegates those mappings to the registry. DNB is
+registered for scoring and settlement, but has no odds mapping in this current
+provider path. Qualification policies, display logic, and historical odds
+storage still contain market-specific behavior, so the registry remains a
+shared contract layer, not yet a single engine.
 
 The shared joint-score implementation and its first detached replay are
 documented in
@@ -161,10 +165,10 @@ diagnosis and validation before it can support new decisions.
 
 ### Recommended implementation sequence
 
-1. **Complete the current catalogue integration.** The 18 scored selections
-   and registered settlement contracts now have machine-readable definitions.
-   Continue mapping qualification, odds, API, UI, and historical-storage paths;
-   keep current qualification behavior unchanged during that audit.
+1. **Complete the current catalogue integration.** The 18 scored selections,
+   settlement rules, and the currently used API-Football odds IDs now have
+   machine-readable definitions. Continue auditing qualification, UI, and
+   historical-storage paths; keep current qualification behavior unchanged.
 2. **Validate the goal event layer.** Diagnose the current regulation-time joint
    home/away score probabilities, freeze candidate comparisons, and evaluate
    them chronologically before deriving additional score-based markets. Add
