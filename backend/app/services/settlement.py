@@ -23,43 +23,44 @@ from app.models import (
     CustomAccumulatorStatus,
 )
 from app.models.bet import Bet, BetStatus
+from app.services.market_catalog import get_market_definition, normalize_market_id
 
 
 def evaluate_selection(market: str, home_goals: int, away_goals: int) -> SelectionResult:
     total = home_goals + away_goals
-    key = market.lower().replace(".", "_")
-    if key.startswith(("over_", "under_")):
-        try:
-            threshold = float(key.split("_", 1)[1].replace("_", "."))
-        except ValueError as exc:
-            raise ValueError(f"Unsupported totals market for settlement: {market}") from exc
-        won = total > threshold if key.startswith("over_") else total < threshold
+    key = normalize_market_id(market)
+    definition = get_market_definition(market)
+    if definition is None:
+        raise ValueError(f"Unsupported market for settlement: {market}")
+    if definition.settlement_rule in {"total_over", "total_under"}:
+        threshold = float(key.split("_", 1)[1].replace("_", "."))
+        won = total > threshold if definition.settlement_rule == "total_over" else total < threshold
         return SelectionResult.WON if won else SelectionResult.LOST
-    if key == "btts_yes":
+    if definition.settlement_rule == "btts_yes":
         return SelectionResult.WON if home_goals > 0 and away_goals > 0 else SelectionResult.LOST
-    if key == "btts_no":
+    if definition.settlement_rule == "btts_no":
         return SelectionResult.WON if home_goals == 0 or away_goals == 0 else SelectionResult.LOST
-    if key == "home_win":
+    if definition.settlement_rule == "home_win":
         return SelectionResult.WON if home_goals > away_goals else SelectionResult.LOST
-    if key == "draw":
+    if definition.settlement_rule == "draw":
         return SelectionResult.WON if home_goals == away_goals else SelectionResult.LOST
-    if key == "away_win":
+    if definition.settlement_rule == "away_win":
         return SelectionResult.WON if away_goals > home_goals else SelectionResult.LOST
-    if key == "double_chance_1x":
+    if definition.settlement_rule == "double_chance_1x":
         return SelectionResult.WON if home_goals >= away_goals else SelectionResult.LOST
-    if key == "double_chance_x2":
+    if definition.settlement_rule == "double_chance_x2":
         return SelectionResult.WON if away_goals >= home_goals else SelectionResult.LOST
-    if key == "double_chance_12":
+    if definition.settlement_rule == "double_chance_12":
         return SelectionResult.WON if home_goals != away_goals else SelectionResult.LOST
-    if key == "dnb_home":
+    if definition.settlement_rule == "dnb_home":
         if home_goals == away_goals:
             return SelectionResult.VOID
         return SelectionResult.WON if home_goals > away_goals else SelectionResult.LOST
-    if key == "dnb_away":
+    if definition.settlement_rule == "dnb_away":
         if home_goals == away_goals:
             return SelectionResult.VOID
         return SelectionResult.WON if away_goals > home_goals else SelectionResult.LOST
-    raise ValueError(f"Unsupported market for settlement: {market}")
+    raise ValueError(f"Unsupported settlement rule for market: {market}")
 
 
 class SettlementService:

@@ -30,10 +30,11 @@ from app.services.models import (
     ZINBModel,
     compute_ensemble,
     compute_q_score,
-    xg_market_probability,
 )
-from app.services.models.bayesian import _run_analytical, predict_market_from_posteriors
+from app.services.models.poisson_dc import joint_score_distribution
+from app.services.models.bayesian import _run_analytical
 from app.services.decision_evidence import build_decision_evidence
+from app.services.forecast_provenance import forecast_build_id
 
 
 TOTALS = (
@@ -220,14 +221,41 @@ class HistoricalTotalsBackfill:
             competition = competitions.get(match.competition_id)
             home_posterior = bayes.get(match.home_team_id)
             away_posterior = bayes.get(match.away_team_id)
+            predict_distribution = getattr(poisson, "predict_distribution", None)
+            poisson_distribution = (
+                predict_distribution(match.home_team_id, match.away_team_id)
+                if callable(predict_distribution) else None
+            )
+            xg_distribution = joint_score_distribution(expected[0], expected[1], rho=-0.05)
+            bayes_distribution = None
+            if home_posterior is not None and away_posterior is not None and competition is not None:
+                home_adv_factor = 1.0 + (competition.home_advantage_elo / 1500.0)
+                try:
+                    bayes_distribution = joint_score_distribution(
+                        home_posterior["attack_mean"] * away_posterior["defense_mean"] * home_adv_factor,
+                        away_posterior["attack_mean"] * home_posterior["defense_mean"],
+                        rho=-0.08,
+                    )
+                except (KeyError, TypeError, ValueError):
+                    bayes_distribution = None
+            score_distribution_snapshots = {
+                "poisson_dixon_coles": poisson_distribution.snapshot("poisson_dixon_coles")
+                if poisson_distribution else None,
+                "xg": xg_distribution.snapshot("xg"),
+                "bayesian": bayes_distribution.snapshot("bayesian")
+                if bayes_distribution else None,
+            }
 
             for market in ALL_MARKETS:
                 if (match.id, market) in existing:
                     skipped["already_backfilled"] += 1
                     continue
                 poisson_probability = (
-                    poisson.predict(match.home_team_id, match.away_team_id, market)
-                    if poisson is not None else None
+                    poisson_distribution.probability(market)
+                    if poisson_distribution is not None
+                    else poisson.predict(match.home_team_id, match.away_team_id, market)
+                    if poisson is not None
+                    else None
                 )
                 if poisson_probability is None:
                     skipped["missing_poisson_parameters"] += 1
@@ -239,21 +267,11 @@ class HistoricalTotalsBackfill:
                         over_probability if market.startswith("over_")
                         else 1.0 - over_probability
                     )
-                bayes_probability = None
-                if home_posterior is not None and away_posterior is not None and competition is not None:
-                    home_adv_factor = 1.0 + (competition.home_advantage_elo / 1500.0)
-                    try:
-                        bayes_probability = predict_market_from_posteriors(
-                            home_posterior["attack_mean"],
-                            home_posterior["defense_mean"],
-                            away_posterior["attack_mean"],
-                            away_posterior["defense_mean"],
-                            home_adv_factor,
-                            market,
-                        )
-                    except Exception:
-                        bayes_probability = None
-                xg_probability = xg_market_probability(expected[0], expected[1], market)
+                bayes_probability = (
+                    bayes_distribution.probability(market)
+                    if bayes_distribution is not None else None
+                )
+                xg_probability = xg_distribution.probability(market)
                 ensemble = compute_ensemble(ModelInputs(
                     poisson_prob=poisson_probability,
                     zinb_prob=zinb_probability,
@@ -307,8 +325,10 @@ class HistoricalTotalsBackfill:
                     data_quality_snapshot={"historical_backfill": True, "as_of_at": input_as_of.isoformat()},
                     feature_snapshot={
                         "schema_version": "qwantej.model-features.v1",
+                        "forecast_build_id": forecast_build_id(),
                         "captured_at": input_as_of.isoformat(),
                         "market": market,
+                        "joint_score_distributions": score_distribution_snapshots,
                         "context": {
                             "expected_goals": [expected[0], expected[1]],
                             "xg_source": "point_in_time_rolling_goal_history",

@@ -9,6 +9,7 @@ from app.services.models.poisson_dc import (
     score_matrix,
     predict_market,
     PoissonDixonColes,
+    joint_score_distribution,
 )
 from app.services.models.elo import (
     expected_score,
@@ -33,6 +34,27 @@ from app.services.models.zinb import should_use_zinb
 def test_score_matrix_sums_to_one():
     mat = score_matrix(lam=1.5, mu=1.0)
     assert abs(mat.sum() - 1.0) < 0.01
+
+
+def test_joint_score_distribution_adapters_match_market_probabilities():
+    from typing import get_args
+    from app.services.models.poisson_dc import Market
+
+    lam, mu, rho = 1.7, 0.9, -0.07
+    distribution = joint_score_distribution(lam, mu, rho)
+    assert distribution.matrix.sum() == pytest.approx(1.0)
+    assert not distribution.matrix.flags.writeable
+    for market in get_args(Market):
+        assert distribution.probability(market) == pytest.approx(
+            predict_market(lam, mu, market, rho)
+        )
+    snapshot = distribution.snapshot("test")
+    assert snapshot["scope"] == "regulation"
+    assert snapshot["parameters"] == {
+        "home_rate": lam,
+        "away_rate": mu,
+        "dixon_coles_rho": rho,
+    }
 
 
 def test_over_15_plus_under_15_equals_one():
@@ -74,8 +96,11 @@ def test_poisson_dc_fit_predict():
     model = PoissonDixonColes()
     model.fit(historical)
     prob = model.predict(1, 2, "over_1.5")
+    distribution = model.predict_distribution(1, 2)
     assert prob is not None
     assert 0.0 <= prob <= 1.0
+    assert distribution is not None
+    assert distribution.probability("over_1.5") == pytest.approx(prob)
 
 
 # ---------------------------------------------------------------------------

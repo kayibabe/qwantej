@@ -19,6 +19,7 @@ from app.api.v1 import (
     match_favorites,
     match_filters,
     insights,
+    markets,
 )
 from app.api import auth, billing
 
@@ -46,3 +47,4 @@ router.include_router(sweet_spot.router)
 router.include_router(match_favorites.router)
 router.include_router(match_filters.router)
 router.include_router(insights.router)
+router.include_router(markets.router)

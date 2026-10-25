@@ -30,7 +30,6 @@ from app.models import (
 from app.services.models import (
     PoissonDixonColes,
     elo_to_win_probabilities,
-    xg_market_probability,
     compute_ensemble,
     compute_q_score,
     ModelInputs,
@@ -51,29 +50,15 @@ from app.services.total_goals_engine import (
     total_goals_distribution,
 )
 from app.services.under05 import qualify_under05
+from app.services.market_catalog import SCORED_MARKETS
+from app.services.models.poisson_dc import joint_score_distribution
+from app.services.forecast_provenance import forecast_build_id
 
 logger = logging.getLogger(__name__)
 
 # Markets to score per match — spec §7, Appendix D
 TARGET_MARKETS: list[tuple[str, str]] = [
-    ("under_0.5", "under_0.5"),
-    ("over_1.5", "over_1.5"),
-    ("under_1.5", "under_1.5"),
-    ("over_2.5", "over_2.5"),
-    ("under_2.5", "under_2.5"),
-    ("over_3.5", "over_3.5"),
-    ("under_3.5", "under_3.5"),
-    ("over_4.5", "over_4.5"),
-    ("under_4.5", "under_4.5"),
-    ("btts_yes", "btts_yes"),
-    ("btts_no", "btts_no"),
-    ("home_win", "home_win"),
-    ("draw", "draw"),
-    ("away_win", "away_win"),
-    ("double_chance_1x", "double_chance_1x"),
-    ("double_chance_x2", "double_chance_x2"),
-    ("dnb_home", "dnb_home"),
-    ("dnb_away", "dnb_away"),
+    (market.legacy_key, market.legacy_key) for market in SCORED_MARKETS
 ]
 
 MINIMUM_ACTIVE_MODELS = 3
@@ -368,15 +353,46 @@ class ModelRunner:
         over45_evidence["shared_goals_forecast"] = shared_goals_forecast
         over45_evidence["shared_distribution"] = shared_goals_forecast
 
+        # Build each joint score distribution once per fixture, then adapt it
+        # into all compatible market probabilities below. The qualification
+        # policies still choose their separately validated probability source.
+        poisson_model = self._poisson_models.get(match.competition_id) or self._poisson_model
+        poisson_distribution = (
+            poisson_model.predict_distribution(match.home_team_id, match.away_team_id)
+            if poisson_model else None
+        )
+        xg_distribution = None
+        if expected_goals is not None:
+            xg_distribution = joint_score_distribution(
+                max(0.01, expected_goals[0]), max(0.01, expected_goals[1]), rho=-0.05
+            )
+        bayes_distribution = None
+        home_posterior = self._bayesian_posteriors.get(match.home_team_id)
+        away_posterior = self._bayesian_posteriors.get(match.away_team_id)
+        if home_posterior is not None and away_posterior is not None:
+            try:
+                home_adv_factor = 1.0 + (competition.home_advantage_elo / 1500.0)
+                bayes_distribution = joint_score_distribution(
+                    home_posterior["attack_mean"] * away_posterior["defense_mean"] * home_adv_factor,
+                    away_posterior["attack_mean"] * home_posterior["defense_mean"],
+                    rho=-0.08,
+                )
+            except (KeyError, TypeError, ValueError):
+                bayes_distribution = None
+        score_distribution_snapshots = {
+            "poisson_dixon_coles": poisson_distribution.snapshot("poisson_dixon_coles")
+            if poisson_distribution else None,
+            "xg": xg_distribution.snapshot("xg") if xg_distribution else None,
+            "bayesian": bayes_distribution.snapshot("bayesian") if bayes_distribution else None,
+        }
+
         count = 0
         for market_key, market_label in TARGET_MARKETS:
             prob_inputs = ModelInputs()
 
             # Poisson-DC
-            poisson_model = self._poisson_models.get(match.competition_id) or self._poisson_model
-            if poisson_model:
-                prob = poisson_model.predict(match.home_team_id, match.away_team_id, market_key)
-                prob_inputs.poisson_prob = prob
+            if poisson_distribution:
+                prob_inputs.poisson_prob = poisson_distribution.probability(market_key)
 
             # ZINB is intentionally conditional and currently contributes only
             # to total-goals markets, which are supported by its fitted PMF.
@@ -403,32 +419,13 @@ class ModelRunner:
 
             # Bayesian parameters belong to this run's pre-match fit; legacy
             # mutable team estimates do not identify their representation.
-            home_posterior = self._bayesian_posteriors.get(match.home_team_id)
-            away_posterior = self._bayesian_posteriors.get(match.away_team_id)
-            if home_posterior is not None and away_posterior is not None:
-                from app.services.models.bayesian import predict_market_from_posteriors
-                try:
-                    # home_advantage is a multiplicative factor ~1.1–1.3 in Poisson space
-                    home_adv_factor = 1.0 + (competition.home_advantage_elo / 1500.0)
-                    prob_inputs.bayes_prob = predict_market_from_posteriors(
-                        home_posterior["attack_mean"],
-                        home_posterior["defense_mean"],
-                        away_posterior["attack_mean"],
-                        away_posterior["defense_mean"],
-                        home_adv_factor,
-                        market_key,
-                    )
-                except Exception:
-                    pass
+            if bayes_distribution is not None:
+                prob_inputs.bayes_prob = bayes_distribution.probability(market_key)
 
             # xG model
             if expected_goals is not None:
-                try:
-                    prob_inputs.xg_prob = xg_market_probability(
-                        expected_goals[0], expected_goals[1], market_key  # type: ignore[arg-type]
-                    )
-                except Exception:
-                    pass
+                if xg_distribution is not None:
+                    prob_inputs.xg_prob = xg_distribution.probability(market_key)
 
             # Need at least one model probability
             active_probs = [p for p in [
@@ -512,10 +509,12 @@ class ModelRunner:
             decision_at = datetime.now(timezone.utc)
             feature_snapshot = {
                 "schema_version": "qwantej.model-features.v1",
+                "forecast_build_id": forecast_build_id(),
                 "captured_at": decision_at.isoformat(),
                 "goals_evidence": over45_evidence,
                 "total_goals_baseline": shared_goals_forecast,
                 "shared_goals_forecast": shared_goals_forecast,
+                "joint_score_distributions": score_distribution_snapshots,
                 "market": market_key,
                 "model_inputs": {
                     "poisson": prob_inputs.poisson_prob,

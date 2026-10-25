@@ -34,6 +34,34 @@ class TeamParams:
     defense: float = 1.0
 
 
+@dataclass(frozen=True)
+class JointScoreDistribution:
+    """Point-in-time joint probability mass over regulation-time scorelines."""
+
+    matrix: np.ndarray
+    home_rate: float
+    away_rate: float
+    rho: float
+
+    def probability(self, market: Market) -> float:
+        return probability_from_score_matrix(self.matrix, market)
+
+    def snapshot(self, source: str) -> dict:
+        """Compact provenance sufficient to reconstruct this distribution."""
+        return {
+            "schema_version": "qwantej.joint-score-distribution.v1",
+            "source": source,
+            "scope": "regulation",
+            "score_support": [0, MAX_GOALS],
+            "tail_policy": "truncate_and_renormalize",
+            "parameters": {
+                "home_rate": self.home_rate,
+                "away_rate": self.away_rate,
+                "dixon_coles_rho": self.rho,
+            },
+        }
+
+
 def _tau(x: int, y: int, lam: float, mu: float, rho: float) -> float:
     """Dixon-Coles correction factor for low-scoring matches."""
     if x == 0 and y == 0:
@@ -71,6 +99,62 @@ def score_matrix(lam: float, mu: float, rho: float = -0.10) -> np.ndarray:
     return mat
 
 
+def joint_score_distribution(
+    lam: float, mu: float, rho: float = -0.10
+) -> JointScoreDistribution:
+    """Build one normalized joint score distribution for a model component."""
+    matrix = score_matrix(lam, mu, rho)
+    matrix.setflags(write=False)
+    return JointScoreDistribution(matrix, float(lam), float(mu), float(rho))
+
+
+def probability_from_score_matrix(matrix: np.ndarray, market: Market) -> float:
+    """Adapt a joint score matrix into a supported score-derived market."""
+    if market == "home_win":
+        return float(np.tril(matrix, k=-1).sum())
+    if market == "draw":
+        return float(np.trace(matrix))
+    if market == "away_win":
+        return float(np.triu(matrix, k=1).sum())
+
+    for threshold in (0.5, 1.5, 2.5, 3.5, 4.5):
+        if market == f"over_{threshold}":
+            total = sum(
+                matrix[home_goals, away_goals]
+                for home_goals in range(MAX_GOALS + 1)
+                for away_goals in range(MAX_GOALS + 1)
+                if home_goals + away_goals > threshold
+            )
+            return float(total)
+        if market == f"under_{threshold}":
+            total = sum(
+                matrix[home_goals, away_goals]
+                for home_goals in range(MAX_GOALS + 1)
+                for away_goals in range(MAX_GOALS + 1)
+                if home_goals + away_goals < threshold
+            )
+            return float(total)
+
+    if market == "btts_yes":
+        return float(matrix[1:, 1:].sum())
+    if market == "btts_no":
+        return float(1.0 - matrix[1:, 1:].sum())
+    if market == "double_chance_1x":
+        return float(np.tril(matrix, k=-1).sum() + np.trace(matrix))
+    if market == "double_chance_x2":
+        return float(np.triu(matrix, k=1).sum() + np.trace(matrix))
+    if market == "double_chance_12":
+        return float(np.tril(matrix, k=-1).sum() + np.triu(matrix, k=1).sum())
+    if market in ("dnb_home", "dnb_away"):
+        p_home = float(np.tril(matrix, k=-1).sum())
+        p_away = float(np.triu(matrix, k=1).sum())
+        if p_home + p_away <= 0:
+            return 0.5
+        return p_home / (p_home + p_away) if market == "dnb_home" else p_away / (p_home + p_away)
+
+    raise ValueError(f"Unknown market: {market}")
+
+
 def predict_market(
     lam: float,
     mu: float,
@@ -78,56 +162,7 @@ def predict_market(
     rho: float = -0.10,
 ) -> float:
     """Compute probability for a given market from Poisson parameters."""
-    mat = score_matrix(lam, mu, rho)
-
-    if market == "home_win":
-        return float(np.tril(mat, k=-1).sum())
-    if market == "draw":
-        return float(np.trace(mat))
-    if market == "away_win":
-        return float(np.triu(mat, k=1).sum())
-
-    # Over / Under total goals
-    for threshold in (0.5, 1.5, 2.5, 3.5, 4.5):
-        if market == f"over_{threshold}":
-            # P(home + away > threshold)
-            total_prob = 0.0
-            for i in range(MAX_GOALS + 1):
-                for j in range(MAX_GOALS + 1):
-                    if i + j > threshold:
-                        total_prob += mat[i, j]
-            return total_prob
-        if market == f"under_{threshold}":
-            total_prob = 0.0
-            for i in range(MAX_GOALS + 1):
-                for j in range(MAX_GOALS + 1):
-                    if i + j < threshold:
-                        total_prob += mat[i, j]
-            return total_prob
-
-    if market == "btts_yes":
-        return float(mat[1:, 1:].sum())
-    if market == "btts_no":
-        return float(1.0 - mat[1:, 1:].sum())
-
-    if market == "double_chance_1x":
-        return float(np.tril(mat, k=-1).sum() + np.trace(mat))
-    if market == "double_chance_x2":
-        return float(np.triu(mat, k=1).sum() + np.trace(mat))
-    if market == "double_chance_12":
-        return float(np.tril(mat, k=-1).sum() + np.triu(mat, k=1).sum())
-
-    if market == "dnb_home":
-        # Home win + stake returned on draw → probability of home win normalised over non-draw
-        p_home = float(np.tril(mat, k=-1).sum())
-        p_away = float(np.triu(mat, k=1).sum())
-        return p_home / (p_home + p_away) if (p_home + p_away) > 0 else 0.5
-    if market == "dnb_away":
-        p_home = float(np.tril(mat, k=-1).sum())
-        p_away = float(np.triu(mat, k=1).sum())
-        return p_away / (p_home + p_away) if (p_home + p_away) > 0 else 0.5
-
-    raise ValueError(f"Unknown market: {market}")
+    return probability_from_score_matrix(score_matrix(lam, mu, rho), market)
 
 
 class PoissonDixonColes:
@@ -317,6 +352,13 @@ class PoissonDixonColes:
 
     def predict(self, home_team_id: int, away_team_id: int, market: Market) -> float | None:
         """Return market probability or None if either team has no parameters."""
+        distribution = self.predict_distribution(home_team_id, away_team_id)
+        return distribution.probability(market) if distribution is not None else None
+
+    def predict_distribution(
+        self, home_team_id: int, away_team_id: int
+    ) -> JointScoreDistribution | None:
+        """Return the shared score distribution for one fixture."""
         if not self._fitted:
             raise RuntimeError("Model not fitted — call fit() first")
 
@@ -327,5 +369,4 @@ class PoissonDixonColes:
 
         lam = home_p.attack * away_p.defense * self.home_advantage
         mu = away_p.attack * home_p.defense
-        probability = predict_market(lam, mu, market, self.rho)
-        return max(0.0, min(1.0, probability))
+        return joint_score_distribution(lam, mu, self.rho)

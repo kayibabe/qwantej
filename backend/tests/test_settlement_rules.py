@@ -61,6 +61,52 @@ def test_every_modelled_market_is_settleable():
     assert unsettleable == [], f"markets with no settlement rule: {unsettleable}"
 
 
+def test_scored_market_catalog_matches_model_runner_targets():
+    from app.services.market_catalog import SCORED_MARKETS, SETTLEMENT_ONLY_MARKETS
+    from app.services.model_runner import TARGET_MARKETS
+
+    assert len(SCORED_MARKETS) == 18
+    assert TARGET_MARKETS == [(market.legacy_key, market.legacy_key) for market in SCORED_MARKETS]
+    assert all(market.scored for market in SCORED_MARKETS)
+    assert all(not market.scored for market in SETTLEMENT_ONLY_MARKETS)
+    assert "double_chance_12" in {market.legacy_key for market in SETTLEMENT_ONLY_MARKETS}
+
+
+def test_catalogued_settlement_lines_match_supported_half_goal_contracts():
+    from app.services.market_catalog import ALL_MARKETS, market_catalog_payload
+
+    for market in ALL_MARKETS:
+        # These inputs exercise every registered rule without relying on a
+        # particular outcome being a winner.
+        assert evaluate_selection(market.legacy_key, 2, 1) in {
+            SelectionResult.WON, SelectionResult.LOST, SelectionResult.VOID,
+        }
+
+    with pytest.raises(ValueError, match="Unsupported market"):
+        evaluate_selection("over_2.25", 2, 1)
+
+    payload = market_catalog_payload()
+    keys = [market["legacy_key"] for market in payload]
+    assert len(keys) == len(set(keys))
+    assert all(market["contract_version"] for market in payload)
+    assert all(market["required_events"] == ["full_time_score"] for market in payload)
+    by_key = {market["legacy_key"]: market for market in payload}
+    assert (by_key["over_2.5"]["market_id"], by_key["over_2.5"]["selection_id"]) == (
+        "total_goals_2.5", "over",
+    )
+    assert by_key["under_2.5"]["market_id"] == by_key["over_2.5"]["market_id"]
+    assert by_key["under_2.5"]["qualification_probability_source"] == "shared_total_goals"
+    assert by_key["home_win"]["market_id"] == by_key["draw"]["market_id"]
+
+
+def test_read_only_market_catalog_endpoint_exposes_registry():
+    from app.api.v1.markets import get_market_catalog
+
+    payload = get_market_catalog()
+    assert payload["catalog_version"] == "1.0.0"
+    assert len(payload["markets"]) > 18
+
+
 class _Rows:
     def __init__(self, rows):
         self.rows = rows
