@@ -147,6 +147,19 @@ marked `generic_recommendation_only`, and settlement-only contracts are marked
 `settlement_only`. These are descriptive labels; provisional policy IDs do not
 mean the policy is calibrated, promoted, or eligible to select a pick.
 
+The consumer audit found two remaining integration boundaries. Frontend pages
+still format legacy market keys through local label helpers; they do not yet
+read display labels from the catalogue endpoint. This preserves current UI
+behavior, but means presentation labels can drift from contract metadata.
+Historical/API quote rows store the legacy market and selection keys, bookmaker,
+price, and timestamp; the mutable live quote row also stores a source type.
+Immutable odds snapshots do not currently store provider market ID, raw source
+label, or catalogue/mapping version. Historical CSV imports populate the quote
+table as fallbacks and do not create API quote snapshots. Future UI integration
+can consume catalogue labels without changing the stored keys. Richer historical
+provenance needs a separate additive schema and backfill proposal before it is
+used for point-in-time comparisons.
+
 The shared joint-score implementation and its first detached replay are
 documented in
 `docs/JOINT_SCORE_DISTRIBUTION_RESEARCH_2026-10-24.md`. Preliminary raw
