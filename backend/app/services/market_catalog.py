@@ -24,6 +24,8 @@ class MarketDefinition:
     required_events: tuple[str, ...]
     probability_source: str
     qualification_probability_source: str | None = None
+    qualification_policy_id: str | None = None
+    qualification_mode: str = "generic_recommendation_only"
     scored: bool = True
     line: float | None = None
     contract_version: str = "1.0.0"
@@ -36,6 +38,16 @@ _SCORED_TOTALS = (
 _SHARED_TOTAL_QUALIFICATION_MARKETS = {
     "under_0.5", "over_1.5", "under_1.5", "over_2.5", "under_2.5",
     "over_3.5", "under_3.5", "over_4.5",
+}
+_TOTAL_QUALIFICATION_POLICY_IDS = {
+    "under_0.5": "under05-v1-provisional",
+    "over_1.5": "over15-v1-provisional",
+    "under_1.5": "under15-v1-provisional",
+    "over_2.5": "over25-v1-provisional",
+    "under_2.5": "under25-v1-provisional",
+    "over_3.5": "over35-v1-provisional",
+    "under_3.5": "under35-v1-provisional",
+    "over_4.5": "over45-v1-provisional",
 }
 
 
@@ -62,6 +74,13 @@ def _total_goal_markets() -> tuple[MarketDefinition, ...]:
                     "shared_total_goals"
                     if market_id in _SHARED_TOTAL_QUALIFICATION_MARKETS
                     else None
+                ),
+                qualification_policy_id=_TOTAL_QUALIFICATION_POLICY_IDS.get(market_id),
+                qualification_mode=(
+                    "market_specific_provisional"
+                    if market_id in _TOTAL_QUALIFICATION_POLICY_IDS
+                    else "generic_recommendation_only" if market_id in scored
+                    else "settlement_only"
                 ),
                 scored=market_id in scored,
                 line=line,
@@ -121,7 +140,7 @@ _SETTLEMENT_ONLY_MARKETS = (
     MarketDefinition(
         "double_chance_full_time", "either_team", "double_chance_12", "double_chance",
         "Either team to win", "regulation", "double_chance_12", ("full_time_score",),
-        "model_ensemble", scored=False,
+        "model_ensemble", qualification_mode="settlement_only", scored=False,
     ),
 )
 

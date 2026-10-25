@@ -140,7 +140,12 @@ double chance; the importer delegates those mappings to the registry. DNB is
 registered for scoring and settlement, but has no odds mapping in this current
 provider path. Qualification policies, display logic, and historical odds
 storage still contain market-specific behavior, so the registry remains a
-shared contract layer, not yet a single engine.
+shared contract layer, not yet a single engine. The catalogue also reports
+qualification coverage: eight scored total-goal selections point to their
+market-specific provisional policy versions, ten other scored selections are
+marked `generic_recommendation_only`, and settlement-only contracts are marked
+`settlement_only`. These are descriptive labels; provisional policy IDs do not
+mean the policy is calibrated, promoted, or eligible to select a pick.
 
 The shared joint-score implementation and its first detached replay are
 documented in
@@ -167,8 +172,10 @@ diagnosis and validation before it can support new decisions.
 
 1. **Complete the current catalogue integration.** The 18 scored selections,
    settlement rules, and the currently used API-Football odds IDs now have
-   machine-readable definitions. Continue auditing qualification, UI, and
-   historical-storage paths; keep current qualification behavior unchanged.
+   machine-readable definitions, as does the current distinction between
+   market-specific provisional and generic recommendation coverage. Continue
+   auditing UI and historical-storage paths; keep current qualification
+   behavior unchanged.
 2. **Validate the goal event layer.** Diagnose the current regulation-time joint
    home/away score probabilities, freeze candidate comparisons, and evaluate
    them chronologically before deriving additional score-based markets. Add
