@@ -156,12 +156,30 @@ parameters were activated or written to Qwantej.
 
 The evaluator can reconstruct truncated-matrix expected home and away goals
 from the saved Poisson-Dixon-Coles parameters, then compare those means with
-finished scores overall and by competition. The current stored model-run and
-historical-backfill rows contain no `joint_score_distributions` parameter
-snapshots (0 of 1,111 and 0 of 16,471 matches respectively), so the rate-level
-diagnostic is currently unavailable. Newly produced forecasts will carry
-these parameters in their feature snapshots; this report did not trigger a
-new operational model run or write forecasts to the database.
+finished scores overall and by competition. At this report's cutoff, the
+stored model-run and historical-backfill rows contained no
+`joint_score_distributions` parameter snapshots (0 of 1,111 and 0 of 16,471
+matches respectively), so the rate-level diagnostic was unavailable. The
+later prospective capture check is recorded below.
+
+## Prospective snapshot capture check (2026-10-25)
+
+A read-only check of the naturally produced prediction snapshots found 1,332
+market forecasts across 74 unique fixtures carrying
+`joint_score_distributions`. All 74 fixtures were still scheduled, with
+kickoffs from 2026-10-25 11:00 UTC through 21:05 UTC; none had a completed
+outcome at the check time (2026-10-25 05:37 UTC). The forecasts were captured
+at 2026-10-25 04:04 UTC, before those kickoffs.
+
+This establishes that prospective feature snapshots are now being retained.
+It does not yet provide a forward scoring sample: Brier score, log loss,
+calibration, and paired baseline comparisons are unavailable until outcomes
+arrive. Keep the cohort frozen by its stored prediction and feature snapshot;
+do not replace it with a later forecast or backfill an as-of time. Once matches
+resolve, evaluate by unique fixture/market, compare only with a predeclared
+chronological baseline, and keep it separate from the retrospective replays
+above. The capture should remain shadow research and does not alter
+qualification or promotion gates.
 
 ## Limits and next research
 
