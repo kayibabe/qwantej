@@ -23,7 +23,7 @@ import type { MatchDisplayState } from "./types";
 import { useFavoriteMatches } from "./useFavoriteMatches";
 
 type MatchSortKey = "match" | "kickoff" | "league" | "q" | "markets" | "spread" | "edge";
-const MATCH_STATUSES: MatchDisplayState[] = ["finished", "live", "scheduled", "postponed", "cancelled"];
+const MATCH_STATUSES: MatchDisplayState[] = ["finished", "live", "scheduled", "postponed", "cancelled", "abandoned", "awarded"];
 const MATCH_SORT_KEYS: MatchSortKey[] = ["match", "kickoff", "league", "q", "markets", "spread", "edge"];
 
 function matchUrlParam(name: string) {
@@ -346,7 +346,7 @@ export function AllMatches({
       counts[matchDisplayState(selections[0])] += 1;
       return counts;
     },
-    { finished: 0, live: 0, scheduled: 0, postponed: 0, cancelled: 0 },
+    { finished: 0, live: 0, scheduled: 0, postponed: 0, cancelled: 0, abandoned: 0, awarded: 0 },
   );
   const filterButton = (
     key: "all" | MatchDisplayState,
@@ -428,6 +428,8 @@ export function AllMatches({
               {filterButton("scheduled", "Pending", statusCounts.scheduled)}
               {statusCounts.postponed > 0 && filterButton("postponed", "Postponed", statusCounts.postponed)}
               {statusCounts.cancelled > 0 && filterButton("cancelled", "Cancelled", statusCounts.cancelled)}
+              {statusCounts.abandoned > 0 && filterButton("abandoned", "Abandoned · review", statusCounts.abandoned)}
+              {statusCounts.awarded > 0 && filterButton("awarded", "Awarded · review", statusCounts.awarded)}
               <button className={`fixture-favorites-filter${favoriteOnly ? " active" : ""}`} onClick={() => setFavoriteOnly((current) => !current)} aria-pressed={favoriteOnly} title="Save matches to your account when signed in">
                 <span aria-hidden="true">★</span> Favourites <b>{favorites.length}</b>
               </button>
@@ -604,6 +606,8 @@ function MatchMarketGroup({
           {displayState === "scheduled" && <b className="match-result-badge pending">Pending</b>}
           {displayState === "postponed" && <b className="match-result-badge void">Postponed</b>}
           {displayState === "cancelled" && <b className="match-result-badge void">Cancelled</b>}
+          {displayState === "abandoned" && <b className="match-result-badge pending">Abandoned · review</b>}
+          {displayState === "awarded" && <b className="match-result-badge pending">Awarded · review</b>}
           {displayState === "finished" && outcomeCounts.won > 0 && <b className="match-result-badge won">{outcomeCounts.won > 1 ? `${outcomeCounts.won} Won` : "Won"}</b>}
           {displayState === "finished" && outcomeCounts.lost > 0 && <b className="match-result-badge lost">{outcomeCounts.lost > 1 ? `${outcomeCounts.lost} Lost` : "Lost"}</b>}
           {displayState === "finished" && outcomeCounts.void > 0 && <b className="match-result-badge void">{outcomeCounts.void > 1 ? `${outcomeCounts.void} Void` : "Void"}</b>}

@@ -42,6 +42,8 @@ export function matchDisplayState(row: SelectionSummary): MatchDisplayState {
   if (status === "live") return "live";
   if (status === "postponed") return "postponed";
   if (status === "cancelled") return "cancelled";
+  if (status === "abandoned") return "abandoned";
+  if (status === "awarded") return "awarded";
   return "scheduled";
 }
 
@@ -58,6 +60,8 @@ export function matchStatusText(row: SelectionSummary): string {
   }
   if (state === "postponed") return "Postponed";
   if (state === "cancelled") return "Cancelled";
+  if (state === "abandoned") return "Abandoned · review";
+  if (state === "awarded") return "Awarded · review";
   return "Upcoming";
 }
 

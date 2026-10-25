@@ -488,7 +488,7 @@ export interface MatchFixture {
   away_team: string
   competition: string
   kickoff_at: string
-  status: 'scheduled' | 'live' | 'finished' | 'postponed' | 'cancelled'
+  status: 'scheduled' | 'live' | 'finished' | 'postponed' | 'cancelled' | 'abandoned' | 'awarded'
   live_phase?: string | null
   elapsed_minutes?: number | null
   home_goals?: number | null
@@ -538,7 +538,7 @@ export interface MatchFilterCriteria {
   query: string
   competition: string
   market: string
-  status: 'all' | 'finished' | 'live' | 'scheduled' | 'postponed' | 'cancelled'
+  status: 'all' | 'finished' | 'live' | 'scheduled' | 'postponed' | 'cancelled' | 'abandoned' | 'awarded'
   favorite_only: boolean
   min_probability: number | null
   max_probability: number | null

@@ -388,8 +388,7 @@ class FixtureIngestor:
             return "skipped"
 
         teams_data = data.get("teams", {})
-        goals_data = data.get("goals", {})
-        score_data = data.get("score", {})
+        score_data = data.get("score", {}) or {}
 
         home_team = await self._get_or_create_team(teams_data.get("home", {}), competition)
         away_team = await self._get_or_create_team(teams_data.get("away", {}), competition)
@@ -405,6 +404,7 @@ class FixtureIngestor:
         status = _map_status(status_str)
         live_phase = _map_live_phase(status_str)
         elapsed_minutes = fixture.get("status", {}).get("elapsed")
+        home_goals, away_goals = _extract_regulation_time_score(data)
 
         # Finished fixtures expose both statistics and injury data. Upcoming
         # fixtures expose injury/team-news coverage but no match statistics.
@@ -442,12 +442,13 @@ class FixtureIngestor:
                 away_team_id=away_team.id,
                 kickoff_at=kickoff_at,
                 status=status,
+                fixture_status_code=status_str,
                 live_phase=live_phase,
                 elapsed_minutes=elapsed_minutes,
                 season=str(data.get("league", {}).get("season", _current_season())),
                 round=_clean(data.get("league", {}).get("round") or ""),
-                home_goals=goals_data.get("home"),
-                away_goals=goals_data.get("away"),
+                home_goals=home_goals,
+                away_goals=away_goals,
                 home_goals_ht=score_data.get("halftime", {}).get("home"),
                 away_goals_ht=score_data.get("halftime", {}).get("away"),
                 home_xg=home_xg,
@@ -460,6 +461,7 @@ class FixtureIngestor:
             action = "ingested"
         else:
             match.status = status
+            match.fixture_status_code = status_str
             match.live_phase = live_phase
             match.elapsed_minutes = elapsed_minutes
             match.competition_id = competition.id
@@ -467,8 +469,10 @@ class FixtureIngestor:
             match.away_team_id = away_team.id
             match.kickoff_at = kickoff_at
             match.round = _clean(data.get("league", {}).get("round") or "") or match.round
-            match.home_goals = goals_data.get("home")
-            match.away_goals = goals_data.get("away")
+            match.home_goals = home_goals
+            match.away_goals = away_goals
+            match.home_goals_ht = score_data.get("halftime", {}).get("home")
+            match.away_goals_ht = score_data.get("halftime", {}).get("away")
             if not skip_enrichment:
                 match.home_xg = home_xg
                 match.away_xg = away_xg
@@ -576,9 +580,36 @@ def _map_status(short: str) -> MatchStatus:
         return MatchStatus.LIVE
     if short == "FT" or short == "AET" or short == "PEN":
         return MatchStatus.FINISHED
-    if short in {"PST", "CANC", "ABD", "AWD", "WO"}:
+    if short == "PST":
         return MatchStatus.POSTPONED
+    if short == "CANC":
+        return MatchStatus.CANCELLED
+    if short == "ABD":
+        return MatchStatus.ABANDONED
+    if short in {"AWD", "WO"}:
+        return MatchStatus.AWARDED
     return MatchStatus.SCHEDULED
+
+
+def _extract_regulation_time_score(data: dict) -> tuple[int | None, int | None]:
+    """Read a regulation-time result without folding extra time into it."""
+    fixture = data.get("fixture", {}) or {}
+    status = (fixture.get("status", {}) or {}).get("short", "NS")
+    goals = data.get("goals", {}) or {}
+    score = data.get("score", {}) or {}
+    fulltime = score.get("fulltime", {}) or {}
+
+    if status in {"AET", "PEN"}:
+        home, away = fulltime.get("home"), fulltime.get("away")
+        if home is None or away is None:
+            return None, None
+        return home, away
+
+    if status == "FT":
+        home, away = fulltime.get("home"), fulltime.get("away")
+        if home is not None and away is not None:
+            return home, away
+    return goals.get("home"), goals.get("away")
 
 
 def _map_live_phase(short: str) -> str | None:

@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from app.models import SelectionResult
+from app.models import MatchStatus, SelectionResult
 from app.models.bet import BetStatus
 from app.services.settlement import SettlementService, evaluate_selection
 
@@ -155,6 +155,39 @@ async def test_confirmed_individual_bet_settles_from_finished_match():
     assert db.add.call_count == 1
 
 
+@pytest.mark.parametrize("status", [MatchStatus.ABANDONED, MatchStatus.AWARDED])
+@pytest.mark.asyncio
+async def test_abandoned_and_awarded_match_bets_remain_unsettled(status):
+    bet = SimpleNamespace(
+        id=8,
+        match_id=12,
+        source_selection_id=20,
+        market="home_win",
+        status=BetStatus.PENDING,
+        actual_return=None,
+        potential_return=18.0,
+        stake=10.0,
+    )
+    match = SimpleNamespace(
+        id=12,
+        status=status,
+        home_goals=1,
+        away_goals=0,
+    )
+    db = SimpleNamespace(
+        execute=AsyncMock(side_effect=[_Rows([bet]), _Rows([match])]),
+        add=Mock(),
+    )
+
+    changed = await SettlementService(db)._settle_confirmed_individual_bets(
+        {12}, "test", datetime_now_utc()
+    )
+
+    assert changed == 0
+    assert bet.status == BetStatus.PENDING
+    db.add.assert_not_called()
+
+
 class _UniqueRows(_Rows):
     def unique(self):
         return self
@@ -233,7 +266,7 @@ async def test_custom_accumulator_loses_immediately_when_one_leg_loses():
     assert accumulator.status == CustomAccumulatorStatus.LOST
     assert accumulator.actual_return == 0.0
     assert losing_leg.result == SelectionResult.LOST
-    assert pending_leg.result is None
+    assert pending_leg.result == SelectionResult.PENDING
 
 
 @pytest.mark.asyncio

@@ -12,6 +12,8 @@ class MatchStatus(str, enum.Enum):
     FINISHED = "finished"
     POSTPONED = "postponed"
     CANCELLED = "cancelled"
+    ABANDONED = "abandoned"
+    AWARDED = "awarded"
 
 
 class Match(Base):
@@ -24,6 +26,7 @@ class Match(Base):
     away_team_id: Mapped[int] = mapped_column(Integer, ForeignKey("teams.id"), nullable=False)
     kickoff_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     status: Mapped[MatchStatus] = mapped_column(SAEnum(MatchStatus), default=MatchStatus.SCHEDULED)
+    fixture_status_code: Mapped[str | None] = mapped_column(String(10), nullable=True)
     live_phase: Mapped[str | None] = mapped_column(String(20), nullable=True)
     elapsed_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     season: Mapped[str] = mapped_column(String(10), nullable=False)  # e.g. "2025"

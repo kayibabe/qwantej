@@ -39,6 +39,8 @@ function matchStateLabel(leg: Leg): string {
   if (status === 'finished') return 'Finished'
   if (status === 'postponed') return 'Postponed'
   if (status === 'cancelled') return 'Cancelled'
+  if (status === 'abandoned') return 'Abandoned · review'
+  if (status === 'awarded') return 'Awarded · review'
   if (status === 'scheduled') return 'Upcoming'
   return 'Pending'
 }

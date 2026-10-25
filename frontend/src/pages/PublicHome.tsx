@@ -30,6 +30,8 @@ function matchStatus(match: MatchFixture) {
   if (status === 'finished') return 'FT'
   if (status === 'postponed') return 'Postponed'
   if (status === 'cancelled') return 'Cancelled'
+  if (status === 'abandoned') return 'Abandoned · review'
+  if (status === 'awarded') return 'Awarded · review'
   return 'Upcoming'
 }
 

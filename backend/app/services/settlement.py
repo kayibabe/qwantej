@@ -330,9 +330,13 @@ class SettlementService:
                     entity_type="custom_accumulator",
                     entity_id=str(accumulator.id),
                     event_type=(
-                        "settled"
-                        if previous_status == CustomAccumulatorStatus.PLACED
-                        else "settlement_adjusted"
+                        "leg_results_updated"
+                        if status == CustomAccumulatorStatus.PLACED
+                        else (
+                            "settled"
+                            if previous_status == CustomAccumulatorStatus.PLACED
+                            else "settlement_adjusted"
+                        )
                     ),
                     actor=source,
                     payload={
@@ -351,7 +355,11 @@ class SettlementService:
                     },
                 )
             )
-            changed += 1
+            # This counter reports accumulators that reached a terminal state.
+            # Recording known leg results while another leg is pending is
+            # auditable progress, but does not settle the accumulator.
+            if status != CustomAccumulatorStatus.PLACED:
+                changed += 1
         return changed
 
     @staticmethod

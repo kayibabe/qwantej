@@ -10,7 +10,7 @@ export type DailyTab =
   "tickets" | "matches" | "odds-policy" | "market-roi" | "daily-match-picks" | "passed" | "acca-analysis";
 
 export type MatchDisplayState =
-  "finished" | "live" | "scheduled" | "postponed" | "cancelled";
+  "finished" | "live" | "scheduled" | "postponed" | "cancelled" | "abandoned" | "awarded";
 
 export type SelectionDisplayState = "won" | "lost" | "void" | "inplay" | "pending";
 

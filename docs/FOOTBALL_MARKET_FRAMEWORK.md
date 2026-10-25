@@ -160,6 +160,16 @@ raw provider labels cannot be reconstructed reliably. Historical CSV imports
 populate the quote table as fallbacks and do not create API quote snapshots, so
 their actual source-as-of time remains unavailable for point-in-time comparisons.
 
+The result-scope audit now distinguishes regulation-time scores from fixture
+completion status. For API-Football `AET` and `PEN` fixtures, ingestion reads
+`score.fulltime`; if that value is missing, the result remains unset rather
+than falling back to a score that may include extra time or penalties. The raw
+fixture status code is retained for new ingests. `ABD`, `AWD`, and `WO` become
+explicit review states and do not auto-settle as void; postponed and cancelled
+fixtures keep their existing void handling. Historical match rows predate the
+status-code field and cannot be reliably reclassified from the stored score
+alone.
+
 The shared joint-score implementation and its first detached replay are
 documented in
 `docs/JOINT_SCORE_DISTRIBUTION_RESEARCH_2026-10-24.md`. Preliminary raw
@@ -170,9 +180,14 @@ diagnosis and validation before it can support new decisions.
 
 ## Family readiness and suggested order
 
+The full 25-family mapping, current blockers, and evidence gates are recorded
+in [`FOOTBALL_MARKET_FAMILY_READINESS.md`](FOOTBALL_MARKET_FAMILY_READINESS.md).
+The grouped summary below is for sequencing; consult the family register for
+the subfamily-level boundaries.
+
 | Catalogue families | Qwantej fit now | Next gate before use |
 | --- | --- | --- |
-| Match result, double chance, DNB | Partially scored and settled from match scores; not covered by the shared totals qualification design | Define canonical contracts, verify complete scoring and calibration/qualification coverage, and audit edge-case settlement |
+| Match result, double chance, DNB | Partially scored and settled from regulation-time match scores; not covered by the shared totals qualification design | Define canonical contracts, verify complete scoring and calibration/qualification coverage, and audit edge-case settlement |
 | Match totals and team goals | Totals have the strongest shared-distribution foundation; a joint score matrix is available for current score-derived adapters, but its detached replay is weak | Preserve existing gates; diagnose and validate the joint score model before adding team-goal qualification or deriving further score-based markets |
 | BTTS, correct score, winning margin, goal handicap, half comparison | BTTS is currently scored from the shared joint-score adapter; other outcomes can partly be settled from final/half-time scores | Validate market-specific probabilities from the joint distribution; add period-specific distributions and contract tests for pushes and line variants before expanding scoring |
 | Corners, cards, shots, fouls, offsides, possession, passing | No evidence in the inspected target-market scoring contract that Qwantej currently captures the event data needed | Confirm provider coverage, statistic definitions, timestamped history, and result ingestion before modelling |
@@ -187,16 +202,17 @@ diagnosis and validation before it can support new decisions.
    settlement rules, and the currently used API-Football odds IDs now have
    machine-readable definitions, as does the current distinction between
    market-specific provisional and generic recommendation coverage. The UI
-    consumes catalogue labels with its existing fallback. New quote snapshots
-    retain source mapping provenance; legacy captures remain explicitly
-    incomplete. Keep current qualification behavior unchanged.
+   consumes catalogue labels with its existing fallback. New quote snapshots
+   retain source mapping provenance; legacy captures remain explicitly
+   incomplete. Keep current qualification behavior unchanged.
 2. **Validate the goal event layer.** Diagnose the current regulation-time joint
    home/away score probabilities, freeze candidate comparisons, and evaluate
    them chronologically before deriving additional score-based markets. Add
    first-half distributions as a separate scope.
-3. **Make settlement contracts explicit.** Cover pushes, quarter-goal lines,
-   period boundaries, corrections, abandoned matches, extra time, and source
-   statistic rules before enabling new definitions.
+3. **Make settlement contracts explicit.** Regulation-time AET/PEN score
+   handling and unresolved abandoned/awarded states are now guarded. Cover
+   pushes, quarter-goal lines, result corrections, and market-specific source
+   rules before enabling new definitions.
 4. **Expand one event family at a time.** Add corners/cards/shots only after
    source coverage and settlement labels are proven. Keep each new family in
    shadow mode through a prospective validation window and explicit promotion.
