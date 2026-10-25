@@ -4,6 +4,7 @@ import './WorkspaceNavigation.css'
 import { TODAY } from './pages/dailyTickets/helpers'
 import { addDays } from './utils'
 import { AuthControls, useAuth } from './auth'
+import { fetchMarketCatalog, installMarketCatalog } from './lib/api'
 
 const DailyTicketsPage = lazy(() => import('./pages/DailyTickets'))
 const TrackerPage = lazy(() => import('./pages/Tracker'))
@@ -93,6 +94,21 @@ export default function App() {
   const [predictionId, setPredictionId] = useState<number | null>(() => routePredictionId(window.location.search))
   const [date, setDate] = useState(() => dateFromSearch(window.location.search))
   const [theme, setTheme] = useState<Theme>('system')
+  const [, setMarketCatalogLoaded] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    fetchMarketCatalog()
+      .then(catalog => {
+        if (!active) return
+        installMarketCatalog(catalog.markets)
+        setMarketCatalogLoaded(true)
+      })
+      .catch(() => {
+        // Existing local formatters remain the fallback if the catalogue is unavailable.
+      })
+    return () => { active = false }
+  }, [])
 
   useEffect(() => {
     const url = new URL(window.location.href)

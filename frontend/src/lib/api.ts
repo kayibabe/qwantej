@@ -1,3 +1,43 @@
+export interface MarketCatalogEntry {
+  legacy_key: string
+  selection_id: string
+  family: string
+  display_name: string
+  scored: boolean
+  qualification_mode: 'market_specific_provisional' | 'generic_recommendation_only' | 'settlement_only'
+  qualification_policy_id: string | null
+}
+
+export interface MarketCatalogResponse {
+  catalog_version: string
+  markets: MarketCatalogEntry[]
+}
+
+let marketCatalogByLegacyKey = new Map<string, MarketCatalogEntry>()
+
+function normalizeMarketKey(value: string): string {
+  return value.trim().toLowerCase().replace(/\./g, '_')
+}
+
+export function installMarketCatalog(markets: MarketCatalogEntry[]): void {
+  const next = new Map<string, MarketCatalogEntry>()
+  for (const market of markets) {
+    if (!market.legacy_key || !market.display_name) continue
+    next.set(normalizeMarketKey(market.legacy_key), market)
+  }
+  if (next.size > 0) marketCatalogByLegacyKey = next
+}
+
+function catalogEntry(value: string): MarketCatalogEntry | undefined {
+  return marketCatalogByLegacyKey.get(normalizeMarketKey(value))
+}
+
+export async function fetchMarketCatalog(): Promise<MarketCatalogResponse> {
+  const response = await fetch('/api/v1/markets/catalog')
+  if (!response.ok) throw new Error(`API error ${response.status}`)
+  return response.json()
+}
+
 export interface Leg {
   selection_id: number
   prediction_id: number
@@ -762,6 +802,8 @@ export function formatKickoff(iso: string): string {
 }
 
 export function formatMarket(market: string): string {
+  const catalogLabel = catalogEntry(market)?.display_name
+  if (catalogLabel) return catalogLabel
   const labels: Record<string, string> = {
     home_win: 'Home Win',
     draw: 'Draw',
@@ -786,6 +828,11 @@ export function formatMarket(market: string): string {
     'under_4.5': 'Under 4.5',
     btts_yes: 'BTTS Yes',
     btts_no: 'BTTS No',
+    btts: 'Both Teams to Score',
+    double_chance: 'Double Chance',
+    match_result: 'Match Result',
+    '1x2': 'Match Result',
+    total_goals: 'Total Goals',
     double_chance_1x: 'Double Chance',
     double_chance_x2: 'Double Chance',
     dnb_home: 'DNB Home',
@@ -795,6 +842,8 @@ export function formatMarket(market: string): string {
 }
 
 export function formatSelection(selection: string): string {
+  const catalogLabel = catalogEntry(selection)?.display_name
+  if (catalogLabel) return catalogLabel
   const labels: Record<string, string> = {
     double_chance_1x: 'Double Chance (1X)',
     double_chance_x2: 'Double Chance (X2)',
@@ -810,6 +859,13 @@ export function formatSelection(selection: string): string {
 }
 
 export function selectionRepeatsMarket(market: string, selection: string): boolean {
+  const definition = catalogEntry(market)
+  if (definition) {
+    const normalizedSelection = selection.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+    const catalogValues = [definition.legacy_key, definition.selection_id, definition.display_name]
+      .map(value => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim())
+    if (catalogValues.includes(normalizedSelection)) return true
+  }
   const normalize = (value: string) => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
   const aliases: Record<string, string> = {
     'btts yes': 'both teams to score yes',

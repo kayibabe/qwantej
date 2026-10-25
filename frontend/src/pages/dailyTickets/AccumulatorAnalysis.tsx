@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fetchAccaPrices, type AccaPrice, type SelectionSummary } from "../../lib/api";
+import { fetchAccaPrices, formatMarket, formatSelection, selectionRepeatsMarket, type AccaPrice, type SelectionSummary } from "../../lib/api";
 import "./AccumulatorAnalysis.css";
 import { selectionStatusLabel } from "./helpers";
 import { passesUnder05Value } from "./helpers";
@@ -88,47 +88,9 @@ function findCombo(pool: ScoredPick[], band: TicketBand, usedMatches: Set<number
   return best;
 }
 
-function marketName(value: string) {
-  return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
 function marketSelectionLabel(market: string, selection: string) {
-  const normalize = (value: string) => value.toLowerCase().replace(/[\s-]+/g, "_");
-  const selectionKey = normalize(selection);
-  const marketKey = normalize(market);
-  const describeCode = (value: string) => {
-    const known: Record<string, string> = {
-      home_win: "Home win",
-      away_win: "Away win",
-      draw: "Draw",
-      btts_yes: "Both teams to score: Yes",
-      btts_no: "Both teams to score: No",
-      double_chance_1x: "Double chance: Home or draw",
-      double_chance_x2: "Double chance: Draw or away",
-      double_chance_12: "Double chance: Home or away",
-    };
-    if (known[value]) return known[value];
-    const totalGoals = value.match(/^(over|under)_?(\d+(?:[._]\d+)?)$/);
-    if (totalGoals) return `${totalGoals[1] === "over" ? "Over" : "Under"} ${totalGoals[2].replace("_", ".")} goals`;
-    return null;
-  };
-  const marketDescription = describeCode(marketKey);
-  const selectionDescription = describeCode(selectionKey);
-  if (marketDescription && (marketKey === selectionKey || selectionKey.startsWith(`${marketKey}_`))) return marketDescription;
-  if (selectionDescription) return selectionDescription;
-  const marketLabels: Record<string, string> = {
-    btts: "Both teams to score",
-    double_chance: "Double chance",
-    match_result: "Match result",
-    "1x2": "Match result",
-    total_goals: "Total goals",
-  };
-  const readableMarket = marketLabels[marketKey] ?? marketName(market);
-  if (selectionKey === marketKey) return readableMarket;
-  if ((selectionKey === "yes" || selectionKey === "no") && (marketKey === "btts" || marketKey === "btts_yes" || marketKey === "btts_no")) {
-    return `Both teams to score: ${selectionKey === "yes" || marketKey === "btts_yes" ? "Yes" : "No"}`;
-  }
-  return `${readableMarket}: ${marketName(selection)}`;
+  if (selectionRepeatsMarket(market, selection)) return formatSelection(selection);
+  return `${formatMarket(market)}: ${formatSelection(selection)}`;
 }
 
 export function AccumulatorAnalysis({ rows, date }: { rows: SelectionSummary[]; date: string }) {
@@ -223,7 +185,7 @@ export function AccumulatorAnalysis({ rows, date }: { rows: SelectionSummary[]; 
         <div className="acca-analysis__ticket-head"><div><h3>{band.title}</h3><span>{band.hint}</span></div>
           <strong>{combo ? `${combo.odds.toFixed(2)}×` : "No eligible ticket"}</strong></div>
         {combo ? <ol>{combo.picks.map(({ row, score, risks }) => <li key={row.prediction_id}>
-          <div><b>{row.home_team} vs {row.away_team}</b><span>{marketName(row.market)} · {row.selection} · {row.best_odds?.toFixed(2)}</span></div>
+          <div><b>{row.home_team} vs {row.away_team}</b><span>{formatMarket(row.market)} · {formatSelection(row.selection)} · {row.best_odds?.toFixed(2)}</span></div>
           <small>{row.source_bookmaker} · Pick score {score.toFixed(0)}/100{risks.length ? ` · ${risks.length} risk flag${risks.length === 1 ? "" : "s"}` : " · no listed risk flags"}</small>
         </li>)}</ol> : <p className="acca-analysis__empty">There are not enough eligible picks in this odds band. The module leaves it empty rather than relaxing the evidence gates.</p>}
       </article>)}
@@ -252,7 +214,7 @@ export function AccumulatorAnalysis({ rows, date }: { rows: SelectionSummary[]; 
     <div className="acca-analysis__table-wrap"><table className="acca-analysis__table"><thead><tr><th>Fixture</th><th>Market selection</th><th>Price / implied</th><th>Model / edge</th><th>Quality</th><th>Match status</th><th>Analysis</th></tr></thead>
       <tbody>{tablePicks.map(({ row, score, reasons, risks }) => <tr key={row.prediction_id}>
         <td><b>{row.home_team} vs {row.away_team}</b><span>{row.competition}</span></td>
-        <td><b>{marketName(row.market)}</b></td>
+        <td><b>{formatMarket(row.market)}</b></td>
         <td>{row.best_odds?.toFixed(2) ?? "—"}<span>{row.best_odds && row.best_odds > 1 ? `${(100 / row.best_odds).toFixed(1)}% break-even` : "No valid price"}</span></td>
         <td>{row.model_probability != null ? `${(row.model_probability * 100).toFixed(1)}%` : "—"}<span>{row.edge != null ? `${row.edge >= 0 ? "+" : ""}${(row.edge * 100).toFixed(1)} pp edge` : "Edge unavailable"}</span></td>
         <td><b>{row.recommendation_status ?? "Unrated"}</b><span>Q {Math.round(row.q_score)} · score {score.toFixed(0)}</span></td>
@@ -269,7 +231,7 @@ export function AccumulatorAnalysis({ rows, date }: { rows: SelectionSummary[]; 
       <section ref={analysisDialogRef} className="acca-analysis__dialog" role="dialog" aria-modal="true" aria-labelledby="acca-analysis-dialog-title" onKeyDown={(event) => { if (event.key === "Escape") setActiveAnalysis(null); }} tabIndex={-1}>
         <header className="acca-analysis__dialog-header">
           <div><span className="eyebrow">Analysis and risks</span><h3 id="acca-analysis-dialog-title">{activeAnalysis.row.home_team} vs {activeAnalysis.row.away_team}</h3>
-            <p>{activeAnalysis.row.competition} · {marketName(activeAnalysis.row.market)}: {activeAnalysis.row.selection}</p></div>
+            <p>{activeAnalysis.row.competition} · {formatMarket(activeAnalysis.row.market)}: {formatSelection(activeAnalysis.row.selection)}</p></div>
           <button type="button" className="acca-analysis__dialog-close" aria-label="Close analysis" onClick={() => setActiveAnalysis(null)}>×</button>
         </header>
         <div className="acca-analysis__dialog-content">

@@ -1,3 +1,5 @@
+import { formatMarket } from './lib/api'
+
 const PRODUCT_TIME_ZONE = 'Africa/Blantyre'
 
 export function dateStringInProductTimeZone(d = new Date()): string {
@@ -42,19 +44,7 @@ export function gradeColor(grade: string): string {
 }
 
 export function marketLabel(market: string): string {
-  const labels: Record<string, string> = {
-    home_win: 'Home Win',
-    draw: 'Draw',
-    away_win: 'Away Win',
-    'over_1.5': 'Over 1.5',
-    'over_2.5': 'Over 2.5',
-    btts_yes: 'BTTS Yes',
-    double_chance_1x: 'DC 1X',
-    double_chance_x2: 'DC X2',
-    dnb_home: 'DNB Home',
-    dnb_away: 'DNB Away',
-  }
-  return labels[market] ?? market
+  return formatMarket(market)
 }
 
 export function addDays(dateStr: string, n: number): string {
