@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { fmt, fmtPnl } from '../utils/currency'
 
 // ── Kelly Criterion ───────────────────────────────────────────────────────────
 
 function KellyCalculator() {
+  const id = useId()
   const [odds, setOdds] = useState('')
   const [prob, setProb] = useState('')
   const [bankroll, setBankroll] = useState('')
@@ -28,27 +29,27 @@ function KellyCalculator() {
       <p className="tool-desc">Scenario calculator using your assumed odds, probability, and bankroll.</p>
       <div className="tool-inputs">
         <div className="form-group">
-          <label>Decimal Odds</label>
-          <input type="number" step="0.01" min="1.01" value={odds} onChange={e => setOdds(e.target.value)} placeholder="e.g. 2.50" />
+          <label htmlFor={`${id}-odds`}>Decimal Odds</label>
+          <input id={`${id}-odds`} type="number" step="0.01" min="1.01" value={odds} onChange={e => setOdds(e.target.value)} placeholder="e.g. 2.50" />
         </div>
         <div className="form-group">
-          <label>Your assumed win probability (%)</label>
-          <input type="number" step="0.1" min="1" max="99" value={prob} onChange={e => setProb(e.target.value)} placeholder="e.g. 55" />
+          <label htmlFor={`${id}-probability`}>Your assumed win probability (%)</label>
+          <input id={`${id}-probability`} type="number" step="0.1" min="1" max="99" value={prob} onChange={e => setProb(e.target.value)} placeholder="e.g. 55" />
         </div>
         <div className="form-group">
-          <label>Bankroll</label>
-          <input type="number" step="1" min="1" value={bankroll} onChange={e => setBankroll(e.target.value)} placeholder="e.g. 1000" />
+          <label htmlFor={`${id}-bankroll`}>Bankroll</label>
+          <input id={`${id}-bankroll`} type="number" step="1" min="1" value={bankroll} onChange={e => setBankroll(e.target.value)} placeholder="e.g. 1000" />
         </div>
         <div className="form-group">
-          <label>Fraction</label>
-          <select value={fraction} onChange={e => setFraction(e.target.value as typeof fraction)}>
+          <label htmlFor={`${id}-fraction`}>Fraction</label>
+          <select id={`${id}-fraction`} value={fraction} onChange={e => setFraction(e.target.value as typeof fraction)}>
             <option value="full">Full Kelly</option>
             <option value="half">Half Kelly</option>
             <option value="quarter">Quarter Kelly (conservative)</option>
           </select>
         </div>
       </div>
-      <p className="tool-method-note">The probability is your input. This calculation does not account for estimation uncertainty or verify a Qwantej quote.</p>
+      <p className="tool-method-note">The probability is your input. This calculation does not account for estimation uncertainty or verify a QwanEj quote.</p>
       {!isNaN(kelly) && (
         <div className="tool-result">
           {kelly <= 0 ? (
@@ -114,10 +115,10 @@ function AccaBuilder() {
         {legs.map((leg, i) => (
           <div key={leg.key} className="acca-leg-row">
             <span className="leg-num">{i + 1}</span>
-            <input className="leg-label-input" value={leg.label} onChange={e => updateLeg(leg.key, 'label', e.target.value)} placeholder="Selection (optional)" />
-            <input className="leg-odds-input" type="number" step="0.01" min="1.01" value={leg.odds} onChange={e => updateLeg(leg.key, 'odds', e.target.value)} placeholder="Odds" />
+            <input className="leg-label-input" aria-label={`Selection name, leg ${i + 1}`} value={leg.label} onChange={e => updateLeg(leg.key, 'label', e.target.value)} placeholder="Selection (optional)" />
+            <input className="leg-odds-input" type="number" aria-label={`Decimal odds, leg ${i + 1}`} step="0.01" min="1.01" value={leg.odds} onChange={e => updateLeg(leg.key, 'odds', e.target.value)} placeholder="Odds" />
             {legs.length > 2 && (
-              <button className="btn-sm btn-danger" onClick={() => removeLeg(leg.key)}>×</button>
+              <button className="btn-sm btn-danger" aria-label={`Remove leg ${i + 1}`} onClick={() => removeLeg(leg.key)}>×</button>
             )}
           </div>
         ))}
@@ -125,7 +126,7 @@ function AccaBuilder() {
       <div className="acca-controls">
         <button className="btn-ghost btn-sm" onClick={addLeg}>+ Add Leg</button>
         <div className="form-group" style={{ marginBottom: 0 }}>
-          <input type="number" step="0.01" min="0.01" value={stake} onChange={e => setStake(e.target.value)} placeholder="Stake" style={{ width: 100 }} />
+          <input type="number" aria-label="Stake amount" step="0.01" min="0.01" value={stake} onChange={e => setStake(e.target.value)} placeholder="Stake" style={{ width: 100 }} />
         </div>
       </div>
       {!complete && parsedOdds.length > 0 && <div className="tool-validation-warning">Enter valid odds above 1.00 for every leg before calculating.</div>}
@@ -162,6 +163,7 @@ function AccaBuilder() {
 // ── Implied Probability ───────────────────────────────────────────────────────
 
 function ImpledProbability() {
+  const id = useId()
   const [odds, setOdds] = useState('')
   const o = parseFloat(odds)
   const impliedProb = o > 1 ? (1 / o) * 100 : NaN
@@ -173,8 +175,8 @@ function ImpledProbability() {
       <p className="tool-desc">Convert decimal odds to implied probability and break-even win rate.</p>
       <div className="tool-inputs">
         <div className="form-group">
-          <label>Decimal Odds</label>
-          <input type="number" step="0.01" min="1.01" value={odds} onChange={e => setOdds(e.target.value)} placeholder="e.g. 2.50" />
+          <label htmlFor={`${id}-odds`}>Decimal Odds</label>
+          <input id={`${id}-odds`} type="number" step="0.01" min="1.01" value={odds} onChange={e => setOdds(e.target.value)} placeholder="e.g. 2.50" />
         </div>
       </div>
       {!isNaN(impliedProb) && (
@@ -208,6 +210,7 @@ function ImpledProbability() {
 // ── Expected Value ────────────────────────────────────────────────────────────
 
 function EVCalculator() {
+  const id = useId()
   const [odds, setOdds] = useState('')
   const [prob, setProb] = useState('')
   const [stake, setStake] = useState('')
@@ -227,16 +230,16 @@ function EVCalculator() {
       <p className="tool-desc">Estimate expected value from a user-supplied probability and price.</p>
       <div className="tool-inputs">
         <div className="form-group">
-          <label>Decimal Odds</label>
-          <input type="number" step="0.01" min="1.01" value={odds} onChange={e => setOdds(e.target.value)} placeholder="e.g. 2.50" />
+          <label htmlFor={`${id}-odds`}>Decimal Odds</label>
+          <input id={`${id}-odds`} type="number" step="0.01" min="1.01" value={odds} onChange={e => setOdds(e.target.value)} placeholder="e.g. 2.50" />
         </div>
         <div className="form-group">
-          <label>Your assumed probability (%)</label>
-          <input type="number" step="0.1" min="1" max="99" value={prob} onChange={e => setProb(e.target.value)} placeholder="e.g. 55" />
+          <label htmlFor={`${id}-probability`}>Your assumed probability (%)</label>
+          <input id={`${id}-probability`} type="number" step="0.1" min="1" max="99" value={prob} onChange={e => setProb(e.target.value)} placeholder="e.g. 55" />
         </div>
         <div className="form-group">
-          <label>Stake</label>
-          <input type="number" step="1" min="1" value={stake} onChange={e => setStake(e.target.value)} placeholder="e.g. 10" />
+          <label htmlFor={`${id}-stake`}>Stake</label>
+          <input id={`${id}-stake`} type="number" step="1" min="1" value={stake} onChange={e => setStake(e.target.value)} placeholder="e.g. 10" />
         </div>
       </div>
       <p className="tool-method-note">Results are conditional on your inputs; no uncertainty range, calibration check, or stored quote is applied.</p>

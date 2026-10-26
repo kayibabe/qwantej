@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchAccaPrices, formatMarket, formatSelection, selectionRepeatsMarket, type AccaPrice, type SelectionSummary } from "../../lib/api";
 import "./AccumulatorAnalysis.css";
-import { selectionStatusLabel } from "./helpers";
-import { passesUnder05Value } from "./helpers";
+import { passesUnder05Value, selectionStatusLabel } from "./helpers";
 
 type TicketBand = { key: string; title: string; min: number; max: number; hint: string };
 type ScoredPick = { row: SelectionSummary; score: number; reasons: string[]; risks: string[] };
@@ -35,7 +34,7 @@ function scoredPick(row: SelectionSummary): ScoredPick {
     reasons.push("A model probability or valid odds quote is missing, so the price comparison is incomplete.");
   }
   reasons.push(`Recommendation: ${row.recommendation_status ?? "unrated"}; Q-score ${Math.round(row.q_score)}/100${row.q_grade ? ` (${row.q_grade})` : ""}.`);
-  if (row.model_agreement != null) reasons.push(`Model agreement ${(row.model_agreement * 100).toFixed(0)}%.`);
+  if (row.model_agreement != null) reasons.push(`Model spread ${(row.model_agreement * 100).toFixed(1)} percentage points; lower spread means the estimates agree more closely.`);
   if (row.source_bookmaker) reasons.push(`Odds source: ${row.source_bookmaker}${row.bookmaker_count ? `; ${row.bookmaker_count} bookmaker${row.bookmaker_count === 1 ? "" : "s"} recorded` : ""}.`);
   if (age != null) reasons.push(`Quote age: ${age < 1 ? `${Math.round(age * 60)} minutes` : `${age.toFixed(1)} hours`}.`);
   if (row.recommendation_risks?.length) risks.push(...row.recommendation_risks);
@@ -43,14 +42,17 @@ function scoredPick(row: SelectionSummary): ScoredPick {
   if (row.data_quality_status && row.data_quality_status !== "good") risks.push(`Data quality is ${row.data_quality_status}${row.data_quality_score != null ? ` (${Math.round(row.data_quality_score)}/100)` : ""}.`);
   if (age == null) risks.push("Odds quote time is unavailable.");
   else if (age > 2) risks.push("Odds quote is older than two hours.");
-  if ((row.model_agreement ?? 0) < 0.6) risks.push("Model agreement is below 60% or unavailable.");
+  if (row.model_agreement == null) risks.push("Model spread is unavailable, so agreement cannot be assessed.");
+  else if (row.model_agreement > 0.15) risks.push("Models disagree materially: probability spread is above 15 percentage points.");
   if (row.match_status && row.match_status.toLowerCase() !== "scheduled") risks.push(`Fixture status is ${row.match_status}.`);
   if (edge != null && edge <= 0) risks.push("No positive model edge is recorded against the quoted price.");
+  const spread = row.model_agreement;
+  const agreementScore = spread == null ? 0 : Math.max(0, 10 * (1 - Math.min(spread, 0.15) / 0.15));
   const score = Math.max(0, Math.min(100,
     (row.recommendation_status === "BET" ? 35 : row.recommendation_status === "WATCH" ? 18 : 0) +
     Math.max(0, Math.min(20, row.q_score / 5)) +
     Math.max(0, Math.min(20, (edge ?? 0) * 200)) +
-    Math.max(0, Math.min(10, (row.model_agreement ?? 0) * 10)) +
+    agreementScore +
     (row.data_quality_status === "good" ? 10 : 0) +
     (age != null && age <= 2 ? 5 : 0),
   ));
@@ -93,7 +95,31 @@ function marketSelectionLabel(market: string, selection: string) {
   return `${formatMarket(market)}: ${formatSelection(selection)}`;
 }
 
-export function AccumulatorAnalysis({ rows, date }: { rows: SelectionSummary[]; date: string }) {
+function currentEligibility(row: SelectionSummary): string {
+  if (row.match_status?.toLowerCase() !== "scheduled" || Date.parse(row.kickoff_at) <= Date.now()) return "Not upcoming"
+  if (row.best_odds == null || row.best_odds <= 1) return "Unavailable · no valid price"
+  if (row.edge == null || row.edge <= 0) return "Blocked · no positive edge"
+  const age = ageHours(row.source_odds_at)
+  if (age == null || age > 2) return "Blocked · missing or stale price"
+  if (row.data_quality_status !== "good") return "Blocked · data quality"
+  const marketGates: Record<string, string | undefined> = {
+    "over_1.5": row.over15_qualification?.status,
+    "over_2.5": row.over25_qualification?.status,
+    "over_3.5": row.over35_qualification?.status,
+    "over_4.5": row.over45_qualification?.status,
+    "under_0.5": row.under05_qualification?.status,
+    "under_1.5": row.under15_qualification?.status,
+    "under_2.5": row.under25_qualification?.status,
+    "under_3.5": row.under35_qualification?.status,
+  };
+  if (marketGates[row.market] && marketGates[row.market] !== "QUALIFY") return "Blocked · market gate";
+  if (!passesUnder05Value(row)) return "Blocked · Under 0.5 value gate";
+  return row.recommendation_status === "BET"
+    ? "Current gates pass · combo rules still apply"
+    : `Current gates pass · model ${row.recommendation_status ?? "unrated"}`;
+}
+
+export function AccumulatorAnalysis({ rows, date, totalSelections = rows.length, loadingMore = false, onLoadMore }: { rows: SelectionSummary[]; date: string; totalSelections?: number; loadingMore?: boolean; onLoadMore?: () => void }) {
   const [pricing, setPricing] = useState<{ date: string; prices: AccaPrice[] } | null>(null);
   const [priceError, setPriceError] = useState<string | null>(null);
   const [activeAnalysis, setActiveAnalysis] = useState<ScoredPick | null>(null);
@@ -101,8 +127,10 @@ export function AccumulatorAnalysis({ rows, date }: { rows: SelectionSummary[]; 
   const [modelFilter, setModelFilter] = useState("all");
   const [qScoreFilter, setQScoreFilter] = useState("all");
   const analysisDialogRef = useRef<HTMLElement>(null);
+  const analysisTriggerRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
     if (activeAnalysis) analysisDialogRef.current?.focus();
+    else analysisTriggerRef.current?.focus();
   }, [activeAnalysis]);
   useEffect(() => {
     const controller = new AbortController();
@@ -151,20 +179,7 @@ export function AccumulatorAnalysis({ rows, date }: { rows: SelectionSummary[]; 
     const used = new Set<number>();
     return BANDS.map((band) => {
       const eligible = picks.filter(({ row }) => {
-        const age = ageHours(row.source_odds_at);
-        return row.recommendation_status === "BET" && row.best_odds != null && row.best_odds > 1 &&
-          (row.market !== "over_1.5" || row.over15_qualification?.status === "QUALIFY") &&
-          (row.market !== "over_2.5" || row.over25_qualification?.status === "QUALIFY") &&
-          (row.market !== "over_3.5" || row.over35_qualification?.status === "QUALIFY") &&
-          (row.market !== "over_4.5" || row.over45_qualification?.status === "QUALIFY") &&
-          (row.market !== "under_2.5" || row.under25_qualification?.status === "QUALIFY") &&
-          (row.market !== "under_3.5" || row.under35_qualification?.status === "QUALIFY") &&
-          (row.market !== "under_1.5" || row.under15_qualification?.status === "QUALIFY") &&
-          (row.market !== "under_0.5" || row.under05_qualification?.status === "QUALIFY") &&
-          passesUnder05Value(row) &&
-          row.data_quality_status === "good" && age != null && age <= 2 && (row.edge ?? 0) > 0 &&
-          Date.parse(row.kickoff_at) > Date.now() &&
-          row.match_status?.toLowerCase() === "scheduled" && !used.has(row.match_id);
+        return row.recommendation_status === "BET" && currentEligibility(row) === "Current gates pass · combo rules still apply" && !used.has(row.match_id);
       });
       const combo = findCombo(eligible, band, used);
       combo?.picks.forEach(({ row }) => used.add(row.match_id));
@@ -175,7 +190,7 @@ export function AccumulatorAnalysis({ rows, date }: { rows: SelectionSummary[]; 
   return <section className="acca-analysis">
     <header className="acca-analysis__heading">
       <div><span className="eyebrow">Evidence review</span><h2>Accumulator analysis</h2>
-        <p>Review each candidate’s model estimate, quoted price, edge, model agreement and data risks. Ticket suggestions use current BET-rated picks with fresh odds and good data quality.</p>
+        <p>Review model estimates, quoted prices, spread and data risks. Suggestions are heuristic research scenarios by combined-odds band, not validated joint probabilities or proof of value. Start with the published Conservative ticket in Today when reviewing an official ticket.</p>
       </div><span className="acca-analysis__date">{date} · {picks.length} candidate picks</span>
     </header>
     <div className="acca-analysis__notice">Betway first; otherwise the closest observed bookmaker across at least three comparable fixtures. Without enough Betway comparisons, use the available price nearest the market median and mark Betway similarity unverified. Original model ratings remain unchanged; displayed edge uses the selected price. Indicative research only: mixed-bookmaker combined odds may not be available as one ticket, and bookmaker margin remains.</div>
@@ -217,18 +232,28 @@ export function AccumulatorAnalysis({ rows, date }: { rows: SelectionSummary[]; 
         <td><b>{formatMarket(row.market)}</b></td>
         <td>{row.best_odds?.toFixed(2) ?? "—"}<span>{row.best_odds && row.best_odds > 1 ? `${(100 / row.best_odds).toFixed(1)}% break-even` : "No valid price"}</span></td>
         <td>{row.model_probability != null ? `${(row.model_probability * 100).toFixed(1)}%` : "—"}<span>{row.edge != null ? `${row.edge >= 0 ? "+" : ""}${(row.edge * 100).toFixed(1)} pp edge` : "Edge unavailable"}</span></td>
-        <td><b>{row.recommendation_status ?? "Unrated"}</b><span>Q {Math.round(row.q_score)} · score {score.toFixed(0)}</span></td>
+        <td><b>Model rating: {row.recommendation_status ?? "Unrated"}</b><span>{currentEligibility(row)}</span><span>Q {Math.round(row.q_score)} · score {score.toFixed(0)}</span></td>
         <td><span className={`acca-analysis__status acca-analysis__status--${row.result ?? "pending"}`}>
           {row.result
             ? `${selectionStatusLabel(row.result)}${row.home_goals != null && row.away_goals != null ? ` (${row.home_goals}-${row.away_goals})` : ""}`
             : "Pending"}
         </span></td>
-        <td><button type="button" className="acca-analysis__details-button" onClick={() => setActiveAnalysis({ row, score, reasons, risks })}>View analysis</button></td>
+        <td><button type="button" className="acca-analysis__details-button" onClick={(event) => { analysisTriggerRef.current = event.currentTarget; setActiveAnalysis({ row, score, reasons, risks }); }}>View analysis</button></td>
       </tr>)}</tbody></table>
       {tablePicks.length === 0 && <p className="acca-analysis__empty">{picks.length === 0 ? "No candidate picks are available for this date." : "No rows match these filters. Adjust a filter to see more candidates."}</p>}
     </div>
+    {onLoadMore && rows.length < totalSelections && <button className="btn-ghost btn-sm" type="button" onClick={onLoadMore} disabled={loadingMore}>{loadingMore ? "Loading more candidates…" : `Load next 100 candidates (${totalSelections - rows.length} remaining)`}</button>}
     {activeAnalysis && <div className="acca-analysis__dialog-backdrop" onClick={(event) => { if (event.target === event.currentTarget) setActiveAnalysis(null); }}>
-      <section ref={analysisDialogRef} className="acca-analysis__dialog" role="dialog" aria-modal="true" aria-labelledby="acca-analysis-dialog-title" onKeyDown={(event) => { if (event.key === "Escape") setActiveAnalysis(null); }} tabIndex={-1}>
+      <section ref={analysisDialogRef} className="acca-analysis__dialog" role="dialog" aria-modal="true" aria-labelledby="acca-analysis-dialog-title" onKeyDown={(event) => {
+        if (event.key === "Escape") { setActiveAnalysis(null); return; }
+        if (event.key !== "Tab") return;
+        const controls = analysisDialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])');
+        if (!controls?.length) { event.preventDefault(); analysisDialogRef.current?.focus(); return; }
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }} tabIndex={-1}>
         <header className="acca-analysis__dialog-header">
           <div><span className="eyebrow">Analysis and risks</span><h3 id="acca-analysis-dialog-title">{activeAnalysis.row.home_team} vs {activeAnalysis.row.away_team}</h3>
             <p>{activeAnalysis.row.competition} · {formatMarket(activeAnalysis.row.market)}: {formatSelection(activeAnalysis.row.selection)}</p></div>

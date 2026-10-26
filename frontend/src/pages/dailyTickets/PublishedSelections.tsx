@@ -1,8 +1,9 @@
 import { useSortableRows } from "../../components/SortableTable";
 import type { Leg, Ticket } from "../../lib/api";
-import { formatDate, formatKickoff, formatMarket, formatSelection, selectionRepeatsMarket, selectionTone } from "../../lib/api";
+import { formatDate, formatKickoff, formatMarket, formatSelection, selectionRepeatsMarket, selectionTone, ticketTierBadgeClass } from "../../lib/api";
 
 interface PublishedTicket {
+  tierKey: string;
   tierName: string;
   ticket: Ticket;
 }
@@ -10,7 +11,7 @@ interface PublishedTicket {
 interface PublishedSelection {
   leg: Leg;
   ticket: Ticket;
-  tiers: Set<string>;
+  tiers: Map<string, string>;
 }
 
 interface Props {
@@ -30,16 +31,16 @@ function matchStatus(leg: Leg): string {
 export default function PublishedSelections({ tickets, onSelect, canViewSelections }: Props) {
   const selections = new Map<string, PublishedSelection>();
 
-  for (const { tierName, ticket } of tickets) {
+  for (const { tierKey, tierName, ticket } of tickets) {
     for (const leg of ticket.legs) {
       const key = leg.prediction_id != null
         ? `prediction:${leg.prediction_id}`
         : `${leg.match_id}|${leg.market}|${leg.selection}`;
       const existing = selections.get(key);
       if (existing) {
-        existing.tiers.add(tierName);
+        existing.tiers.set(tierKey, tierName);
       } else {
-        selections.set(key, { leg, ticket, tiers: new Set([tierName]) });
+        selections.set(key, { leg, ticket, tiers: new Map([[tierKey, tierName]]) });
       }
     }
   }
@@ -70,7 +71,7 @@ export default function PublishedSelections({ tickets, onSelect, canViewSelectio
         </div>
         <span className="published-selection-count">{rows.length} unique {rows.length === 1 ? "selection" : "selections"}</span>
       </div>
-      <p className="published-selections-note">Each match pick appears once. Ticket tiers that include it are shown on the pick; each tier’s full published record is below.</p>
+      <p className="published-selections-note">Each match pick appears once. Review the Conservative ticket first, then Balanced if its legs still fit your decision. Tier names and odds describe construction rules, not a promise of profit. The tiers that include each pick are shown here; each full published record is below.</p>
       {!canViewSelections ? (
         <p className="published-selections-empty">Selection details are available on Pro. Published ticket summaries remain below.</p>
       ) : rows.length === 0 ? (
@@ -100,7 +101,7 @@ export default function PublishedSelections({ tickets, onSelect, canViewSelectio
                   </span>
                   <span className={`published-selection-status ${leg.result ?? "pending"}`}>{matchStatus(leg)}</span>
                   <span className="published-selection-details">
-                    <span className="published-selection-tiers">In {Array.from(tiers).join(" · ")}</span>
+                    <span className="published-selection-tiers"><span>In</span>{Array.from(tiers, ([key, name]) => <span className={ticketTierBadgeClass(key)} key={key}>{name}</span>)}</span>
                     <span className="published-selection-odds">{leg.best_odds == null ? "Odds unavailable" : `${leg.best_odds.toFixed(2)} odds`}</span>
                   </span>
                   <span className="published-selection-open" aria-hidden="true">›</span>

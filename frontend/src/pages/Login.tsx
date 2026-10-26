@@ -22,14 +22,14 @@ export default function LoginPage({ onSuccess }: { onSuccess: () => void }) {
       <div className="auth-card">
         <div className="auth-card-body">
         <div className="auth-form-panel">
-          <a className="auth-card-brand" href="/" aria-label="Qwantej home">
+          <a className="auth-card-brand" href="/" aria-label="QwanEj home">
             <picture>
-              <source media="(prefers-color-scheme: dark)" srcSet="/dark/logo.png" />
-              <img src="/light/logo.png" alt="Qwantej — Intelligence beyond numbers" />
+              <source media="(prefers-color-scheme: dark)" srcSet="/dark/logo.png?v=qwanej-1" />
+              <img src="/light/logo.png?v=qwanej-1" alt="QwanEj — Intelligence beyond numbers" />
             </picture>
           </a>
           <h2 id="auth-page-title">{mode === 'login' ? 'Welcome back' : 'Create your account'}</h2>
-          <p>{mode === 'login' ? 'Sign in to your Qwantej workspace.' : 'Create an account to get started with Qwantej.'}</p>
+          <p>{mode === 'login' ? 'Sign in to your QwanEj workspace.' : 'Create an account to get started with QwanEj.'}</p>
           <form onSubmit={submit}>
             {mode === 'register' && <label>Username<input autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} required /></label>}
             <label>Email<input type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} required /></label>

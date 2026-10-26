@@ -213,7 +213,7 @@ async def create_checkout(
         "redirect_url": _return_url(request, tx_ref),
         "customer": {"email": user.email, "name": user.username},
         "customizations": {
-            "title": "Qwantej Pro",
+            "title": "QwanEj Pro",
             "description": f"Monthly Pro access (MWK {amount:,.2f})",
         },
     }
@@ -385,7 +385,7 @@ async def flutterwave_webhook(
                 )
         user = await db.get(User, active_subscription.user_id) if active_subscription else None
     if user is None:
-        logger.warning("Flutterwave transaction had no matching Qwantej order or active subscription")
+        logger.warning("Flutterwave transaction had no matching QwanEj order or active subscription")
         return {"received": True}
 
     await _activate_from_verified_payment(db, user=user, order=order, transaction=transaction)

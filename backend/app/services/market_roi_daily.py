@@ -7,12 +7,14 @@ from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, load_only
 
 from app.config import CAT, cat_day_bounds_utc, settings
+from app.models.competition import Competition
 from app.models.match import Match, MatchStatus
 from app.models.prediction import Prediction
 from app.models.research import SelectionResult
+from app.models.team import Team
 from app.services.performance import _as_utc, _has_pre_kickoff_information
 from app.services.settlement import evaluate_selection
 
@@ -73,7 +75,29 @@ async def daily_market_roi(db: AsyncSession, target_date: date | None = None) ->
     history_result = await db.execute(
         select(Prediction)
         .join(Match, Match.id == Prediction.match_id)
-        .options(joinedload(Prediction.match))
+        .options(
+            load_only(
+                Prediction.id,
+                Prediction.match_id,
+                Prediction.market,
+                Prediction.selection,
+                Prediction.q_score,
+                Prediction.source_odds_id,
+                Prediction.source_odds_at,
+                Prediction.source_decimal_odds,
+                Prediction.source_odds_provenance,
+                Prediction.decision_at,
+                Prediction.as_of_at,
+                Prediction.created_at,
+            ),
+            joinedload(Prediction.match).load_only(
+                Match.id,
+                Match.kickoff_at,
+                Match.status,
+                Match.home_goals,
+                Match.away_goals,
+            ),
+        )
         .where(
             Match.kickoff_at < day_start,
             Match.status == MatchStatus.FINISHED,
@@ -167,12 +191,53 @@ async def daily_market_roi(db: AsyncSession, target_date: date | None = None) ->
         select(Prediction)
         .join(Match, Prediction.match_id == Match.id)
         .options(
+            load_only(
+                Prediction.id,
+                Prediction.match_id,
+                Prediction.market,
+                Prediction.selection,
+                Prediction.q_score,
+                Prediction.source_odds_id,
+                Prediction.source_odds_at,
+                Prediction.source_decimal_odds,
+                Prediction.source_odds_provenance,
+                Prediction.decision_at,
+                Prediction.as_of_at,
+                Prediction.created_at,
+                Prediction.model_probability,
+                Prediction.q_grade,
+                Prediction.recommendation_status,
+            ),
             joinedload(Prediction.match)
-            .joinedload(Match.home_team),
+            .load_only(
+                Match.id,
+                Match.kickoff_at,
+                Match.status,
+                Match.home_goals,
+                Match.away_goals,
+            )
+            .joinedload(Match.home_team)
+            .load_only(Team.id, Team.name),
             joinedload(Prediction.match)
-            .joinedload(Match.away_team),
+            .load_only(
+                Match.id,
+                Match.kickoff_at,
+                Match.status,
+                Match.home_goals,
+                Match.away_goals,
+            )
+            .joinedload(Match.away_team)
+            .load_only(Team.id, Team.name),
             joinedload(Prediction.match)
-            .joinedload(Match.competition),
+            .load_only(
+                Match.id,
+                Match.kickoff_at,
+                Match.status,
+                Match.home_goals,
+                Match.away_goals,
+            )
+            .joinedload(Match.competition)
+            .load_only(Competition.id, Competition.name),
         )
         .where(Match.kickoff_at >= day_start, Match.kickoff_at < day_end)
         .order_by(Prediction.created_at.desc(), Prediction.id.desc())
@@ -245,6 +310,8 @@ async def daily_market_roi(db: AsyncSession, target_date: date | None = None) ->
         })
     candidates.sort(key=lambda row: (row["kickoff_at"], -row["market_roi"], row["match_id"], row["market"], row["selection"]))
 
+    settled_market_performance = await settled_daily_pick_market_performance(db)
+
     return {
         "target_date": target_date.isoformat(),
         "refreshed_at": now.isoformat(),
@@ -262,7 +329,212 @@ async def daily_market_roi(db: AsyncSession, target_date: date | None = None) ->
         "candidate_count": len(candidates),
         "candidate_fixture_count": len({row["match_id"] for row in candidates}),
         "candidates": candidates,
+        "settled_daily_pick_market_performance": settled_market_performance,
         "unsupported_outcomes_excluded": unsupported,
         "method": "Historical hit rate and flat one-unit ROI use the latest valid pre-kickoff prediction per unique fixture-market-selection across all stored predictions, restricted to Q scores of at least 70, decimal odds from 2.00 to below 3.00, and captured bookmaker quotes no older than three hours at decision time. A market qualifies only when its historical hit rate is strictly above 50% and ROI is strictly above 30%. Today's candidates use the same Q and odds bounds, a quote no older than three hours at refresh, and valid pre-kickoff bookmaker provenance for a qualifying market.",
         "research_only": True,
+    }
+
+
+async def settled_daily_pick_market_performance(db: AsyncSession) -> dict:
+    """Cumulative settled performance of Daily Match Picks since 2026-10-01.
+
+    Rebuild each CAT day's pick set using only results known before that day,
+    matching daily_market_roi's historical market gates. A date is added only
+    after every reconstructed pick that day has a terminal match status.
+    """
+    start_date = date(2026, 10, 1)
+    today = datetime.now(CAT).date()
+    now = datetime.now(timezone.utc)
+    _, range_end = cat_day_bounds_utc(today)
+    result = await db.execute(
+        select(Prediction)
+        .join(Match, Match.id == Prediction.match_id)
+        .options(
+            load_only(
+                Prediction.id, Prediction.match_id, Prediction.market,
+                Prediction.selection, Prediction.q_score,
+                Prediction.source_odds_id, Prediction.source_odds_at,
+                Prediction.source_decimal_odds,
+                Prediction.source_odds_provenance, Prediction.decision_at,
+                Prediction.as_of_at, Prediction.created_at,
+            ),
+            joinedload(Prediction.match).load_only(
+                Match.id, Match.kickoff_at, Match.status, Match.home_goals,
+                Match.away_goals,
+            ),
+        )
+        .where(
+            Match.kickoff_at < range_end,
+            Prediction.q_score >= MIN_Q_SCORE,
+            Prediction.source_odds_id.is_not(None),
+            Prediction.source_odds_at.is_not(None),
+            Prediction.source_decimal_odds >= MIN_DECIMAL_ODDS,
+            Prediction.source_decimal_odds < MAX_DECIMAL_ODDS,
+        )
+        .order_by(Prediction.created_at.desc(), Prediction.id.desc())
+    )
+    predictions = result.scalars().all()
+
+    # Cache valid rows/outcomes once; the same eligible records feed both the
+    # as-of-date qualification history and that day's pick set.
+    valid_predictions = [
+        prediction for prediction in predictions
+        if prediction.match is not None
+        and prediction.q_score >= MIN_Q_SCORE
+        and prediction.source_decimal_odds is not None
+        and MIN_DECIMAL_ODDS <= prediction.source_decimal_odds < MAX_DECIMAL_ODDS
+        and _fresh_pre_kickoff_prediction(prediction, now)
+        and timedelta(0)
+        <= _as_utc(prediction.decision_at or prediction.as_of_at or prediction.created_at)
+        - _as_utc(prediction.source_odds_at)
+        <= MAX_QUOTE_AGE
+    ]
+
+    settled_by_market: dict[str, list[tuple[Prediction, SelectionResult, date]]] = defaultdict(list)
+    incomplete_dates: list[str] = []
+    included_dates: list[str] = []
+
+    current_date = start_date
+    terminal_statuses = {
+        MatchStatus.FINISHED, MatchStatus.POSTPONED, MatchStatus.CANCELLED,
+        MatchStatus.ABANDONED, MatchStatus.AWARDED,
+    }
+    while current_date <= today:
+        history: dict[tuple[int, str, str], tuple[Prediction, SelectionResult]] = {}
+        for prediction in valid_predictions:
+            match = prediction.match
+            match_date = _as_utc(match.kickoff_at).astimezone(CAT).date()
+            if (
+                match_date >= current_date
+                or match.status != MatchStatus.FINISHED
+                or match.home_goals is None
+                or match.away_goals is None
+            ):
+                continue
+            key = (prediction.match_id, prediction.market, prediction.selection)
+            if key in history:
+                continue
+            try:
+                outcome = evaluate_selection(
+                    prediction.selection, match.home_goals, match.away_goals
+                )
+            except ValueError:
+                try:
+                    outcome = evaluate_selection(
+                        prediction.market, match.home_goals, match.away_goals
+                    )
+                except ValueError:
+                    continue
+            if outcome in (SelectionResult.WON, SelectionResult.LOST):
+                history[key] = (prediction, outcome)
+
+        history_by_market: dict[str, list[tuple[Prediction, SelectionResult]]] = defaultdict(list)
+        for (match_id, market, _selection), item in history.items():
+            history_by_market[market].append(item)
+
+        qualifying_markets = set()
+        for market, items in history_by_market.items():
+            wins = sum(outcome == SelectionResult.WON for _, outcome in items)
+            losses = len(items) - wins
+            if not wins + losses:
+                continue
+            roi = sum(
+                prediction.source_decimal_odds - 1
+                if outcome == SelectionResult.WON else -1
+                for prediction, outcome in items
+            ) / (wins + losses)
+            if wins / (wins + losses) > HIT_RATE_THRESHOLD and roi > ROI_THRESHOLD:
+                qualifying_markets.add(market)
+
+        daily_predictions: dict[tuple[int, str, str], Prediction] = {}
+        for prediction in valid_predictions:
+            match = prediction.match
+            match_date = _as_utc(match.kickoff_at).astimezone(CAT).date()
+            if (
+                match_date != current_date
+                or prediction.market not in qualifying_markets
+                or match.status not in {
+                    MatchStatus.SCHEDULED, MatchStatus.LIVE, MatchStatus.FINISHED,
+                    MatchStatus.POSTPONED, MatchStatus.CANCELLED,
+                }
+            ):
+                continue
+            key = (prediction.match_id, prediction.market, prediction.selection)
+            if key not in daily_predictions:
+                daily_predictions[key] = prediction
+
+        if daily_predictions:
+            if any(prediction.match.status not in terminal_statuses for prediction in daily_predictions.values()):
+                incomplete_dates.append(current_date.isoformat())
+            else:
+                included_dates.append(current_date.isoformat())
+                for prediction in daily_predictions.values():
+                    match = prediction.match
+                    if match.status in (MatchStatus.POSTPONED, MatchStatus.CANCELLED):
+                        continue  # Voided picks return the stake; they do not count in ROI.
+                    if (
+                        match.status != MatchStatus.FINISHED
+                        or match.home_goals is None
+                        or match.away_goals is None
+                    ):
+                        continue
+                    try:
+                        outcome = evaluate_selection(
+                            prediction.selection, match.home_goals, match.away_goals
+                        )
+                    except ValueError:
+                        try:
+                            outcome = evaluate_selection(
+                                prediction.market, match.home_goals, match.away_goals
+                            )
+                        except ValueError:
+                            continue
+                    if outcome in (SelectionResult.WON, SelectionResult.LOST):
+                        settled_by_market[prediction.market].append(
+                            (prediction, outcome, current_date)
+                        )
+
+        current_date += timedelta(days=1)
+
+    rows = []
+    for market, items in settled_by_market.items():
+        def performance(window_items):
+            wins = sum(outcome == SelectionResult.WON for _, outcome, _ in window_items)
+            losses = sum(outcome == SelectionResult.LOST for _, outcome, _ in window_items)
+            count = wins + losses
+            pnl = sum(
+                prediction.source_decimal_odds - 1
+                if outcome == SelectionResult.WON else -1
+                for prediction, outcome, _ in window_items
+            )
+            return {
+                "selections": count,
+                "wins": wins,
+                "losses": losses,
+                "hit_rate": wins / count if count else None,
+                "flat_stake_pnl": pnl,
+                "roi": pnl / count if count else None,
+            }
+
+        earlier_items = [item for item in items if item[2] < date(2026, 10, 20)]
+        later_items = [item for item in items if item[2] >= date(2026, 10, 20)]
+        all_stats = performance(items)
+        rows.append({
+            "market": market,
+            **all_stats,
+            "earlier_roi": performance(earlier_items)["roi"],
+            "later_roi": performance(later_items)["roi"],
+        })
+    rows.sort(key=lambda row: (-(row["roi"] if row["roi"] is not None else float("-inf")), row["market"]))
+
+    return {
+        "date_from": start_date.isoformat(),
+        "calculated_at": now.isoformat(),
+        "completed_through": max(included_dates) if included_dates else None,
+        "included_days": included_dates,
+        "waiting_for_settlement_days": incomplete_dates,
+        "earlier_through": "2026-10-19",
+        "later_from": "2026-10-20",
+        "markets": rows,
     }

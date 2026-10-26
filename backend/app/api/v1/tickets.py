@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hmac
-import os
 from datetime import date, timezone
 from typing import Literal, Optional
 
@@ -32,60 +30,6 @@ from app.services.pipeline_tracker import infer_pipeline_run_type
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
 
-
-@router.get("/portfolio-export")
-async def export_portfolio_tickets(
-    from_date: date = Query(alias="from"),
-    to_date: date = Query(alias="to"),
-    x_portfolio_token: str | None = Header(default=None),
-    db: AsyncSession = Depends(get_db),
-):
-    """Read-only service export of immutable public ticket snapshots."""
-    expected = os.environ.get("PORTFOLIO_EXPORT_TOKEN", "")
-    if not expected or not x_portfolio_token or not hmac.compare_digest(expected, x_portfolio_token):
-        raise HTTPException(status_code=401, detail="Invalid portfolio service credential")
-    if from_date > to_date:
-        raise HTTPException(status_code=422, detail="from must be before or equal to to")
-    if (to_date - from_date).days > 3660:
-        raise HTTPException(status_code=422, detail="Date range exceeds ten years")
-
-    result = await db.execute(
-        select(AccumulatorTicket)
-        .where(
-            AccumulatorTicket.target_date >= from_date,
-            AccumulatorTicket.target_date <= to_date,
-            AccumulatorTicket.ticket_type.in_(PUBLIC_TICKET_TYPES),
-            AccumulatorTicket.status.in_([
-                TicketStatus.PUBLISHED,
-                TicketStatus.SETTLED,
-                TicketStatus.VOID,
-            ]),
-        )
-        .options(
-            selectinload(AccumulatorTicket.selections),
-            selectinload(AccumulatorTicket.selections).selectinload(TicketSelection.match).selectinload(Match.home_team),
-            selectinload(AccumulatorTicket.selections).selectinload(TicketSelection.match).selectinload(Match.away_team),
-            selectinload(AccumulatorTicket.selections).selectinload(TicketSelection.match).selectinload(Match.competition),
-            selectinload(AccumulatorTicket.selections).selectinload(TicketSelection.prediction),
-            selectinload(AccumulatorTicket.results),
-        )
-        .order_by(
-            AccumulatorTicket.target_date.desc(),
-            AccumulatorTicket.ticket_type,
-            AccumulatorTicket.version.asc(),
-        )
-    )
-    tickets = []
-    seen = set()
-    for ticket in result.scalars().all():
-        key = (ticket.target_date, ticket.ticket_type)
-        if key in seen:
-            continue
-        seen.add(key)
-        snapshot = _ticket(ticket, reveal=True).model_dump(mode="json")
-        snapshot["target_date"] = ticket.target_date.isoformat()
-        tickets.append(snapshot)
-    return {"tickets": tickets}
 
 PUBLIC_TICKET_TYPES = list(BUILDER_PUBLIC_TICKET_TYPES)
 TICKET_NAMES = {
@@ -233,6 +177,7 @@ class TicketHistoryOut(BaseModel):
     avg_q_score: float | None
     model_version: str
     published_at: str
+    publication_timing: Literal["pre_kickoff", "post_kickoff", "unknown"]
     publication_hash: str
     relaxed_tier: bool
     pricing: str = "model"
@@ -344,7 +289,7 @@ async def get_daily_tickets(
     # It must observe the same entitlement boundary as ``rows`` above: an
     # internal-only ticket is not harmless merely because its legs are redacted.
     # Its existence, tier, hash and settlement state are research information.
-    visible_ticket_types = list(TicketType) if include_internal else list(PUBLIC_TICKET_TYPES)
+    visible_ticket_types = [ticket_type for ticket_type in TicketType if ticket_type != TicketType.HIGH_ODDS] if include_internal else list(PUBLIC_TICKET_TYPES)
     history_result = await db.execute(
         select(AccumulatorTicket)
         .where(
@@ -418,7 +363,7 @@ async def get_daily_tickets(
         ),
         conservative=mapped.get(TicketType.SAFE),
         balanced=mapped.get(TicketType.BALANCED),
-        high_odds=mapped.get(TicketType.HIGH_ODDS),
+        high_odds=None,
         superseded_versions=superseded,
     )
 
@@ -436,7 +381,7 @@ async def get_ticket_history(
     user=Depends(require_authenticated_user),
 ):
     """Return immutable ticket history, latest cohorts by default."""
-    ticket_types = list(TicketType) if include_internal else PUBLIC_TICKET_TYPES
+    ticket_types = [ticket_type for ticket_type in TicketType if ticket_type != TicketType.HIGH_ODDS] if include_internal else PUBLIC_TICKET_TYPES
     if include_superseded:
         result = await db.execute(
             select(AccumulatorTicket)
@@ -449,7 +394,7 @@ async def get_ticket_history(
                 ]),
             )
             .options(
-                selectinload(AccumulatorTicket.selections),
+                selectinload(AccumulatorTicket.selections).selectinload(TicketSelection.match),
                 selectinload(AccumulatorTicket.results),
             )
             .order_by(
@@ -487,7 +432,7 @@ async def get_ticket_history(
             & (AccumulatorTicket.version == latest_versions.c.version),
         )
         .options(
-            selectinload(AccumulatorTicket.selections),
+            selectinload(AccumulatorTicket.selections).selectinload(TicketSelection.match),
             selectinload(AccumulatorTicket.results),
         )
         .order_by(AccumulatorTicket.target_date.desc(), AccumulatorTicket.ticket_type)
@@ -556,7 +501,7 @@ async def get_ticket(
     ticket = await get_ticket_by_id(db, ticket_id)
     if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket not found")
-    if ticket.ticket_type == TicketType.BEST_VALUE and not _can_reveal(user):
+    if ticket.ticket_type in {TicketType.BEST_VALUE, TicketType.HIGH_ODDS} and not _can_reveal(user):
         await require_research_access(request, x_research_key, user)
     reveal = _can_reveal(user)
     return _ticket(ticket, reveal=reveal)
@@ -589,7 +534,7 @@ def _ticket(ticket: AccumulatorTicket, *, reveal: bool = True) -> TicketOut:
         relaxation_level=ticket.relaxation_level,
         horizon_days=ticket.horizon_days or 0,
         pricing=_ticket_pricing(ticket),
-        internal_only=ticket.ticket_type == TicketType.BEST_VALUE,
+        internal_only=ticket.ticket_type in {TicketType.BEST_VALUE, TicketType.HIGH_ODDS},
         result=latest_result.result.value if latest_result else None,
         profit_loss=latest_result.profit_loss if latest_result else None,
         settled_at=latest_result.settled_at.isoformat() if latest_result else None,
@@ -641,10 +586,11 @@ def _history_ticket(ticket: AccumulatorTicket, *, reveal: bool = True) -> Ticket
         avg_q_score=ticket.average_q_score if reveal else None,
         model_version=ticket.model_version,
         published_at=ticket.published_at.isoformat(),
+        publication_timing=_ticket_publication_timing(ticket),
         publication_hash=ticket.publication_hash,
         relaxed_tier=ticket.relaxed_tier,
         pricing=_ticket_pricing(ticket),
-        internal_only=ticket.ticket_type == TicketType.BEST_VALUE,
+        internal_only=ticket.ticket_type in {TicketType.BEST_VALUE, TicketType.HIGH_ODDS},
         result=latest_result.result.value if latest_result else None,
         stake=latest_result.stake if latest_result else None,
         return_amount=latest_result.return_amount if latest_result else None,

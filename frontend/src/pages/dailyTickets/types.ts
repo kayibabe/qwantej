@@ -3,11 +3,12 @@ import type { SelectionSummary } from "../../lib/api";
 export interface DailyTicketsPageProps {
   date: string;
   initialTab?: DailyTab;
-  onOpenTracker?: () => void;
+  onOpenTracker?: (ticketId: number) => void;
+  onTabChange?: (tab: DailyTab) => void;
 }
 
 export type DailyTab =
-  "tickets" | "matches" | "odds-policy" | "market-roi" | "daily-match-picks" | "passed" | "acca-analysis";
+  "tickets" | "published-history" | "personal-journal" | "matches" | "odds-policy" | "market-roi" | "daily-match-picks" | "passed";
 
 export type MatchDisplayState =
   "finished" | "live" | "scheduled" | "postponed" | "cancelled" | "abandoned" | "awarded";

@@ -273,14 +273,16 @@ async def create_custom_accumulator(payload: CustomAccumulatorPayload, db: Async
 
 @router.patch("/{accumulator_id}", response_model=CustomAccumulatorOut, dependencies=[Depends(require_pro_access)])
 async def update_custom_accumulator(accumulator_id: int, payload: CustomAccumulatorPayload, db: AsyncSession = Depends(get_db)):
-    row = (await db.execute(select(CustomAccumulator).options(selectinload(CustomAccumulator.legs)).where(CustomAccumulator.id == accumulator_id))).scalar_one_or_none()
+    row = (await db.execute(select(CustomAccumulator).options(
+        selectinload(CustomAccumulator.legs).selectinload(CustomAccumulatorLeg.match),
+    ).where(CustomAccumulator.id == accumulator_id))).scalar_one_or_none()
     if not row:
         raise HTTPException(404, "Custom accumulator not found")
     await _apply_payload(db, row, payload)
     await db.commit()
     row = (await db.execute(select(CustomAccumulator).options(
         selectinload(CustomAccumulator.legs).selectinload(CustomAccumulatorLeg.match),
-    ).where(CustomAccumulator.id == row.id))).scalar_one()
+    ).where(CustomAccumulator.id == row.id).execution_options(populate_existing=True))).scalar_one()
     return _out(row)
 
 

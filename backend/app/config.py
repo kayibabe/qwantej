@@ -201,16 +201,15 @@ class Settings(BaseSettings):
     # failures such as the same totals line appearing in every accumulator.
     max_public_ticket_exposure_per_match_market: int = 1
 
-    # On thin weekday slates the full-strength tier gates can legitimately
-    # admit zero combinations. The fallback may relax the internal High Odds
-    # tier, but never publishes a relaxed Conservative or Balanced ticket.
+    # Enables the bounded horizon fallback for thin slates. Active tiers stay
+    # full-strength; shadow High Odds no longer fills the recommendation floor.
     ticket_relaxation_enabled: bool = True
     # The public daily portfolio targets the public tiers. Missing tiers remain
     # visible as PARTIAL rather than being
     # fabricated or replaced by history.
-    # The two core tiers remain the minimum daily publication floor. High Odds
-    # is published whenever the slate can support it, but does not block the
-    # day's conservative/balanced release when it cannot.
+    # Conservative and Balanced are the active daily publication floor. High
+    # Odds is generated as an internal paper-tracking cohort and never counts
+    # toward the active slate or its release floor.
     min_daily_public_tickets: int = 2
     # How ticket legs are priced. "market" (default since 2026-09-23): the
     # bookmaker's de-vigged probability — on both the frozen production
@@ -233,8 +232,8 @@ class Settings(BaseSettings):
     # range; higher estimates remain available to diagnostics.
     max_public_model_probability: float = 0.80
     # Rolling-horizon fallback (app/services/ticket_horizon.py). When the
-    # target CAT day cannot fill min_daily_public_tickets even after
-    # relaxation — international breaks leave whole weeks with 0-5 tracked
+    # target CAT day cannot fill min_daily_public_tickets with active tiers —
+    # international breaks leave whole weeks with 0-5 tracked
     # fixtures a day — the ticket stage prepares the following days one at a
     # time (up to this many) and admits their legs for the missing tiers only.
     # Tickets record how far ahead they reach (accumulator_tickets.horizon_days).

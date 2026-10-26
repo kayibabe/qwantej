@@ -11,7 +11,7 @@ interface Props {
   color: string
   research?: boolean
   onSelectLeg?: (leg: Leg, ticket: Ticket) => void
-  suggestedStake?: number | null
+  flatStake?: number | null
   showMarketSelections?: boolean
 }
 
@@ -45,7 +45,7 @@ function matchStateLabel(leg: Leg): string {
   return 'Pending'
 }
 
-export default function TicketCard({ ticket, tierName, tierDesc, color, research, onSelectLeg, suggestedStake, showMarketSelections = true }: Props) {
+export default function TicketCard({ ticket, tierName, tierDesc, color, research, onSelectLeg, flatStake, showMarketSelections = true }: Props) {
   const [legsExpanded, setLegsExpanded] = useState(false)
   const [showAllLegs, setShowAllLegs] = useState(false)
   if (!ticket) {
@@ -138,8 +138,8 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
             <span className="stat-label">Ticket odds</span>
             <span className="stat-value neutral">{ticket.combined_odds == null ? 'Pro only' : `${ticket.combined_odds.toFixed(2)}×`}</span>
           </div>
-          <div className="stat" title={marketPriced ? "Chance every leg wins, from the bookmaker's own odds with its margin removed" : 'Estimated ticket probability after correlation adjustment'}>
-            <span className="stat-label">{marketPriced ? 'Chance to win' : 'Hit probability'}</span>
+          <div className="stat" title={marketPriced ? "Estimated joint chance from each bookmaker fair probability, assuming the legs are independent" : 'Estimated ticket probability after the configured correlation adjustment'}>
+            <span className="stat-label">Estimated chance</span>
             <span className="stat-value neutral">
               {ticket.adjusted_probability == null
                 ? 'Pro only'
@@ -166,6 +166,9 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
           </div>
           </>)}
         </div>
+        {ticket.adjusted_probability != null && <p className="ticket-probability-note">{marketPriced
+          ? "This estimate multiplies fair leg probabilities and assumes the legs are independent. It is not a validated joint probability."
+          : "This estimate uses the model probabilities and configured correlation adjustment; ongoing calibration is still required."}</p>}
         {(flaggedLegs.length > 0 || settlementPending) && (
           <div className="ticket-alerts">
             {flaggedLegs.length > 0 && <div className="value-review-note"><strong>Value check</strong><span>{flaggedLegs.length} leg{flaggedLegs.length === 1 ? '' : 's'} show unusually large model/odds gaps. Treat edge and EV as provisional until market mapping and odds freshness are checked.</span></div>}
@@ -187,7 +190,7 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
           aria-controls={`ticket-leg-list-${tierName.toLowerCase().replace(/\s+/g, '-')}`}
           onClick={() => setLegsExpanded((open) => !open)}
         >
-          <span className="ticket-summary-label"><strong>{ticket.legs.length} legs</strong><span>{legsExpanded ? 'Hide legs' : 'Show legs'}</span></span>
+          <span className="ticket-summary-label"><span>{legsExpanded ? 'Click to hide legs' : 'Click to expand and view legs'}</span><strong>{ticket.legs.length} legs</strong></span>
           <div className="ticket-result-counts" aria-label="Leg outcomes">
             {(['won', 'lost', 'void', 'pending'] as const).filter(result => resultCounts[result]).map(result => (
               <span className={`ticket-result-chip ${result}`} key={result}><b>{resultCounts[result]}</b> {result}</span>
@@ -227,7 +230,7 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
             <span title={ticket.publication_hash}>Publication hash {ticket.publication_hash.slice(0, 10)}…</span>
           </div>
         </details>
-        {suggestedStake != null && !marketPriced && <div className="ticket-stake-suggestion"><div><span>What-if · half Kelly</span><strong>{suggestedStake > 0 && ticket.combined_odds != null ? `${fmt(suggestedStake)} stake` : 'No positive edge'}</strong></div>{suggestedStake > 0 && ticket.combined_odds != null && <div className="ticket-stake-outcomes"><span>Potential return <b>{fmt(suggestedStake * ticket.combined_odds)}</b></span><span>Potential P&amp;L <b className="positive">+{fmt(suggestedStake * (ticket.combined_odds - 1))}</b></span></div>}</div>}
+        {flatStake != null && ticket.combined_odds != null && <div className="ticket-stake-suggestion"><div><span>Flat stake</span><strong>{fmt(flatStake)}</strong></div><div className="ticket-stake-outcomes"><span>Potential return <b>{fmt(flatStake * ticket.combined_odds)}</b></span><span>Potential profit <b className="positive">+{fmt(flatStake * (ticket.combined_odds - 1))}</b></span></div></div>}
       </div>
 
       <ul hidden={!legsExpanded} className="leg-list" id={`ticket-leg-list-${tierName.toLowerCase().replace(/\s+/g, '-')}`}>

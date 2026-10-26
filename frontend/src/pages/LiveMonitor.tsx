@@ -114,7 +114,7 @@ export default function LiveMonitorPage() {
         <div>
           <span className="live-monitor-eyebrow"><i /> Live centre</span>
           <h1>Matches in play</h1>
-          <p>Live scores and match phases from Qwantej’s stored fixture status. This view checks for updates every minute.</p>
+          <p>Live scores and match phases from QwanEj’s stored fixture status. This view checks for updates every minute.</p>
         </div>
         <div className="live-monitor-actions">
           {lastChecked && <span>View checked {lastChecked.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}

@@ -13,6 +13,7 @@ interface Props {
   matchId: number
   selectedPredictionId?: number | null
   onBack: () => void
+  returnLabel?: string
 }
 
 const pct = (value: number | null | undefined, signed = false) => {
@@ -24,7 +25,7 @@ function statusLabel(status: string) {
   return status.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase())
 }
 
-export default function MatchIntelligencePage({ matchId, selectedPredictionId, onBack }: Props) {
+export default function MatchIntelligencePage({ matchId, selectedPredictionId, onBack, returnLabel = 'Today' }: Props) {
   const [data, setData] = useState<MatchIntelligence | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -48,14 +49,14 @@ export default function MatchIntelligencePage({ matchId, selectedPredictionId, o
   const lead = selectedPrediction ?? data?.predictions[0] ?? null
 
   if (loading) return <section className="analytics-page"><div className="analytics-empty"><strong>Loading match intelligence</strong><span>Reading the stored prediction, price, and pre-match context.</span></div></section>
-  if (error || !data) return <section className="analytics-page"><div className="analytics-empty"><strong>Match intelligence unavailable</strong><span>{error ?? 'No persisted intelligence was found for this match.'}</span><button className="btn-secondary" onClick={onBack}>Back to Today</button></div></section>
+  if (error || !data) return <section className="analytics-page"><div className="analytics-empty"><strong>Match intelligence unavailable</strong><span>{error ?? 'No persisted intelligence was found for this match.'}</span><button className="btn-secondary" onClick={onBack}>Back to {returnLabel}</button></div></section>
 
   const score = data.home_goals == null || data.away_goals == null ? 'Unplayed' : `${data.home_goals}–${data.away_goals}`
 
   return (
     <section className="analytics-page match-intelligence-page">
       <div className="page-intro match-intelligence-intro">
-        <div><button className="text-button" onClick={onBack}>← Back to Today</button><span className="eyebrow">Match intelligence</span><h1>{data.home_team} <span>vs</span> {data.away_team}</h1><p>{data.competition} · <span className="event-date">{formatDate(data.kickoff_at)}</span> · <span className="kickoff-time">{formatKickoff(data.kickoff_at)}</span> · {statusLabel(data.status)}</p></div>
+        <div><button className="text-button" onClick={onBack}>← Back to {returnLabel}</button><span className="eyebrow">Match intelligence</span><h1>{data.home_team} <span>vs</span> {data.away_team}</h1><p>{data.competition} · <span className="event-date">{formatDate(data.kickoff_at)}</span> · <span className="kickoff-time">{formatKickoff(data.kickoff_at)}</span> · {statusLabel(data.status)}</p></div>
         <div className="match-intelligence-verdict"><span>{selectedPrediction ? 'Selected market evidence' : 'Top stored market'}</span><strong className={`recommendation-badge ${(lead?.recommendation_status ?? 'WATCH').toLowerCase()}`}>{lead?.recommendation_status ?? 'WATCH'}</strong><small>{lead ? (selectionRepeatsMarket(lead.market, lead.selection) ? formatSelection(lead.selection) : <>{formatMarket(lead.market)} · {formatSelection(lead.selection)}</>) : 'No prediction snapshot'}</small>{selectedPrediction && <small>Selected prediction {selectedPrediction.prediction_id} · odds captured {selectedPrediction.source_odds_at ? new Date(selectedPrediction.source_odds_at).toLocaleString() : 'timestamp unavailable'}</small>}{selectedPredictionId != null && !selectedPrediction && <small>The selected snapshot is unavailable; showing the top stored market.</small>}</div>
       </div>
 
@@ -69,14 +70,19 @@ export default function MatchIntelligencePage({ matchId, selectedPredictionId, o
       </div>
 
       <GoalsEvidence current={data.goals_evidence} prediction={lead} />
-      {data.predictions.filter(row => row.market === 'over_1.5').map(row => <OverGoalsQualification key={row.prediction_id} market="over_1.5" assessment={row.over15_qualification} />)}
-      {data.predictions.filter(row => row.market === 'over_2.5').map(row => <OverGoalsQualification key={row.prediction_id} market="over_2.5" assessment={row.over25_qualification} />)}
-      {data.predictions.filter(row => row.market === 'over_3.5').map(row => <OverGoalsQualification key={row.prediction_id} market="over_3.5" assessment={row.over35_qualification} />)}
-      {data.predictions.filter(row => row.market === 'over_4.5').map(row => <Over45Qualification key={row.prediction_id} assessment={row.over45_qualification} />)}
-      {data.predictions.filter(row => row.market === 'under_2.5').map(row => <Under25Qualification key={row.prediction_id} assessment={row.under25_qualification} />)}
-      {data.predictions.filter(row => row.market === 'under_3.5').map(row => <Under35Qualification key={row.prediction_id} assessment={row.under35_qualification} />)}
-      {data.predictions.filter(row => row.market === 'under_1.5').map(row => <Under15Qualification key={row.prediction_id} assessment={row.under15_qualification} />)}
-      {data.predictions.filter(row => row.market === 'under_0.5').map(row => <Under05Qualification key={row.prediction_id} assessment={row.under05_qualification} />)}
+      <details className="match-qualification-disclosure">
+        <summary><span><strong>Market qualification details</strong><small>Provisional goal-market screens · expand for thresholds, evidence and blockers</small></span></summary>
+        <div className="match-qualification-panels">
+          {data.predictions.filter(row => row.market === 'over_1.5').map(row => <OverGoalsQualification key={row.prediction_id} market="over_1.5" assessment={row.over15_qualification} />)}
+          {data.predictions.filter(row => row.market === 'over_2.5').map(row => <OverGoalsQualification key={row.prediction_id} market="over_2.5" assessment={row.over25_qualification} />)}
+          {data.predictions.filter(row => row.market === 'over_3.5').map(row => <OverGoalsQualification key={row.prediction_id} market="over_3.5" assessment={row.over35_qualification} />)}
+          {data.predictions.filter(row => row.market === 'over_4.5').map(row => <Over45Qualification key={row.prediction_id} assessment={row.over45_qualification} />)}
+          {data.predictions.filter(row => row.market === 'under_2.5').map(row => <Under25Qualification key={row.prediction_id} assessment={row.under25_qualification} />)}
+          {data.predictions.filter(row => row.market === 'under_3.5').map(row => <Under35Qualification key={row.prediction_id} assessment={row.under35_qualification} />)}
+          {data.predictions.filter(row => row.market === 'under_1.5').map(row => <Under15Qualification key={row.prediction_id} assessment={row.under15_qualification} />)}
+          {data.predictions.filter(row => row.market === 'under_0.5').map(row => <Under05Qualification key={row.prediction_id} assessment={row.under05_qualification} />)}
+        </div>
+      </details>
 
       <section className="evidence-card match-intelligence-evidence"><div className="evidence-title"><h2>Executive decision summary</h2><span>Snapshot-backed · no recalculation</span></div><div className="explainability-grid"><div><strong>Why consider it</strong>{lead?.recommendation_reasons.length ? <ul>{lead.recommendation_reasons.slice(0, 5).map(reason => <li key={reason}>{statusLabel(reason)}</li>)}</ul> : <span>No positive reason was persisted.</span>}</div><div><strong>Risks and unknowns</strong>{lead?.recommendation_risks.length ? <ul>{lead.recommendation_risks.slice(0, 5).map(risk => <li key={risk}>{statusLabel(risk)}</li>)}</ul> : <span>No additional risk code was persisted.</span>}</div></div></section>
 

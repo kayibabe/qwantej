@@ -1,14 +1,13 @@
 @echo off
-title Qwantej - Starting
+title QwanEj - Starting
 echo.
 echo  ============================
-echo   QWANTEJ - Starting up...
+echo   QwanEj - Starting up...
 echo  ============================
 echo.
 
 cd /d "%~dp0"
 set "FRONTEND_PORT=3011"
-set "PORTFOLIO_ENV=%~dp0..\local-server\config\portfolio.env"
 
 echo [1/4] Checking Docker Desktop...
 docker info >nul 2>&1
@@ -48,22 +47,13 @@ if "%DOCKER_READY%" neq "1" (
 )
 
 echo [2/4] Starting backend services (Postgres, Redis, API, Celery)...
-docker network inspect local-portfolio-read >nul 2>&1
-if errorlevel 1 (
-    docker network create local-portfolio-read >nul
-    if errorlevel 1 (
-        echo ERROR: Could not create the shared Portfolio read network.
-        pause
-        exit /b 1
-    )
-)
-docker compose --env-file "%PORTFOLIO_ENV%" build backend
+docker compose build backend
 if errorlevel 1 (
     echo ERROR: Backend image build failed.
     pause
     exit /b 1
 )
-docker compose --env-file "%PORTFOLIO_ENV%" up -d
+docker compose up -d
 if errorlevel 1 (
     echo ERROR: Docker Compose failed.
     docker compose logs --tail=50 migrate backend
@@ -95,7 +85,7 @@ if "%API_READY%" neq "1" (
 echo.
 echo [3/4] Starting frontend dev server...
 set "VITE_API_PROXY_TARGET=http://127.0.0.1:%API_PORT%"
-start "Qwantej Frontend" cmd /k "cd /d "%~dp0frontend" && npm run dev -- --port %FRONTEND_PORT% --strictPort"
+start "QwanEj Frontend" cmd /k "cd /d "%~dp0frontend" && npm run dev -- --port %FRONTEND_PORT% --strictPort"
 
 echo.
 echo [4/4] Waiting for Vite to compile, then opening browser...
@@ -118,7 +108,7 @@ start http://localhost:%FRONTEND_PORT%
 
 echo.
 echo  ============================
-echo   QWANTEJ is running!
+echo   QwanEj is running!
 echo.
 echo   App      : http://localhost:%FRONTEND_PORT%
 echo   API docs : http://localhost:%API_PORT%/docs

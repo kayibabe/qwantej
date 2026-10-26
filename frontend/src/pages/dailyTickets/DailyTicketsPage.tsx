@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../../auth";
 import type { CustomAccumulator as ApiCustomAccumulator, DailyTickets, Leg, MatchFixture, SelectionSummary, Ticket } from "../../lib/api";
 import {
@@ -22,13 +22,8 @@ import RejectionReasons from "../../components/RejectionReasons";
 import SelectionDetail, {
   type DetailSelection,
 } from "../../components/SelectionDetail";
-import { ParameterSweepPicks } from "./ParameterSweepPicks";
-import { fetchDailyMarketRoi, DailyMatchPicks, MarketRoiDaily, type MarketRoiDailyData } from "./MarketRoiDaily";
+import type { MarketRoiDailyData } from "./MarketRoiDaily";
 import { TicketGridSkeleton } from "./TicketGridSkeleton";
-import { AccumulatorAnalysis } from "./AccumulatorAnalysis";
-import { AllMatches } from "./AllMatches";
-import { FixtureExplorer } from "./FixtureExplorer";
-import PublishedSelections from "./PublishedSelections";
 import "./DailyOverview.css";
 import {
   accumulatorBlockers,
@@ -39,23 +34,40 @@ import {
 } from "./helpers";
 import type { CustomAccumulator, DailyTab, DailyTicketsPageProps } from "./types";
 
-export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenMatch, onOpenTracker }: DailyTicketsPageProps & { onOpenMatch?: (matchId: number, predictionId?: number) => void }) {
+const ParameterSweepPicks = lazy(() => import("./ParameterSweepPicks").then((module) => ({ default: module.ParameterSweepPicks })));
+const DailyMatchPicks = lazy(() => import("./MarketRoiDaily").then((module) => ({ default: module.DailyMatchPicks })));
+const MarketRoiDaily = lazy(() => import("./MarketRoiDaily").then((module) => ({ default: module.MarketRoiDaily })));
+const AllMatches = lazy(() => import("./AllMatches").then((module) => ({ default: module.AllMatches })));
+const FixtureExplorer = lazy(() => import("./FixtureExplorer").then((module) => ({ default: module.FixtureExplorer })));
+const PublishedSelections = lazy(() => import("./PublishedSelections"));
+const PublishedHistory = lazy(() => import("./PublishedHistory"));
+const PersonalJournal = lazy(() => import("../Tracker"));
+
+export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenMatch, onOpenTracker, onTabChange }: DailyTicketsPageProps & { onOpenMatch?: (matchId: number, predictionId?: number) => void }) {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const canExploreMarkets = isAdmin || user?.plan === "pro";
+  const canAccessDailyPicks = isAdmin || user?.plan === "pro";
   const [data, setData] = useState<DailyTickets | null>(null);
   const [rejected, setRejected] = useState<SelectionSummary[]>([]);
   const [matches, setMatches] = useState<SelectionSummary[]>([]);
+  const [matchesTotal, setMatchesTotal] = useState(0);
+  const [loadingMoreMatches, setLoadingMoreMatches] = useState(false);
   const [marketRoi, setMarketRoi] = useState<MarketRoiDailyData | null>(null);
   const [marketRoiError, setMarketRoiError] = useState<string | null>(null);
+  const [marketRoiLoading, setMarketRoiLoading] = useState(false);
   const [fixtures, setFixtures] = useState<MatchFixture[]>([]);
   const [tab, setTab] = useState<DailyTab>(initialTab);
   const [custom, setCustom] = useState<CustomAccumulator[]>(() => {
     return [];
   });
   const [loading, setLoading] = useState(false);
+  const firstLoad = useRef(true);
+  const requestVersion = useRef(0);
+  const marketRoiResolved = useRef(false);
   const [dataCheckedAt, setDataCheckedAt] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
   const [detail, setDetail] = useState<{
     selection: DetailSelection;
     modelVersion?: string;
@@ -63,63 +75,113 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
     publishedAt?: string;
   } | null>(null);
   const [selectionMessage, setSelectionMessage] = useState<string | null>(null);
-  const [bankroll, setBankroll] = useState("");
+  const [stakePerTicket, setStakePerTicket] = useState("");
 
-  const suggestedStake = (ticket: Ticket | null) => {
-    const bank = Number(bankroll);
-    if (!ticket || !(bank > 0) || ticket.combined_odds == null || ticket.adjusted_probability == null || ticket.combined_odds <= 1) return null;
-    const b = ticket.combined_odds - 1;
-    const kelly =
-      (ticket.adjusted_probability * b - (1 - ticket.adjusted_probability)) / b;
-    return Math.min(Math.max(0, kelly * 0.5 * bank), bank * 0.05);
+  useEffect(() => { setTab(initialTab); }, [initialTab]);
+
+  const flatStakeForTicket = (ticket: Ticket | null) => {
+    const stake = Number(stakePerTicket);
+    if (!ticket || !Number.isFinite(stake) || stake <= 0 || ticket.combined_odds == null || ticket.combined_odds <= 1) return null;
+    return stake;
   };
 
   const load = useCallback(async (targetDate: string) => {
-    setLoading(true);
-    setError(null);
-    if (isAdmin) {
-      setMarketRoi(null);
-      setMarketRoiError(null);
-    }
+    const request = ++requestVersion.current;
+    if (firstLoad.current) setLoading(true);
     try {
+      const wantsTickets = initialTab === "tickets";
+      const wantsFixtures = initialTab === "matches" && !canExploreMarkets;
+      const wantsCandidates = canExploreMarkets && tab === "matches";
+      const wantsRejected = isAdmin && tab === "passed";
+      const wantsCustom = isAdmin && tab === "matches";
+      const wantsMarketRoi = (isAdmin && (tab === "matches" || tab === "market-roi")) || (canAccessDailyPicks && tab === "daily-match-picks");
+      const backgroundMarketRoi = wantsMarketRoi && tab === "matches";
+      if (backgroundMarketRoi) {
+        setMarketRoiLoading(!marketRoiResolved.current);
+        setMarketRoiError(null);
+      }
+      const marketRoiPromise = wantsMarketRoi
+        ? import("./MarketRoiDaily").then(({ fetchDailyMarketRoi }) => fetchDailyMarketRoi(targetDate)).catch((cause) => {
+          const message = cause instanceof Error ? cause.message : "Daily market ROI is unavailable";
+          if (request === requestVersion.current) setMarketRoiError(message);
+          return null;
+        })
+        : Promise.resolve(null);
+      if (backgroundMarketRoi) {
+        void marketRoiPromise.then((rows) => {
+          if (request !== requestVersion.current) return;
+          setMarketRoi(rows);
+          if (rows) setMarketRoiError(null);
+        }).finally(() => {
+          if (request === requestVersion.current) {
+            marketRoiResolved.current = true;
+            setMarketRoiLoading(false);
+          }
+        });
+      }
       const [tickets, fixtureRows, allRows, rejectedRows, customRows, marketRoiRows] = await Promise.all([
-        fetchDailyTickets(targetDate),
-        fetchMatchFixtures(targetDate).catch(() => []),
-        canExploreMarkets ? fetchQualifiedSelections(targetDate) : Promise.resolve([]),
-        isAdmin ? fetchRejectedSelections(targetDate) : Promise.resolve([]),
-        isAdmin && initialTab === "matches" ? fetchCustomAccumulators(targetDate) : Promise.resolve([]),
-        isAdmin
-          ? fetchDailyMarketRoi(targetDate).then((value) => {
-              setMarketRoiError(null);
-              return value;
-            }).catch((cause) => {
-              setMarketRoi(null);
-              setMarketRoiError(cause instanceof Error ? cause.message : "Daily market ROI is unavailable");
-              return null;
-            })
-          : Promise.resolve(null),
+        wantsTickets ? fetchDailyTickets(targetDate) : Promise.resolve(null),
+        wantsFixtures ? fetchMatchFixtures(targetDate) : Promise.resolve(null),
+        wantsCandidates ? fetchQualifiedSelections(targetDate) : Promise.resolve(null),
+        wantsRejected ? fetchRejectedSelections(targetDate) : Promise.resolve(null),
+        wantsCustom ? fetchCustomAccumulators(targetDate) : Promise.resolve(null),
+        wantsMarketRoi && !backgroundMarketRoi ? marketRoiPromise : Promise.resolve(null),
       ]);
+      if (request !== requestVersion.current) return;
+      setError(null);
+      if (tickets) setData(tickets);
+      if (fixtureRows) setFixtures(fixtureRows);
+      if (allRows) {
+        setMatches(withRejectionEvidence(allRows.rows, rejectedRows ?? []));
+        setMatchesTotal(allRows.total);
+      }
+      if (rejectedRows) setRejected(rejectedRows);
+      if (customRows) setCustom(customRows.map(apiAccumulatorToUi));
+      if (wantsMarketRoi && !backgroundMarketRoi) {
+        setMarketRoi(marketRoiRows);
+        if (marketRoiRows) setMarketRoiError(null);
+      }
       setDataCheckedAt(new Date());
-      const evidencedRows = withRejectionEvidence(allRows, rejectedRows);
-      setData(tickets);
-      setFixtures(fixtureRows);
-      setMatches(evidencedRows);
-      setMarketRoi(marketRoiRows);
-      setRejected(rejectedRows);
-      setCustom(customRows.map(apiAccumulatorToUi));
     } catch (e) {
+      if (request !== requestVersion.current) return;
       setError(
         e instanceof Error ? e.message : "Failed to load research ledger",
       );
     } finally {
-      setLoading(false);
+      if (request === requestVersion.current) {
+        setLoading(false);
+        firstLoad.current = false;
+      }
     }
-  }, [canExploreMarkets, isAdmin]);
+  }, [canAccessDailyPicks, canExploreMarkets, initialTab, isAdmin, tab]);
+
+  const loadMoreMatches = async () => {
+    if (loadingMoreMatches || matches.length >= matchesTotal) return;
+    setLoadingMoreMatches(true);
+    try {
+      const page = await fetchQualifiedSelections(date, 75, matches.length);
+      setMatches((current) => withRejectionEvidence(
+        [...current, ...page.rows.filter((row) => !current.some((existing) => existing.prediction_id === row.prediction_id))],
+        rejected,
+      ));
+      setMatchesTotal(page.total);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "More candidate selections could not be loaded");
+    } finally {
+      setLoadingMoreMatches(false);
+    }
+  };
 
   useEffect(() => {
-    load(date);
-    const timer = window.setInterval(() => load(date), 300_000);
-    return () => window.clearInterval(timer);
+    let active = true;
+    const refresh = () => { if (active && document.visibilityState === "visible") void load(date); };
+    // Always start the initial request. A background tab must still leave its
+    // skeleton state; visibility only gates follow-up polling.
+    void load(date);
+    const timer = window.setInterval(refresh, 300_000);
+    const onVisibility = () => { if (document.visibilityState === "visible") refresh(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => { active = false; requestVersion.current += 1; window.clearInterval(timer); document.removeEventListener("visibilitychange", onVisibility); };
   }, [date, load]);
   const replaceCustom = (row: ApiCustomAccumulator) => {
     const uiRow = apiAccumulatorToUi(row);
@@ -156,14 +218,15 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
     const current = custom.find(
       (ticket) => ticket.date === date && ticket.status === "draft" && !ticket.automatic,
     );
+    let saved: CustomAccumulator;
     if (current) {
       if (current.legs.some((leg) => leg.match_id === row.match_id)) return;
-      await addOrUpdateCustom(current, current.name, [...current.legs, row], current.stake, "draft");
+      saved = await addOrUpdateCustom(current, current.name, [...current.legs, row], current.stake, "draft");
     } else {
-      await addOrUpdateCustom(null, `${formatDate(date)} accumulator`, [row], null, "draft");
+      saved = await addOrUpdateCustom(null, `${formatDate(date)} accumulator`, [row], null, "draft");
     }
     setSelectionMessage(null);
-    onOpenTracker?.();
+    onOpenTracker?.(saved.id);
   };
 
   const openTicketLeg = (leg: Leg, ticket: Ticket) => {
@@ -191,23 +254,21 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
     ? [
         data.conservative,
         data.balanced,
-        data.high_odds,
       ].filter((ticket): ticket is Ticket => ticket != null)
     : [];
   const dailyTabs: [DailyTab, string][] = [
     ...(initialTab === "tickets" ? [["tickets", "Recommendations"] as [DailyTab, string]] : []),
-    ...(initialTab === "matches" ? [["matches", "Match explorer"] as [DailyTab, string]] : []),
-    ...(isAdmin && ["odds-policy", "market-roi", "daily-match-picks", "passed"].includes(initialTab) ? [
+    ...(initialTab === "tickets" && (user?.plan === "pro" || isAdmin) ? [["published-history", "Ticket History"] as [DailyTab, string]] : []),
+    ...(initialTab === "tickets" && (user?.plan === "pro" || isAdmin) ? [["personal-journal", "My Journal"] as [DailyTab, string]] : []),
+    ...(initialTab === "matches" && !isAdmin ? [["matches", "Match explorer"] as [DailyTab, string]] : []),
+    ...(isAdmin && ["matches", "odds-policy", "market-roi", "daily-match-picks", "passed"].includes(initialTab) ? [
+      ["matches", "Candidates"],
       ["market-roi", "Market ROI"],
-      ["daily-match-picks", "Daily Match Picks"],
       ["passed", "Passed/Why"],
       ["odds-policy", "Research Policy"],
     ] as [DailyTab, string][] : []),
-    ...(canExploreMarkets && ["tickets", "matches"].includes(initialTab)
-      ? [["acca-analysis", "Acca Analysis"] as [DailyTab, string]]
-      : []),
-    ...(isAdmin && initialTab === "market-roi"
-      ? [["acca-analysis", "Acca Analysis"] as [DailyTab, string]]
+    ...(canAccessDailyPicks && ["matches", "daily-match-picks"].includes(initialTab)
+      ? [["daily-match-picks", "Daily Match Picks"] as [DailyTab, string]]
       : []),
   ];
   const publicationTimes = publicPublishedTickets
@@ -261,20 +322,14 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
     {
       key: "conservative" as const,
       name: "Conservative",
-      desc: fairPriced ? "Most likely ticket · 3–4 legs · 2.0–3.0×" : "Q ≥85 · 3–6 legs · 3–5×",
+      desc: fairPriced ? "2–3 legs · 2.00–3.49× · review first" : "Q ≥85 · 3–6 legs · 3–5×",
       color: "var(--conservative)",
     },
     {
       key: "balanced" as const,
       name: "Balanced",
-      desc: fairPriced ? "Most likely ticket · 3–5 legs · 3.0–5.0×" : "Q ≥80 · 60% Grade A/A+",
+      desc: fairPriced ? "3 legs · 3.50–5.00× · secondary option" : "Q ≥80 · 60% Grade A/A+",
       color: "var(--balanced)",
-    },
-    {
-      key: "high_odds" as const,
-      name: "High Odds",
-      desc: fairPriced ? "Higher-risk ticket · 2–8 legs · 5.0×+" : "Higher-risk research ticket",
-      color: "var(--high-odds)",
     },
   ];
 
@@ -282,12 +337,6 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
   const roiGatedMatches = isAdmin
     ? matches.filter((row) => roiCandidateKeys.has(`${row.match_id}|${row.market}|${row.selection}`))
     : matches;
-  const qualifyingMarketLabels = marketRoi?.qualifying_markets
-    .map((market) => market.replace(/_(\d+)_(\d+)/g, " $1.$2").replace(/_/g, " ")) ?? [];
-  const decisionRows = roiGatedMatches
-    .filter((row) => row.best_odds != null)
-    .sort((left, right) => (right.edge ?? -1) - (left.edge ?? -1))
-    .slice(0, 6);
   const matchGroups = Object.entries(roiGatedMatches.reduce<Record<number, SelectionSummary[]>>((groups, row) => {
     (groups[row.match_id] ??= []).push(row);
     return groups;
@@ -300,7 +349,12 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
           <h1 className="meta-date">
             {initialTab === "tickets" ? "Daily overview" : formatDate(data ? data.target_date : date)}
           </h1>
-          {initialTab === "tickets" && <p className="overview-date"><span className="event-date">{data ? formatDate(data.target_date) : formatDate(date)}</span></p>}
+          {initialTab === "tickets" && <p className="overview-date">
+            <span className="event-date">{data ? formatDate(data.target_date) : formatDate(date)}</span>
+            {dataCheckedAt && <span className="overview-updated-at" title="Time when recommendation data was last checked">
+              Data checked {dataCheckedAt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Blantyre" })} CAT
+            </span>}
+          </p>}
           <p className="research-disclaimer">
             {isAdmin
               ? "Internal research and paper trading only. No ticket is a promise of profit."
@@ -326,7 +380,6 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
             {modelVersions.length > 0 && (
               <span>Model {modelVersions.join(", ")}</span>
             )}
-            {dataCheckedAt && <span>Ticket data loaded {dataCheckedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>}
           </div>
         )}
       </div>
@@ -334,10 +387,16 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
       {error && (
         <div className="error-bar" role="alert">
           <div>
-            <strong>{isAdmin ? "Internal research ledger unavailable" : "Recommendations unavailable"}</strong>
-            <span>{error}</span>
+            <strong>{data && initialTab === "tickets"
+              ? "Showing the last loaded recommendations"
+              : isAdmin ? "Internal research ledger unavailable" : "Recommendations unavailable"}</strong>
+            <span>{data && initialTab === "tickets"
+              ? `The latest refresh failed${dataCheckedAt ? `; this view was loaded at ${dataCheckedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}. ${error}`
+              : error}</span>
           </div>
-          <button onClick={() => load(date)}>Try again</button>
+          <button onClick={async () => { setRetrying(true); try { await load(date); } finally { setRetrying(false); } }} disabled={retrying}>
+            {retrying ? "Retrying…" : data && initialTab === "tickets" ? "Refresh now" : "Try again"}
+          </button>
         </div>
       )}
 
@@ -350,7 +409,7 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
               <button
                 key={key}
                 className={tab === key ? "active" : ""}
-                onClick={() => setTab(key)}
+                onClick={() => { setTab(key); onTabChange?.(key); }}
               >
                 {label}
               </button>
@@ -361,35 +420,12 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
               {selectionMessage}
             </p>
           )}
-          {/* Legacy candidate tabs intentionally removed from the ticket workspace.
-            <div className="quality-legend" aria-label="Quality legend">
-              <span className="legend-title">Quality guide</span>
-              <button className={`quality-guide-item${qualityFilter === "A+" ? " active" : ""}`} onClick={() => { setQualityFilter(qualityFilter === "A+" ? null : "A+"); setTab("matches") }}>
-                <b className="grade-badge grade-a-plus">A+</b> strongest
-              </button>
-              <button className={`quality-guide-item${qualityFilter === "A" ? " active" : ""}`} onClick={() => { setQualityFilter(qualityFilter === "A" ? null : "A"); setTab("matches") }}><b className="grade-badge grade-a">A</b> high confidence</button>
-              <button className={`quality-guide-item${qualityFilter === "B+" ? " active" : ""}`} onClick={() => { setQualityFilter(qualityFilter === "B+" ? null : "B+"); setTab("matches") }}><b className="grade-badge grade-b-plus">B+</b> qualified</button>
-              <button className={`quality-guide-item${qualityFilter === "B" ? " active" : ""}`} onClick={() => { setQualityFilter(qualityFilter === "B" ? null : "B"); setTab("matches") }}><b className="grade-badge grade-b">B</b> acceptable</button>
-              <span>
-                <b className="spread-dot strong" /> ≤5 pp aligned
-              </span>
-              <span>
-                <b className="spread-dot caution" /> 10–15 pp caution
-              </span>
-              <span>
-                <b className="spread-dot high" /> &gt;15 pp downgrade
-              </span>
-            </div>
-          */}
           {tab === "matches" && canExploreMarkets && <div className="view-intro"><div><span className="eyebrow">Research candidates</span><h2 className="section-title">Qualified match markets</h2></div><p>These candidate signals are for inspection. A match appearing here does not mean it was selected for a published ticket.</p></div>}
           {isAdmin && tab === "matches" && marketRoi && (
             <div className="market-roi-match-gate" role="status">
               <b>Daily market report screen</b>
               <span>
-                Showing every available match that meets Q ≥ {marketRoi.min_q_score}, decimal odds {marketRoi.min_decimal_odds.toFixed(2)} to below {marketRoi.max_decimal_odds_exclusive.toFixed(2)}, and a valid pre-kickoff price in a market with historical hit rate above {Math.round(marketRoi.hit_rate_threshold * 100)}% and ROI above {Math.round(marketRoi.roi_threshold * 100)}%.
-                {qualifyingMarketLabels.length > 0
-                  ? ` Qualifying markets: ${qualifyingMarketLabels.join(", ")}.`
-                  : " No market in the current history meets both thresholds."}
+                This admin list intersects the daily ROI market set with the paged Q-score candidate feed (Q ≥ 75). It loads 100 candidates at a time; the ROI report may include lower-Q selections that are not in this candidate list.
               </span>
             </div>
           )}
@@ -398,24 +434,23 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
               Daily ROI gate unavailable ({marketRoiError}); no market-qualified matches are shown until it refreshes.
             </div>
           )}
-          {isAdmin && tab === "matches" && (
-            <DecisionSummary date={date} matches={decisionRows} onSelect={openSelection} />
-          )}
-          {tab === "matches" && canExploreMarkets && <AllMatches rows={matchGroups} onSelect={openSelection} onAdd={addToAccumulator} allowAdd={isAdmin} />}
-          {tab === "matches" && !canExploreMarkets && <FixtureExplorer fixtures={fixtures} />}
+          {tab === "matches" && isAdmin && marketRoiLoading && <div className="route-loading" role="status" aria-live="polite">Loading the daily market screen before showing admin candidates…</div>}
+          {tab === "matches" && canExploreMarkets && !marketRoiLoading && !marketRoiError && <Suspense fallback={<div className="route-loading">Loading candidates…</div>}><AllMatches rows={matchGroups} totalSelections={matchesTotal} loadedSelections={matches.length} loadingMore={loadingMoreMatches} onLoadMore={loadMoreMatches} onSelect={openSelection} onAdd={addToAccumulator} allowAdd={isAdmin} /></Suspense>}
+          {tab === "matches" && !canExploreMarkets && <Suspense fallback={<div className="route-loading">Loading fixtures…</div>}><FixtureExplorer fixtures={fixtures} /></Suspense>}
           {isAdmin && tab === "odds-policy" && (
-            <ParameterSweepPicks
+            <Suspense fallback={<div className="route-loading">Loading policy review…</div>}><ParameterSweepPicks
               date={date}
               onSelect={openSelection}
               onAdd={addToAccumulator}
-            />
+            /></Suspense>
           )}
-          {isAdmin && tab === "market-roi" && <MarketRoiDaily data={marketRoi} error={marketRoiError} />}
-          {canExploreMarkets && tab === "acca-analysis" && <AccumulatorAnalysis rows={matches} date={date} />}
-          {isAdmin && tab === "daily-match-picks" && <DailyMatchPicks data={marketRoi} error={marketRoiError} />}
+          {isAdmin && tab === "market-roi" && <Suspense fallback={<div className="route-loading">Loading market report…</div>}><MarketRoiDaily data={marketRoi} error={marketRoiError} /></Suspense>}
+          {canAccessDailyPicks && tab === "daily-match-picks" && <Suspense fallback={<div className="route-loading">Loading match report…</div>}><DailyMatchPicks data={marketRoi} error={marketRoiError} /></Suspense>}
           {isAdmin && tab === "passed" && (
             <PassedMatches rows={rejected} onSelect={openSelection} />
           )}
+          {tab === "published-history" && (user?.plan === "pro" || isAdmin) && <Suspense fallback={<div className="route-loading">Loading published history…</div>}><PublishedHistory /></Suspense>}
+          {tab === "personal-journal" && (user?.plan === "pro" || isAdmin) && <Suspense fallback={<div className="route-loading">Loading your journal…</div>}><PersonalJournal personalOnly /></Suspense>}
           {tab === "tickets" && (
             <>
               {isAdmin && generationUnavailable && (
@@ -433,7 +468,7 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
                       : data?.pipeline_run_id != null
                         ? `No generation record exists. Last stage: ${formatStage(data?.pipeline_current_stage ?? "unknown")}.${data?.pipeline_error ? ` ${data.pipeline_error}` : " The automation watchdog will retry a stale incomplete run within its bounded safety limit."}`
                         : date === TODAY
-                          ? "Qwantej checks the latest due 00:15 or 05:00 CAT window on startup and every five minutes. If it was missed, it queues one full catch-up automatically."
+                          ? "QwanEj checks the latest due 00:15 or 05:00 CAT window on startup and every five minutes. If it was missed, it queues one full catch-up automatically."
                           : "The ticket cards are intentionally hidden because there is no evidence that candidate generation or publication ran for this date."}
                   </p>
                 </section>
@@ -478,35 +513,27 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
               )}
 
               {publicPublishedTickets.length > 0 && (
-                <PublishedSelections tickets={publicTiers.flatMap((tier) => {
+                <Suspense fallback={<div className="route-loading">Loading published selections…</div>}><PublishedSelections tickets={publicTiers.flatMap((tier) => {
                   const ticket = data?.[tier.key] ?? null;
-                  return ticket ? [{ tierName: tier.name, ticket }] : [];
-                })} onSelect={openTicketLeg} canViewSelections={user?.plan === "pro" || isAdmin} />
+                  return ticket ? [{ tierKey: tier.key, tierName: tier.name, ticket }] : [];
+                })} onSelect={openTicketLeg} canViewSelections={user?.plan === "pro" || isAdmin} /></Suspense>
               )}
-              {publicPublishedTickets.length > 0 && (
-                <details className="stake-planner">
-                  <summary>
-                    <strong>Stake planner</strong>
-                    <span>Set a bankroll to see an illustrative scenario amount on eligible ticket cards.</span>
-                  </summary>
-                  <div className="stake-planner-controls">
-                    <label className="bankroll-input">
-                      Bankroll
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={bankroll}
-                        onChange={(event) => setBankroll(event.target.value)}
-                        placeholder="e.g. 1000"
-                      />
-                    </label>
-                    <span>Illustrative half-Kelly estimate, capped at 5% of bankroll. It does not account for probability uncertainty or place a bet.</span>
-                  </div>
-                </details>
-              )}
-              {publicPublishedTickets.length > 0 && <details className="published-ticket-tiers">
-                <summary><span><strong>Ticket tiers and full legs</strong><small>Combined odds, estimated chance, and immutable legs for {publicPublishedTickets.length} published tier{publicPublishedTickets.length === 1 ? "" : "s"}.</small></span></summary>
+              {publicPublishedTickets.length > 0 && <section className="published-ticket-tiers">
+                <header className="published-ticket-tiers-heading"><span><strong>Ticket tiers and full legs</strong><small>Combined odds, estimated chance, and immutable legs for {publicPublishedTickets.length} published tier{publicPublishedTickets.length === 1 ? "" : "s"}.</small></span></header>
+                {canExploreMarkets && <div className="stake-planner-controls">
+                  <label className="bankroll-input">
+                    Stake per ticket
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={stakePerTicket}
+                      onChange={(event) => setStakePerTicket(event.target.value)}
+                      placeholder="e.g. 100"
+                    />
+                  </label>
+                  <span>Potential return includes the stake; potential profit excludes it. This is a what-if calculation and does not place a bet.</span>
+                </div>}
                 <div className="ticket-grid public-ticket-grid">
               {publicTiers.map((tier) => (
                 <TicketCard
@@ -516,12 +543,12 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
                   tierDesc={tier.desc}
                   color={tier.color}
                   onSelectLeg={canExploreMarkets ? openTicketLeg : undefined}
-                  suggestedStake={suggestedStake(data?.[tier.key] ?? null)}
+                  flatStake={flatStakeForTicket(data?.[tier.key] ?? null)}
                   showMarketSelections={user?.plan === "pro" || isAdmin}
                 />
               ))}
                 </div>
-              </details>}
+              </section>}
             </>
           )}
 
@@ -540,6 +567,7 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
           modelVersion={detail.modelVersion}
           publishedAt={detail.publishedAt}
           pricing={detail.pricing}
+          canViewMarketPrices={canExploreMarkets}
           onClose={() => setDetail(null)}
           onOpenMatch={isAdmin ? onOpenMatch : undefined}
         />
@@ -623,87 +651,4 @@ function PassedMatches({ rows, onSelect }: { rows: SelectionSummary[]; onSelect:
       </table>
     </div>}
   </section>
-}
-
-function DecisionSummary({
-  date,
-  matches,
-  onSelect,
-}: {
-  date: string;
-  matches: SelectionSummary[];
-  onSelect: (selection: SelectionSummary) => void;
-}) {
-  const top = matches[0] ?? null;
-  const kickoffState = (selection: SelectionSummary) => {
-    const kickoff = Date.parse(selection.kickoff_at);
-    return !Number.isFinite(kickoff) ? "unknown" : kickoff <= Date.now() ? "past" : "upcoming";
-  };
-  const isBettable = (selection: SelectionSummary) => selection.recommendation_status ? selection.recommendation_status === "BET" : selection.q_score >= 85 && (selection.edge ?? 0) > 0 && selection.data_quality_status === "good" && (selection.active_models?.length ?? 0) > 0;
-  const topKickoffState = top ? kickoffState(top) : "unknown";
-  const topFinished = top?.match_status?.toLowerCase() === "finished";
-  const topScore = top?.home_goals != null && top.away_goals != null
-    ? `${top.home_goals}–${top.away_goals}`
-    : null;
-  const pickOutcome = top?.result === "won"
-    ? "won"
-    : top?.result === "lost"
-      ? "lost"
-      : top?.result === "void"
-        ? "void"
-        : null;
-  const action = top
-    ? topKickoffState === "past"
-      ? "HISTORICAL"
-      : topKickoffState === "unknown"
-        ? "UNAVAILABLE"
-        : top.recommendation_status ?? (isBettable(top) ? "BET" : "WATCH")
-    : "PASS";
-  const actionTone = action.toLowerCase();
-  const reason = top
-    ? topFinished && topScore && pickOutcome
-      ? `Full time: ${top.home_team} ${topScore} ${top.away_team}. Our pick ${pickOutcome}.`
-      : topFinished
-        ? "This match has finished, but its final score or pick outcome is not available yet."
-        : action === "HISTORICAL"
-          ? "This selection has already kicked off. It remains available for review and is not an upcoming pick."
-          : action === "UNAVAILABLE"
-            ? "Kickoff time is unavailable, so this selection cannot be labelled as an upcoming decision."
-            : action === "BET"
-              ? "Qualified quality score and positive priced edge. Review the risks before logging a decision."
-              : "A qualified signal exists, but the evidence is not strong enough for a direct BET label."
-    : "No priced selection passed the current publication and evidence gates.";
-
-  return (
-    <section className="decision-summary" aria-labelledby="decision-summary-title">
-      <div className="decision-summary-header">
-        <div>
-          <span className="eyebrow">Featured research candidate · {date}</span>
-          <h2 id="decision-summary-title">Candidate decision</h2>
-          <p>{reason}</p>
-        </div>
-        <span className={`decision-status ${actionTone}`} aria-label={`Featured candidate decision: ${action}`}>
-          {action}
-        </span>
-      </div>
-      <p className="decision-footnote">Featured research candidate for {date}. This is not a published ticket.</p>
-      {top && (
-        <div className="decision-lead">
-          <div>
-            <strong>{top.home_team} <span>vs</span> {top.away_team}</strong>
-            <small>{top.competition} · <span className="kickoff-time">{formatKickoff(top.kickoff_at)}</span></small>
-            {topFinished && <small className="decision-final-result">
-              {topScore ? `Full time · ${topScore}` : "Full time · Score unavailable"}
-              {pickOutcome && <b className={`decision-pick-outcome ${pickOutcome}`}>Pick {pickOutcome}</b>}
-            </small>}
-          </div>
-          <div className="decision-lead-selection">
-            {!selectionRepeatsMarket(top.market, top.selection) && <span>{formatMarket(top.market)}</span>}
-            <b>{formatSelection(top.selection)}</b>
-          </div>
-          <button className="btn-ghost btn-sm" onClick={() => onSelect(top)}>Why this?</button>
-        </div>
-      )}
-    </section>
-  );
 }

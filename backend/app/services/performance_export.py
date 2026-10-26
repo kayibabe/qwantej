@@ -40,9 +40,9 @@ def probability_calibration_workbook(data: dict) -> io.BytesIO:
             ["Sample size", s["sample_size"]],
             ["Voids excluded", s["voids_excluded"]],
             ["Unsupported markets excluded", s["unsupported_markets_excluded"]],
-            ["Qwantej Brier score", s["qwantej_brier_score"]],
+            ["QwanEj Brier score", s["qwantej_brier_score"]],
             ["Market Brier score", s["market_brier_score"]],
-            ["Qwantej calibration error", s["qwantej_calibration_error"]],
+            ["QwanEj calibration error", s["qwantej_calibration_error"]],
             ["Market calibration error", s["market_calibration_error"]],
             ["Note", data["note"]],
         ],
@@ -50,7 +50,7 @@ def probability_calibration_workbook(data: dict) -> io.BytesIO:
 
     bucket_headers = ["Band", "Sample size", "Wins", "Losses", "Hit rate", "Avg probability", "Calibration gap", "ROI"]
 
-    qwantej_ws = wb.create_sheet("Qwantej buckets")
+    qwantej_ws = wb.create_sheet("QwanEj buckets")
     _write_table(qwantej_ws, bucket_headers, [
         [r["band"], r["sample_size"], r["wins"], r["losses"], r["hit_rate"], r["avg_probability"], r["calibration_gap"], r["roi"]]
         for r in data["qwantej_buckets"]
@@ -62,7 +62,7 @@ def probability_calibration_workbook(data: dict) -> io.BytesIO:
         for r in data["market_buckets"]
     ])
 
-    matrix_headers = ["Qwantej band", "Market band", "Sample size", "Wins", "Losses", "Hit rate", "ROI", "Avg Qwantej probability", "Avg market probability"]
+    matrix_headers = ["QwanEj band", "Market band", "Sample size", "Wins", "Losses", "Hit rate", "ROI", "Avg QwanEj probability", "Avg market probability"]
 
     matrix_ws = wb.create_sheet("Combined matrix")
     _write_table(matrix_ws, matrix_headers, [
@@ -85,7 +85,7 @@ def probability_calibration_workbook(data: dict) -> io.BytesIO:
 
     market_headers = [
         "Market family", "Sample size", "Wins", "Losses", "Hit rate", "ROI",
-        "Qwantej Brier", "Market Brier", "Qwantej calibration error", "Market calibration error",
+        "QwanEj Brier", "Market Brier", "QwanEj calibration error", "Market calibration error",
     ]
     market_family_ws = wb.create_sheet("By market")
     _write_table(market_family_ws, market_headers, [

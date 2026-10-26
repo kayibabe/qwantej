@@ -68,11 +68,19 @@ function quoteTime(value: string | null | undefined) {
 
 export function AllMatches({
   rows,
+  totalSelections = rows.reduce((sum, [, selections]) => sum + selections.length, 0),
+  loadedSelections = totalSelections,
+  loadingMore = false,
+  onLoadMore,
   onSelect,
   onAdd,
   allowAdd = true,
 }: {
   rows: [number, SelectionSummary[]][];
+  totalSelections?: number;
+  loadedSelections?: number;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
   onSelect: (row: SelectionSummary) => void;
   onAdd: (row: SelectionSummary) => void;
   allowAdd?: boolean;
@@ -219,15 +227,19 @@ export function AllMatches({
   const filteredResults = filteredRows.flatMap(([matchId, selections]) =>
     selections
       .filter((row) => row.result === "won" || row.result === "lost" || row.result === "void")
-      .map((row) => ({ matchId, result: row.result as "won" | "lost" | "void" })),
+      .map((row) => ({ matchId, result: row.result as "won" | "lost" | "void", odds: row.best_odds })),
   );
   const filteredResultCounts = filteredResults.reduce(
     (counts, row) => {
       counts[row.result] += 1;
       counts.matches.add(row.matchId);
+      if (row.result !== "void" && row.odds != null && Number.isFinite(row.odds) && row.odds > 1) {
+        counts.priced += 1;
+        counts.netUnits += row.result === "won" ? row.odds - 1 : -1;
+      }
       return counts;
     },
-    { won: 0, lost: 0, void: 0, matches: new Set<number>() },
+    { won: 0, lost: 0, void: 0, priced: 0, netUnits: 0, matches: new Set<number>() },
   );
   const decidedCount = filteredResultCounts.won + filteredResultCounts.lost;
   const changeSort = (key: MatchSortKey) =>
@@ -330,17 +342,6 @@ export function AllMatches({
     }
     window.setTimeout(() => setCopyState("idle"), 2000);
   };
-  const sortButton = (key: typeof sort.key, label: string) => (
-    <button
-      className={sort.key === key ? "active" : ""}
-      onClick={() => changeSort(key)}
-    >
-      {label}
-      {sort.key === key && (
-        <span aria-hidden="true"> {sort.direction === "asc" ? "↑" : "↓"}</span>
-      )}
-    </button>
-  );
   const statusCounts = discoveredRows.reduce<Record<MatchDisplayState, number>>(
     (counts, [, selections]) => {
       counts[matchDisplayState(selections[0])] += 1;
@@ -373,7 +374,7 @@ export function AllMatches({
           </span>
         </div>
         <span className="section-note match-count-summary">
-          Showing <b>{sortedRows.length}</b> of <b>{rows.length}</b> matches
+          Showing <b>{sortedRows.length}</b> of <b>{rows.length}</b> loaded matches · {loadedSelections} of {totalSelections} candidate selections loaded
           {statusCounts.finished > 0 && <> · <b>{statusCounts.finished}</b> finished</>}
           {statusCounts.live > 0 && <> · <b>{statusCounts.live}</b> live</>}
           {statusCounts.scheduled > 0 && <> · <b>{statusCounts.scheduled}</b> upcoming</>}
@@ -434,15 +435,14 @@ export function AllMatches({
                 <span aria-hidden="true">★</span> Favourites <b>{favorites.length}</b>
               </button>
             </div>
-            <div className="match-sort-controls" aria-label="Sort matches">
-              <span>Sort</span>
-              {sortButton("kickoff", "Kickoff")}
-              {sortButton("match", "Match")}
-              {sortButton("league", "League")}
-              {sortButton("q", "Q-score")}
-              {sortButton("markets", "Markets")}
-              {sortButton("spread", "Spread")}
-              {sortButton("edge", "Model edge")}
+            <div className="match-sort-controls">
+              <label><span>Sort</span><select aria-label="Sort matches" value={sort.key} onChange={(event) => changeSort(event.target.value as MatchSortKey)}>
+                <option value="kickoff">Kickoff</option><option value="match">Match</option><option value="league">Competition</option>
+                <option value="q">Q-score</option><option value="markets">Markets</option><option value="spread">Model agreement</option><option value="edge">Model edge</option>
+              </select></label>
+              <button type="button" onClick={() => setSort((current) => ({ ...current, direction: current.direction === "asc" ? "desc" : "asc" }))}>
+                {sort.direction === "asc" ? "Ascending ↑" : "Descending ↓"}
+              </button>
             </div>
             <button className="match-clear-filters" onClick={clearFilters} disabled={activeFilterCount === 0}>
               Clear filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
@@ -450,7 +450,9 @@ export function AllMatches({
             <button className="match-copy-link" onClick={copyViewLink} title="Copy a link with the selected date and filters">
               {copyState === "copied" ? "Link copied" : copyState === "failed" ? "Copy unavailable" : "Copy view link"}
             </button>
-            <div className="match-filter-presets">
+            <details className="match-more-filters">
+              <summary>More filters and saved views</summary>
+              <div className="match-filter-presets">
               <label><span>Saved filters</span><select value={presetId} onChange={(event) => {
                 setPresetId(event.target.value);
                 const selected = presets.find((item) => String(item.id) === event.target.value);
@@ -465,7 +467,7 @@ export function AllMatches({
               <button className="match-clear-filters" onClick={removePreset} disabled={!presetId}>Delete saved filter</button>
               {presetMessage && <span className="match-filter-message" role="status">{presetMessage}</span>}
             </div>
-            <div className="match-advanced-filters" aria-label="Advanced match filters">
+              <div className="match-advanced-filters" aria-label="Advanced match filters">
               <label><span>Model probability min %</span><input type="number" min="0" max="100" step="1" value={minProbability} onChange={(event) => setMinProbability(event.target.value)} placeholder="Any" /></label>
               <label><span>Model probability max %</span><input type="number" min="0" max="100" step="1" value={maxProbability} onChange={(event) => setMaxProbability(event.target.value)} placeholder="Any" /></label>
               <label><span>Odds min</span><input type="number" min="1" max="1000" step="0.01" value={minOdds} onChange={(event) => setMinOdds(event.target.value)} placeholder="Any" /></label>
@@ -473,17 +475,25 @@ export function AllMatches({
               <label><span>Edge min %</span><input type="number" min="-100" max="100" step="0.1" value={minEdge} onChange={(event) => setMinEdge(event.target.value)} placeholder="Any" /></label>
               <label><span>Q-score min</span><input type="number" min="0" max="100" step="1" value={minQScore} onChange={(event) => setMinQScore(event.target.value)} /></label>
               <label><span>Q-score max</span><input type="number" min="0" max="100" step="1" value={maxQScore} onChange={(event) => setMaxQScore(event.target.value)} placeholder="Any" /></label>
-            </div>
+              </div>
+            </details>
           </div>
           {filteredResults.length > 0 && <section className="match-scan-outcomes" aria-label="Settled results for this filtered match date">
             <div className="match-scan-outcomes-heading"><strong>Settled picks in this view</strong><span>{filteredResultCounts.matches.size} matches with settled picks · selected date only</span></div>
-            <div className="match-scan-outcomes-metrics">
-              <span><small>Won</small><b>{filteredResultCounts.won}</b></span>
-              <span><small>Lost</small><b>{filteredResultCounts.lost}</b></span>
-              <span><small>Void</small><b>{filteredResultCounts.void}</b></span>
-              <span><small>Hit rate</small><b>{decidedCount > 0 ? `${((filteredResultCounts.won / decidedCount) * 100).toFixed(1)}%` : "—"}</b></span>
+            <div className="match-scan-outcomes-table-wrap">
+              <table className="match-scan-outcomes-table">
+                <thead className="sr-only"><tr><th scope="col">Selections</th><th scope="col">Won</th><th scope="col">Lost</th><th scope="col">Hit rate</th><th scope="col">Net units</th><th scope="col">ROI</th></tr></thead>
+                <tbody><tr>
+                  <td><span>Selections</span><b>{filteredResults.length}</b></td>
+                  <td><span>Won</span><b>{filteredResultCounts.won}</b></td>
+                  <td><span>Lost</span><b>{filteredResultCounts.lost}</b></td>
+                  <td><span>Hit rate</span><b>{decidedCount > 0 ? `${((filteredResultCounts.won / decidedCount) * 100).toFixed(1)}%` : "—"}</b></td>
+                  <td><span>Net units</span><b>{filteredResultCounts.priced > 0 ? `${filteredResultCounts.netUnits >= 0 ? "+" : ""}${filteredResultCounts.netUnits.toFixed(2)}` : "—"}</b></td>
+                  <td><span>ROI</span><b>{filteredResultCounts.priced > 0 ? `${((filteredResultCounts.netUnits / filteredResultCounts.priced) * 100).toFixed(1)}%` : "—"}</b></td>
+                </tr></tbody>
+              </table>
             </div>
-            <p>Void picks are excluded from hit rate. This one-date result summary is not a strategy backtest or a profitability claim.</p>
+            <p>{filteredResultCounts.void} void picks excluded from hit rate and ROI. ROI assumes one unit per settled non-void pick with captured odds; priced picks: {filteredResultCounts.priced} of {decidedCount}. Net units and ROI exclude picks without valid captured odds. This one-date summary is not a strategy backtest or a profitability claim.</p>
           </section>}
           {sortedRows.length === 0 ? (
             <p className="panel-empty">{favoriteOnly && favorites.length === 0 ? "No favourites yet. Select a star beside a match to save it here." : "No qualified matches match these filters."}</p>
@@ -502,6 +512,9 @@ export function AllMatches({
               ))}
             </div>
           )}
+          {onLoadMore && loadedSelections < totalSelections && <button className="btn-ghost btn-sm" type="button" onClick={onLoadMore} disabled={loadingMore}>
+            {loadingMore ? "Loading more candidates…" : `Load next 100 candidates (${totalSelections - loadedSelections} remaining)`}
+          </button>}
           </div>
         </div>
       )}

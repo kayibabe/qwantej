@@ -21,6 +21,9 @@ class Bet(Base):
     __tablename__ = "bets"
 
     id = Column(Integer, primary_key=True, index=True)
+    # New personal journal rows are account-owned. Existing rows remain NULL
+    # and are available only through the administrator view after migration.
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

@@ -1,0 +1,2894 @@
+{
+  "cohort_id": "score-snapshot-pilot-2026-10-25",
+  "forecast_dispositions": {
+    "scheduled": 1332
+  },
+  "limitations": [
+    "Selected snapshot pilot, not the registered 180-day holdout",
+    "Legacy forecasts have no scorer build ID",
+    "Complementary markets are dependent; 74 fixtures cannot meet the 500-fixture conclusion threshold",
+    "No qualification, calibration, settlement or promotion changes"
+  ],
+  "manifest_sha256": "e44d7e157c44ac723dc59ec34f422c6c0e259f5530a271cc53909a0c7f5f48fd",
+  "markets": {
+    "away_win": {
+      "model_probability": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      },
+      "poisson_prob": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      }
+    },
+    "btts_no": {
+      "model_probability": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      },
+      "poisson_prob": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      }
+    },
+    "btts_yes": {
+      "model_probability": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      },
+      "poisson_prob": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      }
+    },
+    "dnb_away": {
+      "model_probability": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      },
+      "poisson_prob": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      }
+    },
+    "dnb_home": {
+      "model_probability": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      },
+      "poisson_prob": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      }
+    },
+    "double_chance_1x": {
+      "model_probability": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      },
+      "poisson_prob": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      }
+    },
+    "double_chance_x2": {
+      "model_probability": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      },
+      "poisson_prob": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      }
+    },
+    "draw": {
+      "model_probability": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      },
+      "poisson_prob": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      }
+    },
+    "home_win": {
+      "model_probability": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      },
+      "poisson_prob": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      }
+    },
+    "over_1.5": {
+      "model_probability": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      },
+      "poisson_prob": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      }
+    },
+    "over_2.5": {
+      "model_probability": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      },
+      "poisson_prob": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      }
+    },
+    "over_3.5": {
+      "model_probability": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      },
+      "poisson_prob": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      }
+    },
+    "over_4.5": {
+      "model_probability": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      },
+      "poisson_prob": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      }
+    },
+    "under_0.5": {
+      "model_probability": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      },
+      "poisson_prob": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      }
+    },
+    "under_1.5": {
+      "model_probability": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      },
+      "poisson_prob": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      }
+    },
+    "under_2.5": {
+      "model_probability": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      },
+      "poisson_prob": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      }
+    },
+    "under_3.5": {
+      "model_probability": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      },
+      "poisson_prob": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      }
+    },
+    "under_4.5": {
+      "model_probability": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      },
+      "poisson_prob": {
+        "comparisons": {
+          "competition": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          },
+          "global": {
+            "baseline": {
+              "brier": null,
+              "brier_skill_score": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            },
+            "model_on_paired_rows": {
+              "brier": null,
+              "expected_calibration_error": null,
+              "log_loss": null,
+              "mean_probability": null,
+              "n": 0,
+              "observed_rate": null,
+              "reliability_deciles": [],
+              "roc_auc": null
+            }
+          }
+        },
+        "model": {
+          "brier": null,
+          "expected_calibration_error": null,
+          "log_loss": null,
+          "mean_probability": null,
+          "n": 0,
+          "observed_rate": null,
+          "reliability_deciles": [],
+          "roc_auc": null
+        }
+      }
+    }
+  },
+  "outcome_snapshot": {
+    "31765": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T14:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31766": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T14:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31767": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T14:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31768": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T14:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31769": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T16:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31771": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T16:15:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31773": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T14:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31774": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T16:15:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31775": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T16:15:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31776": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T16:15:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31777": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T16:15:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31778": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T19:45:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-22T04:39:23.232470+00:00"
+    },
+    "31786": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T14:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31787": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T16:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31793": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T11:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31794": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T14:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31795": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T14:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31796": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T17:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31797": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T19:45:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31803": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T13:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31804": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T15:15:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31805": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T17:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31806": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T20:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31812": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T11:15:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31813": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T13:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31814": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T13:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31815": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T15:45:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31816": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T19:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31821": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T15:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31822": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T18:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31823": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T18:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31824": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T20:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31853": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T17:45:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31854": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T20:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31891": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T12:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31892": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T12:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31893": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T12:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31900": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T11:15:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31901": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T13:45:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31902": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T16:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31907": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T12:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31908": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T14:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31914": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T12:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31915": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T15:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31916": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T17:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31917": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T18:15:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31996": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T13:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31997": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T15:15:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31998": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T15:15:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "31999": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T17:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "32010": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T17:45:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "32016": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T11:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "32017": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T11:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "32018": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T13:15:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "32019": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T15:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "32020": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T17:45:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "32024": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T11:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "32025": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T11:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "32026": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T13:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "32027": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T16:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "32028": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T16:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "32029": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T16:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "32030": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T16:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "32038": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T13:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "32039": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T13:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "32040": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T13:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "32046": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T11:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "32047": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T13:30:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "32048": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T14:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "32055": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T19:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "32056": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T21:05:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "32072": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T13:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "32073": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T16:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    },
+    "32074": {
+      "away_goals": null,
+      "excluded_from_models": false,
+      "fixture_status_code": null,
+      "home_goals": null,
+      "kickoff_at": "2026-10-25T19:00:00+00:00",
+      "status": "scheduled",
+      "updated_at": "2026-10-25T04:04:27.800034+00:00"
+    }
+  },
+  "research_only": true,
+  "resolved_score_fixtures": 0,
+  "score_rate_diagnostics": {
+    "competitions": {},
+    "match_coverage": null,
+    "overall": {
+      "n": 0
+    },
+    "snapshot_match_count": 0,
+    "status": "unavailable_no_saved_joint_score_snapshots"
+  },
+  "scored_at": "2026-10-25T06:31:55.515277+00:00",
+  "status": "awaiting_outcomes",
+  "total_fixtures": 74,
+  "total_forecasts": 1332
+}

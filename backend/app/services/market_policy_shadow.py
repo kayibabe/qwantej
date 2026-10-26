@@ -42,7 +42,8 @@ def _ticket_out(ticket: Ticket | None) -> dict | None:
 
 
 def snapshot_payload(built: DailyTickets, excluded_markets: frozenset[str]) -> dict:
-    tickets = [built.conservative, built.balanced, built.high_odds]
+    tickets = [built.conservative, built.balanced]
+    shadow_tickets = [built.high_odds]
     return {
         "mode": "shadow_only",
         "control_unchanged": True,
@@ -57,6 +58,9 @@ def snapshot_payload(built: DailyTickets, excluded_markets: frozenset[str]) -> d
         "horizon_dates": [value.isoformat() for value in built.horizon_dates],
         "selection_diagnostics": built.selection_diagnostics,
         "tickets": [_ticket_out(ticket) for ticket in tickets],
+        "research_tickets": [
+            _ticket_out(ticket) for ticket in shadow_tickets if ticket is not None
+        ],
     }
 
 

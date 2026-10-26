@@ -106,12 +106,12 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
   return (
     <main className="public-home">
       <header className="public-topbar">
-        <a className="public-brand" href="/" aria-label="Qwantej home">
+        <a className="public-brand" href="/" aria-label="QwanEj home">
           <picture className="public-brand-icon">
-            <source media="(prefers-color-scheme: dark)" srcSet="/dark/icon-128.png" />
-            <img src="/light/icon-128.png" alt="" />
+            <source media="(prefers-color-scheme: dark)" srcSet="/dark/icon-128.png?v=qwanej-1" />
+            <img src="/light/icon-128.png?v=qwanej-1" alt="" />
           </picture>
-          <span><strong>QWANTEJ</strong><small>FOOTBALL INTELLIGENCE</small></span>
+          <span><strong>QwanEj</strong><small>FOOTBALL INTELLIGENCE</small></span>
         </a>
         <nav className="public-top-actions" aria-label="Account">
           <button className="public-link-button" onClick={onSignIn}>Sign in</button>
@@ -147,7 +147,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
 
       <nav className="public-section-nav" aria-label="Page sections">
         <a className="is-active" href="#public-matches" aria-current="page">Matches</a>
-        <a href="#public-product">How Qwantej works</a>
+        <a href="#public-product">How QwanEj works</a>
         <a href="#public-faq">FAQs</a>
       </nav>
 
@@ -214,7 +214,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
 
       <section className="public-product" id="public-product" aria-labelledby="public-product-title">
         <div className="public-product-heading">
-          <span className="public-section-kicker">THE QWANTEJ APPROACH</span>
+          <span className="public-section-kicker">THE QwanEj APPROACH</span>
           <h2 id="public-product-title">From fixture list to final result.</h2>
           <p>Useful football research should show its work—and leave room for uncertainty.</p>
         </div>
@@ -228,7 +228,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
           <article className="public-product-card">
             <span className="public-product-number">02</span>
             <h3>Read the recommendation in context</h3>
-            <p>Qwantej keeps published selections distinct from research candidates. Where price evidence is available, the workspace shows the captured odds and timing.</p>
+            <p>QwanEj keeps published selections distinct from research candidates. Where price evidence is available, the workspace shows the captured odds and timing.</p>
             <span className="public-product-note">Recommendations are opinions, not guarantees.</span>
           </article>
           <article className="public-product-card">
@@ -240,7 +240,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
         </div>
       </section>
 
-      <section className="public-access" aria-label="Qwantej account access">
+      <section className="public-access" aria-label="QwanEj account access">
         <div className="public-access-heading">
           <span className="public-section-kicker">START FREE, GO DEEPER WHEN YOU NEED TO</span>
           <h2>Choose how you want to explore.</h2>
@@ -254,7 +254,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
           </article>
           <article className="public-access-card is-featured">
             <div><span className="public-access-label">FREE ACCOUNT</span><h3>Follow the daily slate</h3></div>
-            <p>Open your Qwantej workspace for daily published recommendations, match browsing and live scores.</p>
+            <p>Open your QwanEj workspace for daily published recommendations, match browsing and live scores.</p>
             <button onClick={onCreateAccount}>Create a free account <span aria-hidden="true">→</span></button>
           </article>
           <article className="public-access-card">
@@ -269,13 +269,13 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
         <div className="public-faq-heading"><span className="public-section-kicker">GOOD TO KNOW</span><h2 id="public-faq-title">A few quick answers.</h2></div>
         <div className="public-faq-list">
           <details><summary>What can I see without an account?</summary><p>Public fixtures include the competition, teams, kickoff or live status, and scores when available. Personal account information and workspace tools stay behind sign-in.</p></details>
-          <details><summary>What does Qwantej do with recommendations?</summary><p>Qwantej presents dated published selections separately from research. Where captured price evidence exists, it can be reviewed alongside the selection. A recommendation is never a promise of a result.</p></details>
-          <details><summary>Does Qwantej guarantee wins or profit?</summary><p>No. Football outcomes are uncertain. Any historical result is a record of completed matches, not a guarantee or forecast of future performance.</p></details>
+          <details><summary>What does QwanEj do with recommendations?</summary><p>QwanEj presents dated published selections separately from research. Where captured price evidence exists, it can be reviewed alongside the selection. A recommendation is never a promise of a result.</p></details>
+          <details><summary>Does QwanEj guarantee wins or profit?</summary><p>No. Football outcomes are uncertain. Any historical result is a record of completed matches, not a guarantee or forecast of future performance.</p></details>
         </div>
-        <div className="public-faq-cta"><div><strong>Ready to follow the next matchday?</strong><span>Create a free account to open your Qwantej workspace.</span></div><button className="public-cta" onClick={onCreateAccount}>Get started for free <span aria-hidden="true">→</span></button></div>
+        <div className="public-faq-cta"><div><strong>Ready to follow the next matchday?</strong><span>Create a free account to open your QwanEj workspace.</span></div><button className="public-cta" onClick={onCreateAccount}>Get started for free <span aria-hidden="true">→</span></button></div>
       </section>
 
-      <footer className="public-footer"><span>QWANTEJ · Intelligence beyond numbers</span><span>Information only. Football outcomes are uncertain; no result is guaranteed.</span></footer>
+      <footer className="public-footer"><span>QwanEj · Intelligence beyond numbers</span><span>Information only. Football outcomes are uncertain; no result is guaranteed.</span></footer>
     </main>
   )
 }

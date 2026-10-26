@@ -79,11 +79,15 @@ class TicketPublisher:
         )
         await self._validate_pipeline_context(pipeline_run_id, target_date, built.model_run_id)
 
-        public_tickets = [built.conservative, built.balanced, built.high_odds]
+        active_tickets = {
+            TicketType.SAFE: built.conservative,
+            TicketType.BALANCED: built.balanced,
+        }
+        shadow_tickets = [built.high_odds]
         missing_public_types = [
             ticket_type.value
-            for ticket_type, candidate in zip(PUBLIC_TICKET_TYPES, public_tickets)
-            if candidate is None
+            for ticket_type in PUBLIC_TICKET_TYPES
+            if active_tickets.get(ticket_type) is None
         ]
         existing_result = await self.db.execute(
             select(TicketGeneration)
@@ -110,6 +114,7 @@ class TicketPublisher:
                 "pricing": (built.selection_diagnostics.get("pricing") or {}).get("source", "model"),
                 "research_min_qscore": research_min_qscore,
                 "publication_mode": "immutable_paper_trading",
+                "shadow_ticket_types": [TicketType.HIGH_ODDS.value],
                 "selection_diagnostics": built.selection_diagnostics,
             },
             input_count=built.qualified_pool,
@@ -120,7 +125,8 @@ class TicketPublisher:
         model_run = await self.db.get(ModelRun, built.model_run_id)
         # Best Value is retired from the active profile. Historical rows stay
         # queryable, but no new candidate is generated or published.
-        tickets = public_tickets
+        tickets = [active_tickets[ticket_type] for ticket_type in PUBLIC_TICKET_TYPES]
+        tickets.extend(shadow_tickets)
         published = 0
         published_types = []
         for candidate in tickets:
@@ -131,10 +137,9 @@ class TicketPublisher:
             published_types.append(candidate.ticket_type.value)
 
         generation.output_count = published
-        public_published = sum(candidate is not None for candidate in public_tickets)
         generation.status = (
             RunStatus.COMPLETED
-            if public_published == len(public_tickets)
+            if not missing_public_types
             else RunStatus.PARTIAL
         )
         generation.completed_at = datetime.now(timezone.utc)
@@ -152,6 +157,11 @@ class TicketPublisher:
             **generation.config_snapshot,
             "publication_summary": {
                 "published_ticket_types": published_types,
+                "shadow_ticket_types": [
+                    candidate.ticket_type.value
+                    for candidate in shadow_tickets
+                    if candidate is not None
+                ],
                 "missing_public_ticket_types": missing_public_types,
                 "relaxed_ticket_types": relaxed_ticket_types,
                 "horizon_ticket_types": horizon_ticket_types,
@@ -170,6 +180,11 @@ class TicketPublisher:
                     "qualified_pool": built.qualified_pool,
                     "published_ticket_count": published,
                     "published_ticket_types": published_types,
+                    "shadow_ticket_types": [
+                        candidate.ticket_type.value
+                        for candidate in shadow_tickets
+                        if candidate is not None
+                    ],
                     "missing_public_ticket_types": missing_public_types,
                     "relaxed_ticket_types": relaxed_ticket_types,
                     "horizon_ticket_types": horizon_ticket_types,

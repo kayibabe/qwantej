@@ -94,20 +94,17 @@ async def performance_summary(db: AsyncSession, date_from: date | None = None, d
     for ticket in all_tickets:
         if date_from and ticket.target_date < date_from or date_to and ticket.target_date > date_to:
             continue
-        if model_version and ticket.model_version != model_version:
-            continue
         key = (ticket.target_date, ticket.ticket_type)
         previous = latest_by_day_and_type.get(key)
         if previous is None or (ticket.version, ticket.id) > (previous.version, previous.id):
             latest_by_day_and_type[key] = ticket
-    # Best Value is an internal research tier and is not part of the production
-    # portfolio. Keep it out of every headline and breakdown returned by this
-    # production performance summary; its immutable history remains available
-    # through the protected Best Value research view.
+    # Internal research tiers do not contribute to production portfolio
+    # calculations. Their immutable background records remain stored.
     tickets = [
         ticket
         for ticket in latest_by_day_and_type.values()
-        if ticket.ticket_type != TicketType.BEST_VALUE
+        if ticket.ticket_type not in {TicketType.BEST_VALUE, TicketType.HIGH_ODDS}
+        and (model_version is None or ticket.model_version == model_version)
     ]
     settled: list[tuple[AccumulatorTicket, object]] = []
     for ticket in tickets:
@@ -159,9 +156,9 @@ async def performance_summary(db: AsyncSession, date_from: date | None = None, d
         bucket["stake"] += item.stake
         bucket["return"] += item.return_amount
     breakdown = []
-    # Keep all public production tiers visible in the portfolio lens, even
+    # Keep all active production tiers visible in the portfolio lens, even
     # when a tier has no settled cohort in the selected scope yet.
-    for ticket_type in (TicketType.BALANCED.value, TicketType.SAFE.value, TicketType.HIGH_ODDS.value):
+    for ticket_type in (TicketType.BALANCED.value, TicketType.SAFE.value):
         by_type.setdefault(ticket_type, {"tickets": 0, "wins": 0, "stake": 0.0, "return": 0.0})
     for ticket_type, bucket in by_type.items():
         type_pnl = bucket["return"] - bucket["stake"]
@@ -283,6 +280,8 @@ async def individual_selection_summary(db: AsyncSession, stake: float = 1.0, dat
     )
     unique: dict[tuple, TicketSelection] = {}
     for ticket in result.scalars().all():
+        if ticket.ticket_type == TicketType.HIGH_ODDS:
+            continue
         if model_version and ticket.model_version != model_version:
             continue
         for selection in ticket.selections:
@@ -436,6 +435,8 @@ async def totals_calibration_review(
     )
     unique: dict[tuple[date, int, str, str], TicketSelection] = {}
     for ticket in result.scalars().all():
+        if ticket.ticket_type == TicketType.HIGH_ODDS:
+            continue
         if model_version and ticket.model_version != model_version:
             continue
         if (ticket.pricing or "model") != pricing:
@@ -506,7 +507,7 @@ async def totals_calibration_review(
     }
 
 async def market_reliability_matrix(db: AsyncSession, date_from: date | None = None, date_to: date | None = None, model_version: str | None = CURRENT_MODEL_VERSION) -> list[dict]:
-    result = await db.execute(select(AccumulatorTicket).where(AccumulatorTicket.status.in_([TicketStatus.PUBLISHED, TicketStatus.SETTLED, TicketStatus.VOID])).options(selectinload(AccumulatorTicket.selections).selectinload(TicketSelection.prediction), selectinload(AccumulatorTicket.selections).selectinload(TicketSelection.match)))
+    result = await db.execute(select(AccumulatorTicket).where(AccumulatorTicket.ticket_type != TicketType.HIGH_ODDS, AccumulatorTicket.status.in_([TicketStatus.PUBLISHED, TicketStatus.SETTLED, TicketStatus.VOID])).options(selectinload(AccumulatorTicket.selections).selectinload(TicketSelection.prediction), selectinload(AccumulatorTicket.selections).selectinload(TicketSelection.match)))
     unique: dict[tuple, TicketSelection] = {}
     for ticket in result.scalars().all():
         if model_version and ticket.model_version != model_version:

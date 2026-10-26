@@ -89,12 +89,12 @@ MARKET_TICKET_SPECS: tuple[TicketSpec, ...] = (
 )
 
 
-# Active tiers published to users. Historical Best Value rows are retained in
-# the database enum and audit readers, but the profile is no longer active.
+# Active tiers shown as recommendations. High Odds is still generated and
+# settled as an internal paper-tracking cohort while its recommendation is paused.
+# Historical Best Value rows remain in the database enum and audit readers.
 PUBLIC_TICKET_TYPES: tuple[TicketType, ...] = (
     TicketType.SAFE,
     TicketType.BALANCED,
-    TicketType.HIGH_ODDS,
 )
 
 
@@ -116,11 +116,6 @@ _RELAXATION_STEPS: tuple[dict, ...] = (
 )
 _RELAXATION_FLOOR_Q_SCORE = 60.0
 _RELAXATION_MAX_COMBINED_ODDS = 10.0
-# Relaxation is a supply fallback for the higher-risk internal tier only.
-# Conservative and Balanced remain full-strength-or-missing.
-_RELAXABLE_PUBLIC_TICKET_TYPES = frozenset({TicketType.HIGH_ODDS})
-
-
 @dataclass
 class Leg:
     prediction_id: int
@@ -363,7 +358,7 @@ class AccumulatorBuilder:
                 if len(extended_pool) > len(pool):
                     self._apply_minimum_ticket_relaxation(
                         output, extended_pool, calibration, coefficients,
-                        first_level=0, target_date=td,
+                        target_date=td,
                         market_policy_excluded_markets=market_policy_excluded_markets,
                     )
                 diagnostics["horizon"] = {
@@ -390,19 +385,17 @@ class AccumulatorBuilder:
         calibration: dict,
         coefficients: dict[tuple[str, str, str, int | None], float],
         *,
-        first_level: int = 1,
         target_date: date | None = None,
         market_policy_excluded_markets: frozenset[str] | None = None,
     ) -> None:
-        """Seek `settings.min_daily_public_tickets` public tickets when the
-        qualified pool and portfolio exposure limits can support them, by loosening the tightest gates (only) for
-        public tiers that produced nothing at full strength. Never touches a tier
-        that already has a full-strength ticket, and never invents a combination
-        the beam search can't actually build from real, edge-qualified legs.
+        """Retry missing active tiers at full strength before horizon fallback.
 
-        `first_level=0` tries the unrelaxed spec first; the rolling-horizon
-        pass uses it (with `target_date`, to stamp each ticket's horizon_days)
-        so a wider pool is exhausted at full strength before any gate loosens."""
+        High Odds is excluded from this floor-filling pass while it is
+        shadow-tracked. The bounded relaxation ladder remains available for a
+        future active-tier policy but is not applied to today's two core tiers.
+
+        The rolling-horizon pass uses it with `target_date` to stamp each
+        ticket's horizon_days after widening the candidate pool."""
         if _public_count(output) >= settings.min_daily_public_tickets:
             return
         # Loosest base spec first (BALANCED), so relaxation reaches the floor
@@ -412,14 +405,14 @@ class AccumulatorBuilder:
         # CONSERVATIVE first and keep whichever fills more tiers (ties keep the
         # original order).
         orders = (
-            (TicketType.BALANCED, TicketType.SAFE, TicketType.HIGH_ODDS),
-            (TicketType.HIGH_ODDS, TicketType.BALANCED, TicketType.SAFE),
+            (TicketType.BALANCED, TicketType.SAFE),
+            (TicketType.SAFE, TicketType.BALANCED),
         )
         best: dict[TicketType, Ticket | None] | None = None
         for order in orders:
             attempt = dict(output)
             self._fill_missing_public_tiers(
-                attempt, order, pool, calibration, coefficients, first_level, target_date,
+                attempt, order, pool, calibration, coefficients, target_date,
                 market_policy_excluded_markets,
             )
             if best is None or _public_count(attempt) > _public_count(best):
@@ -444,7 +437,6 @@ class AccumulatorBuilder:
         pool: list[Leg],
         calibration: dict,
         coefficients: dict[tuple[str, str, str, int | None], float],
-        first_level: int,
         target_date: date | None,
         market_policy_excluded_markets: frozenset[str] | None,
     ) -> None:
@@ -456,14 +448,11 @@ class AccumulatorBuilder:
                 (item for item in active_ticket_specs() if item.ticket_type == ticket_type),
                 None,
             )
-            # The high-odds tier is intentionally defined for honest market
-            # pricing only. Research/model-pricing builds retain the public
-            # output slot but must not fail while trying to relax it.
+            # High Odds is shadow-tracked and does not participate in filling
+            # the active recommendation floor.
             if base_spec is None:
                 continue
-            levels = (0,) if ticket_type not in _RELAXABLE_PUBLIC_TICKET_TYPES else range(
-                first_level, len(_RELAXATION_STEPS) + 1
-            )
+            levels = (0,)
             for level in levels:
                 relaxed_spec = _relax_spec(base_spec, level) if level else base_spec
                 eligible = [

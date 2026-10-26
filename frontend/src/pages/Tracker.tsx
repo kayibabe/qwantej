@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { createCustomAccumulator, deleteCustomAccumulator, fetchCustomAccumulators, formatMarket, formatSelection, formatTicketType, selectionRepeatsMarket, updateCustomAccumulator, type CustomAccumulator as ApiCustomAccumulator } from '../lib/api'
+import { createCustomAccumulator, deleteCustomAccumulator, fetchCustomAccumulators, formatMarket, formatSelection, formatTicketType, selectionRepeatsMarket, ticketTierBadgeClass, updateCustomAccumulator, type CustomAccumulator as ApiCustomAccumulator } from '../lib/api'
 import { fmt, fmtPnl } from '../utils/currency'
+import { handleArrowTab } from '../utils/tabs'
 import PaperLedger from '../components/PaperLedger'
 import MatchHistory from '../components/MatchHistory'
 import SweetSpotTracker from '../components/SweetSpotTracker'
@@ -28,8 +29,20 @@ async function responseError(response: Response) {
   try { const body = await response.json(); return body.detail || body.message || `Request failed (${response.status})` } catch { return `Request failed (${response.status})` }
 }
 
-export default function TrackerPage({ onOpenTickets, onOpenResearch, onOpenValidation }: { onOpenTickets?: (date?: string) => void; onOpenResearch?: () => void; onOpenValidation?: () => void }) {
-  const [view, setView] = useState<'paper' | 'sweet' | 'matches' | 'accumulators' | 'manual'>('paper')
+type TrackerView = 'paper' | 'sweet' | 'matches' | 'accumulators' | 'manual'
+const TRACKER_VIEWS: TrackerView[] = ['paper', 'sweet', 'matches', 'accumulators', 'manual']
+function viewFromLocation(): TrackerView {
+  const view = new URLSearchParams(window.location.search).get('view') as TrackerView | null
+  return view && TRACKER_VIEWS.includes(view) ? view : 'paper'
+}
+function dateFromLocation(): string {
+  const value = new URLSearchParams(window.location.search).get('date')
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : TODAY
+}
+
+export default function TrackerPage({ onOpenTickets, onOpenResearch, onOpenValidation, personalOnly = false }: { onOpenTickets?: (date?: string) => void; onOpenResearch?: () => void; onOpenValidation?: () => void; personalOnly?: boolean }) {
+  const [view, setView] = useState<TrackerView>(() => personalOnly ? 'manual' : viewFromLocation())
+  const focusedTicketId = Number(new URLSearchParams(window.location.search).get('ticket')) || null
   const [bets, setBets] = useState<Bet[]>([])
   const [summary, setSummary] = useState<BetSummary | null>(null)
   const [loading, setLoading] = useState(true)
@@ -40,7 +53,7 @@ export default function TrackerPage({ onOpenTickets, onOpenResearch, onOpenValid
   const [form, setForm] = useState({ label: '', odds: '', stake: '', ticket_type: '', ticket_date: '', notes: '' })
   const [settleForm, setSettleForm] = useState({ status: 'won', actual_return: '' })
   const [accumulators, setAccumulators] = useState<CustomAccumulator[]>([])
-  const [accumulatorDate, setAccumulatorDate] = useState(TODAY)
+  const [accumulatorDate, setAccumulatorDate] = useState(dateFromLocation)
   const [accumulatorsLoading, setAccumulatorsLoading] = useState(false)
   const [accumulatorError, setAccumulatorError] = useState<string | null>(null)
   const [accumulatorSummary, setAccumulatorSummary] = useState<AccumulatorPerformanceSummary | null>(null)
@@ -116,18 +129,27 @@ export default function TrackerPage({ onOpenTickets, onOpenResearch, onOpenValid
   }
 
   const accumulatorRoi = accumulatorSummary ? roiFromTotals(accumulatorSummary.profitLoss, accumulatorSummary.settledStake) : null
-  const badge = view === 'sweet' ? 'Prospective paper experiment' : view === 'paper' ? 'Production paper evidence' : view === 'matches' ? 'Published selection evidence' : view === 'accumulators' ? 'Personal accumulators' : 'Confirmed and manual journal'
+  const selectView = (next: TrackerView) => {
+    setView(next)
+    const url = new URL(window.location.href)
+    if (next === 'paper') url.searchParams.delete('view')
+    else url.searchParams.set('view', next)
+    if (next !== 'accumulators') url.searchParams.delete('ticket')
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+  }
+  const badge = personalOnly ? 'Your account only' : view === 'sweet' ? 'Prospective paper experiment' : view === 'paper' ? 'Production paper evidence' : view === 'matches' ? 'Published selection evidence' : view === 'accumulators' ? 'Personal accumulators' : 'Confirmed and manual journal'
 
   return <div className="page-content tracker-page">
-    <div className="analytics-hero tracker-hero"><div><span className="eyebrow">Auditable portfolio</span><h1>Tracker</h1><p>Keep production paper evidence, published match outcomes and personal journal records in clearly separated views.</p></div><span className={`ledger-chip tracker-chip ${view}`}><span /> {badge}</span></div>
-    <div className="analytics-tabs tracker-view-tabs" role="tablist" aria-label="Tracker views">
-      <button role="tab" aria-selected={view === 'paper'} className={view === 'paper' ? 'active' : ''} onClick={() => setView('paper')}>Paper ledger</button>
-      <button role="tab" aria-selected={view === 'sweet'} className={view === 'sweet' ? 'active' : ''} onClick={() => setView('sweet')}>Sweet-spot test</button>
-      <button role="tab" aria-selected={view === 'matches'} className={view === 'matches' ? 'active' : ''} onClick={() => setView('matches')}>Match history</button>
-      <button role="tab" aria-selected={view === 'accumulators'} className={view === 'accumulators' ? 'active' : ''} onClick={() => setView('accumulators')}>My accumulators</button>
-      <button role="tab" aria-selected={view === 'manual'} className={view === 'manual' ? 'active' : ''} onClick={() => setView('manual')}>My journal</button>
-    </div>
+    <div className="analytics-hero tracker-hero"><div><span className="eyebrow">{personalOnly ? 'Personal records' : 'Auditable portfolio'}</span><h1>{personalOnly ? 'My betting journal' : 'Tracker'}</h1><p>{personalOnly ? 'Record bookmaker bets you actually placed, settle them, and review your own returns.' : 'Keep production paper evidence, published match outcomes and personal journal records in clearly separated views.'}</p></div><span className={`ledger-chip tracker-chip ${view}`}><span /> {badge}</span></div>
+    {!personalOnly && <div className="analytics-tabs tracker-view-tabs" role="tablist" aria-label="Tracker views">
+      <button id="tracker-tab-paper" aria-controls="tracker-panel" tabIndex={view === 'paper' ? 0 : -1} role="tab" aria-selected={view === 'paper'} className={view === 'paper' ? 'active' : ''} onKeyDown={event => handleArrowTab(event, ['paper', 'sweet', 'matches', 'accumulators', 'manual'] as const, view, selectView, 'tracker-tab-')} onClick={() => selectView('paper')}>Paper ledger</button>
+      <button id="tracker-tab-sweet" aria-controls="tracker-panel" tabIndex={view === 'sweet' ? 0 : -1} role="tab" aria-selected={view === 'sweet'} className={view === 'sweet' ? 'active' : ''} onKeyDown={event => handleArrowTab(event, ['paper', 'sweet', 'matches', 'accumulators', 'manual'] as const, view, selectView, 'tracker-tab-')} onClick={() => selectView('sweet')}>Sweet-spot test</button>
+      <button id="tracker-tab-matches" aria-controls="tracker-panel" tabIndex={view === 'matches' ? 0 : -1} role="tab" aria-selected={view === 'matches'} className={view === 'matches' ? 'active' : ''} onKeyDown={event => handleArrowTab(event, ['paper', 'sweet', 'matches', 'accumulators', 'manual'] as const, view, selectView, 'tracker-tab-')} onClick={() => selectView('matches')}>Match history</button>
+      <button id="tracker-tab-accumulators" aria-controls="tracker-panel" tabIndex={view === 'accumulators' ? 0 : -1} role="tab" aria-selected={view === 'accumulators'} className={view === 'accumulators' ? 'active' : ''} onKeyDown={event => handleArrowTab(event, ['paper', 'sweet', 'matches', 'accumulators', 'manual'] as const, view, selectView, 'tracker-tab-')} onClick={() => selectView('accumulators')}>My accumulators</button>
+      <button id="tracker-tab-manual" aria-controls="tracker-panel" tabIndex={view === 'manual' ? 0 : -1} role="tab" aria-selected={view === 'manual'} className={view === 'manual' ? 'active' : ''} onKeyDown={event => handleArrowTab(event, ['paper', 'sweet', 'matches', 'accumulators', 'manual'] as const, view, selectView, 'tracker-tab-')} onClick={() => selectView('manual')}>My journal</button>
+    </div>}
 
+    <section id="tracker-panel" role="tabpanel" aria-labelledby={`tracker-tab-${view}`} tabIndex={0}>
     {view === 'sweet' ? <SweetSpotTracker /> : view === 'paper' ? <PaperLedger onOpenValidation={onOpenValidation} /> : view === 'matches' ? <MatchHistory /> : view === 'accumulators' ? <>
       <div className="journal-note"><strong>Personal accumulators</strong><span>Draft and placed accumulators stay separate from the production paper ledger and personal journal totals.</span></div>
       {accumulatorSummary && accumulatorSummary.tickets > 0 && <section className="accumulator-performance-card"><div className="accumulator-performance-heading"><div><span className="eyebrow">All personal accumulators</span><strong>Performance</strong><p>Open stakes remain exposure; settled returns count only after every leg finishes.</p></div><span className="accumulator-performance-count">{accumulatorSummary.tickets} ticket{accumulatorSummary.tickets === 1 ? '' : 's'}</span></div><div className="accumulator-performance-grid"><AccumulatorMetric label="Open" value={accumulatorSummary.open.toString()} note={accumulatorSummary.exposure ? `${fmt(accumulatorSummary.exposure)} exposed` : 'No open exposure'} /><AccumulatorMetric label="Settled" value={accumulatorSummary.settled.toString()} note={`${accumulatorSummary.won} won · ${accumulatorSummary.lost} lost · ${accumulatorSummary.void} void`} /><AccumulatorMetric label="Settled P&L" value={accumulatorSummary.settled ? fmtPnl(accumulatorSummary.profitLoss) : '—'} note={accumulatorSummary.settled ? `${fmt(accumulatorSummary.returned)} returned` : 'Settles after all legs finish'} tone={accumulatorSummary.profitLoss >= 0 ? 'positive' : 'negative'} /><AccumulatorMetric label="Settled ROI" value={accumulatorRoi == null ? '—' : `${(accumulatorRoi * 100).toFixed(1)}%`} note={accumulatorSummary.settled ? `${fmt(accumulatorSummary.settledStake)} settled stake` : 'No settled stake yet'} tone={accumulatorRoi == null ? undefined : accumulatorRoi >= 0 ? 'positive' : 'negative'} /></div></section>}
@@ -140,6 +162,7 @@ export default function TrackerPage({ onOpenTickets, onOpenResearch, onOpenValid
         onUpdate={async (ticket, update) => saveAccumulator(ticket, update)}
         onDelete={async (ticket) => { await deleteCustomAccumulator(ticket.id); setAccumulators((current) => current.filter((item) => item.id !== ticket.id)); await loadAccumulators() }}
         onOpenPicks={onOpenResearch}
+        focusTicketId={focusedTicketId}
       />}
     </> : <>
       <div className="journal-note"><strong>Personal journal</strong><span>Confirmed selections retain system provenance; free-form entries remain clearly labelled. Neither changes the immutable system paper ledger.</span></div>
@@ -170,12 +193,13 @@ export default function TrackerPage({ onOpenTickets, onOpenResearch, onOpenValid
       {loading ? <div className="empty-state" aria-busy="true">Loading journal…</div> : !bets.length ? <div className="empty-state">{summary?.total_bets ? 'No journal entries match this status filter.' : <>No journal entries yet — use <strong>+ Log manual bet</strong> or confirm a published selection.</>}</div> : <>
         {bets.length === 200 && <div className="tracker-message warning">Showing the latest 200 matching entries. Portfolio totals and period summaries still cover the complete journal.</div>}
         <div className="journal-history">{groups.map(year => <section className="journal-year-group" key={year.year}><h2 className="paper-year-heading">{year.year}</h2>{year.months.map(month => <section key={month.month}><h3 className="paper-month-heading">{month.label}</h3>{month.dates.map(date => <section className="journal-date-group" key={date.date}><div className="paper-date-heading"><strong>{date.label}</strong><span>{date.rows.length} entr{date.rows.length === 1 ? 'y' : 'ies'}</span></div><div className="bet-list">{date.rows.map(bet => <div key={bet.id} className="bet-row" style={{ borderLeft: `3px solid ${STATUS_COLORS[bet.status] ?? 'var(--muted)'}`, background: STATUS_BG[bet.status] ?? 'var(--surface)' }}>
-          <div className="bet-main"><div className="bet-origin"><span className={`origin-badge ${bet.source_selection_id ? 'confirmed' : 'manual'}`}>{bet.source_selection_id ? 'Confirmed selection' : 'Manual entry'}</span>{bet.ticket_type && <span className="badge badge-type">{formatTicketType(bet.ticket_type)}</span>}</div><span className="bet-label">{bet.label}</span>{bet.source_selection_id && <div className="bet-provenance">{(!bet.market || !bet.selection || !selectionRepeatsMarket(bet.market, bet.selection)) && <span>{bet.market ? formatMarket(bet.market) : 'Published market'}</span>}<strong>{bet.selection ? formatSelection(bet.selection) : 'Published selection'}</strong><code>source #{bet.source_selection_id}</code></div>}{bet.notes && <p className="bet-notes">{bet.notes}</p>}</div>
+          <div className="bet-main"><div className="bet-origin"><span className={`origin-badge ${bet.source_selection_id ? 'confirmed' : 'manual'}`}>{bet.source_selection_id ? 'Confirmed selection' : 'Manual entry'}</span>{bet.ticket_type && <span className={ticketTierBadgeClass(bet.ticket_type)}>{formatTicketType(bet.ticket_type)}</span>}</div><span className="bet-label">{bet.label}</span>{bet.source_selection_id && <div className="bet-provenance">{(!bet.market || !bet.selection || !selectionRepeatsMarket(bet.market, bet.selection)) && <span>{bet.market ? formatMarket(bet.market) : 'Published market'}</span>}<strong>{bet.selection ? formatSelection(bet.selection) : 'Published selection'}</strong><code>source #{bet.source_selection_id}</code></div>}{bet.notes && <p className="bet-notes">{bet.notes}</p>}</div>
           <div className="bet-financials"><div className="fin-item"><span className="fin-label">Odds</span><span className="fin-value">{bet.odds.toFixed(2)}</span></div><div className="fin-item"><span className="fin-label">Stake</span><span className="fin-value">{fmt(bet.stake)}</span></div><div className="fin-item"><span className="fin-label">{bet.status === 'pending' ? 'Potential' : 'Actual return'}</span><span className="fin-value">{bet.status === 'pending' ? fmt(bet.potential_return) : bet.actual_return == null ? '—' : fmt(bet.actual_return)}</span></div>{bet.profit_loss !== null && <div className="fin-item"><span className="fin-label">P&amp;L</span><span className={`fin-value ${bet.profit_loss >= 0 ? 'positive' : 'negative'}`}>{fmtPnl(bet.profit_loss)}</span></div>}</div>
           <div className="bet-actions"><span className="status-badge" style={{ color: STATUS_COLORS[bet.status] }}>{bet.status.toUpperCase()}</span>{bet.source_selection_id && bet.ticket_date && onOpenTickets && <button className="btn-sm btn-ghost" onClick={() => onOpenTickets(bet.ticket_date ?? undefined)}>View source date</button>}{bet.status === 'pending' && <button className="btn-sm" onClick={() => { setSettleBetId(bet.id); setSettleForm({ status: 'won', actual_return: '' }) }}>Settle</button>}<button className="btn-sm btn-danger" aria-label={`Delete ${bet.label}`} title="Delete journal entry" onClick={() => deleteBet(bet.id)}>Delete</button></div>
         </div>)}</div></section>)}</section>)}</section>)}</div>
       </>}
     </>}
+    </section>
   </div>
 }
 

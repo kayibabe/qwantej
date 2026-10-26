@@ -69,6 +69,13 @@ async def require_research_access(
 ) -> None:
     if getattr(user, "role", None) == "admin":
         return
+    # Pro users may view the Daily Match Picks research page. Keep every other
+    # research endpoint behind administrator or research-key access.
+    if (
+        request.url.path.endswith("/performance/market-roi-daily")
+        and getattr(user, "plan", None) == "pro"
+    ):
+        return
     configured = _normalize_research_key(settings.research_api_key)
     supplied = _normalize_research_key(x_research_key)
     if configured and supplied:

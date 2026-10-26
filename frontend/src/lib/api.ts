@@ -141,6 +141,8 @@ export interface TicketHistoryItem {
   avg_q_score: number
   model_version: string
   published_at: string
+  publication_timing?: 'pre_kickoff' | 'post_kickoff' | 'unknown'
+  pricing?: 'market' | 'model'
   publication_hash: string
   relaxed_tier: boolean
   internal_only: boolean
@@ -667,11 +669,12 @@ export async function fetchStrongestSelections(date: string): Promise<SelectionS
   return res.json()
 }
 
-export async function fetchQualifiedSelections(date: string, minQScore = 75): Promise<SelectionSummary[]> {
-  const params = new URLSearchParams({ date, min_qscore: String(minQScore) })
+export async function fetchQualifiedSelections(date: string, minQScore = 75, offset = 0): Promise<{ rows: SelectionSummary[]; total: number }> {
+  const params = new URLSearchParams({ date, min_qscore: String(minQScore), offset: String(offset), limit: '100' })
   const res = await fetch(`/api/v1/selections/qualified?${params}`)
   if (!res.ok) throw new Error(`API error ${res.status}`)
-  return res.json()
+  const rows = await res.json() as SelectionSummary[]
+  return { rows, total: Number(res.headers.get('X-Total-Count')) || rows.length }
 }
 
 export interface AccaPrice {
@@ -899,6 +902,13 @@ export function formatTicketType(type: string): string {
     high_odds: 'High Odds',
   }
   return labels[type] ?? type.replace(/_/g, ' ').replace(/\b\w/g, character => character.toUpperCase())
+}
+
+export function ticketTierBadgeClass(type: string): string {
+  const key = type === 'conservative' ? 'safe' : type
+  return ['safe', 'balanced', 'high_odds'].includes(key)
+    ? `portfolio-tier ${key}`
+    : 'badge badge-type'
 }
 
 export function formatStage(stage: string): string {

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import cat_day_bounds_utc, cat_today
-from app.models import AccumulatorTicket, Match, Prediction, SelectionResult, TicketSelection
+from app.models import AccumulatorTicket, Match, Prediction, SelectionResult, TicketSelection, TicketType
 
 
 async def review_losses(db: AsyncSession, target_date: date | None = None) -> dict:
@@ -18,6 +18,7 @@ async def review_losses(db: AsyncSession, target_date: date | None = None) -> di
         .join(Prediction, Prediction.id == TicketSelection.prediction_id)
         .join(AccumulatorTicket, AccumulatorTicket.id == TicketSelection.ticket_id)
         .where(
+            AccumulatorTicket.ticket_type != TicketType.HIGH_ODDS,
             TicketSelection.result == SelectionResult.LOST,
             Match.kickoff_at >= start,
             Match.kickoff_at < end,
@@ -75,7 +76,7 @@ def _recommendations(counts: dict[str, int]) -> list[str]:
     if counts.get("high_confidence_miss"):
         advice.append("Audit calibration for high-probability selections before increasing confidence thresholds.")
     if counts.get("high_price_variance"):
-        advice.append("Review high-odds selections separately; their variance can dominate daily results.")
+        advice.append("Review long-price selections separately; their variance can dominate daily results.")
     if counts.get("low_quality_signal") or counts.get("weak_match_data"):
         advice.append("Raise data-quality requirements or exclude matches with incomplete inputs.")
     if counts.get("thin_edge"):

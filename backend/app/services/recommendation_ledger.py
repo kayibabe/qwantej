@@ -19,6 +19,7 @@ from app.models import (
     StrongestSelectionSnapshot,
     TicketSelection,
     TicketStatus,
+    TicketType,
 )
 from app.config import CAT
 from app.services.settlement import evaluate_selection
@@ -220,12 +221,32 @@ def _source_rows(rows: list[dict], source: str) -> list[dict]:
     return rows
 
 
+def _serialize_pick(row: dict) -> dict:
+    item = dict(row)
+    item.pop("_published_at", None)
+    item["sources"] = sorted(item["sources"])
+    item["published_tiers"] = sorted(item["published_tiers"])
+    item["published_ticket_ids"] = sorted(item["published_ticket_ids"])
+    item["published_ticket_count"] = len(item["published_ticket_ids"])
+    item["strongest_capture_sources"] = sorted(item["strongest_capture_sources"])
+    item["prediction_ids"] = sorted(item["prediction_ids"])
+    item["model_run_ids"] = sorted(item["model_run_ids"])
+    item["model_versions"] = sorted(item["model_versions"])
+    item["first_picked_at"] = item["first_picked_at"].isoformat()
+    if item["source_odds_at"]:
+        item["source_odds_at"] = item["source_odds_at"].isoformat()
+    if item["selection_settled_at"]:
+        item["selection_settled_at"] = item["selection_settled_at"].isoformat()
+    return item
+
+
 async def recommendation_pick_ledger(
     db: AsyncSession,
     *,
     stake: float = 1.0,
     date_from: date | None = None,
     date_to: date | None = None,
+    daily_date: date | None = None,
     source: str = "all",
     result_filter: str | None = None,
     market: str | None = None,
@@ -239,6 +260,7 @@ async def recommendation_pick_ledger(
     published_result = await db.execute(
         select(AccumulatorTicket)
         .where(
+            AccumulatorTicket.ticket_type != TicketType.HIGH_ODDS,
             AccumulatorTicket.status.in_(
                 [TicketStatus.PUBLISHED, TicketStatus.SETTLED, TicketStatus.VOID]
             )
@@ -402,32 +424,129 @@ async def recommendation_pick_ledger(
         "strongest": recommendation_metrics(_source_rows(scoped, "strongest"), stake),
         "overlap": recommendation_metrics(_source_rows(scoped, "overlap"), stake),
     }
+
+    # Compare every observed source × market × model group over
+    # the selected date range. Other ledger filters intentionally do not alter
+    # this ranking, so changing a filter cannot silently change its baseline.
+    date_scoped = [
+        row
+        for row in rows
+        if (not date_from or row["target_date"] >= date_from.isoformat())
+        and (not date_to or row["target_date"] <= date_to.isoformat())
+    ]
+    combination_groups: dict[tuple[str, str, str], list[dict]] = {}
+    for source_name in ("all", "published", "strongest", "overlap"):
+        source_rows = _source_rows(date_scoped, source_name)
+        for row in source_rows:
+            versions = row["model_versions"] or {"Unknown model"}
+            for version in versions:
+                key = (source_name, row["market"], version)
+                combination_groups.setdefault(key, []).append(row)
+    roi_combinations = []
+    for (source_name, market_name, version), group_rows in combination_groups.items():
+        roi_combinations.append({
+            "source": source_name,
+            "market": market_name,
+            "model_version": version,
+            **recommendation_metrics(group_rows, stake),
+        })
+    roi_combinations.sort(
+        key=lambda item: (
+            item["roi"] is not None,
+            item["roi"] if item["roi"] is not None else float("-inf"),
+            item["priced_settled"],
+        ),
+        reverse=True,
+    )
+
     displayed = _source_rows(scoped, source)
     displayed.sort(
         key=lambda row: (row["target_date"], row["kickoff_at"], row["q_score"]),
         reverse=True,
     )
     total_rows = len(displayed)
-    serialized = []
-    for row in displayed[:limit]:
-        item = dict(row)
-        item.pop("_published_at", None)
-        item["sources"] = sorted(item["sources"])
-        item["published_tiers"] = sorted(item["published_tiers"])
-        item["published_ticket_ids"] = sorted(item["published_ticket_ids"])
-        item["published_ticket_count"] = len(item["published_ticket_ids"])
-        item["strongest_capture_sources"] = sorted(
-            item["strongest_capture_sources"]
-        )
-        item["prediction_ids"] = sorted(item["prediction_ids"])
-        item["model_run_ids"] = sorted(item["model_run_ids"])
-        item["model_versions"] = sorted(item["model_versions"])
-        item["first_picked_at"] = item["first_picked_at"].isoformat()
-        if item["source_odds_at"]:
-            item["source_odds_at"] = item["source_odds_at"].isoformat()
-        if item["selection_settled_at"]:
-            item["selection_settled_at"] = item["selection_settled_at"].isoformat()
-        serialized.append(item)
+    serialized = [_serialize_pick(row) for row in displayed[:limit]]
+
+    daily_unique = None
+    if daily_date is not None:
+        selected_date = daily_date.isoformat()
+        daily_rows = [row for row in rows if row["target_date"] == selected_date]
+        daily_rows.sort(key=lambda row: (row["kickoff_at"], row["q_score"]))
+        daily_metrics = recommendation_metrics(daily_rows, stake)
+        # Qualify markets from the complete, deduplicated All Unique ledger so
+        # each displayed day's picks are gated by system-wide settled evidence.
+        market_groups: dict[str, list[dict]] = {}
+        for row in rows:
+            market_groups.setdefault(row["market"], []).append(row)
+        qualifying_markets = []
+        qualifying_market_names: set[str] = set()
+        for market_name, market_rows in sorted(market_groups.items()):
+            market_metrics = recommendation_metrics(market_rows, stake)
+            if (
+                market_metrics["unique_picks"] >= 5
+                and market_metrics["roi"] is not None
+                and market_metrics["roi"] >= 0.10
+            ):
+                qualifying_market_names.add(market_name)
+                qualifying_markets.append({
+                    "market": market_name,
+                    "metrics": market_metrics,
+                })
+        daily_qualifies = bool(qualifying_market_names)
+        # The second daily view reproduces the Published-only simulation using
+        # all-time Source × Market × Model combinations at the 5% threshold.
+        published_rows = _source_rows(rows, "published")
+        published_daily_rows = [
+            row for row in published_rows if row["target_date"] == selected_date
+        ]
+        published_daily_rows.sort(key=lambda row: (row["kickoff_at"], row["q_score"]))
+        published_combination_groups: dict[tuple[str, str], list[dict]] = {}
+        for row in published_rows:
+            for version in row["model_versions"] or {"Unknown model"}:
+                published_combination_groups.setdefault(
+                    (row["market"], version), []
+                ).append(row)
+        published_qualifying_combinations = []
+        published_qualifying_keys: set[tuple[str, str]] = set()
+        for (market_name, version), combination_rows in sorted(
+            published_combination_groups.items()
+        ):
+            combination_metrics = recommendation_metrics(combination_rows, stake)
+            if (
+                combination_metrics["unique_picks"] >= 5
+                and combination_metrics["roi"] is not None
+                and combination_metrics["roi"] >= 0.05
+            ):
+                published_qualifying_keys.add((market_name, version))
+                published_qualifying_combinations.append({
+                    "market": market_name,
+                    "model_version": version,
+                    "metrics": combination_metrics,
+                })
+        published_simulation_rows = [
+            _serialize_pick(row)
+            for row in published_daily_rows
+            if any(
+                (row["market"], version) in published_qualifying_keys
+                for version in (row["model_versions"] or {"Unknown model"})
+            )
+        ]
+        daily_unique = {
+            "date": selected_date,
+            "metrics": daily_metrics,
+            "qualifies": daily_qualifies,
+            "qualifying_markets": qualifying_markets,
+            "rows": [
+                _serialize_pick(row)
+                for row in daily_rows
+                if row["market"] in qualifying_market_names
+            ],
+            "published_simulation": {
+                "qualifies": bool(published_qualifying_keys),
+                "qualifying_combinations": published_qualifying_combinations,
+                "rows": published_simulation_rows,
+            },
+        }
     return {
         "stake": stake,
         "deduplication_key": [
@@ -439,6 +558,8 @@ async def recommendation_pick_ledger(
         "total_rows": total_rows,
         "returned_rows": len(serialized),
         "metrics": metrics,
+        "roi_combinations": roi_combinations,
+        "daily_unique": daily_unique,
         "filters": filters,
         "rows": serialized,
     }

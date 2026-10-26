@@ -12,12 +12,11 @@ from sqlalchemy.orm import selectinload
 from app.database import AsyncSessionLocal
 from app.models.bet import Bet, BetStatus
 from app.models import TicketSelection, Match, MatchStatus
-from app.api.security import require_research_access
+from app.api.security import require_pro_access
 
 router = APIRouter(
     prefix="/bets",
     tags=["bets"],
-    dependencies=[Depends(require_research_access)],
 )
 
 
@@ -103,8 +102,8 @@ class BetOut(BaseModel):
 
 # ── Routes ───────────────────────────────────────────────────────────────────
 
-@router.post("", response_model=BetOut, status_code=201, dependencies=[Depends(require_research_access)])
-async def create_bet(payload: BetCreate, db: AsyncSession = Depends(get_db)):
+@router.post("", response_model=BetOut, status_code=201)
+async def create_bet(payload: BetCreate, db: AsyncSession = Depends(get_db), user=Depends(require_pro_access)):
     bet = Bet(
         label=payload.label,
         odds=payload.odds,
@@ -114,14 +113,15 @@ async def create_bet(payload: BetCreate, db: AsyncSession = Depends(get_db)):
         ticket_date=payload.ticket_date,
         notes=payload.notes,
         status=BetStatus.PENDING,
+        user_id=user.id,
     )
     db.add(bet)
     await db.commit()
     await db.refresh(bet)
     return _to_out(bet)
 
-@router.post("/individual", response_model=BetOut, status_code=201, dependencies=[Depends(require_research_access)])
-async def create_individual_bet(payload: IndividualBetCreate, db: AsyncSession = Depends(get_db)):
+@router.post("/individual", response_model=BetOut, status_code=201)
+async def create_individual_bet(payload: IndividualBetCreate, db: AsyncSession = Depends(get_db), user=Depends(require_pro_access)):
     selection = (await db.execute(select(TicketSelection).where(TicketSelection.id == payload.selection_id).options(
         selectinload(TicketSelection.match).selectinload(Match.home_team),
         selectinload(TicketSelection.match).selectinload(Match.away_team),
@@ -140,7 +140,7 @@ async def create_individual_bet(payload: IndividualBetCreate, db: AsyncSession =
               odds=odds, stake=payload.stake, potential_return=round(odds * payload.stake, 2),
               ticket_date=match.kickoff_at.date().isoformat(), notes=payload.notes,
               source_selection_id=selection.id, match_id=match.id, market=selection.market,
-              selection=selection.selection, status=BetStatus.PENDING)
+              selection=selection.selection, status=BetStatus.PENDING, user_id=user.id)
     db.add(bet); await db.commit(); await db.refresh(bet)
     return _to_out(bet)
 
@@ -152,8 +152,11 @@ async def list_bets(
     limit: int = Query(50, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
+    user=Depends(require_pro_access),
 ):
     q = select(Bet).order_by(desc(Bet.created_at)).limit(limit).offset(offset)
+    if user.role != "admin":
+        q = q.where(Bet.user_id == user.id)
     if status:
         q = q.where(Bet.status == status)
     if ticket_date:
@@ -163,23 +166,26 @@ async def list_bets(
 
 
 @router.get("/summary", response_model=BetSummaryOut)
-async def bet_summary(db: AsyncSession = Depends(get_db)):
+async def bet_summary(db: AsyncSession = Depends(get_db), user=Depends(require_pro_access)):
     """Return exact journal totals and daily/monthly/yearly performance."""
-    rows = (await db.execute(select(Bet).order_by(Bet.created_at))).scalars().all()
+    query = select(Bet).order_by(Bet.created_at)
+    if user.role != "admin":
+        query = query.where(Bet.user_id == user.id)
+    rows = (await db.execute(query)).scalars().all()
     return _summarize_bets(rows)
 
 
 @router.get("/{bet_id}", response_model=BetOut)
-async def get_bet(bet_id: int, db: AsyncSession = Depends(get_db)):
-    bet = await db.get(Bet, bet_id)
+async def get_bet(bet_id: int, db: AsyncSession = Depends(get_db), user=Depends(require_pro_access)):
+    bet = await _get_owned_bet(db, bet_id, user)
     if not bet:
         raise HTTPException(404, "Bet not found")
     return _to_out(bet)
 
 
-@router.patch("/{bet_id}/settle", response_model=BetOut, dependencies=[Depends(require_research_access)])
-async def settle_bet(bet_id: int, payload: BetSettle, db: AsyncSession = Depends(get_db)):
-    bet = await db.get(Bet, bet_id)
+@router.patch("/{bet_id}/settle", response_model=BetOut)
+async def settle_bet(bet_id: int, payload: BetSettle, db: AsyncSession = Depends(get_db), user=Depends(require_pro_access)):
+    bet = await _get_owned_bet(db, bet_id, user)
     if not bet:
         raise HTTPException(404, "Bet not found")
 
@@ -199,9 +205,9 @@ async def settle_bet(bet_id: int, payload: BetSettle, db: AsyncSession = Depends
     return _to_out(bet)
 
 
-@router.delete("/{bet_id}", status_code=204, dependencies=[Depends(require_research_access)])
-async def delete_bet(bet_id: int, db: AsyncSession = Depends(get_db)):
-    bet = await db.get(Bet, bet_id)
+@router.delete("/{bet_id}", status_code=204)
+async def delete_bet(bet_id: int, db: AsyncSession = Depends(get_db), user=Depends(require_pro_access)):
+    bet = await _get_owned_bet(db, bet_id, user)
     if not bet:
         raise HTTPException(404, "Bet not found")
     await db.delete(bet)
@@ -209,6 +215,12 @@ async def delete_bet(bet_id: int, db: AsyncSession = Depends(get_db)):
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
+async def _get_owned_bet(db: AsyncSession, bet_id: int, user) -> Bet | None:
+    query = select(Bet).where(Bet.id == bet_id)
+    if user.role != "admin":
+        query = query.where(Bet.user_id == user.id)
+    return (await db.execute(query)).scalar_one_or_none()
 
 def _to_out(b: Bet) -> BetOut:
     return BetOut(

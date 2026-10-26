@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatDate, formatKickoff, formatSelection, selectionTone } from "../../lib/api";
 import { fmt } from "../../utils/currency";
 import type { CustomAccumulator, DailyTab } from "./types";
@@ -41,6 +41,7 @@ export function CustomAccumulatorPanel({
   onDelete,
   onNavigate,
   onOpenPicks,
+  focusTicketId,
 }: {
   date: string;
   tickets: CustomAccumulator[];
@@ -49,11 +50,18 @@ export function CustomAccumulatorPanel({
   onDelete: (ticket: CustomAccumulator) => Promise<void>;
   onNavigate?: (tab: DailyTab) => void;
   onOpenPicks?: () => void;
+  focusTicketId?: number | null;
 }) {
   const openPicks = () => onOpenPicks ? onOpenPicks() : onNavigate?.("daily-match-picks");
   const [name, setName] = useState("");
   const [stakeDrafts, setStakeDrafts] = useState<Record<number, string>>({});
   const history = groupedAccumulatorHistory(tickets);
+  useEffect(() => {
+    if (focusTicketId == null || !tickets.some((ticket) => ticket.id === focusTicketId)) return;
+    const target = document.getElementById(`custom-accumulator-${focusTicketId}`);
+    target?.scrollIntoView?.({ block: "center" });
+    target?.focus({ preventScroll: true });
+  }, [focusTicketId, tickets]);
   const create = async () => {
     const title = name.trim() || `${formatDate(date)} accumulator`;
     try {
@@ -158,7 +166,7 @@ export function CustomAccumulatorPanel({
             const sourceSnapshots = Object.values(ticket.source_ticket_snapshots ?? {});
             const latestKickoff = latestAccumulatorKickoff(ticket);
             return (
-              <article className={`custom-ticket ${ticket.status}${ticket.automatic ? " automatic-ticket" : ""}`} key={ticket.id}>
+              <article id={`custom-accumulator-${ticket.id}`} tabIndex={-1} className={`custom-ticket ${ticket.status}${ticket.automatic ? " automatic-ticket" : ""}`} key={ticket.id}>
                 <div className="custom-ticket-header">
                   <div>
                     <strong>{ticket.name}</strong>
@@ -168,13 +176,13 @@ export function CustomAccumulatorPanel({
                   <span className={`custom-status-badge ${ticket.status}`}>{statusLabel}</span>
                 </div>
                 {ticket.automatic ? <>
+                  <p className="automatic-ticket-note"><strong>Longer combined ticket:</strong> this merges legs from Conservative and Balanced without fresh joint optimisation. Its chance and return use multiplied leg snapshots and do not apply the official correlation model; treat them as illustrative only.</p>
                   <div className="custom-ticket-metrics automatic-ticket-metrics">
-                    <span><small>Ticket odds</small><b>{ticket.legs.length ? `${odds.toFixed(2)}×` : "—"}</b></span>
-                    <span><small>Chance to win</small><b>{chanceToWin == null ? "—" : `${(chanceToWin * 100).toFixed(1)}%`}<em>{chanceToWin ? `about 1 in ${Math.max(1, Math.round(1 / chanceToWin))}` : "snapshot unavailable"}</em></b></span>
-                    <span><small>Risk score</small><b>{riskScore == null ? "—" : `${riskScore.toFixed(0)}/100`}</b></span>
-                    <span><small>Expected return</small><b>{expectedReturn == null ? "—" : `${expectedReturn >= 0 ? "+" : ""}${(expectedReturn * 100).toFixed(1)}%`}</b></span>
+                    <span><small>Combined odds</small><b>{ticket.legs.length ? `${odds.toFixed(2)}×` : "—"}</b></span>
+                    <span><small>Illustrative chance</small><b>{chanceToWin == null ? "—" : `${(chanceToWin * 100).toFixed(1)}%`}<em>{chanceToWin ? `about 1 in ${Math.max(1, Math.round(1 / chanceToWin))}` : "snapshot unavailable"}</em></b></span>
+                    <span><small>Risk indicator</small><b>{riskScore == null ? "—" : `${riskScore.toFixed(0)}/100`}</b></span>
+                    <span><small>Illustrative return</small><b>{expectedReturn == null ? "—" : `${expectedReturn >= 0 ? "+" : ""}${(expectedReturn * 100).toFixed(1)}%`}</b></span>
                   </div>
-                  <p className="automatic-ticket-note">Merged from today&apos;s Conservative and Balanced tickets. Chance and risk use the immutable leg snapshots; this personal ticket does not carry the official correlation model.</p>
                   {sourceSnapshots.length > 0 && <p className="automatic-ticket-note">Source versions: {sourceSnapshots.map((source) => `${source.ticket_type ?? "ticket"} v${source.version ?? "—"}${source.publication_hash ? ` · ${source.publication_hash.slice(0, 10)}…` : ""}`).join(" · ")}</p>}
                   <div className="ticket-summary automatic-ticket-summary"><strong>{ticket.legs.length} legs</strong><span className="ticket-result-chip pending"><b>{pendingLegs}</b> pending</span></div>
                 </> : <div className="custom-ticket-metrics">
@@ -208,7 +216,7 @@ export function CustomAccumulatorPanel({
                           <span className="custom-leg-odds">{leg.best_odds != null ? `${leg.best_odds.toFixed(2)}×` : "—"}</span>
                           <span>Q {leg.q_score.toFixed(1)}</span>
                           <span>{leg.model_agreement != null ? `${(leg.model_agreement * 100).toFixed(1)} pp` : "—"}</span>
-                          {ticket.automatic && leg.source_ticket_type && <span className="source-ticket-badge">{leg.source_conflict ? "Conservative priority" : sourceTicketLabel(leg.source_ticket_type)}{leg.source_ticket_version ? ` · v${leg.source_ticket_version}` : ""}</span>}
+                          {ticket.automatic && leg.source_ticket_type && <span className={`source-ticket-badge ${leg.source_conflict ? "safe" : leg.source_ticket_type}`}>{leg.source_conflict ? "Conservative priority" : sourceTicketLabel(leg.source_ticket_type)}{leg.source_ticket_version ? ` · v${leg.source_ticket_version}` : ""}</span>}
                           <button
                             type="button"
                             disabled={legsLocked}

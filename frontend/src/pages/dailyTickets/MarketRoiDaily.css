@@ -1,6 +1,8 @@
 .market-roi-panel { display: grid; gap: 20px; }
 .market-roi-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
 .market-roi-heading > div:first-child { max-width: 820px; }
+.market-roi-heading.daily-match-picks-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+.market-roi-heading.daily-match-picks-heading > div:first-child { max-width: none; }
 .market-roi-heading p { color: var(--text-secondary, #687386); margin: 8px 0 0; line-height: 1.55; }
 .market-roi-refresh { display: grid; gap: 5px; text-align: right; color: var(--text-secondary, #687386); font-size: var(--type-body); white-space: nowrap; }
 .market-roi-refresh small { opacity: .8; }
@@ -75,6 +77,7 @@
 .market-roi-match-error { border: 1px solid #f0cece; background: #fff5f4; color: #a52c2c; }
 @media (max-width: 800px) {
   .market-roi-heading { display: grid; }
+  .market-roi-heading.daily-match-picks-heading { grid-template-columns: minmax(0, 1fr); }
   .market-roi-refresh { text-align: left; }
   .market-roi-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .market-roi-table-wrap { overflow-x: auto; }
@@ -95,3 +98,16 @@
 @media (max-width: 1100px) {
   .market-roi-fixture { grid-template-columns: 1fr; gap: 9px; }
 }
+.daily-picks-performance { margin: 14px 0 20px; padding: 15px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.daily-picks-performance-heading { display: flex; justify-content: space-between; align-items: start; gap: 12px; margin-bottom: 10px; }
+.daily-picks-performance-heading h3 { margin: 0 0 3px; font-size: 16px; }
+.daily-picks-performance-heading p, .daily-picks-performance-heading small, .daily-picks-performance-note { color: var(--muted); font-size: var(--type-small); }
+.daily-picks-performance-heading p, .daily-picks-performance-note { margin: 0; }
+.daily-picks-performance-table-wrap { width: 100%; overflow-x: auto; }
+.daily-picks-performance-table { min-width: 900px; }
+.daily-picks-performance-note { margin-top: 9px; }
+@media (max-width: 700px) {
+  .daily-picks-performance-heading { flex-direction: column; }
+}
+.daily-picks-research-warning { margin: 12px 0; padding: 11px 13px; border-left: 3px solid var(--warning, #d49b36); border-radius: 6px; background: color-mix(in srgb, var(--warning, #d49b36) 9%, var(--surface, #fff)); color: var(--text-secondary, #5d6675); font-size: var(--type-small, 13px); }
+.daily-picks-research-warning strong { color: var(--text, #202938); }

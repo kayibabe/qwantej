@@ -4,6 +4,8 @@ export function TicketGridSkeleton() {
       className="ticket-grid public-ticket-grid skeleton-grid"
       aria-label="Loading published ledger"
       aria-busy="true"
+      role="status"
+      aria-live="polite"
     >
       {[0, 1, 2].map((index) => (
         <div className="ticket-card skeleton-card" key={index}>

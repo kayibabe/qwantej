@@ -1,4 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
+import { act, type ReactNode } from 'react'
+import { createRoot } from 'react-dom/client'
 import { describe, expect, it } from 'vitest'
 import TicketCard from './TicketCard'
 import SelectionDetail from './SelectionDetail'
@@ -49,6 +51,14 @@ const ticket: Ticket = {
   }],
 }
 
+function renderInteractive(element: ReactNode) {
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  act(() => root.render(element))
+  return { container, unmount: () => act(() => root.unmount()) }
+}
+
 describe('audited ticket surfaces', () => {
   it('renders publication audit data', () => {
     const html = renderToStaticMarkup(
@@ -58,9 +68,9 @@ describe('audited ticket surfaces', () => {
     expect(html).toContain('Hit probability')
     expect(html).toContain('Risk score')
     expect(html).toContain('Open · 1 pending')
-    expect(html).toContain('v3')
-    expect(html).toContain('Hash aaaaaaaaaa')
-    expect(html).toContain('v3 · model 0.2.0')
+    expect(html).toContain('Version 3')
+    expect(html).toContain('Publication hash aaaaaaaaaa')
+    expect(html).toContain('Version 3 · model 0.2.0')
   })
 
   it('flags a relaxed-tier ticket built on a thin match day', () => {
@@ -84,7 +94,7 @@ describe('audited ticket surfaces', () => {
     const html = renderToStaticMarkup(
       <TicketCard ticket={horizonTicket} tierName="Balanced" tierDesc="Q ≥80" color="blue" />,
     )
-    expect(html).toContain('Includes games to Mon 31 Aug')
+    expect(html).toContain('class="event-date">Mon 31 Aug</span>')
     expect(html).toContain('Fri 28 Aug')
     expect(html).toContain('up to 3 day(s) later')
   })
@@ -102,12 +112,12 @@ describe('audited ticket surfaces', () => {
     )
     expect(html).toContain('Chance to win')
     expect(html).toContain('about 1 in 2')
-    expect(html).toContain('Expected return')
+    expect(html).toContain('Return / unit')
     expect(html).toContain('-4.1%')
     expect(html).toContain('79% chance')
-    expect(html).toContain('Fair-priced')
-    expect(html).toContain('expect to lose roughly the margin')
-    for (const modelOnly of ['Avg Q-score', 'Avg edge', ' edge<', 'Spread ', 'Value review']) {
+    expect(html).toContain('Market-priced')
+    expect(html).not.toContain('stat-value positive')
+    for (const modelOnly of ['Average Q-score', 'Average edge', ' edge<', 'Spread ', 'Value review']) {
       expect(html).not.toContain(modelOnly)
     }
   })
@@ -117,7 +127,7 @@ describe('audited ticket surfaces', () => {
       <TicketCard ticket={ticket} tierName="Balanced" tierDesc="Q ≥80" color="blue" />,
     )
     expect(html).toContain('Hit probability')
-    expect(html).toContain('Avg Q-score')
+    expect(html).toContain('Average Q-score')
     expect(html).not.toContain('Fair-priced')
     expect(html).not.toContain('Chance to win')
   })
@@ -162,8 +172,8 @@ describe('audited ticket surfaces', () => {
     expect(html).toContain('distinct-match, odds, and correlation limits')
   })
 
-  it('shows rejected-selection reason codes', () => {
-    const html = renderToStaticMarkup(
+  it('reveals rejected-selection reason codes on demand', () => {
+    const view = renderInteractive(
       <SelectionPanel
         title="Rejected matches"
         empty="None"
@@ -184,8 +194,11 @@ describe('audited ticket surfaces', () => {
         }]}
       />,
     )
-    expect(html).toContain('Q SCORE BELOW TIER')
-    expect(html).toContain('NON POSITIVE EDGE')
+    expect(view.container.textContent).not.toContain('minimum')
+    act(() => view.container.querySelector<HTMLButtonElement>('.rejection-reasons-trigger')?.click())
+    expect(view.container.textContent).toContain("below this ticket's minimum")
+    expect(view.container.textContent).toContain('Non positive edge')
+    view.unmount()
   })
 
   it('keeps long tickets compact with an explicit expansion control', () => {
@@ -195,12 +208,19 @@ describe('audited ticket surfaces', () => {
       prediction_id: index + 10,
       home_team: `Home ${index + 1}`,
     }))
-    const html = renderToStaticMarkup(
+    const view = renderInteractive(
       <TicketCard ticket={{ ...ticket, legs }} tierName="Balanced" tierDesc="Q ≥80" color="blue" onSelectLeg={() => undefined} />,
     )
-    expect(html).toContain('View all 5 legs')
-    expect(html).toContain('Home 4')
-    expect(html).not.toContain('Home 5')
+    const legList = view.container.querySelector<HTMLUListElement>('.leg-list')!
+    expect(legList.hidden).toBe(true)
+    act(() => view.container.querySelector<HTMLButtonElement>('.ticket-summary')?.click())
+    expect(legList.hidden).toBe(false)
+    expect(view.container.querySelector('.ticket-expand')).not.toBeNull()
+    expect(legList.textContent).toContain('Home 4')
+    expect(legList.textContent).not.toContain('Home 5')
+    act(() => view.container.querySelector<HTMLButtonElement>('.ticket-expand')?.click())
+    expect(legList.textContent).toContain('Home 5')
+    view.unmount()
   })
 
   it('renders probability evidence and audit context in the selection drawer', () => {
@@ -208,7 +228,7 @@ describe('audited ticket surfaces', () => {
       <SelectionDetail selection={ticket.legs[0]} modelVersion="0.2.1" publishedAt={ticket.published_at} onClose={() => undefined} />,
     )
     expect(html).toContain('Probability evidence')
-    expect(html).toContain('Qwantej model')
+    expect(html).toContain('QwanEj model')
     expect(html).toContain('Market implied')
     expect(html).toContain('Probabilities are estimates, not guarantees')
     expect(html).toContain('0.2.1')
@@ -229,17 +249,18 @@ describe('audited ticket surfaces', () => {
     expect(html).toContain('Fair chance (margin removed)')
     expect(html).toContain('Quoted price implies')
     expect(html).toContain('Price vs fair')
-    expect(html).not.toContain('Qwantej model')
+    expect(html).not.toContain('QwanEj model')
     expect(html).not.toContain('No positive edge')
     expect(html).not.toContain('Model spread')
   })
 
-  it('never shows a stake suggestion or green return on a fair-priced ticket', () => {
+  it('shows flat-stake return and profit on a fair-priced ticket', () => {
     const html = renderToStaticMarkup(
-      <TicketCard ticket={{ ...ticket, pricing: 'market', expected_value: 0.012 }} tierName="Balanced" tierDesc="" color="blue" suggestedStake={5} />,
+      <TicketCard ticket={{ ...ticket, pricing: 'market', expected_value: 0.012 }} tierName="Balanced" tierDesc="" color="blue" flatStake={5} />,
     )
-    expect(html).not.toContain('half Kelly')
-    expect(html).not.toContain('stat-value positive')
+    expect(html).toContain('Flat stake')
+    expect(html).toContain('Potential return')
+    expect(html).toContain('Potential profit')
   })
 
   it('explains when individual-bet confirmation is unavailable', () => {

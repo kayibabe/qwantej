@@ -21,8 +21,8 @@ router = APIRouter(
 
 
 @router.get("/summary")
-async def summary(date_from: date | None = None, date_to: date | None = None, model_version: str | None = None, db: AsyncSession = Depends(get_db)):
-    return await performance_summary(db, date_from, date_to, model_version)
+async def summary(date_from: date | None = None, date_to: date | None = None, model_version: str | None = CURRENT_MODEL_VERSION, db: AsyncSession = Depends(get_db)):
+    return await performance_summary(db, date_from, date_to, None if model_version == "all" else model_version)
 
 
 @router.get("/individual-selections")
@@ -80,6 +80,7 @@ async def recommendation_picks(
     stake: float = Query(1.0, gt=0, le=100000),
     date_from: date | None = None,
     date_to: date | None = None,
+    daily_date: date | None = None,
     source: str = Query("all", pattern="^(all|published|strongest|overlap)$"),
     result: str | None = Query(None, pattern="^(pending|won|lost|void)$"),
     market: str | None = None,
@@ -93,6 +94,7 @@ async def recommendation_picks(
         stake=stake,
         date_from=date_from,
         date_to=date_to,
+        daily_date=daily_date,
         source=source,
         result_filter=result,
         market=market,

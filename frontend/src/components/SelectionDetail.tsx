@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { fetchSelectionOdds, formatDate, formatKickoff, formatMarket, formatSelection, selectionRepeatsMarket, type OddsQuote } from '../lib/api'
+import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { fetchAccaPrices, fetchSelectionOdds, formatDate, formatKickoff, formatMarket, formatSelection, selectionRepeatsMarket, type AccaPrice, type OddsQuote } from '../lib/api'
 import GradeBadge from './GradeBadge'
 import Over45Qualification from './Over45Qualification'
 import OverGoalsQualification from './OverGoalsQualification'
@@ -64,9 +64,13 @@ interface Props {
   publishedAt?: string
   /** 'market': the leg's probability is the bookmaker's fair price, not a model estimate. */
   pricing?: 'market' | 'model'
+  canViewMarketPrices?: boolean
   onClose: () => void
   onOpenMatch?: (matchId: number, predictionId?: number) => void
 }
+
+const DETAIL_TABS = ['overview', 'stats', 'probability', 'h2h', 'signals', 'odds'] as const
+type DetailTab = (typeof DETAIL_TABS)[number]
 
 const pct = (value: number | null | undefined, signed = false) => {
   if (value == null) return '—'
@@ -85,6 +89,14 @@ function evidenceLabel(value: string) {
   return value
     .replace(/_/g, ' ')
     .replace(/\b\w/g, character => character.toUpperCase())
+}
+
+function catCalendarDate(value: string): string {
+  const parts = new Intl.DateTimeFormat('en', {
+    timeZone: 'Africa/Blantyre', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date(value))
+  const part = (type: string) => parts.find(item => item.type === type)?.value ?? ''
+  return `${part('year')}-${part('month')}-${part('day')}`
 }
 
 function freshness(iso?: string | null) {
@@ -120,12 +132,12 @@ function decisionStrength(selection: DetailSelection, priceState: ReturnType<typ
   return { label: strong ? 'Strong' : caution ? 'Review' : 'Acceptable', tone: strong ? 'strong' : caution ? 'caution' : 'acceptable', cautions }
 }
 
-export default function SelectionDetail({ selection, modelVersion, publishedAt, pricing, onClose, onOpenMatch }: Props) {
+export default function SelectionDetail({ selection, modelVersion, publishedAt, pricing, canViewMarketPrices = false, onClose, onOpenMatch }: Props) {
   const market = pricing === 'market'
   const label = market
     ? { prob: 'Fair chance', edge: 'Price vs fair', probRow: 'Fair chance (margin removed)', impliedRow: 'Quoted price implies', subtitle: 'Fair price vs quoted price', ev: 'Long-run return at this price against the fair chance. Negative values are the bookmaker margin.' }
-    : { prob: 'Calibrated probability', edge: 'Positive edge', probRow: 'Qwantej model', impliedRow: 'Market implied', subtitle: 'Model vs market', ev: 'Theoretical value based on the model probability and captured odds. It is not a guaranteed return or win probability.' }
-  const [activeTab, setActiveTab] = useState<'overview' | 'stats' | 'probability' | 'h2h' | 'signals' | 'odds'>('probability')
+    : { prob: 'Calibrated probability', edge: 'Positive edge', probRow: 'QwanEj model', impliedRow: 'Market implied', subtitle: 'Model vs market', ev: 'Theoretical value based on the model probability and captured odds. It is not a guaranteed return or win probability.' }
+  const [activeTab, setActiveTab] = useState<DetailTab>('probability')
   const [copied, setCopied] = useState(false)
   const [stake, setStake] = useState('10')
   const [betMessage, setBetMessage] = useState('')
@@ -133,9 +145,25 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
   const [quotes, setQuotes] = useState<OddsQuote[]>([])
   const [quotesLoading, setQuotesLoading] = useState(true)
   const [quotesError, setQuotesError] = useState(false)
+  const [accaPrice, setAccaPrice] = useState<AccaPrice | null>(null)
+  const [accaPriceLoading, setAccaPriceLoading] = useState(false)
+  const [accaPriceError, setAccaPriceError] = useState(false)
   const [form, setForm] = useState<{ home: TeamForm; away: TeamForm; h2h: H2H[] } | null>(null)
   const drawerRef = useRef<HTMLElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
+  const onDetailTabKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const tabs = event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+    const currentIndex = DETAIL_TABS.indexOf(activeTab)
+    let nextIndex: number | null = null
+    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % DETAIL_TABS.length
+    if (event.key === 'ArrowLeft') nextIndex = (currentIndex + DETAIL_TABS.length - 1) % DETAIL_TABS.length
+    if (event.key === 'Home') nextIndex = 0
+    if (event.key === 'End') nextIndex = DETAIL_TABS.length - 1
+    if (nextIndex == null) return
+    event.preventDefault()
+    setActiveTab(DETAIL_TABS[nextIndex])
+    tabs[nextIndex]?.focus()
+  }
   const implied = selection.avg_implied ?? (selection.best_odds ? 1 / selection.best_odds : null)
   const priceState = useMemo(() => freshness(selection.source_odds_at), [selection.source_odds_at])
   const strength = useMemo(() => (market ? marketDecisionStrength : decisionStrength)(selection, priceState), [selection, priceState, market])
@@ -195,6 +223,27 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
     return () => { active = false }
   }, [selection.prediction_id])
 
+  useEffect(() => {
+    if (!canViewMarketPrices) {
+      setAccaPrice(null)
+      setAccaPriceLoading(false)
+      setAccaPriceError(false)
+      return
+    }
+    const controller = new AbortController()
+    setAccaPrice(null)
+    setAccaPriceLoading(true)
+    setAccaPriceError(false)
+    fetchAccaPrices(catCalendarDate(selection.kickoff_at), controller.signal)
+      .then(rows => {
+        if (controller.signal.aborted) return
+        setAccaPrice(rows.find(row => row.match_id === selection.match_id && row.market === selection.market && row.selection === selection.selection) ?? null)
+      })
+      .catch(() => { if (!controller.signal.aborted) setAccaPriceError(true) })
+      .finally(() => { if (!controller.signal.aborted) setAccaPriceLoading(false) })
+    return () => controller.abort()
+  }, [canViewMarketPrices, selection.kickoff_at, selection.match_id, selection.market, selection.selection])
+
   useEffect(() => { fetch(`/api/v1/selections/match-context/${selection.match_id}`).then(response => response.ok ? response.json() : Promise.reject()).then(setForm).catch(() => setForm(null)) }, [selection.match_id])
 
   async function copySummary() {
@@ -204,7 +253,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
       market
         ? `fair chance ${pct(selection.model_probability)} · return at price ${pct(selection.expected_value, true)}`
         : `Q ${selection.q_score == null ? 'Pro only' : selection.q_score.toFixed(1)} · model ${pct(selection.model_probability)} · edge ${pct(selection.edge, true)}`,
-      'Qwantej research / paper trading only',
+      'QwanEj research / paper trading only',
     ].join('\n')
     await navigator.clipboard?.writeText(summary)
     setCopied(true)
@@ -277,11 +326,29 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
           <div><span>Market settlement</span><strong>{selection.result === 'pending' && selection.home_goals != null ? 'Pending' : selection.result ?? 'Pending'}</strong></div>
         </section>
 
-        <div className="detail-tabs" role="tablist" aria-label="Match analysis"><button className={activeTab === 'overview' ? 'active' : ''} onClick={() => setActiveTab('overview')}>Overview</button><button className={activeTab === 'stats' ? 'active' : ''} onClick={() => setActiveTab('stats')}>Stats</button><button className={activeTab === 'probability' ? 'active' : ''} onClick={() => setActiveTab('probability')}>Probability</button><button className={activeTab === 'h2h' ? 'active' : ''} onClick={() => setActiveTab('h2h')}>H2H</button><button className={activeTab === 'signals' ? 'active' : ''} onClick={() => setActiveTab('signals')}>Signals</button><button className={activeTab === 'odds' ? 'active' : ''} onClick={() => setActiveTab('odds')}>Odds</button></div>
+        <div className="detail-tabs" role="tablist" aria-label="Match analysis" onKeyDown={onDetailTabKeyDown}>
+          {DETAIL_TABS.map((tab) => {
+            const selected = activeTab === tab
+            const label = tab === 'h2h' ? 'H2H' : tab.charAt(0).toUpperCase() + tab.slice(1)
+            return <button
+              key={tab}
+              id={`detail-tab-${tab}`}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              aria-controls={`detail-panel-${tab}`}
+              tabIndex={selected ? 0 : -1}
+              className={selected ? 'active' : ''}
+              onClick={() => setActiveTab(tab)}
+            >{label}</button>
+          })}
+        </div>
+        <div id={`detail-panel-${activeTab}`} className="detail-tab-panel" role="tabpanel" aria-labelledby={`detail-tab-${activeTab}`} tabIndex={0}>
+        {!form && ['overview', 'stats', 'h2h'].includes(activeTab) && <p className="detail-empty-note">Match context is not available in the saved evidence.</p>}
         {form && activeTab === 'overview' && <section className="form-evidence-card"><div className="evidence-title"><h3>Recent form</h3><span>Last {Math.max(form.home.matches, form.away.matches)} finished matches</span></div><div className="form-teams"><TeamForm team={form.home} /><span className="form-vs">vs</span><TeamForm team={form.away} /></div></section>}
         {form && activeTab === 'stats' && <section className="form-evidence-card"><div className="evidence-title"><h3>Recent team statistics</h3><span>Last five finished matches</span></div><div className="team-stats-grid"><TeamStats team={form.home} /><TeamStats team={form.away} /></div></section>}
         {form && activeTab === 'h2h' && <section className="form-evidence-card"><div className="evidence-title"><h3>Head-to-head</h3><span>Previous finished meetings</span></div>{form.h2h.length ? <div className="h2h-list">{form.h2h.map(game => <div key={game.date + game.score}><span>{game.date}</span><strong>{game.home_team} {game.score} {game.away_team}</strong></div>)}</div> : <div className="detail-empty-note">No previous meetings found in the persisted data.</div>}</section>}
-        {activeTab === 'signals' && <section className="form-evidence-card"><div className="evidence-title"><h3>Qwantej signal</h3><span>Current published selection</span></div><div className="signal-summary">{!selectionRepeatsMarket(selection.market, selection.selection) && <div><span>Market</span><strong>{formatMarket(selection.market)}</strong></div>}<div><span>Selection</span><strong>{formatSelection(selection.selection)}</strong></div><div><span>{market ? label.prob : 'Model probability'}</span><strong>{pct(selection.model_probability)}</strong></div><div><span>{market ? label.edge : 'Estimated edge'}</span><strong>{pct(selection.edge, true)}</strong></div><div><span>Q-score</span><strong>{selection.q_score == null ? 'Pro only' : `${selection.q_score.toFixed(1)} · ${selection.q_grade ? 'graded' : '—'}`}</strong></div><div><span>Expected value</span><strong>{pct(selection.expected_value, true)}</strong></div></div></section>}
+        {activeTab === 'signals' && <section className="form-evidence-card"><div className="evidence-title"><h3>QwanEj signal</h3><span>Current published selection</span></div><div className="signal-summary">{!selectionRepeatsMarket(selection.market, selection.selection) && <div><span>Market</span><strong>{formatMarket(selection.market)}</strong></div>}<div><span>Selection</span><strong>{formatSelection(selection.selection)}</strong></div><div><span>{market ? label.prob : 'Model probability'}</span><strong>{pct(selection.model_probability)}</strong></div><div><span>{market ? label.edge : 'Estimated edge'}</span><strong>{pct(selection.edge, true)}</strong></div><div><span>Q-score</span><strong>{selection.q_score == null ? 'Pro only' : `${selection.q_score.toFixed(1)} · ${selection.q_grade ? 'graded' : '—'}`}</strong></div><div><span>Expected value</span><strong>{pct(selection.expected_value, true)}</strong></div></div></section>}
 
         {activeTab === 'probability' && <section className="evidence-card">
           <div className="evidence-title"><h3>Probability evidence</h3><span>{label.subtitle}</span></div>
@@ -293,7 +360,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
           </div>
         </section>}
 
-        {activeTab === 'odds' && <OddsComparison quotes={quotes} loading={quotesLoading} failed={quotesError} />}
+        {activeTab === 'odds' && <OddsComparison quotes={quotes} loading={quotesLoading} failed={quotesError} marketPrice={accaPrice} marketPriceLoading={accaPriceLoading} marketPriceFailed={accaPriceError} modelProbability={selection.model_probability ?? null} probabilityLabel={market ? 'Fair chance' : 'Model estimate'} canViewMarketPrices={canViewMarketPrices} />}
 
         {activeTab === 'probability' && <section className="detail-metrics">
           {!market && <Metric label="Q score" value={selection.q_score == null ? 'Pro only' : selection.q_score.toFixed(1)} />}
@@ -301,6 +368,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
           {!market && <Metric label="Model spread" value={selection.model_agreement == null ? '—' : `${(selection.model_agreement * 100).toFixed(1)} pp`} note={spreadLabel(selection.model_agreement)} hint="Standard deviation between the active model probabilities. Up to 5 pp is strong alignment; above 15 pp triggers a confidence downgrade." />}
           <Metric label="Bookmakers" value={(quotes.length || selection.bookmaker_count)?.toString() ?? 'Snapshot'} />
         </section>}
+        </div>
 
         <section className="audit-panel">
           <div><span>Match ID</span><code>{selection.match_id}</code></div>
@@ -310,7 +378,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
           <div><span>Information as of</span><code>{selection.as_of_at ? new Date(selection.as_of_at).toLocaleString() : 'Unavailable'}</code></div>
           <div><span>Data quality</span><code>{selection.data_quality_score == null ? 'Unavailable' : `${selection.data_quality_score.toFixed(0)}/100 · ${selection.data_quality_status ?? 'unknown'}`}</code></div>
           <div><span>Active models</span><code>{selection.active_models?.length ? selection.active_models.join(', ') : 'Unavailable'}</code></div>
-          <div><span>Market settled</span><code>{selection.selection_settled_at ? new Date(selection.selection_settled_at).toLocaleString() : 'Pending'}</code></div>
+          <div><span>Settlement recorded</span><code>{selection.selection_settled_at ? new Date(selection.selection_settled_at).toLocaleString() : selection.result && selection.result !== 'pending' ? 'Result recorded · timestamp unavailable' : 'Pending'}</code></div>
         </section>
 
         <div className="detail-disclaimer">Probabilities are estimates, not guarantees. Expected value is theoretical, not a guaranteed return, and price movement after publication can materially change the calculation.</div>
@@ -352,7 +420,7 @@ interface H2H { date: string; home_team: string; away_team: string; score: strin
 function TeamForm({ team }: { team: TeamForm }) { return <div className="team-form"><strong>{team.team}</strong><div className="form-pills">{team.results.length ? team.results.map((result, index) => <b className={`form-pill ${result.toLowerCase()}`} key={`${result}-${index}`}>{result}</b>) : <span>Form unavailable</span>}</div><small>{team.wins}W · {team.draws}D · {team.losses}L</small></div> }
 function TeamStats({ team }: { team: TeamForm }) { return <div className="team-stats"><strong>{team.team}</strong><span>Played <b>{team.matches}</b></span><span>Win rate <b>{team.matches ? `${Math.round(team.wins / team.matches * 100)}%` : '—'}</b></span><span>Goals for / against <b>{team.avg_goals_for.toFixed(1)} / {team.avg_goals_against.toFixed(1)}</b></span><span>Goal difference <b>{team.goal_difference > 0 ? '+' : ''}{team.goal_difference}</b></span><span>Points per game <b>{team.points_per_game.toFixed(2)}</b></span></div> }
 
-function OddsComparison({ quotes, loading, failed }: { quotes: OddsQuote[]; loading: boolean; failed: boolean }) {
+function OddsComparison({ quotes, loading, failed, marketPrice, marketPriceLoading, marketPriceFailed, modelProbability, probabilityLabel, canViewMarketPrices }: { quotes: OddsQuote[]; loading: boolean; failed: boolean; marketPrice: AccaPrice | null; marketPriceLoading: boolean; marketPriceFailed: boolean; modelProbability: number | null; probabilityLabel: string; canViewMarketPrices: boolean }) {
   const spread = quotes.length > 1 ? quotes[0].decimal_odds - quotes[quotes.length - 1].decimal_odds : 0
   const { sorted, sort, toggle } = useSortableRows(quotes, { source: quote => quote.bookmaker, opening: quote => quote.opening_odds, current: quote => quote.decimal_odds, move: quote => quote.movement })
   const columnHeader = (key: 'source' | 'opening' | 'current' | 'move', label: string) => {
@@ -361,6 +429,26 @@ function OddsComparison({ quotes, loading, failed }: { quotes: OddsQuote[]; load
   }
   return (
     <section className="odds-comparison">
+      {canViewMarketPrices && <div className="acca-price-context" aria-label="Accumulator price context">
+        <div className="evidence-title"><h3>Ticket price context</h3><span>Fresh, pre-kickoff quote</span></div>
+        {marketPriceLoading && <div className="odds-state"><span className="spinner" />Checking Betway and comparable prices…</div>}
+        {!marketPriceLoading && marketPriceFailed && <div className="odds-state">Current ticket price context is unavailable.</div>}
+        {!marketPriceLoading && !marketPriceFailed && !marketPrice && <div className="odds-state">No fresh eligible quote is available for this fixture.</div>}
+        {!marketPriceLoading && !marketPriceFailed && marketPrice && <>
+          <div className="acca-price-context__values">
+            <div><span>Selected source</span><strong>{marketPrice.bookmaker}</strong></div>
+            <div><span>Current odds</span><strong>{marketPrice.decimal_odds.toFixed(2)}</strong></div>
+            <div><span>Price break-even</span><strong>{pct(1 / marketPrice.decimal_odds)}</strong></div>
+            <div><span>{probabilityLabel}</span><strong>{pct(modelProbability)}</strong></div>
+            <div><span>Price gap</span><strong>{modelProbability == null ? '—' : `${(modelProbability - 1 / marketPrice.decimal_odds >= 0 ? '+' : '')}${((modelProbability - 1 / marketPrice.decimal_odds) * 100).toFixed(1)} pp`}</strong></div>
+          </div>
+          <p>{marketPrice.pricing_mode === 'betway'
+            ? 'Betway supplied this current quote.'
+            : marketPrice.pricing_mode === 'closest_observed'
+              ? `Betway was unavailable. This source was closest across ${marketPrice.comparison_fixtures} comparable fixtures; Betway similarity is not guaranteed.`
+              : 'Betway similarity is unverified; this is a market reference price.'} Quote captured {new Date(marketPrice.fetched_at).toLocaleString()}. This is a per-leg check; combined availability at one bookmaker is not confirmed.</p>
+        </>}
+      </div>}
       <div className="evidence-title">
         <h3>Bookmaker comparison</h3>
         <span>{quotes.length > 1 ? `${spread.toFixed(2)} price spread` : 'Captured prices'}</span>

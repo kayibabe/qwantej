@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { localDateString } from './DailyTickets'
-import { formatMarket, formatSelection, formatStage, selectionRepeatsMarket } from '../lib/api'
+import { formatMarket, formatSelection, formatStage, formatTicketType, selectionRepeatsMarket, ticketTierBadgeClass } from '../lib/api'
 
 interface SystemStats {
   matches: number
@@ -288,7 +288,7 @@ export default function AdminPage() {
                 <div className="admin-info-row"><span className="admin-info-label">Excluded markets</span><span className="admin-info-value">{marketPolicyShadow.excluded_markets?.join(', ') || 'None'}</span></div>
                 <div className="admin-info-row"><span className="admin-info-label">Qualified pool</span><span className="admin-info-value admin-count">{marketPolicyShadow.qualified_pool ?? '—'}</span></div>
                 <div className="admin-info-row"><span className="admin-info-label">Comparable public tiers</span><span className="admin-info-value">{marketPolicyShadow.public_ticket_count ?? 0} / 3</span></div>
-                {marketPolicyShadow.missing_public_ticket_types?.length ? <div className="admin-info-row"><span className="admin-info-label">Missing tiers</span><span className="admin-info-value">{marketPolicyShadow.missing_public_ticket_types.join(', ')}</span></div> : null}
+                {marketPolicyShadow.missing_public_ticket_types?.length ? <div className="admin-info-row"><span className="admin-info-label">Missing tiers</span><span className="admin-info-value tier-badge-list">{marketPolicyShadow.missing_public_ticket_types.map(type => <span className={ticketTierBadgeClass(type)} key={type}>{formatTicketType(type)}</span>)}</span></div> : null}
               </div>
               <details className="admin-shadow-details">
                 <summary>Inspect frozen counterfactual tickets</summary>

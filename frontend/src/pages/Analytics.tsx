@@ -1,6 +1,7 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { fmt, fmtPnl } from '../utils/currency'
-import { formatMarket, formatSelection, formatTicketType, selectionRepeatsMarket } from '../lib/api'
+import { handleArrowTab } from '../utils/tabs'
+import { formatMarket, formatSelection, formatTicketType, selectionRepeatsMarket, ticketTierBadgeClass } from '../lib/api'
 import GradeBadge from '../components/GradeBadge'
 import { SortableTh, bandSortValue, useSortableRows } from '../components/SortableTable'
 import './Analytics.css'
@@ -21,6 +22,20 @@ interface ClvRow { legs: number; avg_clv_pct: number | null; beat_close_rate: nu
 interface ClvBreakdown extends ClvRow { q_grade?: string; market?: string; month?: string }
 interface ClvSummaryData { overall: ClvRow; by_q_grade: ClvBreakdown[]; by_market: ClvBreakdown[]; by_month: ClvBreakdown[] }
 interface PickMetric { unique_picks: number; settled: number; pending: number; wins: number; losses: number; voids: number; settlement_coverage: number; hit_rate: number | null; priced_settled: number; missing_odds: number; staked: number; returned: number; profit_loss: number; roi: number | null }
+interface PickRoiCombination extends PickMetric { source: 'all' | 'published' | 'strongest' | 'overlap'; market: string; model_version: string }
+interface DailyLedgerSnapshot { rows: RecommendationPick[]; roi_combinations: PickRoiCombination[] }
+interface DailyUniquePicks {
+  date: string
+  metrics: PickMetric
+  qualifies: boolean
+  qualifying_markets: Array<{ market: string; metrics: PickMetric }>
+  rows: RecommendationPick[]
+  published_simulation: {
+    qualifies: boolean
+    qualifying_combinations: Array<{ market: string; model_version: string; metrics: PickMetric }>
+    rows: RecommendationPick[]
+  }
+}
 interface RecommendationPick {
   pick_id: string; target_date: string; match_id: number; home_team: string; away_team: string; competition: string; kickoff_at: string
   market: string; selection: string; sources: Array<'published' | 'strongest'>; published_tiers: string[]; published_ticket_count: number
@@ -32,6 +47,7 @@ interface RecommendationPick {
 interface PickLedgerData {
   stake: number; total_rows: number; returned_rows: number
   metrics: Record<'all' | 'published' | 'strongest' | 'overlap', PickMetric>
+  roi_combinations: PickRoiCombination[]
   filters: { markets: string[]; competitions: string[]; model_versions: string[]; date_min: string | null; date_max: string | null }
   rows: RecommendationPick[]
 }
@@ -44,7 +60,7 @@ interface BacktestMetrics {
 }
 interface BacktestResult { backtest_run_id: number; status: string; leakage_checks_passed: boolean; error_details: string | null; metrics: BacktestMetrics }
 interface PipelineRun { id: number; target_date: string; status: string; current_stage: string | null; completed_at: string | null; started_at: string | null }
-type View = 'performance' | 'ledger' | 'methods'
+type View = 'daily' | 'performance' | 'ledger' | 'methods'
 type ResearchView = 'calibration' | 'market' | 'backtest'
 
 interface ProbabilityBucketRow { band: string; sample_size: number; wins: number; losses: number; hit_rate: number | null; roi: number | null; avg_probability: number; calibration_gap: number }
@@ -69,7 +85,7 @@ const isoDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() 
 function initialBacktestDates(modelVersion: string) { const end = new Date(); const start = new Date(end); start.setFullYear(start.getFullYear() - 1); return { period_start: isoDate(start), period_end: isoDate(end), model_version: modelVersion, simulations: '10000' } }
 
 export default function AnalyticsPage() {
-  const [view, setView] = useState<View>('performance')
+  const [view, setView] = useState<View>('daily')
   const [researchView, setResearchView] = useState<ResearchView>('calibration')
   const [research, setResearch] = useState<ResearchSummary | null>(null)
   const [loading, setLoading] = useState(true)
@@ -78,15 +94,27 @@ export default function AnalyticsPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [modelVersion, setModelVersion] = useState('')
+  const firstLoad = useRef(true)
 
   useEffect(() => {
-    Promise.all([
-      fetch(`/api/v1/performance/summary?${new URLSearchParams({ ...(dateFrom ? { date_from: dateFrom } : {}), ...(dateTo ? { date_to: dateTo } : {}), ...(modelVersion ? { model_version: modelVersion } : {}) })}`).then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch('/api/v1/admin/pipeline/status').then(r => r.ok ? r.json() : null).catch(() => null),
-    ]).then(([paper, pipeline]) => {
-      setResearch(paper); setLatestRun(pipeline?.runs?.[0] ?? null); setError(!paper)
-    }).finally(() => setLoading(false))
+    let active = true
+    const params = new URLSearchParams({ ...(dateFrom ? { date_from: dateFrom } : {}), ...(dateTo ? { date_to: dateTo } : {}), ...(modelVersion ? { model_version: modelVersion } : {}) })
+    const timer = window.setTimeout(() => {
+      fetch(`/api/v1/performance/summary?${params}`).then(async response => response.ok ? response.json() : null)
+        .then(paper => { if (active) { if (paper) setResearch(paper); setError(!paper) } })
+        .catch(() => { if (active) setError(true) })
+        .finally(() => { if (active) { setLoading(false); firstLoad.current = false } })
+    }, firstLoad.current ? 0 : 250)
+    return () => { active = false; window.clearTimeout(timer) }
   }, [dateFrom, dateTo, modelVersion])
+
+  useEffect(() => {
+    let active = true
+    fetch('/api/v1/admin/pipeline/status').then(response => response.ok ? response.json() : null)
+      .then(status => { if (active) setLatestRun(status?.runs?.[0] ?? null) })
+      .catch(() => { if (active) setLatestRun(null) })
+    return () => { active = false }
+  }, [])
 
   return (
     <div className="page-content analytics-page">
@@ -94,21 +122,26 @@ export default function AnalyticsPage() {
         <div><span className="eyebrow">Evidence, not promises</span><h1>Model validation</h1><p>Paper-trading performance, calibration, drawdown, and strict closing-odds backtests.</p></div>
         <span className="ledger-chip"><span /> Immutable research ledger</span>
       </div>
-      <div className="analytics-tabs" role="tablist" aria-label="Analytics views">
-        {([['performance', 'Performance'], ['ledger', 'Recommendation ledger'], ['methods', 'Research methods']] as [View, string][]).map(([id, label]) => <button key={id} role="tab" aria-selected={view === id} className={view === id ? 'active' : ''} onClick={() => setView(id)}>{label}</button>)}
-      </div>
       <DataFreshness run={latestRun} />
+      <div className="analytics-tabs" role="tablist" aria-label="Analytics views">
+        {([['daily', 'Daily picks'], ['performance', 'Performance'], ['ledger', 'Recommendation ledger'], ['methods', 'Research methods']] as [View, string][]).map(([id, label]) => <button key={id} id={`analytics-tab-${id}`} aria-controls="analytics-panel" tabIndex={view === id ? 0 : -1} role="tab" aria-selected={view === id} className={view === id ? 'active' : ''} onKeyDown={event => handleArrowTab(event, ['daily', 'performance', 'ledger', 'methods'] as const, view, setView, 'analytics-tab-')} onClick={() => setView(id)}>{label}</button>)}
+      </div>
+      <section id="analytics-panel" role="tabpanel" aria-labelledby={`analytics-tab-${view}`} tabIndex={0}>
+      {view === 'daily' && <DailyQualifyingMatches />}
       {view === 'methods' && <div className="analytics-tabs analytics-subtabs" role="tablist" aria-label="Research methods">
-        {([['calibration', 'Probability calibration'], ['market', 'Market research'], ['backtest', 'Backtest lab']] as [ResearchView, string][]).map(([id, label]) => <button key={id} role="tab" aria-selected={researchView === id} className={researchView === id ? 'active' : ''} onClick={() => setResearchView(id)}>{label}</button>)}
+        {([['calibration', 'Probability calibration'], ['market', 'Market research'], ['backtest', 'Backtest lab']] as [ResearchView, string][]).map(([id, label]) => <button key={id} id={`analytics-method-tab-${id}`} aria-controls="analytics-method-panel" tabIndex={researchView === id ? 0 : -1} role="tab" aria-selected={researchView === id} className={researchView === id ? 'active' : ''} onKeyDown={event => handleArrowTab(event, ['calibration', 'market', 'backtest'] as const, researchView, setResearchView, 'analytics-method-tab-')} onClick={() => setResearchView(id)}>{label}</button>)}
       </div>}
-      {view === 'performance' && <div className="analytics-filters shared-analytics-filters" aria-label="Analytics scope filters"><span className="filter-scope-label">Scope</span><label>From<input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></label><label>To<input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} /></label><label>Model<input placeholder="All models" value={modelVersion} onChange={e => setModelVersion(e.target.value)} /></label>{(dateFrom || dateTo || modelVersion) && <button className="btn-ghost btn-sm" onClick={() => { setDateFrom(''); setDateTo(''); setModelVersion('') }}>Reset scope</button>}<span className="filter-summary">Applies to immutable published-ticket performance.</span></div>}
-      {loading && <AnalyticsSkeleton />}
-      {!loading && error && view === 'performance' && <AnalyticsEmpty title="Performance data is unavailable" body="Check the API connection and try again. Other research views may still be available." />}
+      {view === 'performance' && <div className="analytics-filters shared-analytics-filters" aria-label="Analytics scope filters"><span className="filter-scope-label">Scope</span><label>From<input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></label><label>To<input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} /></label><label>Model version<input aria-describedby="analytics-model-scope" placeholder={`Current model${research?.current_model_version ? ` · ${research.current_model_version}` : ''}`} value={modelVersion} onChange={e => setModelVersion(e.target.value)} /></label>{(dateFrom || dateTo || modelVersion) && <button className="btn-ghost btn-sm" onClick={() => { setDateFrom(''); setDateTo(''); setModelVersion('') }}>Reset scope</button>}<span id="analytics-model-scope" className="filter-summary">Blank uses the current model. Enter “all” for every version. Scope applies to immutable published-ticket performance.</span></div>}
+      {loading && !research && <AnalyticsSkeleton />}
+      {!loading && error && view === 'performance' && <AnalyticsEmpty title={research ? 'Performance refresh failed' : 'Performance data is unavailable'} body={research ? 'Showing the last successful snapshot. Check the connection and adjust the scope to retry.' : 'Check the API connection. Other research views may still be available.'} />}
       {!loading && view === 'performance' && <ResearchPerformance data={research} />}
       {!loading && view === 'ledger' && <PickLedger />}
-      {!loading && view === 'methods' && researchView === 'market' && <AutoMarketResearch />}
-      {!loading && view === 'methods' && researchView === 'calibration' && <ProbabilityCalibration />}
-      {!loading && view === 'methods' && researchView === 'backtest' && <BacktestPanel currentModelVersion={research?.current_model_version ?? ''} />}
+      {view === 'methods' && <section id="analytics-method-panel" role="tabpanel" aria-labelledby={`analytics-method-tab-${researchView}`} tabIndex={0}>
+        {!loading && researchView === 'market' && <AutoMarketResearch />}
+        {!loading && researchView === 'calibration' && <ProbabilityCalibration />}
+        {!loading && researchView === 'backtest' && <BacktestPanel currentModelVersion={research?.current_model_version ?? ''} />}
+      </section>}
+      </section>
     </div>
   )
 }
@@ -222,7 +255,7 @@ function ProbabilityCalibration() {
   if (!data) return <AnalyticsEmpty title="No calibration data" body="Calibration bands appear once predictions have pre-kickoff prices and settled outcomes." />
 
   const s = data.summary
-  const betterModel = (s.qwantej_brier_score ?? 1) <= (s.market_brier_score ?? 1) ? 'Qwantej' : 'Market'
+  const betterModel = (s.qwantej_brier_score ?? 1) <= (s.market_brier_score ?? 1) ? 'QwanEj' : 'Market'
 
   return <>
     <div className="journal-note"><strong>Whole-system probability calibration</strong><span>Every latest prediction — accepted or rejected — with a pre-kickoff price and a settled outcome. Voids are excluded from hit rate and ROI.</span></div>
@@ -237,17 +270,17 @@ function ProbabilityCalibration() {
     {exportError && <div className="sample-warning">Export failed. Check the API connection and try again.</div>}
     <div className="research-kpis">
       <MetricCard label="Sample size" value={s.sample_size.toString()} note={`${s.voids_excluded} void · ${s.unsupported_markets_excluded} unsupported excluded`} />
-      <MetricCard label="Qwantej Brier score" value={score(s.qwantej_brier_score)} note="Lower is better" />
+      <MetricCard label="QwanEj Brier score" value={score(s.qwantej_brier_score)} note="Lower is better" />
       <MetricCard label="Market Brier score" value={score(s.market_brier_score)} note="Lower is better" />
-      <MetricCard label="Better calibrated" value={betterModel} note={`Qwantej ${score(s.qwantej_calibration_error)} vs Market ${score(s.market_calibration_error)} calibration error`} tone={betterModel === 'Qwantej' ? 'positive' : 'warning'} />
+      <MetricCard label="Better calibrated" value={betterModel} note={`QwanEj ${score(s.qwantej_calibration_error)} vs Market ${score(s.market_calibration_error)} calibration error`} tone={betterModel === 'QwanEj' ? 'positive' : 'warning'} />
     </div>
     {s.sample_size < 30 && <div className="sample-warning">Small sample: only {s.sample_size} settled predictions in this scope. Treat bucket results as directional.</div>}
     <div className="analytics-insight-grid analytics-insight-grid--stacked">
-      <ProbabilityBucketTable title="Qwantej model probability" subtitle="Bucketed by predicted win probability, 5pp bands" rows={data.qwantej_buckets} />
+      <ProbabilityBucketTable title="QwanEj model probability" subtitle="Bucketed by predicted win probability, 5pp bands" rows={data.qwantej_buckets} />
       <ProbabilityBucketTable title="Market implied probability" subtitle="Bucketed by 1/odds at pick time, 5pp bands" rows={data.market_buckets} />
     </div>
     <section className="analytics-card">
-      <div className="section-header"><div><span className="eyebrow">Where the two views agree or diverge</span><h2 className="section-title">Qwantej × Market combined matrix</h2></div><span className="section-subtitle">Every observed band pairing, sorted by probability band</span></div>
+      <div className="section-header"><div><span className="eyebrow">Where the two views agree or diverge</span><h2 className="section-title">QwanEj × Market combined matrix</h2></div><span className="section-subtitle">Every observed band pairing, sorted by probability band</span></div>
       <CombinedMatrixTable rows={data.combined_matrix} />
     </section>
     <section className="analytics-card">
@@ -255,7 +288,7 @@ function ProbabilityCalibration() {
       {data.best_combinations.length === 0 ? <AnalyticsEmpty title="No qualifying combinations yet" body="Combinations need at least 8 settled predictions to appear here." compact /> : <CombinedMatrixTable rows={data.best_combinations} />}
     </section>
     <section className="analytics-card">
-      <div className="section-header"><div><span className="eyebrow">Value-betting signal</span><h2 className="section-title">Performance by edge (Qwantej minus market)</h2></div><span className="section-subtitle">Positive edge should correlate with positive ROI if the model has real edge</span></div>
+      <div className="section-header"><div><span className="eyebrow">Value-betting signal</span><h2 className="section-title">Performance by edge (QwanEj minus market)</h2></div><span className="section-subtitle">Positive edge should correlate with positive ROI if the model has real edge</span></div>
       <EdgeBucketTable rows={data.edge_buckets} />
     </section>
     <section className="analytics-card">
@@ -277,14 +310,14 @@ function ProbabilityBucketTable({ title, subtitle, rows }: { title: string; subt
 function CombinedMatrixTable({ rows }: { rows: CombinedMatrixRow[] }) {
   const { sorted, header } = useSortableRows(rows, { qwantej: row => bandSortValue(row.qwantej_band), market: row => bandSortValue(row.market_band), n: row => row.sample_size, wins: row => row.wins, hit: row => row.hit_rate, roi: row => row.roi })
   if (rows.length === 0) return <AnalyticsEmpty title="No combined bands yet" body="Combinations appear once both probability sources have settled outcomes." compact />
-  return <div className="analytics-table-wrap"><table className="analytics-table"><thead><tr>{header('qwantej', 'Qwantej band')}{header('market', 'Market band')}{header('n', 'N')}{header('wins', 'Won / lost')}{header('hit', 'Hit rate')}{header('roi', 'ROI')}</tr></thead><tbody>{sorted.map((row, index) => <tr key={`${row.qwantej_band}-${row.market_band}-${index}`}><td><strong>{row.qwantej_band}%</strong></td><td>{row.market_band}%</td><td>{row.sample_size}</td><td>{row.wins} / {row.losses}</td><td>{pct(row.hit_rate)}</td><td className={row.roi != null && row.roi >= 0 ? 'positive' : 'negative'}>{row.roi == null ? '—' : pct(row.roi)}</td></tr>)}</tbody></table></div>
+  return <div className="analytics-table-wrap"><table className="analytics-table"><thead><tr>{header('qwantej', 'QwanEj band')}{header('market', 'Market band')}{header('n', 'N')}{header('wins', 'Won / lost')}{header('hit', 'Hit rate')}{header('roi', 'ROI')}</tr></thead><tbody>{sorted.map((row, index) => <tr key={`${row.qwantej_band}-${row.market_band}-${index}`}><td><strong>{row.qwantej_band}%</strong></td><td>{row.market_band}%</td><td>{row.sample_size}</td><td>{row.wins} / {row.losses}</td><td>{pct(row.hit_rate)}</td><td className={row.roi != null && row.roi >= 0 ? 'positive' : 'negative'}>{row.roi == null ? '—' : pct(row.roi)}</td></tr>)}</tbody></table></div>
 }
 
 function MarketBreakdownTable({ rows }: { rows: MarketBreakdownRow[] }) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const { sorted, header } = useSortableRows(rows, { family: row => formatMarket(row.market_family), n: row => row.sample_size, wins: row => row.wins, hit: row => row.hit_rate, roi: row => row.roi, qwantejBrier: row => row.qwantej_brier_score, marketBrier: row => row.market_brier_score, qwantejError: row => row.qwantej_calibration_error, marketError: row => row.market_calibration_error })
   if (rows.length === 0) return <AnalyticsEmpty title="No market breakdown yet" body="Market families appear once predictions have settled outcomes." compact />
-  return <div className="analytics-table-wrap"><table className="analytics-table"><thead><tr>{header('family', 'Market family')}{header('n', 'N')}{header('wins', 'Won / lost')}{header('hit', 'Hit rate')}{header('roi', 'ROI')}{header('qwantejBrier', 'Qwantej Brier')}{header('marketBrier', 'Market Brier')}{header('qwantejError', 'Qwantej calib. error')}{header('marketError', 'Market calib. error')}<th><span className="sr-only">Actions</span></th></tr></thead><tbody>{sorted.map(row => <Fragment key={row.market_family}>
+  return <div className="analytics-table-wrap"><table className="analytics-table"><thead><tr>{header('family', 'Market family')}{header('n', 'N')}{header('wins', 'Won / lost')}{header('hit', 'Hit rate')}{header('roi', 'ROI')}{header('qwantejBrier', 'QwanEj Brier')}{header('marketBrier', 'Market Brier')}{header('qwantejError', 'QwanEj calib. error')}{header('marketError', 'Market calib. error')}<th><span className="sr-only">Actions</span></th></tr></thead><tbody>{sorted.map(row => <Fragment key={row.market_family}>
     <tr><td><strong>{formatMarket(row.market_family)}</strong></td><td>{row.sample_size}</td><td>{row.wins} / {row.losses}</td><td>{pct(row.hit_rate)}</td><td className={row.roi != null && row.roi >= 0 ? 'positive' : 'negative'}>{row.roi == null ? '—' : pct(row.roi)}</td><td>{score(row.qwantej_brier_score)}</td><td>{score(row.market_brier_score)}</td><td>{score(row.qwantej_calibration_error)}</td><td>{score(row.market_calibration_error)}</td><td><button type="button" className="btn-ghost btn-sm" onClick={() => setExpanded(current => current === row.market_family ? null : row.market_family)}>{expanded === row.market_family ? 'Hide edge' : 'Edge bands'}</button></td></tr>
     {expanded === row.market_family && <tr><td colSpan={10}><EdgeBucketTable rows={row.edge_buckets} /></td></tr>}
   </Fragment>)}</tbody></table></div>
@@ -320,7 +353,9 @@ function PickLedger() {
 
   useEffect(() => {
     let active = true
+    let lastRefreshAt = 0
     const refresh = () => {
+      lastRefreshAt = Date.now()
       const params = new URLSearchParams({ stake: stake || '1', source, limit: '2000' })
       if (from) params.set('date_from', from)
       if (to) params.set('date_to', to)
@@ -334,10 +369,20 @@ function PickLedger() {
         .catch(() => { if (active) setFailed(true) })
         .finally(() => { if (active) setLoading(false) })
     }
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible' && Date.now() - lastRefreshAt > 30_000) refresh()
+    }
     setLoading(true)
     refresh()
-    const timer = window.setInterval(refresh, 300_000)
-    return () => { active = false; window.clearInterval(timer) }
+    const timer = window.setInterval(refreshWhenVisible, 60_000)
+    window.addEventListener('focus', refreshWhenVisible)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+    return () => {
+      active = false
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refreshWhenVisible)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+    }
   }, [stake, source, result, market, competition, modelVersion, from, to])
 
   useEffect(() => {
@@ -381,6 +426,11 @@ function PickLedger() {
       {hasFilters && <button className="btn-ghost btn-sm" onClick={reset}>Reset filters</button>}
     </div>
     <div className="filter-summary">Showing {visibleRows.length} of {data.total_rows} deduplicated picks · {source === 'all' ? 'all sources' : source === 'overlap' ? 'Published + Strongest overlap' : source} · {fmt(data.stake)} flat stake</div>
+    <details className="analytics-card pick-roi-combinations">
+      <summary className="section-header pick-roi-summary"><div><span className="eyebrow">Same date range</span><h2 className="section-title">ROI by combination</h2></div><span className="section-subtitle pick-roi-toggle-label"><span className="pick-roi-label-closed">Updates every minute · click to view all combinations</span><span className="pick-roi-label-open">Updates every minute · click to collapse</span></span></summary>
+      <p className="matrix-note">Uses the selected dates and compares all source and result groups. Refreshes every minute and when you return to this tab; newly settled matches are included. ROI includes settled picks with frozen odds, and small samples are directional.</p>
+      <PickRoiCombinationTable rows={data.roi_combinations ?? []} />
+    </details>
     <div className="research-kpis pick-ledger-kpis">
       <MetricCard label="Unique picks" value={focused.unique_picks.toString()} note={`${focused.settled} settled · ${focused.pending} pending`} />
       <MetricCard label="Settlement coverage" value={pct(focused.settlement_coverage)} note="Final results attached" />
@@ -394,6 +444,288 @@ function PickLedger() {
     <RecommendationPickTable rows={visibleRows} stake={data.stake} />
     <ReliabilityMatrix rows={reliability} />
   </>
+}
+
+function todayInBlantyre() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Blantyre', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date())
+  const part = (type: string) => parts.find(item => item.type === type)?.value ?? ''
+  return `${part('year')}-${part('month')}-${part('day')}`
+}
+
+function shiftIsoDate(value: string, days: number) {
+  const [year, month, day] = value.split('-').map(Number)
+  const shifted = new Date(Date.UTC(year, month - 1, day + days))
+  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, '0')}-${String(shifted.getUTCDate()).padStart(2, '0')}`
+}
+
+function dateAtBlantyreNoon(value: string) {
+  return new Date(`${value}T12:00:00+02:00`)
+}
+
+function DailyQualifyingMatches() {
+  const [date, setDate] = useState(todayInBlantyre)
+  const [daily, setDaily] = useState<DailyUniquePicks | null>(null)
+  const [ledgerSnapshot, setLedgerSnapshot] = useState<DailyLedgerSnapshot | null>(null)
+  const [flatStake, setFlatStake] = useState(1)
+  const [loading, setLoading] = useState(true)
+  const [failed, setFailed] = useState(false)
+  const today = todayInBlantyre()
+  const dateLabel = new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'full', timeZone: 'Africa/Blantyre',
+  }).format(dateAtBlantyreNoon(date))
+
+  useEffect(() => {
+    let active = true
+    let lastRefreshAt = 0
+    const refresh = () => {
+      lastRefreshAt = Date.now()
+      const params = new URLSearchParams({ daily_date: date, source: 'all', limit: '2000' })
+      fetch(`/api/v1/performance/recommendation-picks?${params}`)
+        .then(response => response.ok ? response.json() : Promise.reject(new Error(`API ${response.status}`)))
+        .then(value => { if (active) {
+          setDaily(value.daily_unique ?? null)
+          setLedgerSnapshot({ rows: value.rows ?? [], roi_combinations: value.roi_combinations ?? [] })
+          setFailed(false)
+        } })
+        .catch(() => { if (active) setFailed(true) })
+        .finally(() => { if (active) setLoading(false) })
+    }
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible' && Date.now() - lastRefreshAt > 30_000) refresh()
+    }
+    setDaily(null)
+    setLedgerSnapshot(null)
+    setLoading(true)
+    refresh()
+    const timer = window.setInterval(refreshWhenVisible, 60_000)
+    window.addEventListener('focus', refreshWhenVisible)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+    return () => {
+      active = false
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refreshWhenVisible)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+    }
+  }, [date])
+
+  const selectedDate = date
+  const dateOptions = [-2, -1, 0, 1, 2].map(offset => shiftIsoDate(date, offset))
+  return <div className="daily-qualifying-stack">
+    <DailyAccumulatorSummary snapshot={ledgerSnapshot} stake={flatStake} onStakeChange={setFlatStake} throughDate={shiftIsoDate(today, -1)} loading={loading} failed={failed} />
+    <section className="analytics-card daily-qualifying-card">
+    <div className="section-header daily-qualifying-header"><div><span className="eyebrow">All Unique · all markets</span><h2 className="section-title">Daily picks</h2></div>
+      <div className="daily-date-nav" aria-label="Choose qualifying match date">
+        <button type="button" className="daily-date-arrow" aria-label="Previous day" onClick={() => setDate(value => shiftIsoDate(value, -1))}>‹</button>
+        <div className="daily-date-strip">{dateOptions.map(option => {
+          const optionDate = dateAtBlantyreNoon(option)
+          const weekday = option === today ? 'Today' : new Intl.DateTimeFormat(undefined, { weekday: 'short', timeZone: 'Africa/Blantyre' }).format(optionDate)
+          const day = new Intl.DateTimeFormat(undefined, { day: '2-digit', timeZone: 'Africa/Blantyre' }).format(optionDate)
+          return <button type="button" key={option} className={`daily-date-option${option === selectedDate ? ' selected' : ''}`} aria-pressed={option === selectedDate} aria-label={new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeZone: 'Africa/Blantyre' }).format(optionDate)} onClick={() => setDate(option)}><span>{weekday}</span><strong>{day}</strong></button>
+        })}</div>
+        {date !== today && <button type="button" className="daily-date-today" aria-label="Go to today" onClick={() => setDate(today)}>Today</button>}
+        <label className="daily-date-calendar" title="Choose date"><span aria-hidden="true">▦</span><input type="date" aria-label="Choose date" value={date} onChange={event => event.target.value && setDate(event.target.value)} /></label>
+        <button type="button" className="daily-date-arrow" aria-label="Next day" onClick={() => setDate(value => shiftIsoDate(value, 1))}>›</button>
+      </div>
+    </div>
+    <span className="daily-selected-date">{dateLabel}</span>
+    {loading && !daily ? <div className="daily-qualifying-status">Loading picks and results for {dateLabel}…</div>
+        : failed && !daily ? <AnalyticsEmpty title="Daily picks unavailable" body="Could not load All Unique picks for this date." compact />
+        : daily && <>
+          <div className={`daily-qualifying-status${daily.qualifies ? ' qualifies' : ''}`}>
+            <strong>{daily.qualifies ? `${daily.qualifying_markets.length} markets meet the criteria` : 'No markets meet the criteria'}</strong>
+            <span>All Unique Recommended Ledger since tracking began. Each market needs at least 5 unique picks and 10% ROI from priced, settled picks with frozen odds.</span>
+          </div>
+          {daily.qualifies && <div className="daily-market-qualification-list" aria-label="All-time qualifying market performance">
+            {daily.qualifying_markets.map(({ market, metrics }) => <div key={market}>
+              <strong>{formatMarket(market)}</strong>
+              <span>{metrics.unique_picks} picks · {metrics.priced_settled} priced settled · {pct(metrics.roi)} ROI</span>
+            </div>)}
+          </div>}
+          {daily.qualifies
+            ? daily.rows.length > 0
+              ? <><DailyQualifyingMatchTable rows={daily.rows} /><DailyAccumulatorPreview title="Daily picks" rows={daily.rows} stake={flatStake} /></>
+              : <AnalyticsEmpty title="No matches from qualifying markets on this date" body="The ledger markets meet the all-time thresholds, but none have a pick on the selected date." compact />
+            : <p className="matrix-note">Matches appear when a market meets both thresholds in the all-time All Unique Recommended Ledger.</p>}
+        </>}
+  </section>
+  <section className="analytics-card daily-qualifying-card published-simulation-card" aria-labelledby="published-simulation-title">
+    <div className="section-header daily-qualifying-header"><div><span className="eyebrow">Published · Market × Model · 5% simulation</span><h2 className="section-title" id="published-simulation-title">Published simulation picks</h2></div></div>
+    <span className="daily-selected-date">For {dateLabel}</span>
+    {loading && !daily ? <div className="daily-qualifying-status">Loading Published picks for {dateLabel}…</div>
+      : failed && !daily ? <AnalyticsEmpty title="Published simulation unavailable" body="Could not load Published picks for this date." compact />
+      : daily && <>
+        <div className={`daily-qualifying-status${daily.published_simulation.qualifies ? ' qualifies' : ''}`}>
+          <strong>{daily.published_simulation.qualifies ? `${daily.published_simulation.qualifying_combinations.length} Published combinations qualify` : 'No Published combinations meet the criteria'}</strong>
+          <span>All-time Published Recommended Ledger. Each Market × Model combination needs at least 5 unique picks and 5% ROI from priced, settled picks with frozen odds.</span>
+        </div>
+        {daily.published_simulation.qualifies && <div className="daily-market-qualification-list" aria-label="All-time qualifying Published market and model performance">
+          {daily.published_simulation.qualifying_combinations.map(({ market, model_version, metrics }) => <div key={`${market}-${model_version}`}>
+            <strong>{formatMarket(market)} · Model {model_version}</strong>
+            <span>{metrics.unique_picks} picks · {metrics.priced_settled} priced settled · {pct(metrics.roi)} ROI</span>
+          </div>)}
+        </div>}
+        {daily.published_simulation.qualifies
+          ? daily.published_simulation.rows.length > 0
+            ? <><DailyQualifyingMatchTable rows={daily.published_simulation.rows} /><DailyAccumulatorPreview title="Published simulation" rows={daily.published_simulation.rows} stake={flatStake} /></>
+            : <AnalyticsEmpty title="No Published picks from qualifying combinations on this date" body="The all-time combinations meet the simulation thresholds, but none have a Published pick on the selected date." compact />
+          : <p className="matrix-note">Published matches appear when a Market × Model combination meets both all-time thresholds.</p>}
+      </>}
+  </section></div>
+}
+
+function DailyQualifyingMatchTable({ rows }: { rows: RecommendationPick[] }) {
+  const sorted = [...rows].sort((a, b) => a.kickoff_at.localeCompare(b.kickoff_at))
+  if (sorted.length === 0) return <AnalyticsEmpty title="No qualifying matches" body="The daily pick and ROI criteria are met, but there are no match rows to display." compact />
+  return <div className="analytics-table-wrap"><table className="analytics-table daily-qualifying-table"><thead><tr><th>Kickoff</th><th>Match</th><th>Market / pick</th><th>Sources</th><th>Odds</th><th>Result</th><th>P&amp;L</th></tr></thead><tbody>{sorted.map(row => <tr key={row.pick_id}><td>{new Date(row.kickoff_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Blantyre' })}</td><td><strong>{row.home_team} vs {row.away_team}</strong><small>{row.competition}</small></td><td><strong>{formatMarket(row.market)}</strong><small>{formatSelection(row.selection)}</small></td><td>{row.sources.map(item => item === 'published' ? 'Published' : 'Strongest').join(' + ')}</td><td>{row.odds == null ? '—' : row.odds.toFixed(2)}</td><td><strong>{row.home_goals != null && row.away_goals != null ? `${row.home_goals}–${row.away_goals}` : '—'}</strong><small className={`selection-outcome ${row.result}`}>{row.result}</small></td><td className={row.profit_loss == null ? '' : row.profit_loss >= 0 ? 'positive' : 'negative'}>{row.profit_loss == null ? '—' : fmtPnl(row.profit_loss)}</td></tr>)}</tbody></table></div>
+}
+
+interface AccumulatorTotals { tickets: number; settled: number; won: number; lost: number; pending: number; hitRate: number | null; profitLoss: number; roi: number | null }
+
+function summarizeAccumulators(rows: RecommendationPick[], stake: number, throughDate: string): AccumulatorTotals {
+  const byDate = new Map<string, RecommendationPick[]>()
+  for (const row of rows) {
+    if (row.target_date < '2026-10-01' || row.target_date > throughDate) continue
+    const bucket = byDate.get(row.target_date) ?? []
+    bucket.push(row)
+    byDate.set(row.target_date, bucket)
+  }
+  let settled = 0
+  let won = 0
+  let lost = 0
+  let pending = 0
+  let pricedSettled = 0
+  let profitLoss = 0
+  for (const picks of byDate.values()) {
+    const hasLoss = picks.some(row => row.result === 'lost')
+    const hasPending = picks.some(row => row.result === 'pending')
+    const allVoid = picks.every(row => row.result === 'void')
+    const status = hasLoss ? 'lost' : hasPending ? 'pending' : allVoid ? 'void' : 'won'
+    if (status === 'pending') { pending += 1; continue }
+    settled += 1
+    if (status === 'won') won += 1
+    if (status === 'lost') lost += 1
+    const priced = picks.every(row => row.result === 'void' || (row.odds != null && row.odds > 1))
+    if (!priced) continue
+    const odds = picks.filter(row => row.result !== 'void').reduce((product, row) => product * (row.odds ?? 1), 1)
+    pricedSettled += 1
+    profitLoss += status === 'won' ? stake * (odds - 1) : status === 'lost' ? -stake : 0
+  }
+  return {
+    tickets: byDate.size,
+    settled,
+    won,
+    lost,
+    pending,
+    hitRate: settled ? won / settled : null,
+    profitLoss,
+    roi: pricedSettled && stake > 0 ? Math.round((profitLoss / (pricedSettled * stake)) * 10_000) / 10_000 : null,
+  }
+}
+
+function DailyAccumulatorSummary({ snapshot, stake, onStakeChange, throughDate, loading, failed }: {
+  snapshot: DailyLedgerSnapshot | null
+  stake: number
+  onStakeChange: (value: number) => void
+  throughDate: string
+  loading: boolean
+  failed: boolean
+}) {
+  const allUniqueMarkets = new Set(snapshot?.roi_combinations
+    .filter(row => row.source === 'all' && row.unique_picks >= 5 && row.roi != null && row.roi >= 0.10)
+    .map(row => row.market) ?? [])
+  const publishedCombos = new Set(snapshot?.roi_combinations
+    .filter(row => row.source === 'published' && row.unique_picks >= 5 && row.roi != null && row.roi >= 0.05)
+    .map(row => `${row.market}\u0000${row.model_version}`) ?? [])
+  const allUniqueRows = snapshot?.rows.filter(row => allUniqueMarkets.has(row.market)) ?? []
+  const publishedRows = snapshot?.rows.filter(row => row.sources.includes('published') && row.model_versions.some(version => publishedCombos.has(`${row.market}\u0000${version}`))) ?? []
+  const allUnique = summarizeAccumulators(allUniqueRows, stake, throughDate)
+  const published = summarizeAccumulators(publishedRows, stake, throughDate)
+  const dateLabel = throughDate < '2026-10-01'
+    ? 'No completed dates yet'
+    : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'Africa/Blantyre' }).format(dateAtBlantyreNoon(throughDate))
+
+  return <section className="analytics-card daily-acca-summary-card" aria-labelledby="daily-acca-summary-title">
+    <div className="daily-acca-summary-header">
+      <div><span className="eyebrow">Daily picks + Published simulation</span><h2 className="section-title" id="daily-acca-summary-title">Accumulator performance</h2><p>October 1, 2026 through {dateLabel}</p></div>
+      <label className="daily-acca-stake">Flat stake per ticket
+        <input type="number" min="0.01" step="any" value={stake} onChange={event => onStakeChange(Math.max(0, Number(event.target.value) || 0))} aria-label="Flat stake per accumulator ticket" />
+      </label>
+    </div>
+    {loading && !snapshot
+      ? <div className="daily-qualifying-status">Updating accumulator results...</div>
+      : failed && !snapshot
+        ? <AnalyticsEmpty title="Accumulator summary unavailable" body="Could not load the Recommended Ledger results." compact />
+        : <div className="analytics-table-wrap daily-acca-summary-table-wrap"><table className="analytics-table daily-acca-summary-table"><thead><tr><th>Accumulator set</th><th>Settled tickets</th><th>Won</th><th>Lost</th><th>Pending</th><th>Hit rate</th><th>Settled P&amp;L</th><th>ROI</th></tr></thead><tbody>
+          <AccumulatorSummaryRow label="Daily picks - All Unique / 10% rule" totals={allUnique} />
+          <AccumulatorSummaryRow label="Published simulation - 5% rule" totals={published} />
+        </tbody></table></div>}
+    <p className="daily-acca-summary-note">One flat stake per daily ticket. Hit rate is won / settled tickets; pending tickets are excluded from P&amp;L and ROI. P&amp;L and ROI use multiplied frozen pick odds; same-match combinations may receive a different bookmaker price.</p>
+  </section>
+}
+
+function AccumulatorSummaryRow({ label, totals }: { label: string; totals: AccumulatorTotals }) {
+  const summaryPct = (value: number | null) => value == null ? '—' : `${(Math.round((value * 100 + 0.00000001) * 10) / 10).toFixed(1)}%`
+  return <tr><td><strong>{label}</strong></td><td>{totals.settled}</td><td>{totals.won}</td><td>{totals.lost}</td><td>{totals.pending}</td><td>{totals.hitRate == null ? '—' : summaryPct(totals.hitRate)}</td><td className={totals.profitLoss >= 0 ? 'positive' : 'negative'}>{fmtPnl(totals.profitLoss)}</td><td className={totals.roi != null && totals.roi >= 0 ? 'positive' : 'negative'}>{totals.roi == null ? '—' : summaryPct(totals.roi)}</td></tr>
+}
+
+function DailyAccumulatorPreview({ title, rows, stake }: { title: string; rows: RecommendationPick[]; stake: number }) {
+  if (rows.length === 0) return null
+
+  const fixtureCounts = new Map<number, number>()
+  for (const row of rows) fixtureCounts.set(row.match_id, (fixtureCounts.get(row.match_id) ?? 0) + 1)
+  const repeatedFixtures = [...fixtureCounts.values()].some(count => count > 1)
+  const missingOdds = rows.some(row => row.odds == null || row.odds <= 1)
+  const oddsRows = rows.filter(row => row.result !== 'void')
+  const combinedOdds = oddsRows.reduce((product, row) => product * (row.odds ?? 1), 1)
+  const hasPending = rows.some(row => row.result === 'pending')
+  const hasLoss = rows.some(row => row.result === 'lost')
+  const allVoid = rows.every(row => row.result === 'void')
+  const status = hasLoss ? 'Lost' : hasPending ? 'Open' : allVoid ? 'Void' : 'Won'
+  const canPrice = !repeatedFixtures && !missingOdds
+  const amount = Number.isFinite(stake) && stake > 0 ? stake : 0
+  const possibleReturn = canPrice ? amount * combinedOdds : null
+  const settledReturn = status === 'Won' && canPrice
+    ? amount * combinedOdds
+    : status === 'Void' && canPrice ? amount : status === 'Lost' ? 0 : null
+  const displayedReturn = status === 'Open' ? possibleReturn : settledReturn
+  const net = displayedReturn == null ? null : displayedReturn - amount
+
+  return <section className="daily-acca-preview" aria-label={`${title} accumulator preview`}>
+    <div className="daily-acca-header">
+      <div><span className="eyebrow">Paper ticket · {rows.length} {rows.length === 1 ? 'leg' : 'legs'}</span><h3>{title} accumulator</h3></div>
+      <span className={`daily-acca-status ${status.toLowerCase()}`}>{status}</span>
+    </div>
+    <div className="daily-acca-stake-display"><span>Flat stake per ticket</span><strong>{fmt(stake)}</strong></div>
+    {repeatedFixtures
+      ? <p className="daily-acca-warning">This set has multiple picks from the same match. Choose one pick per match or enter a bookmaker’s same-match combined price before pricing this ticket.</p>
+      : missingOdds
+        ? <p className="daily-acca-warning">At least one leg has no frozen odds, so combined odds and returns are unavailable.</p>
+        : <div className="daily-acca-metrics">
+          <div><span>Combined odds</span><strong>{combinedOdds.toFixed(2)}</strong></div>
+          <div><span>{status === 'Open' ? 'Potential return' : 'Ticket return'}</span><strong>{displayedReturn == null ? '—' : fmt(displayedReturn)}</strong></div>
+          <div><span>{status === 'Open' ? 'Potential P&L' : 'Ticket P&L'}</span><strong className={net == null ? '' : net >= 0 ? 'positive' : 'negative'}>{net == null ? '—' : fmtPnl(net)}</strong></div>
+        </div>}
+    <details className="daily-acca-legs"><summary>Review ticket legs</summary><ul>{rows.map(row => <li key={row.pick_id}>
+      <span><strong>{row.home_team} vs {row.away_team}</strong><small>{formatMarket(row.market)} · {formatSelection(row.selection)}</small></span>
+      <span>{row.odds == null ? 'Odds unavailable' : row.odds.toFixed(2)} · {row.result}</span>
+    </li>)}</ul></details>
+    <p className="daily-acca-note">Uses each pick’s frozen ledger odds. Paper preview only; confirm the combined price with your bookmaker.</p>
+  </section>
+}
+
+function PickRoiCombinationTable({ rows }: { rows: PickRoiCombination[] }) {
+  const { sorted, header } = useSortableRows(rows, {
+    source: row => row.source,
+    market: row => formatMarket(row.market),
+    model: row => row.model_version,
+    picks: row => row.unique_picks,
+    settled: row => row.priced_settled,
+    roi: row => row.roi,
+  }, { key: 'roi', direction: 'desc' })
+  if (rows.length === 0) return <AnalyticsEmpty title="No ROI combinations yet" body="Priced settled picks will appear here for the selected dates." compact />
+  return <div className="analytics-table-wrap"><table className="analytics-table"><thead><tr><th>Rank</th>{header('source', 'Source')}{header('market', 'Market')}{header('model', 'Model')}{header('picks', 'Picks')}{header('settled', 'Priced settled')}{header('roi', 'ROI')}</tr></thead><tbody>{sorted.map((row, index) => <tr key={`${row.source}-${row.market}-${row.model_version}`}><td>{index + 1}</td><td>{row.source === 'all' ? 'All unique' : row.source === 'overlap' ? 'Published + Strongest' : row.source === 'published' ? 'Published' : 'Strongest'}</td><td><strong>{formatMarket(row.market)}</strong></td><td>{row.model_version}</td><td>{row.unique_picks}</td><td>{row.priced_settled}</td><td className={row.roi != null && row.roi >= 0 ? 'positive' : 'negative'}>{row.roi == null ? '—' : pct(row.roi)}</td></tr>)}</tbody></table></div>
 }
 
 type PickSortKey = 'kickoff_at' | 'match' | 'market' | 'source' | 'q_score' | 'odds' | 'result' | 'profit_loss'
@@ -497,7 +829,7 @@ function RecommendationPickTable({ rows, stake }: { rows: RecommendationPick[]; 
   const change = (key: PickSortKey) => setSort(current => ({ key, direction: current.key === key && current.direction === 'desc' ? 'asc' : 'desc' }))
   const heading = (key: PickSortKey, label: string) => <SortableTh label={label} direction={sort.key === key ? sort.direction : null} onSort={() => change(key)} />
 
-  const table = (dateRows: RecommendationPick[]) => <div className="analytics-table-wrap"><table className="analytics-table pick-ledger-table"><thead><tr>{heading('kickoff_at', 'Kickoff / model')}{heading('match', 'Match / league')}{heading('market', 'Market / selection')}{heading('source', 'Source')}{heading('q_score', 'Decision evidence')}{heading('result', 'Result')}{heading('profit_loss', 'P&L')}</tr></thead><tbody>{dateRows.map(row => <tr key={row.pick_id}><td><strong className="kickoff-time">{new Date(row.kickoff_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong><small>Model {row.model_versions.join(', ')}</small></td><td><strong>{row.home_team} <span className="match-vs">vs</span> {row.away_team}</strong><small>{row.competition}</small></td><td>{!selectionRepeatsMarket(row.market, row.selection) && <span className="market-chip">{formatMarket(row.market)}</span>}<strong>{formatSelection(row.selection)}</strong>{row.revised_pick && <span className="pick-flag revised">Selection revised · {row.revision_count}</span>}</td><td><div className="pick-source-badges">{row.sources.map(item => <span key={item} className={`pick-source-badge ${item}`}>{item === 'published' ? 'Published' : `Strongest${row.strongest_rank ? ` #${row.strongest_rank}` : ''}`}</span>)}</div>{row.published_tiers.length > 0 && <small>{row.published_tiers.map(formatTicketType).join(' · ')}</small>}{row.reconstructed && <span className="pick-flag reconstructed">Reconstructed</span>}</td><td><div className="pick-evidence"><GradeBadge grade={row.q_grade} /><strong>Q {row.q_score.toFixed(1)}</strong></div><small>{pct(row.model_probability)} probability · {row.edge == null ? 'No edge' : `${(row.edge * 100).toFixed(1)} pp edge`}</small><small>{row.model_spread == null ? 'Spread unavailable' : `${(row.model_spread * 100).toFixed(1)} pp spread`} · {row.odds ? `@ ${row.odds.toFixed(2)}` : 'Odds unavailable'}</small></td><td>{row.home_goals != null && row.away_goals != null ? <strong>{row.home_goals}–{row.away_goals}</strong> : <strong>—</strong>}<span className={`selection-outcome ${row.result}`}><strong>{row.result}</strong></span></td><td className={row.profit_loss == null ? '' : row.profit_loss >= 0 ? 'positive' : 'negative'}><strong>{row.profit_loss == null ? '—' : fmtPnl(row.profit_loss)}</strong><small>{row.result === 'pending' ? 'Awaiting result' : 'Flat-stake result'}</small></td></tr>)}</tbody></table></div>
+  const table = (dateRows: RecommendationPick[]) => <div className="analytics-table-wrap"><table className="analytics-table pick-ledger-table"><thead><tr>{heading('kickoff_at', 'Kickoff / model')}{heading('match', 'Match / league')}{heading('market', 'Market / selection')}{heading('source', 'Source')}{heading('q_score', 'Decision evidence')}{heading('result', 'Result')}{heading('profit_loss', 'P&L')}</tr></thead><tbody>{dateRows.map(row => <tr key={row.pick_id}><td><strong className="kickoff-time">{new Date(row.kickoff_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong><small>Model {row.model_versions.join(', ')}</small></td><td><strong>{row.home_team} <span className="match-vs">vs</span> {row.away_team}</strong><small>{row.competition}</small></td><td>{!selectionRepeatsMarket(row.market, row.selection) && <span className="market-chip">{formatMarket(row.market)}</span>}<strong>{formatSelection(row.selection)}</strong>{row.revised_pick && <span className="pick-flag revised">Selection revised · {row.revision_count}</span>}</td><td><div className="pick-source-badges">{row.sources.map(item => <span key={item} className={`pick-source-badge ${item}`}>{item === 'published' ? 'Published' : `Strongest${row.strongest_rank ? ` #${row.strongest_rank}` : ''}`}</span>)}</div>{row.published_tiers.length > 0 && <small className="pick-tier-badges">{row.published_tiers.map(type => <span key={type} className={ticketTierBadgeClass(type)}>{formatTicketType(type)}</span>)}</small>}{row.reconstructed && <span className="pick-flag reconstructed">Reconstructed</span>}</td><td><div className="pick-evidence"><GradeBadge grade={row.q_grade} /><strong>Q {row.q_score.toFixed(1)}</strong></div><small>{pct(row.model_probability)} probability · {row.edge == null ? 'No edge' : `${(row.edge * 100).toFixed(1)} pp edge`}</small><small>{row.model_spread == null ? 'Spread unavailable' : `${(row.model_spread * 100).toFixed(1)} pp spread`} · {row.odds ? `@ ${row.odds.toFixed(2)}` : 'Odds unavailable'}</small></td><td>{row.home_goals != null && row.away_goals != null ? <strong>{row.home_goals}–{row.away_goals}</strong> : <strong>—</strong>}<span className={`selection-outcome ${row.result}`}><strong>{row.result}</strong></span></td><td className={row.profit_loss == null ? '' : row.profit_loss >= 0 ? 'positive' : 'negative'}><strong>{row.profit_loss == null ? '—' : fmtPnl(row.profit_loss)}</strong><small>{row.result === 'pending' ? 'Awaiting result' : 'Flat-stake result'}</small></td></tr>)}</tbody></table></div>
 
   return <section className="analytics-card pick-ledger-table-card">
     <div className="section-header"><div><span className="eyebrow">Pick-level evidence</span><h2 className="section-title">Recommendation ledger</h2></div><span className="section-subtitle">Year → month → exact date · one deduplicated row per selection</span></div>
@@ -547,7 +879,7 @@ function ResearchPerformance({ data }: { data: ResearchSummary | null }) {
     <div className="analytics-insight-grid">
       <section className="analytics-card">
         <div className="section-header"><div><span className="eyebrow">Portfolio lens</span><h2 className="section-title">By ticket type</h2></div><span className="section-subtitle">Published ticket tiers only</span></div>
-        {portfolioRows.length === 0 ? <AnalyticsEmpty title="No settled ticket cohorts yet" body="Breakdowns appear after result ingestion." compact /> : <div className="cohort-list">{portfolioRows.map(row => <div className="cohort-row" key={row.ticket_type}><div><span className="badge badge-type">{row.ticket_type === 'my_accumulators' ? 'My Accumulators' : formatTicketType(row.ticket_type)}</span><small>{row.wins}/{row.tickets} won</small></div><div><span>Hit rate</span><strong>{pct(row.hit_rate)}</strong></div><div><span>ROI</span><strong className={row.roi >= 0 ? 'positive' : 'negative'}>{pct(row.roi)}</strong></div><div><span>P&amp;L</span><strong className={row.profit_loss >= 0 ? 'positive' : 'negative'}>{fmtPnl(row.profit_loss)}</strong></div></div>)}</div>}
+        {portfolioRows.length === 0 ? <AnalyticsEmpty title="No settled ticket cohorts yet" body="Breakdowns appear after result ingestion." compact /> : <div className="cohort-list">{portfolioRows.map(row => <div className="cohort-row" key={row.ticket_type}><div><span className={ticketTierBadgeClass(row.ticket_type)}>{row.ticket_type === 'my_accumulators' ? 'My Accumulators' : formatTicketType(row.ticket_type)}</span><small>{row.wins}/{row.tickets} won</small></div><div><span>Hit rate</span><strong>{pct(row.hit_rate)}</strong></div><div><span>ROI</span><strong className={row.roi >= 0 ? 'positive' : 'negative'}>{pct(row.roi)}</strong></div><div><span>P&amp;L</span><strong className={row.profit_loss >= 0 ? 'positive' : 'negative'}>{fmtPnl(row.profit_loss)}</strong></div></div>)}</div>}
         <p className="matrix-note">Personal accumulator performance is tracked separately in Track → My accumulators.</p>
       </section>
       <section className="analytics-card methodology-card">

@@ -1,4 +1,4 @@
-QWANTEJ BRAND KIT
+QwanEj BRAND KIT
 
 Light and dark folders each contain:
 - logo.png: full stacked logo with tagline, on a solid theme background.

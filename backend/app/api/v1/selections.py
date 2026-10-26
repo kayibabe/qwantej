@@ -3,11 +3,11 @@
 from datetime import date, datetime, timezone, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import aliased, selectinload
 from pydantic import BaseModel, Field
 
 from app.database import get_db
@@ -301,9 +301,12 @@ class MatchIntelligenceOut(BaseModel):
 
 @router.get("/qualified", response_model=list[SelectionOut], dependencies=[Depends(require_pro_access)])
 async def get_qualified_selections(
+    response: Response,
     date: Optional[date] = Query(default=None, description="Target date (default: today)"),
     min_qscore: float = Query(default=75.0, ge=0, le=100),
     market: Optional[str] = Query(default=None),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -314,6 +317,7 @@ async def get_qualified_selections(
     calibration, diversification, and combination constraints.
     """
     target = date or cat_today()
+    response.headers["X-Total-Count"] = "0"
 
     run_result = await db.execute(
         select(ModelRun)
@@ -339,7 +343,7 @@ async def get_qualified_selections(
         .group_by(Prediction.match_id, Prediction.market)
         .subquery()
     )
-    pred_result = await db.execute(
+    candidate_query = (
         select(Prediction)
         .join(Match, Prediction.match_id == Match.id)
         .join(
@@ -354,9 +358,20 @@ async def get_qualified_selections(
             Match.kickoff_at < cat_day_bounds_utc(target)[1],
             Match.excluded_from_models == False,
         )
-        .order_by(Prediction.q_score.desc())
-        .limit(100)
+        .options(
+            selectinload(Prediction.match).selectinload(Match.home_team),
+            selectinload(Prediction.match).selectinload(Match.away_team),
+            selectinload(Prediction.match).selectinload(Match.competition),
+        )
+        .order_by(Prediction.q_score.desc(), Prediction.id.asc())
     )
+    if market:
+        candidate_query = candidate_query.where(Prediction.market == market)
+    total_result = await db.execute(select(func.count()).select_from(candidate_query.order_by(None).subquery()))
+    response.headers["X-Total-Count"] = str(total_result.scalar_one())
+    response.headers["X-Page-Offset"] = str(offset)
+    response.headers["X-Page-Limit"] = str(limit)
+    pred_result = await db.execute(candidate_query.offset(offset).limit(limit))
     predictions = pred_result.scalars().all()
 
     output = []
@@ -370,15 +385,13 @@ async def get_qualified_selections(
         under15 = under15_qualification(pred)
         under05 = under05_qualification(pred)
         totals_assessment = over15 or over25 or over35 or over45 or under25 or under35 or under15 or under05
-        match = await db.get(Match, pred.match_id)
+        match = pred.match
         if not match:
             continue
-        home_team = await db.get(Team, match.home_team_id)
-        away_team = await db.get(Team, match.away_team_id)
-        competition = await db.get(Competition, match.competition_id)
+        home_team = match.home_team
+        away_team = match.away_team
+        competition = match.competition
         if not home_team or not away_team or not competition:
-            continue
-        if market and pred.market != market:
             continue
 
         # Keep the price, implied chance and timestamp paired to the exact

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
+import { Component, lazy, Suspense, useEffect, useState, type ErrorInfo, type ReactNode } from 'react'
 import './App.css'
 import './WorkspaceNavigation.css'
 import { TODAY } from './pages/dailyTickets/helpers'
@@ -26,6 +26,32 @@ type Theme = 'dark' | 'light' | 'system'
 type ModulePage = 'tickets' | 'matches' | 'live' | 'insights' | 'research' | 'tracker' | 'analytics' | 'tools' | 'admin'
 type Page = ModulePage | 'home' | 'match' | 'upgrade' | 'login'
 type Workspace = 'football' | 'research'
+type ResearchTab = 'matches' | 'odds-policy' | 'market-roi' | 'daily-match-picks' | 'passed'
+const RESEARCH_TABS: ResearchTab[] = ['matches', 'odds-policy', 'market-roi', 'daily-match-picks', 'passed']
+const MATCH_RETURN_ROUTES = new Set(['/tickets', '/matches', '/research', '/live', '/insights'])
+
+class RouteErrorBoundary extends Component<{ children: ReactNode; onRetry: () => void }, { failed: boolean }> {
+  state = { failed: false }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('Route content failed to render', error, info.componentStack)
+  }
+
+  render() {
+    if (this.state.failed) {
+      return <section className="route-error" role="alert">
+        <h1>This page could not be displayed</h1>
+        <p>Your navigation is still available. Try this page again or open another section.</p>
+        <button className="btn-primary" onClick={this.props.onRetry}>Try this page again</button>
+      </section>
+    }
+    return this.props.children
+  }
+}
 
 function dateFromSearch(search: string): string {
   const value = new URLSearchParams(search).get('date')
@@ -88,10 +114,12 @@ export default function App() {
   const { user, loading: authLoading } = useAuth()
   const isInternal = user?.role === 'admin'
   const [page, setPage] = useState<Page>(() => routePage(window.location.pathname))
-  const [researchVisit, setResearchVisit] = useState(0)
-  const [workspace, setWorkspace] = useState<Workspace>(() => workspaceForPage(routePage(window.location.pathname)) ?? 'football')
+  const [routeAttempt, setRouteAttempt] = useState(0)
+  const [researchTab, setResearchTab] = useState<ResearchTab>(() => researchTabFromSearch(window.location.search))
+  const [workspace, setWorkspace] = useState<Workspace>(() => workspaceForLocation(routePage(window.location.pathname), window.location.search) ?? 'football')
   const [matchId, setMatchId] = useState<number | null>(() => routeMatchId(window.location.pathname))
   const [predictionId, setPredictionId] = useState<number | null>(() => routePredictionId(window.location.search))
+  const [matchReturnTo, setMatchReturnTo] = useState<string>(() => matchReturnPath(window.location.search))
   const [date, setDate] = useState(() => dateFromSearch(window.location.search))
   const [theme, setTheme] = useState<Theme>('system')
   const [, setMarketCatalogLoaded] = useState(false)
@@ -121,15 +149,21 @@ export default function App() {
     const onPopState = () => {
       const nextPage = routePage(window.location.pathname)
       setPage(nextPage)
-      const nextWorkspace = workspaceForPage(nextPage)
+      const nextWorkspace = workspaceForLocation(nextPage, window.location.search)
       if (nextWorkspace) setWorkspace(nextWorkspace)
       setMatchId(routeMatchId(window.location.pathname))
       setPredictionId(routePredictionId(window.location.search))
+      setMatchReturnTo(matchReturnPath(window.location.search))
+      setResearchTab(researchTabFromSearch(window.location.search))
       setDate(dateFromSearch(window.location.search))
     }
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
+
+  useEffect(() => {
+    document.getElementById('main-content')?.focus()
+  }, [page])
 
   useEffect(() => {
     if (authLoading) return
@@ -147,7 +181,7 @@ export default function App() {
   }, [authLoading, user])
 
   useEffect(() => {
-    if (authLoading || !user || isInternal || !isInternalPage(page)) return
+    if (authLoading || !user || isInternal || !isInternalPage(page) || (page === 'match' && user.plan === 'pro')) return
     setPage('tickets')
     setWorkspace('football')
     setMatchId(null)
@@ -161,7 +195,7 @@ export default function App() {
   }, [authLoading, page, user])
 
   function navigate(next: Page, _requested?: ModulePage, replace = false) {
-    if (next === 'research') setResearchVisit(visit => visit + 1)
+    if (next === 'research') { navigateResearch(researchTab, replace); return }
     setPage(next)
     const nextWorkspace = workspaceForPage(next)
     if (nextWorkspace) setWorkspace(nextWorkspace)
@@ -173,17 +207,60 @@ export default function App() {
     setMatchId(nextMatchId)
     setPredictionId(nextPredictionId ?? null)
     setPage('match')
-    setWorkspace('research')
-    window.history.pushState({}, '', datePath(`/match/${nextMatchId}`, date, nextPredictionId == null ? undefined : { prediction_id: String(nextPredictionId) }))
+    const currentPath = window.location.pathname
+    const currentParams = new URLSearchParams(window.location.search)
+    currentParams.delete('from')
+    const from = `${currentPath}${currentParams.size ? `?${currentParams}` : ''}`
+    setMatchReturnTo(from)
+    const extra: Record<string, string> = { from }
+    if (nextPredictionId != null) extra.prediction_id = String(nextPredictionId)
+    window.history.pushState({ qwantejMatchReturn: true }, '', datePath(`/match/${nextMatchId}`, date, extra))
+  }
+
+  function returnFromMatch() {
+    if (window.history.state?.qwantejMatchReturn) {
+      window.history.back()
+      return
+    }
+    const target = matchReturnPath(window.location.search) || matchReturnTo || '/tickets'
+    const targetUrl = new URL(target, window.location.origin)
+    const nextPage = routePage(targetUrl.pathname)
+    setPage(nextPage)
+    setWorkspace(workspaceForPage(nextPage) ?? 'football')
+    setMatchId(null)
+    setPredictionId(null)
+    setDate(dateFromSearch(targetUrl.search))
+    window.history.pushState({}, '', `${targetUrl.pathname}${targetUrl.search}`)
   }
 
   function goTo(next: ModulePage) {
     navigate(next)
   }
 
+  function navigateResearch(tab: ResearchTab, replace = false) {
+    setResearchTab(tab)
+    setPage('research')
+    setWorkspace('research')
+    const method = replace ? 'replaceState' : 'pushState'
+    window.history[method]({}, '', datePath('/research', date, { tab }))
+  }
+
+  function navigateTracker(ticketId?: number, targetDate?: string) {
+    const nextDate = targetDate ?? date
+    setDate(nextDate)
+    setPage('tracker')
+    setWorkspace('research')
+    const params = new URLSearchParams()
+    params.set('view', 'accumulators')
+    if (ticketId != null) params.set('ticket', String(ticketId))
+    if (nextDate !== TODAY) params.set('date', nextDate)
+    window.history.pushState({}, '', `/tracker?${params}`)
+  }
+
   function switchWorkspace(next: Workspace) {
     if (!isInternal || next === workspace) return
-    goTo(next === 'football' ? 'tickets' : 'research')
+    if (next === 'football') goTo('tickets')
+    else navigateResearch(researchTab)
   }
 
   const cycleTheme = () => {
@@ -199,6 +276,7 @@ export default function App() {
   }
 
   const nav = (n: number) => setDate(d => addDays(d, n))
+  const navPage = page === 'match' ? routePage(new URL(matchReturnTo || '/tickets', window.location.origin).pathname) : page
 
   if (authLoading) {
     return <div className="auth-standalone" role="status" aria-live="polite">Checking your session…</div>
@@ -218,16 +296,16 @@ export default function App() {
   return (
     <div className="app">
       <aside className="app-sidebar">
-        <a className="brand" href="/" aria-label="Qwantej home" onClick={(event) => { event.preventDefault(); goTo('tickets') }}>
-          <img className="brand-logo brand-logo-light" src="/light/icon-128.png" alt="" />
-          <img className="brand-logo brand-logo-dark" src="/dark/icon-128.png" alt="" />
-          <span className="brand-copy"><strong className="brand-name">Qwantej</strong><small className="brand-tagline">Intelligence beyond numbers</small></span>
+        <a className="brand" href="/" aria-label="QwanEj home" onClick={(event) => { event.preventDefault(); goTo('tickets') }}>
+          <img className="brand-logo brand-logo-light" src="/light/icon-128.png?v=qwanej-1" alt="" />
+          <img className="brand-logo brand-logo-dark" src="/dark/icon-128.png?v=qwanej-1" alt="" />
+          <span className="brand-copy"><strong className="brand-name">QwanEj</strong><small className="brand-tagline">Intelligence beyond numbers</small></span>
         </a>
         {isInternal && <WorkspaceSwitcher workspace={workspace} onChange={switchWorkspace} className="workspace-switcher-sidebar" />}
         <nav className="sidebar-nav" aria-label="Primary navigation">
           <span className="sidebar-label">{workspace === 'football' ? 'Football' : 'Research workspace'}</span>
           {(workspace === 'research' ? INTERNAL_NAV : NAV).map(n => (
-            <button key={n.id} className={`nav-tab${page === n.id ? ' active' : ''}`} onClick={() => goTo(n.id)} title={NAV_META[n.id].hint} aria-current={page === n.id ? 'page' : undefined}>
+            <button key={n.id} className={`nav-tab${navPage === n.id ? ' active' : ''}`} onClick={() => goTo(n.id)} title={NAV_META[n.id].hint} aria-current={navPage === n.id ? 'page' : undefined}>
               <span className="nav-icon"><NavIcon name={NAV_META[n.id].icon} /></span>{n.label}
             </button>
           ))}
@@ -237,10 +315,10 @@ export default function App() {
         </div>
       </aside>
       <header className="app-header">
-        <a className="topbar-brand" href="/tickets" aria-label="Qwantej home" onClick={(event) => { event.preventDefault(); goTo('tickets') }}>
-          <img className="topbar-mark topbar-logo-light" src="/light/icon-128.png" alt="" />
-          <img className="topbar-mark topbar-logo-dark" src="/dark/icon-128.png" alt="" />
-          <span>QWANTEJ</span>
+        <a className="topbar-brand" href="/tickets" aria-label="QwanEj home" onClick={(event) => { event.preventDefault(); goTo('tickets') }}>
+          <img className="topbar-mark topbar-logo-light" src="/light/icon-128.png?v=qwanej-1" alt="" />
+          <img className="topbar-mark topbar-logo-dark" src="/dark/icon-128.png?v=qwanej-1" alt="" />
+          <span>QwanEj</span>
         </a>
         {isInternal && <WorkspaceSwitcher workspace={workspace} onChange={switchWorkspace} className="workspace-switcher-header" />}
         {(page === 'tickets' || page === 'matches' || (page === 'research' && isInternal)) && (
@@ -287,28 +365,30 @@ export default function App() {
         </div>
         <div className="header-refresh">
           <AuthControls onSignIn={() => navigate('login')} onSignedOut={() => navigate('login', undefined, true)} />
-          <button className="premium-button" onClick={() => navigate('upgrade')}>{user?.plan === 'pro' ? 'Pro account' : 'Go Premium'}</button>
+          {user?.plan !== 'pro' && <button className="premium-button" onClick={() => navigate('upgrade')}>Go Premium</button>}
           <button className="theme-btn settings-btn" onClick={cycleTheme} title={`Theme: ${theme}`} aria-label={`Theme: ${theme}. Change theme`}>⚙</button>
           <button className="global-refresh" onClick={() => window.location.reload()} title="Reload current page" aria-label="Reload current page">↻ <span>Reload</span></button>
         </div>
       </header>
 
       <main className="main" id="main-content" tabIndex={-1}>
+        <RouteErrorBoundary key={`${page}-${routeAttempt}`} onRetry={() => setRouteAttempt(attempt => attempt + 1)}>
         <Suspense fallback={<PageLoading />}>
         {page === 'upgrade' && <UpgradePage onBack={() => goTo('tickets')} />}
         {page === 'tickets' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab="tickets" onOpenMatch={navigateToMatch} />}
-        {page === 'matches' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab="matches" onOpenMatch={navigateToMatch} onOpenTracker={() => goTo('tracker')} />}
+        {page === 'matches' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab="matches" onOpenMatch={navigateToMatch} onOpenTracker={ticketId => navigateTracker(ticketId, date)} />}
         {page === 'live' && <LiveMonitorPage />}
         {page === 'insights' && (user.plan === 'pro' || isInternal
           ? <InsightsPage />
           : <section className="insights-access-card"><h1>Stats &amp; trends</h1><p>League results and team tables are available on Pro.</p><button className="btn-primary" onClick={() => navigate('upgrade')}>View Pro access</button></section>)}
-        {isInternal && page === 'research' && <DailyTicketsPage key={`${date}-${page}-${researchVisit}`} date={date} initialTab="market-roi" onOpenMatch={navigateToMatch} />}
-        {page === 'match' && matchId != null && (isInternal || authLoading) && <MatchIntelligencePage matchId={matchId} selectedPredictionId={predictionId} onBack={() => navigate('tickets')} />}
-        {isInternal && page === 'tracker' && <TrackerPage onOpenTickets={(targetDate) => { if (targetDate) setDate(targetDate); goTo('tickets') }} onOpenResearch={() => goTo('research')} onOpenValidation={() => goTo('analytics')} />}
+        {isInternal && page === 'research' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab={researchTab} onTabChange={tab => navigateResearch(tab as ResearchTab)} onOpenMatch={navigateToMatch} onOpenTracker={ticketId => navigateTracker(ticketId, date)} />}
+        {page === 'match' && matchId != null && (user?.plan === 'pro' || isInternal) && <MatchIntelligencePage matchId={matchId} selectedPredictionId={predictionId} onBack={returnFromMatch} returnLabel={matchReturnLabel(matchReturnTo)} />}
+        {isInternal && page === 'tracker' && <TrackerPage onOpenTickets={(targetDate) => { if (targetDate) setDate(targetDate); goTo('tickets') }} onOpenResearch={() => navigateResearch('matches')} onOpenValidation={() => goTo('analytics')} />}
         {isInternal && page === 'analytics' && <AnalyticsPage />}
         {isInternal && page === 'tools' && <ToolsPage />}
         {isInternal && page === 'admin' && <AdminPage />}
         </Suspense>
+        </RouteErrorBoundary>
       </main>
 
 
@@ -316,9 +396,9 @@ export default function App() {
         {(isInternal && workspace === 'research' ? INTERNAL_NAV : NAV).map(item => (
           <button
             key={item.id}
-            className={page === item.id ? 'active' : ''}
+            className={navPage === item.id ? 'active' : ''}
             onClick={() => goTo(item.id)}
-            aria-current={page === item.id ? 'page' : undefined}
+            aria-current={navPage === item.id ? 'page' : undefined}
           >
             <span aria-hidden="true"><NavIcon name={NAV_META[item.id].icon} /></span>
             {item.label}
@@ -359,6 +439,12 @@ function workspaceForPage(page: Page): Workspace | null {
   return null
 }
 
+function workspaceForLocation(page: Page, search: string): Workspace | null {
+  if (page !== 'match') return workspaceForPage(page)
+  const target = matchReturnPath(search)
+  return target ? workspaceForPage(routePage(new URL(target, window.location.origin).pathname)) : 'football'
+}
+
 function routeMatchId(pathname: string): number | null {
   const match = pathname.replace(/\/$/, '').match(/^\/match\/(\d+)$/)
   return match ? Number(match[1]) : null
@@ -367,5 +453,29 @@ function routeMatchId(pathname: string): number | null {
 function routePredictionId(search: string): number | null {
   const value = Number(new URLSearchParams(search).get('prediction_id'))
   return Number.isInteger(value) && value > 0 ? value : null
+}
+
+function researchTabFromSearch(search: string): ResearchTab {
+  const rawValue = new URLSearchParams(search).get('tab')
+  if (rawValue === 'acca-analysis') return 'matches'
+  const value = rawValue as ResearchTab | null
+  return value && RESEARCH_TABS.includes(value) ? value : 'market-roi'
+}
+
+function matchReturnPath(search: string): string {
+  const value = new URLSearchParams(search).get('from')
+  if (!value) return ''
+  const target = new URL(value, window.location.origin)
+  return target.origin === window.location.origin && MATCH_RETURN_ROUTES.has(target.pathname)
+    ? `${target.pathname}${target.search}`
+    : ''
+}
+
+function matchReturnLabel(path: string): string {
+  const pathname = path ? new URL(path, window.location.origin).pathname : '/tickets'
+  if (pathname === '/matches') return 'Matches'
+  if (pathname === '/research') return 'Research'
+  if (pathname === '/tracker') return 'Tracker'
+  return 'Today'
 }
 

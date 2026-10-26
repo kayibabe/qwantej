@@ -212,7 +212,7 @@
   .public-top-actions .public-cta { min-height: 34px; padding: 0 8px; font-size: var(--type-small); white-space: nowrap; }
 }
 
-/* Public match dashboard, adapted to Qwantej's fixture and score data. */
+/* Public match dashboard, adapted to QwanEj's fixture and score data. */
 .public-dashboard { display: grid; max-width: 1560px; grid-template-columns: 248px minmax(0, 1fr); margin: 0 auto; border-bottom: 1px solid var(--border); }
 .public-dashboard-rail { display: flex; min-width: 0; flex-direction: column; gap: 12px; padding: 16px 12px; border-right: 1px solid var(--border); background: color-mix(in srgb, var(--surface2) 72%, var(--bg)); }
 .public-tool-nav { display: grid; gap: 4px; }

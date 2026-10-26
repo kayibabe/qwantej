@@ -24,6 +24,19 @@
 .match-intelligence-columns .evidence-card { margin: 0; }
 .match-intelligence-page .form-teams { margin-top: 8px; }
 .match-intelligence-page .audit-panel { margin-top: 4px; }
+.match-qualification-disclosure { border: 1px solid var(--border); border-radius: 14px; background: var(--surface); overflow: clip; }
+.match-qualification-disclosure > summary { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 16px 18px; cursor: pointer; list-style: none; }
+.match-qualification-disclosure > summary::-webkit-details-marker { display: none; }
+.match-qualification-disclosure > summary::after { content: '+'; color: var(--accent); font-size: 1.35rem; line-height: 1; }
+.match-qualification-disclosure[open] > summary::after { content: '−'; }
+.match-qualification-disclosure > summary span { display: grid; gap: 4px; }
+.match-qualification-disclosure > summary strong { color: var(--text); }
+.match-qualification-disclosure > summary small { color: var(--muted); }
+.match-qualification-panels { display: grid; gap: 14px; padding: 0 14px 14px; }
+.match-qualification-panels > section { margin: 0; }
+.detail-tab-panel { min-width: 0; }
+.detail-tabs [role="tab"]:focus-visible,
+.match-qualification-disclosure > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .detail-header-actions { display: flex; align-items: center; gap: 8px; }
 
 @media (max-width: 900px) {
@@ -188,11 +201,86 @@
 .pick-ledger-filters label { flex-direction: column; align-items: flex-start; gap: 4px; }
 .pick-ledger-filters input[type="search"] { width: 145px; }
 .pick-ledger-kpis { margin-top: 12px; }
+.daily-qualifying-card { margin-top: 14px; }
+.daily-qualifying-header { align-items: center !important; flex-wrap: wrap; gap: 12px; }
+.daily-qualifying-stack { display: grid; gap: 14px; }
+.daily-qualifying-stack > .daily-qualifying-card { margin: 0; }
+.daily-qualifying-stack > .daily-acca-summary-card { margin: 0; }
+.daily-acca-summary-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.daily-acca-summary-header p { margin: 4px 0 0; color: var(--muted); font-size: var(--type-small); }
+.daily-acca-summary-table-wrap { margin: 0; }
+.daily-acca-summary-table { min-width: 920px; }
+.daily-acca-summary-table th:first-child, .daily-acca-summary-table td:first-child { min-width: 220px; text-align: left; }
+.daily-acca-summary-table td:not(:first-child), .daily-acca-summary-table th:not(:first-child) { text-align: center; }
+.daily-acca-summary-note { margin: 10px 0 0; color: var(--muted); font-size: var(--type-xs); }
+.daily-date-nav { display: flex; align-items: center; gap: 7px; }
+.daily-date-strip { display: flex; align-items: stretch; gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface2); }
+.daily-date-arrow, .daily-date-calendar { display: grid; place-items: center; flex: 0 0 42px; width: 42px; height: 42px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface2); color: var(--accent); font: inherit; font-size: 20px; cursor: pointer; }
+.daily-date-today { display: grid; place-items: center; flex: 0 0 72px; height: 42px; padding: 0 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface2); color: var(--accent); font: inherit; font-size: var(--type-small); font-weight: 600; cursor: pointer; }
+.daily-date-arrow:hover, .daily-date-calendar:hover, .daily-date-today:hover { border-color: var(--accent); }
+.daily-date-option { display: grid; justify-items: center; align-content: center; gap: 2px; min-width: 52px; padding: 4px 7px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--accent); cursor: pointer; }
+.daily-date-option span { color: var(--muted); font-size: 11px; font-weight: 600; line-height: 1.2; text-transform: uppercase; }
+.daily-date-option strong { font-size: 14px; line-height: 1.2; }
+.daily-date-option.selected { border-color: var(--accent); background: var(--accent-bg); }
+.daily-date-calendar { position: relative; font-size: 17px; }
+.daily-date-calendar input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.daily-selected-date { display: block; margin: -3px 0 11px; color: var(--muted); font-size: var(--type-small); text-align: right; }
+.daily-qualifying-status { display: grid; gap: 3px; margin: 0 0 12px; padding: 10px 12px; border-left: 3px solid var(--warning); background: color-mix(in srgb, var(--warning) 8%, var(--surface)); color: var(--muted); font-size: var(--type-small); }
+.daily-qualifying-status strong { color: var(--warning); }
+.daily-qualifying-status.qualifies { border-left-color: var(--positive); background: color-mix(in srgb, var(--positive) 8%, var(--surface)); }
+.daily-qualifying-status.qualifies strong { color: var(--positive); }
+.daily-market-qualification-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.daily-market-qualification-list > div { display: grid; gap: 2px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--positive) 24%, var(--border)); border-radius: var(--r-sm); background: color-mix(in srgb, var(--positive) 5%, var(--surface)); }
+.daily-market-qualification-list strong { color: var(--text2); font-size: var(--type-small); }
+.daily-market-qualification-list span { color: var(--muted); font-size: var(--type-small); }
+.daily-acca-preview { display: grid; gap: 12px; margin-top: 12px; padding: 14px; border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border)); border-radius: var(--r-sm); background: color-mix(in srgb, var(--accent) 4%, var(--surface)); }
+.daily-acca-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.daily-acca-header h3 { margin: 3px 0 0; color: var(--text); font-size: var(--type-body); }
+.daily-acca-status { padding: 4px 9px; border-radius: 999px; background: var(--surface2); color: var(--muted); font-size: var(--type-small); font-weight: 700; text-transform: uppercase; }
+.daily-acca-status.open { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--accent); }
+.daily-acca-status.won { background: color-mix(in srgb, var(--positive) 12%, var(--surface)); color: var(--positive); }
+.daily-acca-status.lost { background: color-mix(in srgb, var(--negative) 12%, var(--surface)); color: var(--negative); }
+.daily-acca-stake { display: flex; align-items: center; gap: 10px; color: var(--text2); font-size: var(--type-small); font-weight: 600; }
+.daily-acca-stake input { width: 150px; padding: 7px 9px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); color: var(--text); font: inherit; }
+.daily-acca-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.daily-acca-metrics > div { display: grid; gap: 3px; padding: 9px 10px; border-radius: var(--r-sm); background: var(--surface); }
+.daily-acca-metrics span { color: var(--muted); font-size: var(--type-small); }
+.daily-acca-metrics strong { color: var(--text); }
+.daily-acca-legs summary { width: fit-content; color: var(--accent); font-size: var(--type-small); cursor: pointer; }
+.daily-acca-legs ul { display: grid; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
+.daily-acca-legs li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 9px; border-radius: var(--r-sm); background: var(--surface); color: var(--text2); font-size: var(--type-small); }
+.daily-acca-legs li > span:first-child { display: grid; gap: 2px; }
+.daily-acca-legs small { color: var(--muted); }
+.daily-acca-legs li > span:last-child { flex: 0 0 auto; color: var(--muted); }
+.daily-acca-warning, .daily-acca-note { margin: 0; color: var(--muted); font-size: var(--type-small); }
+.daily-acca-warning { padding: 9px 10px; border-left: 3px solid var(--warning); background: color-mix(in srgb, var(--warning) 8%, var(--surface)); }
+.daily-acca-note { font-size: var(--type-xs); }
+.daily-qualifying-card .analytics-table-wrap { max-height: 420px; overflow: auto; }
+.daily-qualifying-table { min-width: 900px; }
+.daily-qualifying-table td > strong, .daily-qualifying-table td > small { display: block; }
+.daily-qualifying-table td > small { margin-top: 3px; color: var(--muted); font-size: var(--type-small); }
+.pick-roi-combinations { margin-top: 14px; }
+.pick-roi-summary { cursor: pointer; list-style: none; }
+.pick-roi-summary::-webkit-details-marker { display: none; }
+.pick-roi-summary::after { content: '+'; flex: 0 0 auto; margin-left: 10px; color: var(--accent); font-size: 20px; line-height: 1; }
+.pick-roi-toggle-label .pick-roi-label-open { display: none; }
+.pick-roi-combinations[open] .pick-roi-toggle-label .pick-roi-label-closed { display: none; }
+.pick-roi-combinations[open] .pick-roi-toggle-label .pick-roi-label-open { display: inline; }
+.pick-roi-combinations[open] > .pick-roi-summary::after { content: '−'; }
+.pick-roi-summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: var(--r-sm); }
+.pick-roi-combinations .matrix-note { margin: -4px 0 12px; }
+.pick-roi-combinations .analytics-table-wrap { max-height: 440px; overflow: auto; }
+.pick-roi-combinations .analytics-table { min-width: 980px; }
 .pick-backfill-note { display: flex; align-items: center; gap: 9px; margin: 12px 0; padding: 9px 12px; border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border)); border-radius: var(--r-sm); background: color-mix(in srgb, var(--accent) 5%, var(--surface)); font-size: var(--type-small); }
 .pick-backfill-note strong { color: var(--text2); white-space: nowrap; }
 .pick-backfill-note span { color: var(--muted); }
 .pick-ledger-table-card { margin-top: 14px; }
 .pick-ledger-table-card .analytics-table-wrap { margin: 0; box-shadow: none; }
+@media (max-width: 640px) {
+  .daily-acca-metrics { grid-template-columns: 1fr; }
+  .daily-acca-legs li { align-items: flex-start; flex-direction: column; }
+  .daily-acca-summary-header { align-items: flex-start; flex-direction: column; }
+}
 .pick-ledger-table { min-width: 1160px; }
 .pick-ledger-table th, .pick-ledger-table td { vertical-align: top; }
 .pick-ledger-table td { line-height: 1.35; }
@@ -272,6 +360,9 @@
   .analytics-tabs, .meta-context { scrollbar-width: none; }
   .analytics-tabs::-webkit-scrollbar, .meta-context::-webkit-scrollbar { display: none; }
   .analytics-tabs button { flex: 1 0 auto; }
+  .daily-qualifying-header { align-items: flex-start !important; }
+  .daily-date-nav { width: 100%; justify-content: center; }
+  .daily-selected-date { text-align: center; }
   .research-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .analytics-insight-grid { grid-template-columns: 1fr; }
   .backtest-console form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -281,6 +372,12 @@
   .pick-period-summary.date { grid-template-columns: 1fr; }
   .pick-period-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 9px; }
   .pick-period-stats > span:nth-child(4) { border-left: 0; }
+}
+
+@media (max-width: 480px) {
+  .daily-date-nav { gap: 4px; }
+  .daily-date-arrow, .daily-date-calendar { flex-basis: 34px; width: 34px; height: 38px; }
+  .daily-date-option { min-width: 41px; padding-inline: 4px; }
 }
 
 @media (max-width: 520px) {

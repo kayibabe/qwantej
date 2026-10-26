@@ -58,6 +58,26 @@ export interface MarketRoiDailyData {
   candidate_count: number;
   candidate_fixture_count: number;
   candidates: MarketCandidate[];
+  settled_daily_pick_market_performance: {
+    date_from: string;
+    calculated_at: string;
+    completed_through: string | null;
+    included_days: string[];
+    waiting_for_settlement_days: string[];
+    earlier_through: string;
+    later_from: string;
+    markets: Array<{
+      market: string;
+      selections: number;
+      wins: number;
+      losses: number;
+      hit_rate: number | null;
+      flat_stake_pnl: number;
+      roi: number | null;
+      earlier_roi: number | null;
+      later_roi: number | null;
+    }>;
+  };
   unsupported_outcomes_excluded: number;
   method: string;
   research_only: boolean;
@@ -121,10 +141,36 @@ function MarketRoiDailyContent({ data, error, view }: { data: MarketRoiDailyData
 
   return (
     <section className="market-roi-panel">
-      <header className="market-roi-heading">
+      <header className={`market-roi-heading${view === "daily-match-picks" ? " daily-match-picks-heading" : ""}`}>
         <div>
           <span className="eyebrow">Daily market scan · research only</span>
+          {view === "daily-match-picks" && data && <section className="daily-picks-performance" aria-label="Settled Daily Match Picks performance">
+            <div className="daily-picks-performance-heading">
+              <div><h3>Settled Daily Match Picks performance</h3><p>From {data.settled_daily_pick_market_performance.date_from} · Q ≥ {data.min_q_score} · odds {data.min_decimal_odds.toFixed(2)} to below {data.max_decimal_odds_exclusive.toFixed(2)}</p></div>
+              <small>{data.settled_daily_pick_market_performance.completed_through
+                ? `Completed through ${data.settled_daily_pick_market_performance.completed_through}`
+                : "Waiting for the first full day to settle"}{data.settled_daily_pick_market_performance.waiting_for_settlement_days.length > 0
+                  ? ` · Waiting: ${data.settled_daily_pick_market_performance.waiting_for_settlement_days.join(", ")}`
+                  : ""}</small>
+            </div>
+            {data.settled_daily_pick_market_performance.markets.length === 0
+              ? <p className="panel-empty">No fully settled Daily Match Picks are available for this period yet.</p>
+              : <div className="daily-picks-performance-table-wrap"><table className="market-roi-table daily-picks-performance-table">
+                <thead><tr><th>Market</th><th>Selections</th><th>Won</th><th>Lost</th><th>Hit rate</th><th>Net units</th><th>ROI</th><th>Earlier ROI<br />(through Oct 19)</th><th>Later ROI<br />(from Oct 20)</th></tr></thead>
+                <tbody>{data.settled_daily_pick_market_performance.markets.map((row) => <tr key={row.market}>
+                  <td><span className="market-roi-selection-chip">{title(row.market)}</span></td>
+                  <td>{row.selections}</td><td>{row.wins}</td><td>{row.losses}</td>
+                  <td>{row.hit_rate == null ? "—" : pct(row.hit_rate)}</td>
+                  <td className={row.flat_stake_pnl >= 0 ? "roi-positive" : "roi-negative"}>{row.flat_stake_pnl >= 0 ? "+" : ""}{row.flat_stake_pnl.toFixed(2)}</td>
+                  <td className={row.roi == null ? "" : row.roi >= 0 ? "roi-positive" : "roi-negative"}>{row.roi == null ? "—" : pct(row.roi)}</td>
+                  <td className={row.earlier_roi != null && row.earlier_roi >= 0 ? "roi-positive" : "roi-negative"}>{row.earlier_roi == null ? "—" : pct(row.earlier_roi)}</td>
+                  <td className={row.later_roi != null && row.later_roi >= 0 ? "roi-positive" : "roi-negative"}>{row.later_roi == null ? "—" : pct(row.later_roi)}</td>
+                </tr>)}</tbody>
+              </table></div>}
+            <p className="daily-picks-performance-note">One unit per settled selection at its captured odds. Void picks and dates still awaiting settlement are excluded. ROI is sorted from highest to lowest; this is historical paper performance, not a profitability guarantee.</p>
+          </section>}
           <h2 className="section-title">{view === "market-roi" ? "Hit rate and ROI by market" : `Daily Match Picks · ${data?.target_date ?? "selected date"}`}</h2>
+          {view === "daily-match-picks" && <p className="daily-picks-research-warning" role="note"><strong>Experimental shortlist.</strong> Its historical market rule has no minimum settled sample size. Check the number of picks and the later-date results before interpreting ROI; these are reconstructed paper results, not recorded bookmaker bets.</p>}
           <p>{view === "market-roi"
             ? "Compare historical market results, then inspect the selected date’s qualifying research candidates. Small samples remain exploratory."
             : `Research candidates for ${data?.target_date ?? "the selected date"} from historically qualifying markets. Each row keeps the match, pick, current result, and quote status together.`}</p>
