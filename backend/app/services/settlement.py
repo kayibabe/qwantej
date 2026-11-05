@@ -239,6 +239,15 @@ class SettlementService:
             .options(selectinload(CustomAccumulator.legs))
         )
         rows = result.scalars().unique().all()
+        leg_match_ids = {
+            leg.match_id for accumulator in rows for leg in accumulator.legs
+        }
+        match_lookup: dict[int, Match] = {}
+        if leg_match_ids:
+            match_result = await self.db.execute(
+                select(Match).where(Match.id.in_(leg_match_ids))
+            )
+            match_lookup = {match.id: match for match in match_result.scalars().all()}
         changed = 0
         for accumulator in rows:
             if accumulator.stake is None:
@@ -256,7 +265,7 @@ class SettlementService:
             previous_leg_results = [leg.result for leg in accumulator.legs]
             outcomes = []
             for leg in accumulator.legs:
-                match = await self.db.get(Match, leg.match_id)
+                match = match_lookup.get(leg.match_id)
                 if not match:
                     leg.result = SelectionResult.PENDING
                     leg.settled_at = None

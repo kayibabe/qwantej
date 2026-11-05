@@ -217,8 +217,10 @@ async def test_unsupported_leg_does_not_abort_custom_accumulator_settlement():
     other = SimpleNamespace(id=12, status=MatchStatus.FINISHED, home_goals=1, away_goals=0)
 
     db = SimpleNamespace(
-        execute=AsyncMock(return_value=_UniqueRows([accumulator])),
-        get=AsyncMock(side_effect=[finished, other]),
+        execute=AsyncMock(side_effect=[
+            _UniqueRows([accumulator]),
+            _UniqueRows([finished, other]),
+        ]),
         add=Mock(),
     )
 
@@ -250,10 +252,12 @@ async def test_custom_accumulator_loses_immediately_when_one_leg_loses():
         settlement_details=None,
     )
     db = SimpleNamespace(
-        execute=AsyncMock(return_value=_UniqueRows([accumulator])),
-        get=AsyncMock(side_effect=[
-            SimpleNamespace(id=11, status=MatchStatus.FINISHED, home_goals=0, away_goals=1),
-            SimpleNamespace(id=12, status=MatchStatus.SCHEDULED, home_goals=None, away_goals=None),
+        execute=AsyncMock(side_effect=[
+            _UniqueRows([accumulator]),
+            _UniqueRows([
+                SimpleNamespace(id=11, status=MatchStatus.FINISHED, home_goals=0, away_goals=1),
+                SimpleNamespace(id=12, status=MatchStatus.SCHEDULED, home_goals=None, away_goals=None),
+            ]),
         ]),
         add=Mock(),
     )
@@ -288,10 +292,12 @@ async def test_custom_accumulator_settles_when_all_legs_are_gradeable():
         },
     )
     db = SimpleNamespace(
-        execute=AsyncMock(return_value=_UniqueRows([accumulator])),
-        get=AsyncMock(side_effect=[
-            SimpleNamespace(id=11, status=MatchStatus.FINISHED, home_goals=2, away_goals=1),
-            SimpleNamespace(id=12, status=MatchStatus.FINISHED, home_goals=0, away_goals=3),
+        execute=AsyncMock(side_effect=[
+            _UniqueRows([accumulator]),
+            _UniqueRows([
+                SimpleNamespace(id=11, status=MatchStatus.FINISHED, home_goals=2, away_goals=1),
+                SimpleNamespace(id=12, status=MatchStatus.FINISHED, home_goals=0, away_goals=3),
+            ]),
         ]),
         add=Mock(),
     )

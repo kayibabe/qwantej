@@ -11,6 +11,7 @@ from typing import Optional
 
 from sqlalchemy import case, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.config import cat_day_bounds_utc, cat_today, settings
 from app.models import (
@@ -605,10 +606,14 @@ class AccumulatorBuilder:
         return {"leagues": leagues, "markets": markets, "edge_bands": edge_bands}
 
     async def _load_all_legs(self, target_date: date, model_run_id: int) -> list[Leg]:
+        home_team_alias = aliased(Team)
+        away_team_alias = aliased(Team)
         result = await self.db.execute(
-            select(Prediction, Match, Competition, Odds)
+            select(Prediction, Match, Competition, Odds, home_team_alias, away_team_alias)
             .join(Match, Prediction.match_id == Match.id)
             .join(Competition, Match.competition_id == Competition.id)
+            .join(home_team_alias, Match.home_team_id == home_team_alias.id)
+            .join(away_team_alias, Match.away_team_id == away_team_alias.id)
             .outerjoin(Odds, Prediction.source_odds_id == Odds.id)
             .where(
                 Prediction.model_run_id == model_run_id,
@@ -619,11 +624,9 @@ class AccumulatorBuilder:
             .order_by(Prediction.q_score.desc())
         )
         legs: list[Leg] = []
-        for prediction, match, competition, source_odds in result.all():
-            home_team = await self.db.get(Team, match.home_team_id)
-            away_team = await self.db.get(Team, match.away_team_id)
-            if not home_team or not away_team:
-                continue
+        for (
+            prediction, match, competition, source_odds, home_team, away_team
+        ) in result.all():
             odds = source_odds
             decimal_odds = prediction.source_decimal_odds
             source_odds_at = prediction.source_odds_at

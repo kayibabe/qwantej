@@ -10,6 +10,9 @@ from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine
 
+# Celery tasks run one asyncio loop per task; app.database must select NullPool.
+os.environ.setdefault("CELERY_WORKER", "1")
+
 from app.config import settings
 
 

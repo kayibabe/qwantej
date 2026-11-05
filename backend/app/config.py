@@ -40,6 +40,12 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "postgresql+asyncpg://lohela:lohela_pass@localhost:5432/lohela"
+    # The API keeps a bounded pool. Celery workers use NullPool because each
+    # task runs its own asyncio.run() loop.
+    db_pool_size: int = 10
+    db_max_overflow: int = 20
+    db_pool_timeout: int = 30
+    db_pool_recycle_seconds: int = 1800
 
     @field_validator("database_url", mode="before")
     @classmethod
