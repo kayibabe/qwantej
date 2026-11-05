@@ -90,10 +90,12 @@ services:
       - ./backend/app:/app/app
       - ./backend/migrations:/app/migrations
       - ./backend/alembic.ini:/app/alembic.ini
+      - backups_data:/data/backups
     command: celery -A app.tasks.pipeline worker --loglevel=info
     restart: unless-stopped
 
 volumes:
   postgres_data:
   redis_data:
+  backups_data:
 

@@ -11,7 +11,7 @@ Completed: production read-only capture, cohort reconciliation, loss attribution
 ## Evidence and scope
 
 
-Capture: **2026-09-20T05:33:30.491115+00:00** (07:33:30 Africa/Blantyre on 20 September 2026). Source: Railway production web, PostgreSQL; transaction `REPEATABLE READ READ ONLY`, verified `transaction_read_only=on`, ended with rollback. No database writes or model fitting. Snapshot figures stop at capture time; unresolved fixtures may settle later.
+Capture: **2026-09-20T05:33:30.491115+00:00** (07:33:30 Africa/Blantyre on 20 September 2026). Source: production web, PostgreSQL; transaction `REPEATABLE READ READ ONLY`, verified `transaction_read_only=on`, ended with rollback. No database writes or model fitting. Snapshot figures stop at capture time; unresolved fixtures may settle later.
 
 
 Local analysis revision before changes: `f09f23c6d17646b86054f0c7c4dac5f3cc8aae81`. The deployed Git SHA was unavailable from the runtime environment, so local/deployed code identity is not asserted. Results are computed offline from captured records. Database final scores were not independently reconciled to a second results provider. No bookmaker account or cash wagers were inspected.
@@ -272,7 +272,7 @@ python backend/scripts/render_pre_retraining_report.py
 python -m unittest discover -s backend/tests -p test_pre_retraining_report.py -v
 ```
 
-The production export script is `backend/scripts/export_pre_retraining.py`; it was transmitted to the web runtime and executed in memory using Railway SSH. It issues SELECT queries in an explicitly read-only transaction and rolls back. It does not invoke application lifespan, settlement, calibration aggregation, or training.
+The production export script is `backend/scripts/export_pre_retraining.py`; it was transmitted to the web runtime and executed in memory using an SSH session. It issues SELECT queries in an explicitly read-only transaction and rolls back. It does not invoke application lifespan, settlement, calibration aggregation, or training.
 
 **Verified:** four focused tests passed. They compare 960 binary-market/score combinations against the application's settlement function; reject push-sensitive/unknown markets; check perfect/wrong/extreme and empty probability scores; reconcile all prediction and publication dispositions, unique picks, gross-loss allocations and paper profit. Supported finished legs in the latest settled-ticket cohort have zero stored-versus-score settlement mismatches. All those ticket publications preceded their leg kickoffs. Unsupported/push-sensitive settlements are not certified by that check.
 

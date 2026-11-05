@@ -9,16 +9,17 @@ evidence log for details. No dump files were retained afterward.
 
 ## Important: dev/prod Postgres version drift
 
-Local dev (`docker-compose.yml`) runs **Postgres 15** (`postgres:15-alpine`).
-Production (Railway) runs **Postgres 18.6**, confirmed via a read-only query
-against the live database on 2026-09-20. `pg_dump`/`pg_restore` are not
-guaranteed to work correctly against a server *newer* than the client tool
-itself (Debian trixie's default `postgresql-client` package only ships
-v17), so the Dockerfile now pulls `postgresql-client-18` from the official
-PGDG apt repository to match production exactly. This version drift between
-dev and prod is itself worth a decision at some point (upgrade local dev to
-Postgres 18, or accept the gap) — flagged here, not fixed, since it's outside
-what was asked.
+Local dev (`docker-compose.yml`) and the Compose deployment definition
+(`docker-compose.prod.yml`) use **Postgres 15** (`postgres:15-alpine`). The
+existing production database runs **Postgres 18.6**, confirmed via a
+read-only query on 2026-09-20. `pg_dump`/`pg_restore` are not guaranteed to
+work correctly against a server *newer* than the client tool itself (Debian
+trixie's default `postgresql-client` package only ships v17), so the
+Dockerfile pulls `postgresql-client-18` from the official PGDG apt repository
+to match production exactly. This version drift between dev and prod is itself
+worth a decision at some point (upgrade the Compose database to Postgres 18,
+or accept the gap) — flagged here, not fixed, since it's outside what was
+asked.
 
 ## What exists
 
@@ -37,10 +38,12 @@ what was asked.
   since Debian trixie's own repos top out at 17). Backup and restore scripts
   detect the server major and select a matching client, avoiding incompatible
   dump/restore settings across server versions.
-- **Automated daily backups**: a Railway Volume (`backups`, declared in
-  [`.railway/railway.ts`](../.railway/railway.ts)) mounted on the `worker`
-  service at `/data/backups`. `app/main.py`'s APScheduler queues a new Celery
-  task, `pipeline.backup_database` ([`app/tasks/pipeline.py`](../backend/app/tasks/pipeline.py)),
+- **Automated daily backups**: a named Docker volume (`backups_data`, declared
+  in [`docker-compose.yml`](../docker-compose.yml) and
+  [`docker-compose.prod.yml`](../docker-compose.prod.yml)) mounted on the
+  `celery_worker` service at `/data/backups`. `app/main.py`'s APScheduler
+  queues a new Celery task, `pipeline.backup_database`
+  ([`app/tasks/pipeline.py`](../backend/app/tasks/pipeline.py)),
   daily at 01:00 UTC (configurable via `db_backup_cron_hour`/`_minute` in
   `app/config.py`) — clear of the pipeline windows (22:15/03:00 UTC) and the
   shadow-learning/singles-ledger jobs (04:10-04:30 UTC). The task shells out
@@ -54,21 +57,17 @@ what was asked.
 
 ## What does NOT exist yet (open decisions, not done)
 
-- **Off-provider storage.** The `backups` volume lives on Railway itself —
-  durable against a container restart/redeploy, but *not* protection against
-  a Railway-account-level incident (the volume goes down with the database
-  it's backing up). Chosen deliberately for now: simplicity, no new vendor.
-  Moving to S3-compatible storage (Cloudflare R2 / Backblaze B2 / AWS S3) is
-  a follow-up if true off-provider redundancy becomes a requirement.
-- **Railway's built-in Postgres backups — checked, not available.** Confirmed
-  in the dashboard (Postgres service → Backups tab) on 2026-09-20:
-  "Backups and point-in-time recovery (PITR) are only available for
-  customers on the Pro plan," and the Postgres volume shows "No Backups."
-  The account is not currently on a plan that includes this. Before this
-  session there was genuinely zero backup mechanism, in-house or managed —
-  `pipeline.backup_database` (above) is the only backup coverage that
-  exists today. Upgrading to Pro for native PITR is a cost decision, not
-  made here.
+- **Off-host storage.** The `backups_data` volume lives on the same Docker
+  host as the database — durable against a container restart/redeploy, but
+  *not* protection against a host-level incident (the volume goes down with
+  the database it is backing up). Chosen deliberately for now: simplicity, no
+  new vendor. Moving to S3-compatible storage (Cloudflare R2 / Backblaze B2 /
+  AWS S3) is a follow-up if true off-host redundancy becomes a requirement.
+- **No managed Postgres PITR in the Compose stack.** The previous managed
+  provider's built-in backups required a paid plan and were not enabled. In
+  the Docker Compose deployment, `pipeline.backup_database` (above) is the
+  only backup coverage that exists today; native PITR would require a managed
+  database service or a separate WAL-archiving setup.
 - **Dev/prod Postgres version parity** (15 vs 18) — not addressed here.
 - **No alerting beyond the existing `automation_alerts` table** — a failed
   scheduled backup surfaces the same way any other failed pipeline task
@@ -112,24 +111,26 @@ dumps.
 
 ## Running against production
 
-Production's `DATABASE_URL` points at `postgres.railway.internal`, which is
-**only reachable from inside a Railway service** — not from a local machine,
-and not through `railway run` (which injects env vars but still executes
-locally). Two ways to actually run this against prod:
+The Compose deployment keeps `DATABASE_URL` on the private Compose network
+(`postgres:5432`), so it is **only reachable from inside the running
+services** — not from a local machine. Run the tools inside the worker
+container:
 
-1. **After the Dockerfile change is deployed** (recommended — this is what
-   it was built for): the `web`/`worker` containers will have
-   `postgresql-client-18` baked in, exactly matching the server.
+1. **Inside the worker container** (recommended — the `celery_worker` image
+   has `postgresql-client-18` baked in, exactly matching the server):
    ```
-   railway ssh --service worker -- python scripts/backup_db.py --output-dir /tmp/backups --label pre_migration
+   docker compose -f docker-compose.prod.yml exec celery_worker python scripts/backup_db.py --output-dir /data/backups --label pre_migration
    ```
-   The dump lands in the container's ephemeral filesystem — it does **not**
-   survive a restart/redeploy, so pull it off-box immediately (e.g. base64
-   over `railway ssh` into a local file) before doing anything else.
+   The dump lands on the persistent `backups_data` volume, so it survives a
+   container restart/redeploy. Pull a copy off the host immediately before
+   doing anything else, for example:
+   ```
+   docker compose -f docker-compose.prod.yml cp celery_worker:/data/backups/<dump> ./
+   ```
+   or base64 over an SSH session.
 
-2. **From an operator machine with the public connection string**, if
-   Railway's Postgres has public networking enabled (check the Railway
-   dashboard for a `DATABASE_PUBLIC_URL`-style variable). Run
+2. **From an operator machine with the public connection string**, only if
+   the database port is deliberately exposed to that machine. Run
    `backend/scripts/backup_db.py --url <that URL>` directly with a
    `postgresql-client-18` toolchain. **Never paste that URL into chat, a
    commit, or a log** — it contains the database password.
@@ -165,7 +166,7 @@ is the plan for the *next* one, not a fix for an outstanding backlog.
 | 2026-09-20 | `restore_db.py` into disposable throwaway container (v15 client) | Verified — restore completed clean, row counts matched source exactly (predictions 2496/2496, matches 8280/8280) |
 | 2026-09-20 | Same rehearsal with mismatched v17 client against v15 target | Failed as expected (`unrecognized configuration parameter "transaction_timeout"`) — confirms why the Dockerfile pins the exact server-matching client version |
 | 2026-09-20 | Deployed deadlock fix + `postgresql-client-18` to production (`web` 14:08:46, `worker` 14:11:02 SAST) | Verified — `pg_dump --version` on the worker container reports 18.6, matching the server exactly |
-| 2026-09-20 | `backup_db.py` against **production** via `railway ssh --service worker` | Verified — 3,031,922 bytes, 32 tables with data, validated via `pg_restore --list` inside the container |
-| 2026-09-20 | Pulled the production dump off-box (base64 over `railway ssh`) and byte-verified locally | Verified — 3,031,922 bytes both ends, identical |
+| 2026-09-20 | `backup_db.py` against **production** via `docker compose -f docker-compose.prod.yml exec celery_worker` | Verified — 3,031,922 bytes, 32 tables with data, validated via `pg_restore --list` inside the container |
+| 2026-09-20 | Pulled the production dump off-box (base64 over an SSH session) and byte-verified locally | Verified — 3,031,922 bytes both ends, identical |
 | 2026-09-20 | Restored the production dump into a disposable `postgres:18-alpine` container (matching client/server versions) and compared row counts to the live figures confirmed earlier this session | Verified exactly — predictions 11,444, matches 1,521, odds 43,931, users 3 |
 | 2026-09-20 | Cleanup after the production rehearsal | Done — disposable container removed, local decoded dump + base64 transfer file deleted, remote copy removed from the worker container's `/tmp/backups`. No production data retained anywhere outside Postgres itself. |

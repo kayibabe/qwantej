@@ -48,6 +48,6 @@ COPY --from=frontend /build/dist ./static
 
 EXPOSE 8000
 
-# Set CELERY_WORKER=1 on the Railway worker service to start the Celery
+# Set CELERY_WORKER=1 on the worker service to start the Celery
 # consumer instead of the API server. Both run from the same image.
 CMD ["sh", "-c", "if [ \"$CELERY_WORKER\" = '1' ]; then exec python -m scripts.worker_start; else exec python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}; fi"]

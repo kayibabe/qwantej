@@ -17,10 +17,10 @@ def _normalize_research_key(value: str | None) -> str:
     """Remove transport-added markers without weakening the secret comparison."""
     if not value:
         return ""
-    # Railway/PowerShell environments can preserve a UTF-8 BOM or its common
-    # mojibake representation at the beginning of a copied secret. Secrets
-    # themselves are expected to be ASCII; interior non-ASCII characters are
-    # left intact and will fail closed below.
+    # Deployment shells and PowerShell environments can preserve a UTF-8 BOM
+    # or its common mojibake representation at the beginning of a copied
+    # secret. Secrets themselves are expected to be ASCII; interior non-ASCII
+    # characters are left intact and will fail closed below.
     return value.strip().lstrip("\ufeff").lstrip("ï»¿").strip()
 
 

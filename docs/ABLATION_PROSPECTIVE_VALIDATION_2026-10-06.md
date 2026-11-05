@@ -5,7 +5,7 @@ database state, or deployment were changed.
 
 ## Evidence capture
 
-- Source: read-only repeatable-read export from Railway production PostgreSQL,
+- Source: read-only repeatable-read export from production PostgreSQL,
   executed in the worker service environment.
 - Latest runner capture: `2026-10-06T18:19:53.013604+00:00`.
 - Latest evidence SHA-256: `1771f043af6a185a240a60d18d2261b3a0abc14e96d9e2fefc306c3dc8163828`.

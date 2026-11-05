@@ -887,9 +887,10 @@ def capture_market_policy_shadow(self, target_date: str, model_run_id: int):
 
 @celery_app.task(name="pipeline.backup_database", bind=True, max_retries=2)
 def backup_database(self):
-    """Daily pg_dump to the Railway Volume mounted on this service (see
-    .railway/railway.ts and docs/BACKUP_RESTORE_RUNBOOK.md), pruned to the
-    most recent `db_backup_retention_count` dumps. Shells out to the same
+    """Daily pg_dump to the shared backup volume mounted on this service (see
+    docker-compose.yml / docker-compose.prod.yml and
+    docs/BACKUP_RESTORE_RUNBOOK.md), pruned to the most recent
+    `db_backup_retention_count` dumps. Shells out to the same
     scripts/backup_db.py used for manual/rehearsed backups rather than
     duplicating its pg_dump + pg_restore-validate logic.
     """

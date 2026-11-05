@@ -1,3 +1,7 @@
+# Production deployment. Docker Compose is the only supported deployment path.
+# Copy .env.example to .env, set POSTGRES_* and the other secrets, then run:
+#   docker compose -f docker-compose.prod.yml up -d --build
+# The one-shot `migrate` service applies Alembic before the API and worker start.
 services:
   postgres:
     image: postgres:15-alpine
@@ -78,8 +82,11 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+    volumes:
+      - backups_data:/data/backups
     command: celery -A app.tasks.pipeline worker --loglevel=info
 
 volumes:
   postgres_data:
   redis_data:
+  backups_data:

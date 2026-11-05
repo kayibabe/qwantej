@@ -13,7 +13,7 @@ from app.database import AsyncSessionLocal
 
 async def main():
     evidence = {"captured_at": datetime.now(timezone.utc).isoformat(),
-                "source": "Railway production web / PostgreSQL", "tables": {}}
+                "source": "production web / PostgreSQL", "tables": {}}
     async with AsyncSessionLocal() as db:
         await db.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"))
         evidence["read_only"] = (await db.execute(text("SHOW transaction_read_only"))).scalar()

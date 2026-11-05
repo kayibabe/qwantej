@@ -21,7 +21,7 @@ All three must be met before moving to the Calibrate/validate phase — see `rea
 
 ## How to check progress
 
-This requires running inside the application's configured environment against the production database (Railway), which this session does not have credentials for:
+This requires running inside the application's configured environment against the production database, which this session does not have credentials for:
 
 ```bash
 python backend/scripts/export_pre_retraining.py > /tmp/fresh_export.txt

@@ -488,7 +488,7 @@ async def readiness(response: Response):
 
 # The React client calls the API with same-origin relative paths (/api/v1/...),
 # so in production the built SPA is served from this app rather than a separate
-# host. That keeps one Railway service and needs no CORS. In development Vite
+# host. That keeps one deployable service and needs no CORS. In development Vite
 # serves the SPA and proxies /api here, so this mount is simply absent.
 FRONTEND_DIR = (Path(__file__).resolve().parent.parent / "static").resolve()
 

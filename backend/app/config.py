@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     @field_validator("database_url", mode="before")
     @classmethod
     def normalize_database_url(cls, v: str) -> str:
-        # Railway (and Heroku/Render) provide postgresql:// or postgres://;
+        # Managed Postgres providers can supply postgresql:// or postgres://;
         # asyncpg requires the postgresql+asyncpg:// scheme.
         if isinstance(v, str):
             if v.startswith("postgres://"):
@@ -121,10 +121,11 @@ class Settings(BaseSettings):
     # shadow validation. Keep this release's validation entirely prospective.
     learning_validation_not_before: date = date(2026, 10, 25)
 
-    # Daily pg_dump to a Railway Volume (see .railway/railway.ts, mounted on
-    # the worker service) — see docs/BACKUP_RESTORE_RUNBOOK.md. 01:00 UTC is
-    # clear of both pipeline windows (22:15 UTC / 03:00 UTC) and the shadow
-    # learning / singles ledger jobs (04:10-04:30 UTC).
+    # Daily pg_dump to the backup volume mounted on the worker service (see
+    # docker-compose.yml / docker-compose.prod.yml and
+    # docs/BACKUP_RESTORE_RUNBOOK.md). 01:00 UTC is clear of both pipeline
+    # windows (22:15 UTC / 03:00 UTC) and the shadow learning / singles ledger
+    # jobs (04:10-04:30 UTC).
     db_backup_enabled: bool = True
     db_backup_cron_hour: int = 1
     db_backup_cron_minute: int = 0
