@@ -3,13 +3,15 @@ import math
 import pytest
 
 from app.services.over45 import THRESHOLDS, probability_grade, qualify_over45, summarize_samples
+from tests.goals_fixtures import promoted_shared_forecast
 
 
-def evidence():
+def evidence(probability=.35):
     return {"metrics": dict(THRESHOLDS), "sample_sizes": {"home": 8, "away": 12},
             "calibration": {"status": "promoted", "profile_id": 1, "method": "platt_logit",
                             "checks": {"brier_improved": True, "calibration_not_worse": True}},
-            "context_review": {"opponent_strength": "verified", "tactics_lineups": "verified"}}
+            "context_review": {"opponent_strength": "verified", "tactics_lineups": "verified"},
+            "shared_goals_forecast": promoted_shared_forecast({"over_4.5": probability})}
 
 
 @pytest.mark.parametrize("p,grade", [(0, "D"), (.1499, "D"), (.15, "C"), (.2499, "C"), (.25, "B"), (.35, "A"), (.45, "A+"), (1, "A+"), (math.nan, None), (1.1, None)])
@@ -23,24 +25,24 @@ def test_btts_is_optional_and_poisson_is_only_baseline():
     result = qualify_over45(.35, 3, data)
     assert result["status"] == "QUALIFY"
     assert result["expected_value"] == pytest.approx(.05)
-    assert result["poisson_baseline"] == pytest.approx(.3321564)
+    assert result["poisson_baseline"] == pytest.approx(.35)
     assert result["grade"] == "A"
 
 
 @pytest.mark.parametrize("p,odds", [(.25, 4), (.45, 2), (.5, None), (.5, math.inf), (.2, 10)])
 def test_no_value_or_low_probability_rejected(p, odds):
-    assert qualify_over45(p, odds, evidence())["status"] == "REJECT"
+    assert qualify_over45(p, odds, evidence(p))["status"] == "REJECT"
 
 
 def test_missing_evidence_and_uncalibrated_probabilities_do_not_qualify():
     assert qualify_over45(.9, 3)["status"] == "REJECT"
-    data = evidence()
+    data = evidence(.5)
     data["calibration"]["method"] = "identity"
     assert "OVER45_CALIBRATION_UNVALIDATED" in qualify_over45(.5, 3, data)["reasons"]
-    data = evidence()
+    data = evidence(.5)
     data["sample_sizes"]["home"] = 7
     assert "OVER45_INSUFFICIENT_RECENT_SAMPLE" in qualify_over45(.5, 3, data)["reasons"]
-    data = evidence()
+    data = evidence(.5)
     data["metrics"]["projected_xg"] = None
     assert "OVER45_PROJECTED_XG_MISSING" in qualify_over45(.5, 3, data)["reasons"]
 

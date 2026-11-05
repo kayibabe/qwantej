@@ -7,9 +7,10 @@ from app.services.under25 import (
     RISK_CHECKS, THRESHOLDS, initial_evidence, poisson_under25,
     probability_grade, qualify_under25,
 )
+from tests.goals_fixtures import promoted_shared_forecast
 
 
-def evidence():
+def evidence(probability=.8):
     return {
         "metrics": {key: value for key, (_, value) in THRESHOLDS.items()},
         "sample_sizes": {"home": 8, "away": 12},
@@ -21,6 +22,7 @@ def evidence():
                         "checks": {key: True for key in (
                             "brier_improved", "calibration_not_worse", "enough_priced_bets",
                             "positive_roi_evidence", "roi_not_worse")}},
+        "shared_goals_forecast": promoted_shared_forecast({"under_2.5": probability}),
     }
 
 
@@ -37,11 +39,11 @@ def test_poisson_illustration_and_value_are_separate():
     assert result["fair_odds"] == 1.25
     assert result["expected_value"] == pytest.approx(-.056)
     assert result["status"] == "REJECT"
-    assert qualify_under25(.72, 1.5, evidence())["status"] == "QUALIFY"
+    assert qualify_under25(.72, 1.5, evidence(.72))["status"] == "QUALIFY"
 
 
 def test_b_grade_is_not_in_primary_pool_even_with_value():
-    result = qualify_under25(.71, 2, evidence())
+    result = qualify_under25(.71, 2, evidence(.71))
     assert result["grade"] == "B"
     assert "UNDER25_PRIMARY_PROBABILITY_BELOW_72" in result["reasons"]
 

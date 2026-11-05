@@ -7,9 +7,10 @@ from app.services.under15 import (
     CONTEXT_CHECKS, RISK_CHECKS, THRESHOLDS, poisson_under15,
     prediction_qualification, probability_grade, qualify_under15,
 )
+from tests.goals_fixtures import promoted_shared_forecast
 
 
-def evidence():
+def evidence(probability=.75):
     data = {
         "metrics": {key: threshold for key, (_, threshold) in THRESHOLDS.items()},
         "sample_sizes": {"home": 8, "away": 12},
@@ -21,6 +22,7 @@ def evidence():
                             "positive_roi_evidence", "roi_not_worse")}},
     }
     data["metrics"].update(home_projected_goals=.6, away_projected_goals=.6)
+    data["shared_goals_forecast"] = promoted_shared_forecast({"under_1.5": probability})
     return data
 
 
@@ -43,11 +45,11 @@ def test_poisson_examples_and_value():
 
 
 def test_b_grade_requires_compelling_value_review():
-    data = evidence()
+    data = evidence(.65)
     assert qualify_under15(.65, 2, data)["status"] == "REJECT"
     data["context_review"]["compelling_value_review"] = "verified"
     assert qualify_under15(.65, 2, data)["status"] == "QUALIFY"
-    assert qualify_under15(.59, 3, data)["status"] == "REJECT"
+    assert qualify_under15(.59, 3, evidence(.59))["status"] == "REJECT"
     assert qualify_under15(.65, 1.1, data)["status"] == "REJECT"
 
 

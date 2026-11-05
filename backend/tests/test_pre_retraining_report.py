@@ -8,6 +8,8 @@ import json
 from pathlib import Path
 import unittest
 
+from app.services.market_catalog import get_market_definition, normalize_market_id
+
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('report', ROOT/'backend/scripts/pre_retraining_report.py')
 report = importlib.util.module_from_spec(spec)
@@ -24,7 +26,11 @@ class ReportTests(unittest.TestCase):
     def test_settlement_matches_application_on_score_grid(self):
         tree = ast.parse((ROOT/'backend/app/services/settlement.py').read_text())
         function = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'evaluate_selection')
-        scope = {'SelectionResult': SelectionResult}
+        scope = {
+            'SelectionResult': SelectionResult,
+            'normalize_market_id': normalize_market_id,
+            'get_market_definition': get_market_definition,
+        }
         exec(compile(ast.Module(body=[function], type_ignores=[]), 'settlement', 'exec'), scope)
         for market in ['home_win','away_win','draw','btts_yes','btts_no','double_chance_1x',
                        'double_chance_x2','double_chance_12','over_1.5','over_2.5','under_2.5',

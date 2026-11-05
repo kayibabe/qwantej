@@ -10,6 +10,9 @@ from app.services import operational_monitor
 @pytest.mark.asyncio
 async def test_operational_snapshot_reports_read_only_signals(monkeypatch):
     monkeypatch.setattr(operational_monitor, "latest_due_pipeline_window", lambda now: None)
+    monkeypatch.setattr(
+        operational_monitor._cache, "get_api_football_quota", AsyncMock(return_value=None)
+    )
     db = SimpleNamespace(
         scalar=AsyncMock(side_effect=[
             SimpleNamespace(
@@ -17,8 +20,9 @@ async def test_operational_snapshot_reports_read_only_signals(monkeypatch):
                 current_stage="publication", completed_at=datetime(2026, 10, 4, tzinfo=timezone.utc),
                 run_details={"run_type": "daily_pipeline"}, stages=[],
             ),
-            3, 2, 1,
-        ])
+            3, 2, 5, 4, 1,
+        ]),
+        execute=AsyncMock(return_value=SimpleNamespace(all=lambda: [])),
     )
     result = await operational_monitor.operational_snapshot(
         db, datetime(2026, 10, 4, 8, tzinfo=timezone.utc)

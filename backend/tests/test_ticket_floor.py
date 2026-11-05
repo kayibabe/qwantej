@@ -22,7 +22,12 @@ from app.services.accumulator_builder import (
 )
 from app.services.fixture_ingestor import _season_segments
 
-TARGET = date(2026, 9, 24)
+# Keep the fixture slate ahead of the real clock; the builder rejects legs
+# whose kickoff or quote is already in the past.
+_TARGET_KICKOFF = (datetime.now(timezone.utc) + timedelta(days=30)).replace(
+    hour=13, minute=0, second=0, microsecond=0
+)
+TARGET = _TARGET_KICKOFF.date()
 
 
 @pytest.fixture(autouse=True)
@@ -45,7 +50,7 @@ def _leg(prediction_id: int, *, day_offset: int = 0, market: str | None = None, 
         competition=f"League {match_id}",
         competition_id=match_id,  # distinct leagues -> independent legs
         # 13:00 UTC = 15:00 CAT: comfortably inside the CAT day.
-        kickoff_at=datetime(2026, 9, 24, 13, tzinfo=timezone.utc) + timedelta(days=day_offset),
+        kickoff_at=_TARGET_KICKOFF + timedelta(days=day_offset),
         market=market or _SAFE_MARKETS[prediction_id % len(_SAFE_MARKETS)],
         selection="x",
         model_probability=0.72,
@@ -96,12 +101,12 @@ def _fake_builder(pools: dict[date, list[Leg]]) -> AccumulatorBuilder:
 # ── CAT day arithmetic ──────────────────────────────────────────────────────
 
 def test_cat_day_offset_uses_cat_not_utc_midnight():
-    assert _cat_day_offset(datetime(2026, 9, 24, 13, tzinfo=timezone.utc), TARGET) == 0
+    assert _cat_day_offset(_TARGET_KICKOFF, TARGET) == 0
     # 21:59 UTC is still 23:59 CAT on the target day...
-    assert _cat_day_offset(datetime(2026, 9, 24, 21, 59, tzinfo=timezone.utc), TARGET) == 0
+    assert _cat_day_offset(_TARGET_KICKOFF.replace(hour=21, minute=59), TARGET) == 0
     # ...but 22:30 UTC is 00:30 CAT the next day.
-    assert _cat_day_offset(datetime(2026, 9, 24, 22, 30, tzinfo=timezone.utc), TARGET) == 1
-    assert _cat_day_offset(datetime(2026, 9, 26, 13, tzinfo=timezone.utc), TARGET) == 2
+    assert _cat_day_offset(_TARGET_KICKOFF.replace(hour=22, minute=30), TARGET) == 1
+    assert _cat_day_offset(_TARGET_KICKOFF + timedelta(days=2), TARGET) == 2
 
 
 # ── Relaxation must respect the research market restriction ─────────────────

@@ -65,7 +65,8 @@ describe('audited ticket surfaces', () => {
       <TicketCard ticket={ticket} tierName="Balanced" tierDesc="Q ≥80" color="blue" />,
     )
     expect(html).not.toContain('High Risk')
-    expect(html).toContain('Hit probability')
+    expect(html).toContain('Estimated chance')
+    expect(html).toContain('This estimate uses the model probabilities')
     expect(html).toContain('Risk score')
     expect(html).toContain('Open · 1 pending')
     expect(html).toContain('Version 3')
@@ -110,7 +111,8 @@ describe('audited ticket surfaces', () => {
     const html = renderToStaticMarkup(
       <TicketCard ticket={fair} tierName="Conservative" tierDesc="" color="green" />,
     )
-    expect(html).toContain('Chance to win')
+    expect(html).toContain('Estimated chance')
+    expect(html).toContain('multiplies fair leg probabilities')
     expect(html).toContain('about 1 in 2')
     expect(html).toContain('Return / unit')
     expect(html).toContain('-4.1%')
@@ -126,7 +128,8 @@ describe('audited ticket surfaces', () => {
     const html = renderToStaticMarkup(
       <TicketCard ticket={ticket} tierName="Balanced" tierDesc="Q ≥80" color="blue" />,
     )
-    expect(html).toContain('Hit probability')
+    expect(html).toContain('Estimated chance')
+    expect(html).toContain('This estimate uses the model probabilities')
     expect(html).toContain('Average Q-score')
     expect(html).not.toContain('Fair-priced')
     expect(html).not.toContain('Chance to win')

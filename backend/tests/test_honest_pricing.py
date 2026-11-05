@@ -25,7 +25,12 @@ from app.services.accumulator_builder import (
 )
 
 SPEC = {s.ticket_type: s for s in MARKET_TICKET_SPECS}
-TARGET = datetime(2026, 9, 26).date()
+# Keep the slate ahead of the real clock so the freshness/kickoff gates do not
+# turn this pricing suite into a date-dependent test.
+KICKOFF_BASE = (datetime.now(timezone.utc) + timedelta(days=30)).replace(
+    hour=13, minute=0, second=0, microsecond=0
+)
+TARGET = KICKOFF_BASE.date()
 
 
 def _leg(pid, *, match_id=None, market="double_chance_1x", odds=1.30, fair=0.74, model_p=0.90,
@@ -33,7 +38,7 @@ def _leg(pid, *, match_id=None, market="double_chance_1x", odds=1.30, fair=0.74,
     match_id = match_id or pid
     return Leg(
         pid, match_id, match_id * 2, match_id * 2 + 1, f"H{match_id}", f"A{match_id}",
-        f"L{match_id}", match_id, datetime(2026, 9, 26, 13, tzinfo=timezone.utc) + timedelta(minutes=pid),
+        f"L{match_id}", match_id, KICKOFF_BASE + timedelta(minutes=pid),
         market, market, model_p, 0.05, odds, datetime.now(timezone.utc), q, QGrade.C,
         model_p - 1 / odds, model_p * odds - 1, list(models), 80.0, fair_probability=fair,
     )
@@ -133,9 +138,12 @@ def _slate():
     """A realistic mixed slate: short favourites, mid prices and longer shots."""
     legs, pid = [], 1
     for match in range(1, 25):
+        # Avoid the total-goals markets here: they now have their own
+        # evidence/calibration gates, which are covered by the qualification
+        # suites. This slate is about market pricing and tier construction.
         for market, odds in (("double_chance_1x", 1.22 + 0.02 * (match % 5)),
-                             ("over_1.5", 1.30 + 0.03 * (match % 4)),
-                             ("over_2.5", 1.85 + 0.05 * (match % 5)),
+                             ("btts_yes", 1.30 + 0.03 * (match % 4)),
+                             ("home_win", 1.85 + 0.05 * (match % 5)),
                              ("away_win", 2.6 + 0.2 * (match % 4))):
             fair = (1 / odds) * 0.965  # ~3.5% margin on every quote
             legs.append(_leg(pid, match_id=match, market=market, odds=round(odds, 2), fair=fair))

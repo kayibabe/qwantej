@@ -7,9 +7,10 @@ from app.services.under35 import (
     CONTEXT_CHECKS, RISK_CHECKS, THRESHOLDS, poisson_under35,
     prediction_qualification, probability_grade, qualify_under35,
 )
+from tests.goals_fixtures import promoted_shared_forecast
 
 
-def evidence():
+def evidence(probability=.85):
     return {
         "metrics": {key: threshold for key, (_, threshold) in THRESHOLDS.items()},
         "sample_sizes": {"home": 8, "away": 12},
@@ -19,6 +20,7 @@ def evidence():
                         "method": "platt_logit", "checks": {key: True for key in (
                             "brier_improved", "calibration_not_worse", "enough_priced_bets",
                             "positive_roi_evidence", "roi_not_worse")}},
+        "shared_goals_forecast": promoted_shared_forecast({"under_3.5": probability}),
     }
 
 
@@ -42,7 +44,7 @@ def test_poisson_examples_and_upper_tail():
 
 
 def test_b_grade_requires_both_extra_reviews():
-    data = evidence()
+    data = evidence(.80)
     assert qualify_under35(.80, 1.5, data)["status"] == "REJECT"
     data["context_review"]["strong_supporting_evidence"] = "verified"
     assert qualify_under35(.80, 1.5, data)["status"] == "REJECT"
@@ -50,7 +52,7 @@ def test_b_grade_requires_both_extra_reviews():
     result = qualify_under35(.80, 1.5, data)
     assert result["status"] == "QUALIFY"
     assert result["selection_pool"] == "conditional"
-    assert qualify_under35(.74, 2, data)["status"] == "REJECT"
+    assert qualify_under35(.74, 2, evidence(.74))["status"] == "REJECT"
 
 
 @pytest.mark.parametrize("key", [key for key in THRESHOLDS if key != "projected_goals"])

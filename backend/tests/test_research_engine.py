@@ -1,7 +1,7 @@
 """Pure acceptance tests for optimiser, settlement, and Kelly constraints."""
 
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -222,7 +222,10 @@ def test_thin_slate_relaxation_recovers_a_balanced_ticket():
         _leg(4, 4, "away_win", competition_id=4, q_score=74.0, odds=1.7),
     ]
     for leg in pool:
-        leg.source_odds_at = datetime.now(timezone.utc)  # selection_rejection_reasons checks odds age
+        # Keep the fixtures ahead of the real clock: selection_rejection_reasons
+        # rejects already-started fixtures and stale quotes.
+        leg.kickoff_at = datetime.now(timezone.utc) + timedelta(days=1)
+        leg.source_odds_at = datetime.now(timezone.utc)
 
     eligible_at_full_strength = [leg for leg in pool if not selection_rejection_reasons(leg, base, None)]
     assert _find_best_ticket(eligible_at_full_strength, base, {}) is None

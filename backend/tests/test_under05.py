@@ -7,9 +7,10 @@ from app.services.under05 import (
     CONTEXT_CHECKS, RISK_CHECKS, THRESHOLDS, poisson_under05,
     prediction_qualification, probability_grade, qualify_under05,
 )
+from tests.goals_fixtures import promoted_shared_forecast
 
 
-def evidence():
+def evidence(probability=.4):
     data = {
         "metrics": {key: threshold for key, (_, threshold) in THRESHOLDS.items()},
         "sample_sizes": {"home": 10, "away": 15},
@@ -21,6 +22,7 @@ def evidence():
                             "positive_roi_evidence", "roi_not_worse")}},
     }
     data["metrics"].update(home_projected_goals=.6, away_projected_goals=.6)
+    data["shared_goals_forecast"] = promoted_shared_forecast({"under_0.5": probability})
     return data
 
 
@@ -35,12 +37,12 @@ def test_poisson_and_stressed_value_examples():
     assert poisson_under05(1) == pytest.approx(.3678794)
     assert 1 - poisson_under05(1.2) == pytest.approx(.6988058)
     assert poisson_under05(math.log(2)) == pytest.approx(.5)
-    result = qualify_under05(.35, 3.2, evidence())
+    result = qualify_under05(.35, 3.2, evidence(.35))
     assert result["expected_value"] == pytest.approx(.12)
     assert result["stressed_expected_value"] == pytest.approx(-.04)
     assert result["status"] == "REJECT"
     assert "UNDER05_NO_POSITIVE_STRESSED_VALUE" in result["reasons"]
-    assert qualify_under05(.35, 3.5, evidence())["status"] == "QUALIFY"
+    assert qualify_under05(.35, 3.5, evidence(.35))["status"] == "QUALIFY"
     result = qualify_under05(.4, 3, evidence())
     assert result["one_plus_probability"] == .6
     assert result["implied_probability"] == pytest.approx(1 / 3)
@@ -48,12 +50,12 @@ def test_poisson_and_stressed_value_examples():
 
 
 def test_b_grade_requires_explicit_review_and_stressed_value():
-    data = evidence()
+    data = evidence(.25)
     assert qualify_under05(.25, 6, data)["status"] == "REJECT"
     data["context_review"]["conditional_value_review"] = "verified"
     assert qualify_under05(.25, 6, data)["status"] == "QUALIFY"
     assert qualify_under05(.25, 5, data)["status"] == "REJECT"  # zero stressed EV
-    assert qualify_under05(.21, 10, data)["status"] == "REJECT"
+    assert qualify_under05(.21, 10, evidence(.21))["status"] == "REJECT"
 
 
 @pytest.mark.parametrize("key", list(THRESHOLDS))

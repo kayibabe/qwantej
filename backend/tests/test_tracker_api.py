@@ -46,9 +46,16 @@ def test_journal_summary_uses_actual_returns_and_exact_periods():
 
 @pytest.mark.asyncio
 async def test_cashout_requires_an_actual_return():
-    db = SimpleNamespace(get=AsyncMock(return_value=_bet(status=BetStatus.PENDING, actual_return=None, ticket_date="2026-08-30")))
+    class _Result:
+        def scalar_one_or_none(self):
+            return _bet(status=BetStatus.PENDING, actual_return=None, ticket_date="2026-08-30")
+
+    db = SimpleNamespace(execute=AsyncMock(return_value=_Result()))
+    user = SimpleNamespace(id=1, role="admin", plan="pro")
     with pytest.raises(HTTPException, match="Actual return is required"):
-        await bets_api.settle_bet(1, bets_api.BetSettle(status="cashout"), db)
+        await bets_api.settle_bet(
+            1, bets_api.BetSettle(status="cashout"), db, user=user
+        )
 
 
 class _Result:

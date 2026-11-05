@@ -14,4 +14,6 @@ def test_shadow_payload_is_explicitly_non_publishing_and_records_empty_tiers():
     assert payload["control_unchanged"] is True
     assert payload["excluded_markets"] == ["draw"]
     assert payload["public_ticket_count"] == 0
-    assert payload["missing_public_ticket_types"] == ["safe", "balanced", "high_odds"]
+    assert payload["missing_public_ticket_types"] == ["safe", "balanced"]
+    assert "high_odds" not in payload["missing_public_ticket_types"]
+    assert payload["research_tickets"] == []
