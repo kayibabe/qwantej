@@ -137,6 +137,18 @@ async def lifespan(app: FastAPI):
             coalesce=True,
             max_instances=1,
         )
+    if settings.account_lifecycle_enabled:
+        scheduler.add_job(
+            _trigger_account_lifecycle,
+            CronTrigger(
+                hour=settings.account_lifecycle_cron_hour,
+                minute=settings.account_lifecycle_cron_minute,
+            ),
+            id="daily_account_lifecycle",
+            replace_existing=True,
+            coalesce=True,
+            max_instances=1,
+        )
     if settings.sweet_spot_tracking_enabled:
         scheduler.add_job(
             _trigger_sweet_spot, IntervalTrigger(minutes=5),
@@ -397,6 +409,17 @@ async def _queue_db_backup():
 
     backup_database.delay()
     logger.info("Scheduled database backup task queued")
+
+
+async def _trigger_account_lifecycle():
+    """Queue session pruning and stale Pro-subscription reconciliation."""
+    async with _scheduler_leadership("account_lifecycle") as leader:
+        if not leader:
+            return
+        from app.tasks.pipeline import reconcile_account_lifecycle
+
+        reconcile_account_lifecycle.delay()
+        logger.info("Scheduled account lifecycle reconciliation queued")
 
 
 app = FastAPI(

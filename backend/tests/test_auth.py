@@ -69,6 +69,26 @@ async def test_authenticated_admin_can_use_admin_gated_endpoints():
 
 
 @pytest.mark.asyncio
+async def test_admin_key_is_separate_from_research_key(monkeypatch):
+    from app.api import security
+
+    monkeypatch.setattr(
+        security,
+        "settings",
+        SimpleNamespace(
+            admin_api_key="admin-secret",
+            research_api_key="research-secret",
+        ),
+    )
+    request = _request_with_cookie("token")
+
+    assert await require_admin_access(request, "admin-secret", None) is None
+    with pytest.raises(HTTPException) as error:
+        await require_admin_access(request, "research-secret", None)
+    assert error.value.status_code == 401
+
+
+@pytest.mark.asyncio
 async def test_research_key_normalizes_bom_and_rejects_non_ascii_without_500(monkeypatch):
     from app.api import security
 

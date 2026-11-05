@@ -81,8 +81,9 @@ async def _ensure_active_admin_continuity(db, user: User, changes: dict) -> None
     """Prevent an edit or deletion from removing the final usable admin.
 
     Counting roles alone is not sufficient: a suspended admin cannot access the
-    private administration surface. The research key remains an emergency
-    service path, but must not be the only way to recover normal access.
+    private administration surface. The dedicated admin key remains an
+    emergency service path, but must not be the only way to recover normal
+    access.
     """
     is_active_admin = user.role == "admin" and user.account_status == "active"
     remains_active_admin = (

@@ -60,8 +60,13 @@ class Settings(BaseSettings):
     app_env: str = "development"
     secret_key: str = "change_me_in_production"
     research_api_key: str = ""
+    # Separate from the research key. Research access must never imply the
+    # ability to create, demote, suspend, or delete accounts.
+    admin_api_key: str = ""
     auth_cookie_name: str = "qwantej_session"
     auth_session_days: int = 30
+    # Expired/revoked sessions are retained briefly for audit, then deleted.
+    auth_session_retention_days: int = 7
     auth_allow_registration: bool = True
     log_level: str = "INFO"
 
@@ -181,6 +186,15 @@ class Settings(BaseSettings):
     auth_rate_limit_window_seconds: int = 900
     auth_login_rate_limit: int = 12
     auth_register_rate_limit: int = 5
+
+    # Account lifecycle reconciliation. A monthly Pro subscription that has not
+    # recorded a successful payment within the period plus grace is downgraded;
+    # expired/revoked browser sessions are pruned after the retention window.
+    account_lifecycle_enabled: bool = True
+    account_lifecycle_cron_hour: int = 0
+    account_lifecycle_cron_minute: int = 45
+    pro_subscription_period_days: int = 30
+    pro_subscription_grace_days: int = 3
     operational_monitor_enabled: bool = True
     operational_monitor_interval_minutes: int = 15
     api_football_quota_warning_fraction: float = 0.10
@@ -304,6 +318,11 @@ class Settings(BaseSettings):
                 raise ValueError("Production SECRET_KEY must be a unique value of at least 32 characters")
             if len(self.research_api_key) < 32:
                 raise ValueError("Production RESEARCH_API_KEY must be at least 32 characters")
+            if self.admin_api_key:
+                if len(self.admin_api_key) < 32:
+                    raise ValueError("Production ADMIN_API_KEY must be at least 32 characters when set")
+                if self.admin_api_key == self.research_api_key:
+                    raise ValueError("Production ADMIN_API_KEY must differ from RESEARCH_API_KEY")
         return self
 
     @property

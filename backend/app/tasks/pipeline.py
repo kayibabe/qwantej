@@ -927,6 +927,27 @@ def backup_database(self):
         raise self.retry(exc=exc, countdown=300)
 
 
+@celery_app.task(name="pipeline.reconcile_account_lifecycle", bind=True, max_retries=2)
+def reconcile_account_lifecycle(self):
+    """Prune stale sessions and expire Pro subscriptions that stopped paying."""
+    async def _run():
+        from app.database import AsyncSessionLocal
+        from app.services.account_lifecycle import reconcile_account_lifecycle as reconcile
+
+        async with AsyncSessionLocal() as db:
+            result = await reconcile(db)
+            await db.commit()
+            return result
+
+    try:
+        result = _run_async(_run())
+        logger.info("Account lifecycle reconciliation: %s", result)
+        return result
+    except Exception as exc:
+        logger.exception("Account lifecycle reconciliation failed")
+        raise self.retry(exc=exc, countdown=300)
+
+
 def _daily_pipeline_canvas(today: str, pipeline_run_id: int):
     """Build the deterministic task graph separately so its wiring is testable."""
     from celery import chain

@@ -101,20 +101,21 @@ async def require_authenticated_user(
 
 async def require_admin_access(
     request: Request,
-    x_research_key: str | None = Header(default=None),
+    x_admin_key: str | None = Header(default=None),
     user: User | None = Depends(get_optional_current_user),
 ) -> None:
     if user and user.role == "admin":
         return
-    # Internal automation may use the same key, but public-access mode never
-    # grants access to administration routes.
-    configured = _normalize_research_key(settings.research_api_key)
-    supplied = _normalize_research_key(x_research_key)
+    # Internal automation may use a dedicated admin key. The research key is
+    # deliberately not accepted here: research access must not imply account
+    # administration.
+    configured = _normalize_research_key(settings.admin_api_key)
+    supplied = _normalize_research_key(x_admin_key)
     if configured and supplied and configured.isascii() and supplied.isascii() and hmac.compare_digest(configured, supplied):
         return
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Administrator authentication or valid X-Research-Key required",
+        detail="Administrator authentication or valid X-Admin-Key required",
     )
 
 
