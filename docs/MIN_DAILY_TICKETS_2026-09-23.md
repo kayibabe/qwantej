@@ -1,5 +1,12 @@
 # Minimum 3 public tickets per day — incident and fix (2026-09-23)
 
+> **Current policy (2026-11-05):** the active Conservative and Balanced tiers
+> are retried at full strength only. The relaxation ladder is paused for active
+> tiers and retained for research/sweeps; the rolling horizon is the only
+> widening mechanism. High Odds is an internal paper cohort. The September
+> record below explains the original incident and fix, not the current
+> three-public-tier policy.
+
 ## Symptom
 No public tickets from 2026-09-21 onward (and on several earlier weekdays).
 
@@ -31,8 +38,8 @@ Secondary causes found and fixed on the way:
    `POST /api/v1/admin/leagues/backfill`). Seasons are resolved per league
    from `/leagues`.
 2. **Guarantee** — rolling horizon (`app/services/ticket_horizon.py`). If the
-   target day still has fewer than `min_daily_public_tickets` after
-   relaxation, the ticket stage prepares the following days one at a time,
+   target day still has fewer than `min_daily_public_tickets` after the
+   full-strength retry, the ticket stage prepares the following days one at a time,
    up to `ticket_horizon_max_days` (4). For each day it runs ingest, odds,
    enrich and model steps, then admits those legs for the missing tiers only,
    full strength first. Every per-leg gate still applies. Tickets record

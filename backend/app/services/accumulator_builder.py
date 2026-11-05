@@ -102,14 +102,10 @@ PUBLIC_TICKET_TYPES: tuple[TicketType, ...] = (
 def active_ticket_specs() -> tuple[TicketSpec, ...]:
     return MARKET_TICKET_SPECS if settings.leg_probability_source == "market" else TICKET_SPECS
 
-# Bounded relaxation ladder for the minimum-daily-tickets fallback (see
-# AccumulatorBuilder.build). Each step loosens the constraints that a thin
-# weekday slate hits first — the high-grade-leg ratio, market-family diversity,
-# and (for the conservative tier) combined-odds ceiling — while leaving
-# min/max legs and correlation tolerance untouched. A relaxed ticket remains a
-# coherent, auditable accumulator rather than an arbitrary leg dump. Applied
-# cumulatively (step 2 includes step 1's loosening) and only ever to public
-# tiers that produced no ticket at full strength.
+# Research-only relaxation ladder. The active minimum-daily-tickets floor no
+# longer applies it: missing Conservative/Balanced tiers are retried at full
+# strength, and the rolling horizon supplies extra fixtures. Retained for
+# parameter-sweep, ablation and backtest experiments.
 _RELAXATION_STEPS: tuple[dict, ...] = (
     {"min_high_grade_ratio": -0.30, "min_market_types": -1, "max_combined_odds": 1.0},
     {"min_high_grade_ratio": -0.60, "min_q_score": -5.0, "max_combined_odds": 2.0},
@@ -392,19 +388,18 @@ class AccumulatorBuilder:
         """Retry missing active tiers at full strength before horizon fallback.
 
         High Odds is excluded from this floor-filling pass while it is
-        shadow-tracked. The bounded relaxation ladder remains available for a
-        future active-tier policy but is not applied to today's two core tiers.
+        shadow-tracked. The relaxation ladder is research-only and is not
+        applied to today's two core tiers; the rolling horizon is the only
+        widening mechanism.
 
-        The rolling-horizon pass uses it with `target_date` to stamp each
+        The rolling-horizon pass uses this with `target_date` to stamp each
         ticket's horizon_days after widening the candidate pool."""
         if _public_count(output) >= settings.min_daily_public_tickets:
             return
-        # Loosest base spec first (BALANCED), so relaxation reaches the floor
-        # with the fewest, least-invasive concessions. On a thin pool that order
-        # can starve CONSERVATIVE: the public one-exposure-per-match/market rule
-        # may leave it too few legs. So when it falls short, also try
-        # CONSERVATIVE first and keep whichever fills more tiers (ties keep the
-        # original order).
+        # The tier order can matter on a thin pool: the public one-exposure-
+        # per-match/market rule may leave the second tier too few legs. Try
+        # both orders at full strength and keep whichever fills more tiers
+        # (ties keep the original order).
         orders = (
             (TicketType.BALANCED, TicketType.SAFE),
             (TicketType.SAFE, TicketType.BALANCED),
@@ -423,11 +418,11 @@ class AccumulatorBuilder:
         output.update(best)
         for ticket_type in PUBLIC_TICKET_TYPES:
             ticket = output[ticket_type]
-            if ticket is not None and (ticket.relaxed or ticket.horizon_days):
+            if ticket is not None and ticket.horizon_days:
                 logger.warning(
-                    "Filled %s ticket (relaxation level %d, horizon +%dd) to meet minimum "
-                    "daily publication (%d/%d public)",
-                    ticket_type.value, ticket.relaxation_level, ticket.horizon_days,
+                    "Filled %s ticket from horizon +%dd to meet minimum daily "
+                    "publication (%d/%d public)",
+                    ticket_type.value, ticket.horizon_days,
                     _public_count(output), settings.min_daily_public_tickets,
                 )
 
@@ -441,6 +436,7 @@ class AccumulatorBuilder:
         target_date: date | None,
         market_policy_excluded_markets: frozenset[str] | None,
     ) -> None:
+        """Fill missing public tiers at full strength only."""
         published = _public_count(output)
         for ticket_type in (t for t in order if output.get(t) is None):
             if published >= settings.min_daily_public_tickets:
@@ -453,42 +449,38 @@ class AccumulatorBuilder:
             # the active recommendation floor.
             if base_spec is None:
                 continue
-            levels = (0,)
-            for level in levels:
-                relaxed_spec = _relax_spec(base_spec, level) if level else base_spec
-                eligible = [
-                    leg for leg in pool
-                    if not _research_market_rejection_reasons(
-                        leg, relaxed_spec, market_policy_excluded_markets
-                    )
-                    and not selection_rejection_reasons(leg, relaxed_spec, calibration)
-                ]
-                prior_public = [
-                    existing for existing_type, existing in output.items()
-                    if existing is not None
-                    and existing_type in PUBLIC_TICKET_TYPES
-                    and existing_type != ticket_type
-                ]
-                ticket = _find_best_ticket(
-                    eligible,
-                    relaxed_spec,
-                    coefficients,
-                    prior_tickets=prior_public,
-                    max_shared_matches=(settings.max_shared_matches_between_market_tickets
-                        if relaxed_spec.pricing == "market" else settings.max_shared_matches_between_tickets),
-                    max_match_market_exposure=settings.max_public_ticket_exposure_per_match_market,
-                    max_match_exposure=settings.max_public_ticket_exposure_per_match,
+            eligible = [
+                leg for leg in pool
+                if not _research_market_rejection_reasons(
+                    leg, base_spec, market_policy_excluded_markets
                 )
-                if ticket is not None:
-                    ticket.relaxed = level > 0
-                    ticket.relaxation_level = level
-                    if target_date is not None:
-                        ticket.horizon_days = max(
-                            _cat_day_offset(leg.kickoff_at, target_date) for leg in ticket.legs
-                        )
-                    output[ticket_type] = ticket
-                    published += 1
-                    break
+                and not selection_rejection_reasons(leg, base_spec, calibration)
+            ]
+            prior_public = [
+                existing for existing_type, existing in output.items()
+                if existing is not None
+                and existing_type in PUBLIC_TICKET_TYPES
+                and existing_type != ticket_type
+            ]
+            ticket = _find_best_ticket(
+                eligible,
+                base_spec,
+                coefficients,
+                prior_tickets=prior_public,
+                max_shared_matches=(settings.max_shared_matches_between_market_tickets
+                    if base_spec.pricing == "market" else settings.max_shared_matches_between_tickets),
+                max_match_market_exposure=settings.max_public_ticket_exposure_per_match_market,
+                max_match_exposure=settings.max_public_ticket_exposure_per_match,
+            )
+            if ticket is not None:
+                ticket.relaxed = False
+                ticket.relaxation_level = 0
+                if target_date is not None:
+                    ticket.horizon_days = max(
+                        _cat_day_offset(leg.kickoff_at, target_date) for leg in ticket.legs
+                    )
+                output[ticket_type] = ticket
+                published += 1
 
     async def rejected_selections(
         self, target_date: date, ticket_type: TicketType = TicketType.SAFE
