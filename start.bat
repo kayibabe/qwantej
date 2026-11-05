@@ -1,4 +1,5 @@
 @echo off
+setlocal EnableExtensions
 title QwanEj - Starting
 echo.
 echo  ============================
@@ -7,45 +8,35 @@ echo  ============================
 echo.
 
 cd /d "%~dp0"
-set "FRONTEND_PORT=3011"
+set "FRONTEND_PORT=3000"
+set "FRONTEND_URL=http://localhost:%FRONTEND_PORT%"
 
 echo [1/4] Checking Docker Desktop...
 docker info >nul 2>&1
-if not errorlevel 1 (
-    set "DOCKER_READY=1"
-    goto :docker_ready
-)
-if errorlevel 1 (
-    echo Docker engine is not running. Starting Docker Desktop...
-    if exist "%ProgramFiles%\Docker\Docker\Docker Desktop.exe" (
-        start "Docker Desktop" "%ProgramFiles%\Docker\Docker\Docker Desktop.exe"
-    ) else if exist "%LocalAppData%\Docker\Docker Desktop.exe" (
-        start "Docker Desktop" "%LocalAppData%\Docker\Docker Desktop.exe"
-    ) else (
-        echo ERROR: Docker Desktop was not found on this computer.
-        pause
-        exit /b 1
-    )
-)
+if not errorlevel 1 goto :docker_ready
 
-echo Waiting for Docker engine to become ready...
-set "DOCKER_READY=0"
-for /l %%i in (1,1,60) do (
-    docker info >nul 2>&1
-    if not errorlevel 1 (
-        set "DOCKER_READY=1"
-        goto :docker_ready
-    )
-    timeout /t 2 /nobreak >nul
-)
-
-:docker_ready
-if "%DOCKER_READY%" neq "1" (
-    echo ERROR: Docker Desktop did not become ready within 120 seconds.
+echo Docker engine is not running. Starting Docker Desktop...
+if exist "%ProgramFiles%\Docker\Docker\Docker Desktop.exe" (
+    start "Docker Desktop" "%ProgramFiles%\Docker\Docker\Docker Desktop.exe"
+) else if exist "%LocalAppData%\Docker\Docker Desktop.exe" (
+    start "Docker Desktop" "%LocalAppData%\Docker\Docker Desktop.exe"
+) else (
+    echo ERROR: Docker Desktop was not found on this computer.
     pause
     exit /b 1
 )
 
+echo Waiting for Docker engine to become ready...
+for /l %%i in (1,1,60) do (
+    docker info >nul 2>&1
+    if not errorlevel 1 goto :docker_ready
+    call :wait_2s
+)
+echo ERROR: Docker Desktop did not become ready within 120 seconds.
+pause
+exit /b 1
+
+:docker_ready
 echo [2/4] Starting backend services (Postgres, Redis, API, Celery)...
 docker compose build backend
 if errorlevel 1 (
@@ -53,7 +44,7 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-docker compose up -d
+docker compose up -d --remove-orphans
 if errorlevel 1 (
     echo ERROR: Docker Compose failed.
     docker compose logs --tail=50 migrate backend
@@ -72,7 +63,7 @@ for /l %%i in (1,1,30) do (
         set "API_READY=1"
         goto :api_ready
     )
-    timeout /t 2 /nobreak >nul
+    call :wait_2s
 )
 :api_ready
 if "%API_READY%" neq "1" (
@@ -84,8 +75,21 @@ if "%API_READY%" neq "1" (
 
 echo.
 echo [3/4] Starting frontend dev server...
+powershell -NoProfile -Command "try { $r = Invoke-WebRequest -UseBasicParsing http://localhost:%FRONTEND_PORT% -TimeoutSec 2; if ($r.StatusCode -eq 200 -and $r.Content -match 'QwanEj') { exit 0 } } catch {} ; exit 1" >nul 2>&1
+if not errorlevel 1 (
+    echo QwanEj frontend is already running on port %FRONTEND_PORT%.
+    set "FRONTEND_READY=1"
+    goto :frontend_ready
+)
+if not exist "frontend\node_modules\.bin\vite.cmd" (
+    echo ERROR: Frontend dependencies are missing.
+    echo Run "npm install" in the frontend folder, then try again.
+    pause
+    exit /b 1
+)
+
 set "VITE_API_PROXY_TARGET=http://127.0.0.1:%API_PORT%"
-start "QwanEj Frontend" cmd /k "cd /d "%~dp0frontend" && npm run dev -- --port %FRONTEND_PORT% --strictPort"
+start "QwanEj Frontend" cmd /k "cd /d "%~dp0frontend" && call node_modules\.bin\vite.cmd --port %FRONTEND_PORT% --strictPort"
 
 echo.
 echo [4/4] Waiting for Vite to compile, then opening browser...
@@ -96,25 +100,34 @@ for /l %%i in (1,1,30) do (
         set "FRONTEND_READY=1"
         goto :frontend_ready
     )
-    timeout /t 2 /nobreak >nul
+    call :wait_2s
 )
 :frontend_ready
 if "%FRONTEND_READY%" neq "1" (
     echo ERROR: Frontend did not respond within 60 seconds.
+    echo Check the "QwanEj Frontend" console window for the Vite error.
     pause
     exit /b 1
 )
-start http://localhost:%FRONTEND_PORT%
+start "" "%FRONTEND_URL%"
 
 echo.
 echo  ============================
 echo   QwanEj is running!
 echo.
-echo   App      : http://localhost:%FRONTEND_PORT%
-echo   API docs : http://localhost:%API_PORT%/docs
+echo   App      : %FRONTEND_URL%
+echo   API docs : http://127.0.0.1:%API_PORT%/docs
 echo.
 echo   Run stop.bat to shut down.
 echo  ============================
 echo.
-timeout /t 3 /nobreak >nul
-exit
+call :wait_3s
+exit /b 0
+
+:wait_2s
+ping -n 3 127.0.0.1 >nul
+exit /b 0
+
+:wait_3s
+ping -n 4 127.0.0.1 >nul
+exit /b 0
