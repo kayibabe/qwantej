@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { requestEmailVerification } from './lib/api'
 
 export interface CurrentUser {
   id: number
@@ -7,6 +8,7 @@ export interface CurrentUser {
   role: 'user' | 'admin'
   plan: 'free' | 'pro'
   account_status: 'active' | 'suspended' | 'pending'
+  email_verified?: boolean
 }
 
 interface AuthContextValue {
@@ -83,12 +85,22 @@ export function useAuth() {
 
 export function AuthControls({ onSignIn, onSignedOut }: { onSignIn?: () => void; onSignedOut?: () => void }) {
   const { user, loading, logout } = useAuth()
+  const [verificationSent, setVerificationSent] = useState(false)
   if (loading) return <span className="auth-status">Checking session…</span>
   if (user) {
     return (
       <div className="auth-session">
         <span className="auth-status">{user.username?.trim() || user.email}</span>
         <span className={`auth-plan-badge auth-plan-${user.plan}`}>{user.plan === 'pro' ? 'Pro' : 'Free'}</span>
+        {user.email_verified === false && (
+          <button
+            className="theme-btn"
+            onClick={async () => { await requestEmailVerification(); setVerificationSent(true) }}
+            title="Send a verification link to your email"
+          >
+            {verificationSent ? 'Email sent' : 'Verify email'}
+          </button>
+        )}
         <button className="theme-btn auth-signout" onClick={async () => { await logout(); onSignedOut?.() }}>Sign out</button>
       </div>
     )

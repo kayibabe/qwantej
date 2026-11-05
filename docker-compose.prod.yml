@@ -39,7 +39,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: alembic upgrade head
+    command: python -m scripts.apply_migrations
 
   backend:
     build:

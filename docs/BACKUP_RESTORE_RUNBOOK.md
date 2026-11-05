@@ -140,20 +140,22 @@ change was deployed. See the evidence log.
 
 ## Migration safety procedure (ties to the "pending migrations" requirement)
 
-Before running `alembic upgrade head` against production:
+Before applying a migration against production:
 
 1. Take a backup (`backup_db.py`, labeled `pre_migration_<revision>`).
 2. Record the JSON summary it prints (file, size, table count) in the
    evidence log for that migration.
-3. Apply the migration.
+3. Apply the migration. Compose deployments use
+   `python -m scripts.apply_migrations`: it upgrades an existing stamped
+   database and bootstraps a genuinely empty one. Use `alembic upgrade head`
+   only when the database already has an `alembic_version` row.
 4. Verify: `alembic current` shows the new head, spot-check the
    new/changed columns, run the app's smoke path.
 5. If verification fails: `restore_db.py --clean` from the pre-migration
    dump, re-investigate before retrying.
 
-As of this writing, production's `alembic_version` is already at head
-(`c3f8a1d9e2b7`) — there is no migration currently pending. This procedure
-is the plan for the *next* one, not a fix for an outstanding backlog.
+The code head at this writing is `0200_auth_tokens`; verify the deployed
+database with `alembic current` rather than assuming it.
 
 ## Evidence log
 

@@ -38,6 +38,43 @@ export async function fetchMarketCatalog(): Promise<MarketCatalogResponse> {
   return response.json()
 }
 
+async function authErrorMessage(response: Response, fallback: string): Promise<string> {
+  const body = await response.json().catch(() => ({}))
+  return typeof body?.detail === 'string' ? body.detail : fallback
+}
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  const response = await fetch('/api/v1/auth/password-reset/request', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  })
+  if (!response.ok) throw new Error(await authErrorMessage(response, 'Unable to request a password reset'))
+}
+
+export async function confirmPasswordReset(token: string, password: string): Promise<void> {
+  const response = await fetch('/api/v1/auth/password-reset/confirm', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, password }),
+  })
+  if (!response.ok) throw new Error(await authErrorMessage(response, 'Unable to reset the password'))
+}
+
+export async function confirmEmailVerification(token: string): Promise<void> {
+  const response = await fetch('/api/v1/auth/email-verification/confirm', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  })
+  if (!response.ok) throw new Error(await authErrorMessage(response, 'Unable to verify the email address'))
+}
+
+export async function requestEmailVerification(): Promise<void> {
+  const response = await fetch('/api/v1/auth/email-verification/request', { method: 'POST' })
+  if (!response.ok) throw new Error(await authErrorMessage(response, 'Unable to send a verification email'))
+}
+
 export interface Leg {
   selection_id: number
   prediction_id: number

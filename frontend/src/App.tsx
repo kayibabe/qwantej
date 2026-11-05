@@ -17,6 +17,7 @@ const LoginPage = lazy(() => import('./pages/Login'))
 const InsightsPage = lazy(() => import('./pages/Insights'))
 const LiveMonitorPage = lazy(() => import('./pages/LiveMonitor'))
 const PublicHome = lazy(() => import('./pages/PublicHome'))
+const AccountRecoveryPage = lazy(() => import('./pages/AccountRecovery'))
 
 function PageLoading() {
   return <div className="route-loading" role="status" aria-live="polite">Loading page…</div>
@@ -24,7 +25,7 @@ function PageLoading() {
 
 type Theme = 'dark' | 'light' | 'system'
 type ModulePage = 'tickets' | 'matches' | 'live' | 'insights' | 'research' | 'tracker' | 'analytics' | 'tools' | 'admin'
-type Page = ModulePage | 'home' | 'match' | 'upgrade' | 'login'
+type Page = ModulePage | 'home' | 'match' | 'upgrade' | 'login' | 'reset-password' | 'verify-email'
 type Workspace = 'football' | 'research'
 type ResearchTab = 'matches' | 'odds-policy' | 'market-roi' | 'daily-match-picks' | 'passed'
 const RESEARCH_TABS: ResearchTab[] = ['matches', 'odds-policy', 'market-roi', 'daily-match-picks', 'passed']
@@ -168,7 +169,7 @@ export default function App() {
   useEffect(() => {
     if (authLoading) return
     const path = window.location.pathname
-    if (!user && path !== '/' && path !== '/login') {
+    if (!user && !['/', '/login', '/reset-password', '/verify-email'].includes(path)) {
       window.history.replaceState({}, '', '/login')
       setPage('login')
       setWorkspace('football')
@@ -280,6 +281,16 @@ export default function App() {
 
   if (authLoading) {
     return <div className="auth-standalone" role="status" aria-live="polite">Checking your session…</div>
+  }
+
+  if (page === 'reset-password' || page === 'verify-email') {
+    return (
+      <div className="auth-standalone">
+        <Suspense fallback={<PageLoading />}>
+          <AccountRecoveryPage mode={page === 'verify-email' ? 'verify' : 'reset'} />
+        </Suspense>
+      </div>
+    )
   }
 
   if (!user) {
@@ -422,6 +433,8 @@ function routePage(pathname: string): Page {
   const path = pathname.replace(/\/$/, '')
   if (!path) return 'home'
   if (path === '/login') return 'login'
+  if (path === '/reset-password') return 'reset-password'
+  if (path === '/verify-email') return 'verify-email'
   if (path === '/upgrade') return 'upgrade'
   if (/^\/match\/\d+$/.test(path)) return 'match'
   if (path === '/tickets' || path === '/matches' || path === '/live' || path === '/insights' || path === '/research') return path.slice(1) as ModulePage

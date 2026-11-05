@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models import AuditEvent, BillingSubscription, User, UserSession
+from app.services.auth_tokens import prune_auth_tokens
 
 
 def _utc_now() -> datetime:
@@ -76,5 +77,6 @@ async def reconcile_account_lifecycle(
     """Run both idempotent lifecycle checks in one transaction."""
     return {
         "sessions_pruned": await prune_auth_sessions(db, now),
+        "tokens_pruned": await prune_auth_tokens(db, now),
         "subscriptions_expired": await expire_stale_pro_subscriptions(db, now),
     }

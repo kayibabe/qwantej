@@ -71,9 +71,24 @@ class Settings(BaseSettings):
     admin_api_key: str = ""
     auth_cookie_name: str = "qwantej_session"
     auth_session_days: int = 30
-    # Expired/revoked sessions are retained briefly for audit, then deleted.
+    # Expired/revoked sessions and one-time tokens are retained briefly for
+    # audit, then deleted.
     auth_session_retention_days: int = 7
+    auth_token_retention_days: int = 7
+    password_reset_token_minutes: int = 30
+    email_verification_token_hours: int = 24
     auth_allow_registration: bool = True
+
+    # Transactional email. Password reset and verification work without SMTP in
+    # development (the link is logged); set these to deliver in production.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_starttls: bool = True
+    smtp_use_ssl: bool = False
+    smtp_timeout_seconds: int = 15
     log_level: str = "INFO"
 
     # Flutterwave Pro checkout stays disabled until its server-side keys and

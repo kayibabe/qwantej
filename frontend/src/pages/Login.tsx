@@ -40,6 +40,7 @@ export default function LoginPage({ onSuccess }: { onSuccess: () => void }) {
           <button className="btn-ghost auth-switch" type="button" onClick={() => setMode(value => value === 'login' ? 'register' : 'login')}>
             {mode === 'login' ? 'Need an account? Create one' : 'Already have an account? Sign in'}
           </button>
+          {mode === 'login' && <a className="auth-home-link" href="/reset-password">Forgot your password?</a>}
           <a className="auth-home-link" href="/">Back to home</a>
         </div>
         </div>

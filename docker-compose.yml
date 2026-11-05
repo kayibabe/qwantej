@@ -38,7 +38,7 @@ services:
       - ./backend/app:/app/app
       - ./backend/migrations:/app/migrations
       - ./backend/alembic.ini:/app/alembic.ini
-    command: alembic upgrade head
+    command: python -m scripts.apply_migrations
 
   backend:
     image: qwantej-backend:latest

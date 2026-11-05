@@ -111,12 +111,15 @@ async def test_expired_subscription_does_not_override_a_manual_plan():
 async def test_reconcile_combines_both_counts():
     now = datetime(2026, 11, 5, tzinfo=timezone.utc)
     db = SimpleNamespace(
-        execute=AsyncMock(side_effect=[SimpleNamespace(rowcount=2), _Scalars([])]),
+        execute=AsyncMock(
+            side_effect=[SimpleNamespace(rowcount=2), SimpleNamespace(rowcount=4), _Scalars([])]
+        ),
         get=AsyncMock(),
         add=Mock(),
     )
 
     assert await reconcile_account_lifecycle(db, now=now) == {
         "sessions_pruned": 2,
+        "tokens_pruned": 4,
         "subscriptions_expired": 0,
     }
