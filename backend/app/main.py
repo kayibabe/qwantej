@@ -422,13 +422,26 @@ async def _trigger_account_lifecycle():
         logger.info("Scheduled account lifecycle reconciliation queued")
 
 
+def _api_docs_config(env: str) -> dict:
+    """Expose interactive API docs outside production only."""
+    if env == "production":
+        return {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    return {"docs_url": "/docs", "redoc_url": "/redoc", "openapi_url": "/openapi.json"}
+
+
+_CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; base-uri 'self'; object-src 'none'; "
+    "frame-ancestors 'none'; img-src 'self' data:; font-src 'self' data:; "
+    "style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; "
+    "form-action 'self'"
+)
+
 app = FastAPI(
     title="QwanEj Intelligence API",
     description="Football Intelligence & Accumulator Analytics Platform — Internal API",
     version="0.2.0",
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
+    **_api_docs_config(settings.app_env),
 )
 app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=1)
 
@@ -454,6 +467,22 @@ async def operational_response_headers(request: Request, call_next):
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    if not request.url.path.startswith(("/docs", "/redoc", "/openapi.json")):
+        # Swagger UI loads its bundle from a CDN in development; keep the strict
+        # policy for the app and API, where no external scripts are required.
+        response.headers.setdefault("Content-Security-Policy", _CONTENT_SECURITY_POLICY)
+    if request.url.path.startswith("/api/"):
+        # Authenticated JSON, billing state, and journal rows must not be
+        # retained by browser or intermediary caches.
+        response.headers.setdefault("Cache-Control", "no-store")
+        response.headers.setdefault("Pragma", "no-cache")
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip().lower()
+    if settings.app_env == "production" and (
+        request.url.scheme == "https" or forwarded_proto == "https"
+    ):
+        response.headers.setdefault(
+            "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+        )
     return response
 
 app.include_router(api_v1_router)

@@ -53,6 +53,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://lohela:lohela_pass@postgres:5432/lohela
       REDIS_URL: redis://redis:6379/0
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
       FLUTTERWAVE_SECRET_KEY: ${FLUTTERWAVE_SECRET_KEY:-}
       FLUTTERWAVE_SECRET_HASH: ${FLUTTERWAVE_SECRET_HASH:-}
       FLUTTERWAVE_PRO_MONTHLY_PLAN_ID: ${FLUTTERWAVE_PRO_MONTHLY_PLAN_ID:-}
