@@ -2498,7 +2498,8 @@ th[aria-sort="descending"] .table-sort span,
 
 .auth-control, .auth-session { position: relative; display: flex; align-items: center; gap: 8px; }
 .auth-status { color: var(--muted); font-size: var(--type-small); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.auth-plan-badge { display: inline-flex; align-items: center; padding: 3px 7px; border-radius: 999px; background: var(--accent-bg); color: var(--accent); font-size: var(--type-small); font-weight: 600; line-height: 1.2; }
+.auth-plan-badge { display: inline-flex; align-items: center; padding: 3px 7px; border-radius: 999px; background: var(--accent-bg); color: var(--accent); font-size: var(--type-small); font-weight: 600; line-height: 1.2; flex: 0 0 auto; }
+.auth-verify { width: auto; min-width: max-content; flex: 0 0 auto; padding: 0 10px; white-space: nowrap; font-size: var(--type-small); line-height: 1.2; }
 .auth-plan-pro { background: color-mix(in srgb, var(--accent) 16%, var(--surface)); }
 .auth-popover { position: absolute; z-index: 20; top: calc(100% + 10px); right: 0; width: 250px; display: grid; gap: 9px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: 0 16px 40px rgba(0,0,0,.22); }
 .auth-popover input { width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface2); color: var(--text); }
@@ -4032,7 +4033,7 @@ body { line-height: 1.6; }
 }
 .app-header {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(220px, 1fr) auto auto;
   align-items: center;
   grid-column: 1 / -1;
   grid-row: 1;
@@ -4156,9 +4157,10 @@ html[data-theme="dark"] .topbar-logo-dark { display: block; }
   background: var(--surface);
 }
 .app-header .auth-status { border: 0; color: var(--text2); background: transparent; }
-.app-header .auth-session { flex: 0 0 auto; flex-wrap: nowrap; gap: 10px; white-space: nowrap; }
+.app-header .auth-session { flex: 0 1 auto; min-width: 0; flex-wrap: nowrap; gap: 10px; white-space: nowrap; }
 .app-header .auth-status { flex: 0 1 180px; max-width: 180px; min-width: 0; font-size: var(--type-body); line-height: 1.2; }
 .app-header .auth-signout { width: auto; min-width: max-content; height: 36px; flex: 0 0 auto; padding: 0 10px; font: inherit; font-size: var(--type-body); font-weight: 600; line-height: 1; white-space: nowrap; }
+.app-header .auth-verify { height: 36px; padding: 0 10px; font: inherit; font-size: var(--type-body); font-weight: 600; line-height: 1; }
 .app-header .auth-signin { height: 36px; padding: 0 11px; border: 1px solid var(--border); border-radius: var(--r-sm); color: var(--text); font: inherit; font-size: var(--type-body); font-weight: 600; line-height: 1; }
 .app-header .global-refresh { height: 36px; margin-left: 0; padding: 0 12px; font-size: var(--type-body); line-height: 1; white-space: nowrap; }
 .premium-button {

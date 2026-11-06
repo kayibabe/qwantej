@@ -94,7 +94,7 @@ export function AuthControls({ onSignIn, onSignedOut }: { onSignIn?: () => void;
         <span className={`auth-plan-badge auth-plan-${user.plan}`}>{user.plan === 'pro' ? 'Pro' : 'Free'}</span>
         {user.email_verified === false && (
           <button
-            className="theme-btn"
+            className="theme-btn auth-verify"
             onClick={async () => { await requestEmailVerification(); setVerificationSent(true) }}
             title="Send a verification link to your email"
           >
