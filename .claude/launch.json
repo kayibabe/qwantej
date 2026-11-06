@@ -5,9 +5,9 @@
       "name": "qwantej-frontend",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "frontend"],
-      "port": 3000,
+      "port": 5173,
       "autoPort": true,
-      "url": "http://localhost:3000"
+      "url": "http://localhost:5173"
     }
   ]
 }

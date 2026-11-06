@@ -8,7 +8,7 @@ echo  ============================
 echo.
 
 cd /d "%~dp0"
-set "FRONTEND_PORT=3000"
+set "FRONTEND_PORT=5173"
 set "FRONTEND_URL=http://localhost:%FRONTEND_PORT%"
 
 echo [1/4] Checking Docker Desktop...
