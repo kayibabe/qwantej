@@ -19,8 +19,8 @@ from app.services.performance import _as_utc, _has_pre_kickoff_information
 from app.services.settlement import evaluate_selection
 
 
-HIT_RATE_THRESHOLD = 0.50
-ROI_THRESHOLD = 0.30
+HIT_RATE_THRESHOLD = 0.45
+ROI_THRESHOLD = 0.10
 MIN_Q_SCORE = 70
 MIN_DECIMAL_ODDS = 2.0
 MAX_DECIMAL_ODDS = 3.0
