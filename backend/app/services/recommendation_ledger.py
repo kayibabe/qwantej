@@ -35,6 +35,10 @@ def _cat_date(value: datetime | None) -> date | None:
 STRONGEST_LIMIT = 8
 STRONGEST_MIN_QSCORE = 85.0
 
+ACCUMULATOR_MIN_PICKS = 5
+ACCUMULATOR_ALL_UNIQUE_ROI = 0.10
+ACCUMULATOR_PUBLISHED_ROI = 0.05
+
 
 async def capture_strongest_snapshots(
     db: AsyncSession,
@@ -152,6 +156,15 @@ def _new_pick(
 
 
 def _authoritative_result(row: dict) -> str:
+    # Postponed and cancelled fixtures are settled as voids everywhere else in
+    # the app (ticket selections, individual bets, custom accumulators). The
+    # ledger must follow that rule, otherwise a fixture that will never be
+    # replayed stays pending forever and blocks its accumulator ticket.
+    if row["match_status"] in (
+        MatchStatus.POSTPONED.value,
+        MatchStatus.CANCELLED.value,
+    ):
+        return SelectionResult.VOID.value
     if (
         row["match_status"] != MatchStatus.FINISHED.value
         or row["home_goals"] is None
@@ -219,6 +232,112 @@ def _source_rows(rows: list[dict], source: str) -> list[dict]:
             if {"published", "strongest"}.issubset(row["sources"])
         ]
     return rows
+
+
+def _walk_forward_qualifies(
+    history: list[dict],
+    stake: float,
+    min_picks: int,
+    min_roi: float,
+) -> bool:
+    if len(history) < min_picks:
+        return False
+    metrics = recommendation_metrics(history, stake)
+    return metrics["roi"] is not None and metrics["roi"] >= min_roi
+
+
+def walk_forward_accumulator_selections(
+    rows: list[dict],
+    stake: float = 1.0,
+    *,
+    min_picks: int = ACCUMULATOR_MIN_PICKS,
+    all_unique_roi: float = ACCUMULATOR_ALL_UNIQUE_ROI,
+    published_roi: float = ACCUMULATOR_PUBLISHED_ROI,
+) -> dict:
+    """Select each date's accumulator legs using only earlier evidence.
+
+    A market (All Unique) or market × model combination (Published) may
+    contribute to a date's ticket only when its record over strictly earlier
+    dates clears the same pick-count and ROI thresholds the Analytics summary
+    uses. The current date's rows never vote on their own selection, which
+    removes the look-ahead an all-time threshold introduces.
+    """
+    by_date: dict[str, list[dict]] = {}
+    for row in rows:
+        by_date.setdefault(row["target_date"], []).append(row)
+
+    market_history: dict[str, list[dict]] = {}
+    combo_history: dict[tuple[str, str], list[dict]] = {}
+    all_unique_selected: list[dict] = []
+    published_selected: list[dict] = []
+    first_market_date: dict[str, str] = {}
+    first_combo_date: dict[tuple[str, str], str] = {}
+
+    for target_date in sorted(by_date):
+        qualified_markets = {
+            market
+            for market, history in market_history.items()
+            if _walk_forward_qualifies(history, stake, min_picks, all_unique_roi)
+        }
+        qualified_combos = {
+            combo
+            for combo, history in combo_history.items()
+            if _walk_forward_qualifies(history, stake, min_picks, published_roi)
+        }
+        for market in qualified_markets:
+            first_market_date.setdefault(market, target_date)
+        for combo in qualified_combos:
+            first_combo_date.setdefault(combo, target_date)
+
+        day_rows = by_date[target_date]
+        all_unique_selected.extend(
+            row for row in day_rows if row["market"] in qualified_markets
+        )
+        published_selected.extend(
+            row
+            for row in _source_rows(day_rows, "published")
+            if any(
+                (row["market"], version) in qualified_combos
+                for version in (row["model_versions"] or {"Unknown model"})
+            )
+        )
+
+        # Fold today's evidence into the history only after selecting, so a
+        # date can never qualify itself.
+        for row in day_rows:
+            market_history.setdefault(row["market"], []).append(row)
+        for row in _source_rows(day_rows, "published"):
+            for version in row["model_versions"] or {"Unknown model"}:
+                combo_history.setdefault((row["market"], version), []).append(row)
+
+    return {
+        "thresholds": {
+            "min_picks": min_picks,
+            "all_unique_roi": all_unique_roi,
+            "published_roi": published_roi,
+        },
+        "all_unique": {
+            "rows": all_unique_selected,
+            "qualifying_markets": [
+                {
+                    "market": market,
+                    "first_qualified_date": first_market_date[market],
+                }
+                for market in sorted(first_market_date)
+            ],
+        },
+        "published": {
+            "rows": published_selected,
+            "qualifying_combinations": [
+                {
+                    "market": market,
+                    "model_version": version,
+                    "first_qualified_date": first_combo_date[(market, version)],
+                }
+                for market, version in sorted(first_combo_date)
+            ],
+        },
+    }
 
 
 def _serialize_pick(row: dict) -> dict:
@@ -468,6 +587,7 @@ async def recommendation_pick_ledger(
     serialized = [_serialize_pick(row) for row in displayed[:limit]]
 
     daily_unique = None
+    walk_forward = None
     if daily_date is not None:
         selected_date = daily_date.isoformat()
         daily_rows = [row for row in rows if row["target_date"] == selected_date]
@@ -547,6 +667,30 @@ async def recommendation_pick_ledger(
                 "rows": published_simulation_rows,
             },
         }
+        # Same thresholds, but each date may only use evidence from strictly
+        # earlier dates, so the summary cannot select its own winners.
+        walk_forward_selection = walk_forward_accumulator_selections(rows, stake)
+        walk_forward = {
+            "thresholds": walk_forward_selection["thresholds"],
+            "all_unique": {
+                "rows": [
+                    _serialize_pick(row)
+                    for row in walk_forward_selection["all_unique"]["rows"]
+                ],
+                "qualifying_markets": walk_forward_selection["all_unique"][
+                    "qualifying_markets"
+                ],
+            },
+            "published": {
+                "rows": [
+                    _serialize_pick(row)
+                    for row in walk_forward_selection["published"]["rows"]
+                ],
+                "qualifying_combinations": walk_forward_selection["published"][
+                    "qualifying_combinations"
+                ],
+            },
+        }
     return {
         "stake": stake,
         "deduplication_key": [
@@ -560,6 +704,7 @@ async def recommendation_pick_ledger(
         "metrics": metrics,
         "roi_combinations": roi_combinations,
         "daily_unique": daily_unique,
+        "walk_forward": walk_forward,
         "filters": filters,
         "rows": serialized,
     }

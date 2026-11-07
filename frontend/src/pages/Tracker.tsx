@@ -29,11 +29,17 @@ async function responseError(response: Response) {
   try { const body = await response.json(); return body.detail || body.message || `Request failed (${response.status})` } catch { return `Request failed (${response.status})` }
 }
 
-type TrackerView = 'paper' | 'sweet' | 'matches' | 'accumulators' | 'manual'
-const TRACKER_VIEWS: TrackerView[] = ['paper', 'sweet', 'matches', 'accumulators', 'manual']
-function viewFromLocation(): TrackerView {
-  const view = new URLSearchParams(window.location.search).get('view') as TrackerView | null
-  return view && TRACKER_VIEWS.includes(view) ? view : 'paper'
+type TrackerView = 'paper' | 'accumulators' | 'manual'
+type EvidenceView = 'tickets' | 'matches' | 'sweet'
+const TRACKER_VIEWS: TrackerView[] = ['paper', 'accumulators', 'manual']
+const EVIDENCE_VIEWS: EvidenceView[] = ['tickets', 'matches', 'sweet']
+// Older bookmarks used view=matches and view=sweet as top-level tabs. They now
+// open the matching sub-view of the consolidated Paper evidence tab.
+function locationState(): { view: TrackerView; evidence: EvidenceView } {
+  const view = new URLSearchParams(window.location.search).get('view')
+  if (view === 'matches' || view === 'sweet') return { view: 'paper', evidence: view }
+  if (view && TRACKER_VIEWS.includes(view as TrackerView)) return { view: view as TrackerView, evidence: 'tickets' }
+  return { view: 'paper', evidence: 'tickets' }
 }
 function dateFromLocation(): string {
   const value = new URLSearchParams(window.location.search).get('date')
@@ -41,7 +47,8 @@ function dateFromLocation(): string {
 }
 
 export default function TrackerPage({ onOpenTickets, onOpenResearch, onOpenValidation, personalOnly = false }: { onOpenTickets?: (date?: string) => void; onOpenResearch?: () => void; onOpenValidation?: () => void; personalOnly?: boolean }) {
-  const [view, setView] = useState<TrackerView>(() => personalOnly ? 'manual' : viewFromLocation())
+  const [view, setView] = useState<TrackerView>(() => personalOnly ? 'manual' : locationState().view)
+  const [evidence, setEvidence] = useState<EvidenceView>(() => locationState().evidence)
   const focusedTicketId = Number(new URLSearchParams(window.location.search).get('ticket')) || null
   const [bets, setBets] = useState<Bet[]>([])
   const [summary, setSummary] = useState<BetSummary | null>(null)
@@ -132,25 +139,41 @@ export default function TrackerPage({ onOpenTickets, onOpenResearch, onOpenValid
   const selectView = (next: TrackerView) => {
     setView(next)
     const url = new URL(window.location.href)
-    if (next === 'paper') url.searchParams.delete('view')
-    else url.searchParams.set('view', next)
+    if (next === 'accumulators' || next === 'manual') url.searchParams.set('view', next)
+    else if (evidence !== 'tickets') url.searchParams.set('view', evidence)
+    else url.searchParams.delete('view')
     if (next !== 'accumulators') url.searchParams.delete('ticket')
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
   }
-  const badge = personalOnly ? 'Your account only' : view === 'sweet' ? 'Prospective paper experiment' : view === 'paper' ? 'Production paper evidence' : view === 'matches' ? 'Published selection evidence' : view === 'accumulators' ? 'Personal accumulators' : 'Confirmed and manual journal'
+  const selectEvidence = (next: EvidenceView) => {
+    setView('paper')
+    setEvidence(next)
+    const url = new URL(window.location.href)
+    if (next === 'tickets') url.searchParams.delete('view')
+    else url.searchParams.set('view', next)
+    url.searchParams.delete('ticket')
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+  }
+  const evidenceBadge = evidence === 'sweet' ? 'Prospective paper experiment' : evidence === 'matches' ? 'Published selection evidence' : 'Production paper evidence'
+  const badge = personalOnly ? 'Your account only' : view === 'paper' ? evidenceBadge : view === 'accumulators' ? 'Personal accumulators' : 'Confirmed and manual journal'
 
   return <div className="page-content tracker-page">
-    <div className="analytics-hero tracker-hero"><div><span className="eyebrow">{personalOnly ? 'Personal records' : 'Auditable portfolio'}</span><h1>{personalOnly ? 'My betting journal' : 'Tracker'}</h1><p>{personalOnly ? 'Record bookmaker bets you actually placed, settle them, and review your own returns.' : 'Keep production paper evidence, published match outcomes and personal journal records in clearly separated views.'}</p></div><span className={`ledger-chip tracker-chip ${view}`}><span /> {badge}</span></div>
+    <div className="analytics-hero tracker-hero"><div><span className="eyebrow">{personalOnly ? 'Personal records' : 'Auditable portfolio'}</span><h1>{personalOnly ? 'My betting journal' : 'Tracker'}</h1><p>{personalOnly ? 'Record bookmaker bets you actually placed, settle them, and review your own returns.' : 'Review paper evidence, manage your own accumulators, and keep a personal journal in three focused tabs.'}</p></div><span className={`ledger-chip tracker-chip ${view}`}><span /> {badge}</span></div>
     {!personalOnly && <div className="analytics-tabs tracker-view-tabs" role="tablist" aria-label="Tracker views">
-      <button id="tracker-tab-paper" aria-controls="tracker-panel" tabIndex={view === 'paper' ? 0 : -1} role="tab" aria-selected={view === 'paper'} className={view === 'paper' ? 'active' : ''} onKeyDown={event => handleArrowTab(event, ['paper', 'sweet', 'matches', 'accumulators', 'manual'] as const, view, selectView, 'tracker-tab-')} onClick={() => selectView('paper')}>Paper ledger</button>
-      <button id="tracker-tab-sweet" aria-controls="tracker-panel" tabIndex={view === 'sweet' ? 0 : -1} role="tab" aria-selected={view === 'sweet'} className={view === 'sweet' ? 'active' : ''} onKeyDown={event => handleArrowTab(event, ['paper', 'sweet', 'matches', 'accumulators', 'manual'] as const, view, selectView, 'tracker-tab-')} onClick={() => selectView('sweet')}>Sweet-spot test</button>
-      <button id="tracker-tab-matches" aria-controls="tracker-panel" tabIndex={view === 'matches' ? 0 : -1} role="tab" aria-selected={view === 'matches'} className={view === 'matches' ? 'active' : ''} onKeyDown={event => handleArrowTab(event, ['paper', 'sweet', 'matches', 'accumulators', 'manual'] as const, view, selectView, 'tracker-tab-')} onClick={() => selectView('matches')}>Match history</button>
-      <button id="tracker-tab-accumulators" aria-controls="tracker-panel" tabIndex={view === 'accumulators' ? 0 : -1} role="tab" aria-selected={view === 'accumulators'} className={view === 'accumulators' ? 'active' : ''} onKeyDown={event => handleArrowTab(event, ['paper', 'sweet', 'matches', 'accumulators', 'manual'] as const, view, selectView, 'tracker-tab-')} onClick={() => selectView('accumulators')}>My accumulators</button>
-      <button id="tracker-tab-manual" aria-controls="tracker-panel" tabIndex={view === 'manual' ? 0 : -1} role="tab" aria-selected={view === 'manual'} className={view === 'manual' ? 'active' : ''} onKeyDown={event => handleArrowTab(event, ['paper', 'sweet', 'matches', 'accumulators', 'manual'] as const, view, selectView, 'tracker-tab-')} onClick={() => selectView('manual')}>My journal</button>
+      <button id="tracker-tab-paper" aria-controls="tracker-panel" tabIndex={view === 'paper' ? 0 : -1} role="tab" aria-selected={view === 'paper'} className={view === 'paper' ? 'active' : ''} onKeyDown={event => handleArrowTab(event, TRACKER_VIEWS, view, selectView, 'tracker-tab-')} onClick={() => selectView('paper')}>Paper evidence</button>
+      <button id="tracker-tab-accumulators" aria-controls="tracker-panel" tabIndex={view === 'accumulators' ? 0 : -1} role="tab" aria-selected={view === 'accumulators'} className={view === 'accumulators' ? 'active' : ''} onKeyDown={event => handleArrowTab(event, TRACKER_VIEWS, view, selectView, 'tracker-tab-')} onClick={() => selectView('accumulators')}>My accumulators</button>
+      <button id="tracker-tab-manual" aria-controls="tracker-panel" tabIndex={view === 'manual' ? 0 : -1} role="tab" aria-selected={view === 'manual'} className={view === 'manual' ? 'active' : ''} onKeyDown={event => handleArrowTab(event, TRACKER_VIEWS, view, selectView, 'tracker-tab-')} onClick={() => selectView('manual')}>My journal</button>
     </div>}
 
     <section id="tracker-panel" role="tabpanel" aria-labelledby={`tracker-tab-${view}`} tabIndex={0}>
-    {view === 'sweet' ? <SweetSpotTracker /> : view === 'paper' ? <PaperLedger onOpenValidation={onOpenValidation} /> : view === 'matches' ? <MatchHistory /> : view === 'accumulators' ? <>
+    {view === 'paper' ? <>
+      <div className="analytics-tabs analytics-subtabs" role="tablist" aria-label="Paper evidence views">
+        {([['tickets', 'Ticket history'], ['matches', 'Match outcomes'], ['sweet', 'Sweet-spot test']] as [EvidenceView, string][]).map(([id, label]) => <button key={id} id={`tracker-evidence-tab-${id}`} aria-controls="tracker-evidence-panel" tabIndex={evidence === id ? 0 : -1} role="tab" aria-selected={evidence === id} className={evidence === id ? 'active' : ''} onKeyDown={event => handleArrowTab(event, EVIDENCE_VIEWS, evidence, selectEvidence, 'tracker-evidence-tab-')} onClick={() => selectEvidence(id)}>{label}</button>)}
+      </div>
+      <div id="tracker-evidence-panel" role="tabpanel" aria-labelledby={`tracker-evidence-tab-${evidence}`} tabIndex={0}>
+        {evidence === 'tickets' ? <PaperLedger onOpenValidation={onOpenValidation} /> : evidence === 'matches' ? <MatchHistory /> : <SweetSpotTracker />}
+      </div>
+    </> : view === 'accumulators' ? <>
       <div className="journal-note"><strong>Personal accumulators</strong><span>Draft and placed accumulators stay separate from the production paper ledger and personal journal totals.</span></div>
       {accumulatorSummary && accumulatorSummary.tickets > 0 && <section className="accumulator-performance-card"><div className="accumulator-performance-heading"><div><span className="eyebrow">All personal accumulators</span><strong>Performance</strong><p>Open stakes remain exposure; settled returns count only after every leg finishes.</p></div><span className="accumulator-performance-count">{accumulatorSummary.tickets} ticket{accumulatorSummary.tickets === 1 ? '' : 's'}</span></div><div className="accumulator-performance-grid"><AccumulatorMetric label="Open" value={accumulatorSummary.open.toString()} note={accumulatorSummary.exposure ? `${fmt(accumulatorSummary.exposure)} exposed` : 'No open exposure'} /><AccumulatorMetric label="Settled" value={accumulatorSummary.settled.toString()} note={`${accumulatorSummary.won} won · ${accumulatorSummary.lost} lost · ${accumulatorSummary.void} void`} /><AccumulatorMetric label="Settled P&L" value={accumulatorSummary.settled ? fmtPnl(accumulatorSummary.profitLoss) : '—'} note={accumulatorSummary.settled ? `${fmt(accumulatorSummary.returned)} returned` : 'Settles after all legs finish'} tone={accumulatorSummary.profitLoss >= 0 ? 'positive' : 'negative'} /><AccumulatorMetric label="Settled ROI" value={accumulatorRoi == null ? '—' : `${(accumulatorRoi * 100).toFixed(1)}%`} note={accumulatorSummary.settled ? `${fmt(accumulatorSummary.settledStake)} settled stake` : 'No settled stake yet'} tone={accumulatorRoi == null ? undefined : accumulatorRoi >= 0 ? 'positive' : 'negative'} /></div></section>}
       <div className="tracker-toolbar"><label className="form-group"><span>New accumulator date</span><input type="date" value={accumulatorDate} onChange={(event) => setAccumulatorDate(event.target.value)} /></label><button className="btn-ghost btn-sm" onClick={() => void loadAccumulators()} disabled={accumulatorsLoading}>Refresh</button></div>

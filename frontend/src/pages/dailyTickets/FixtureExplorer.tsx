@@ -57,8 +57,8 @@ export function FixtureExplorer({ fixtures }: { fixtures: MatchFixture[] }) {
     <section className="selection-panel fixture-explorer" aria-labelledby="fixture-explorer-title">
       <div className="section-heading">
         <div>
-          <h2 id="fixture-explorer-title">Match Explorer</h2>
-          <span className="section-note">Browse fixtures, competitions, kickoff times and match status.</span>
+          <h2 id="fixture-explorer-title">Fixture list</h2>
+          <span className="section-note">Search, filter, and sort the full fixture list.</span>
         </div>
         <span className="section-note"><b>{filtered.length}</b> of {fixtures.length} matches</span>
       </div>

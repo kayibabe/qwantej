@@ -24,11 +24,11 @@ function PageLoading() {
 }
 
 type Theme = 'dark' | 'light' | 'system'
-type ModulePage = 'tickets' | 'matches' | 'live' | 'insights' | 'research' | 'tracker' | 'analytics' | 'tools' | 'admin'
+type ModulePage = 'tickets' | 'live' | 'insights' | 'research' | 'tracker' | 'analytics' | 'tools' | 'admin'
 type Page = ModulePage | 'home' | 'match' | 'upgrade' | 'login' | 'reset-password' | 'verify-email'
 type Workspace = 'football' | 'research'
-type ResearchTab = 'matches' | 'odds-policy' | 'market-roi' | 'daily-match-picks' | 'passed'
-const RESEARCH_TABS: ResearchTab[] = ['matches', 'odds-policy', 'market-roi', 'daily-match-picks', 'passed']
+type ResearchTab = 'picks' | 'odds-policy' | 'market-roi' | 'daily-match-picks' | 'passed'
+const RESEARCH_TABS: ResearchTab[] = ['picks', 'odds-policy', 'market-roi', 'daily-match-picks', 'passed']
 const MATCH_RETURN_ROUTES = new Set(['/tickets', '/matches', '/research', '/live', '/insights'])
 
 class RouteErrorBoundary extends Component<{ children: ReactNode; onRetry: () => void }, { failed: boolean }> {
@@ -73,7 +73,6 @@ function datePath(path: string, date: string, extra?: Record<string, string>): s
 
 const NAV: { id: ModulePage; label: string }[] = [
   { id: 'tickets', label: 'Today' },
-  { id: 'matches', label: 'Matches' },
   { id: 'live', label: 'Live' },
   { id: 'insights', label: 'Stats & trends' },
 ]
@@ -86,8 +85,7 @@ const INTERNAL_NAV: { id: ModulePage; label: string }[] = [
 ]
 
 const NAV_META: Record<ModulePage, { icon: string; hint: string }> = {
-  tickets: { icon: 'sparkles', hint: 'Published recommendations' },
-  matches: { icon: 'search', hint: 'Browse fixtures and qualified match markets' },
+  tickets: { icon: 'sparkles', hint: 'Today’s fixtures, system picks, and accumulator tickets' },
   live: { icon: 'activity', hint: 'Live scores and match phases' },
   insights: { icon: 'chart', hint: 'League results and team trends' },
   research: { icon: 'flask', hint: 'Research models and selection policies' },
@@ -141,6 +139,8 @@ export default function App() {
 
   useEffect(() => {
     const url = new URL(window.location.href)
+    // The former standalone /matches page now lives inside Today.
+    if (url.pathname.replace(/\/$/, '') === '/matches') url.pathname = '/tickets'
     if (date === TODAY) url.searchParams.delete('date')
     else url.searchParams.set('date', date)
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
@@ -332,7 +332,7 @@ export default function App() {
           <span>QwanEj</span>
         </a>
         {isInternal && <WorkspaceSwitcher workspace={workspace} onChange={switchWorkspace} className="workspace-switcher-header" />}
-        {(page === 'tickets' || page === 'matches' || (page === 'research' && isInternal)) && (
+        {(page === 'tickets' || (page === 'research' && isInternal)) && (
           <div className="date-nav">
             <button className="date-btn" onClick={() => nav(-1)} title="Previous day" aria-label="Previous day">‹</button>
             <div className="date-strip" role="group" aria-label="Choose match date">
@@ -386,15 +386,14 @@ export default function App() {
         <RouteErrorBoundary key={`${page}-${routeAttempt}`} onRetry={() => setRouteAttempt(attempt => attempt + 1)}>
         <Suspense fallback={<PageLoading />}>
         {page === 'upgrade' && <UpgradePage onBack={() => goTo('tickets')} />}
-        {page === 'tickets' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab="tickets" onOpenMatch={navigateToMatch} />}
-        {page === 'matches' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab="matches" onOpenMatch={navigateToMatch} onOpenTracker={ticketId => navigateTracker(ticketId, date)} />}
+        {page === 'tickets' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab="tickets" mode="overview" onOpenMatch={navigateToMatch} onOpenTracker={ticketId => navigateTracker(ticketId, date)} />}
         {page === 'live' && <LiveMonitorPage />}
         {page === 'insights' && (user.plan === 'pro' || isInternal
           ? <InsightsPage />
           : <section className="insights-access-card"><h1>Stats &amp; trends</h1><p>League results and team tables are available on Pro.</p><button className="btn-primary" onClick={() => navigate('upgrade')}>View Pro access</button></section>)}
-        {isInternal && page === 'research' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab={researchTab} onTabChange={tab => navigateResearch(tab as ResearchTab)} onOpenMatch={navigateToMatch} onOpenTracker={ticketId => navigateTracker(ticketId, date)} />}
+        {isInternal && page === 'research' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab={researchTab} mode="research" onTabChange={tab => navigateResearch(tab as ResearchTab)} onOpenMatch={navigateToMatch} onOpenTracker={ticketId => navigateTracker(ticketId, date)} />}
         {page === 'match' && matchId != null && (user?.plan === 'pro' || isInternal) && <MatchIntelligencePage matchId={matchId} selectedPredictionId={predictionId} onBack={returnFromMatch} returnLabel={matchReturnLabel(matchReturnTo)} />}
-        {isInternal && page === 'tracker' && <TrackerPage onOpenTickets={(targetDate) => { if (targetDate) setDate(targetDate); goTo('tickets') }} onOpenResearch={() => navigateResearch('matches')} onOpenValidation={() => goTo('analytics')} />}
+        {isInternal && page === 'tracker' && <TrackerPage onOpenTickets={(targetDate) => { if (targetDate) setDate(targetDate); goTo('tickets') }} onOpenResearch={() => navigateResearch('picks')} onOpenValidation={() => goTo('analytics')} />}
         {isInternal && page === 'analytics' && <AnalyticsPage />}
         {isInternal && page === 'tools' && <ToolsPage />}
         {isInternal && page === 'admin' && <AdminPage />}
@@ -437,7 +436,9 @@ function routePage(pathname: string): Page {
   if (path === '/verify-email') return 'verify-email'
   if (path === '/upgrade') return 'upgrade'
   if (/^\/match\/\d+$/.test(path)) return 'match'
-  if (path === '/tickets' || path === '/matches' || path === '/live' || path === '/insights' || path === '/research') return path.slice(1) as ModulePage
+  // The former /matches page is now the "System picks" tab of Today.
+  if (path === '/matches') return 'tickets'
+  if (path === '/tickets' || path === '/live' || path === '/insights' || path === '/research') return path.slice(1) as ModulePage
   if (path === '/tracker' || path === '/analytics' || path === '/tools' || path === '/admin') return path.slice(1) as ModulePage
   return 'tickets'
 }
@@ -448,7 +449,7 @@ function isInternalPage(page: Page): boolean {
 
 function workspaceForPage(page: Page): Workspace | null {
   if (isInternalPage(page)) return 'research'
-  if (page === 'tickets' || page === 'matches' || page === 'live' || page === 'insights') return 'football'
+  if (page === 'tickets' || page === 'live' || page === 'insights') return 'football'
   return null
 }
 
@@ -470,7 +471,8 @@ function routePredictionId(search: string): number | null {
 
 function researchTabFromSearch(search: string): ResearchTab {
   const rawValue = new URLSearchParams(search).get('tab')
-  if (rawValue === 'acca-analysis') return 'matches'
+  // Keep old bookmarks working after the research tabs were consolidated.
+  if (rawValue === 'acca-analysis' || rawValue === 'matches') return 'picks'
   const value = rawValue as ResearchTab | null
   return value && RESEARCH_TABS.includes(value) ? value : 'market-roi'
 }
@@ -486,7 +488,7 @@ function matchReturnPath(search: string): string {
 
 function matchReturnLabel(path: string): string {
   const pathname = path ? new URL(path, window.location.origin).pathname : '/tickets'
-  if (pathname === '/matches') return 'Matches'
+  if (pathname === '/matches') return 'Today'
   if (pathname === '/research') return 'Research'
   if (pathname === '/tracker') return 'Tracker'
   return 'Today'

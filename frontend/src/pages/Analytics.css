@@ -211,6 +211,7 @@
 .daily-acca-summary-table-wrap { margin: 0; }
 .daily-acca-summary-table { min-width: 920px; }
 .daily-acca-summary-table th:first-child, .daily-acca-summary-table td:first-child { min-width: 220px; text-align: left; }
+.daily-acca-summary-table td:first-child small { display: block; color: var(--muted); margin-top: 3px; font-size: var(--type-table-label); line-height: 1.35; }
 .daily-acca-summary-table td:not(:first-child), .daily-acca-summary-table th:not(:first-child) { text-align: center; }
 .daily-acca-summary-note { margin: 10px 0 0; color: var(--muted); font-size: var(--type-xs); }
 .daily-date-nav { display: flex; align-items: center; gap: 7px; }

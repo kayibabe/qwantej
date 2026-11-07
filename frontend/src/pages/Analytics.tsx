@@ -23,7 +23,17 @@ interface ClvBreakdown extends ClvRow { q_grade?: string; market?: string; month
 interface ClvSummaryData { overall: ClvRow; by_q_grade: ClvBreakdown[]; by_market: ClvBreakdown[]; by_month: ClvBreakdown[] }
 interface PickMetric { unique_picks: number; settled: number; pending: number; wins: number; losses: number; voids: number; settlement_coverage: number; hit_rate: number | null; priced_settled: number; missing_odds: number; staked: number; returned: number; profit_loss: number; roi: number | null }
 interface PickRoiCombination extends PickMetric { source: 'all' | 'published' | 'strongest' | 'overlap'; market: string; model_version: string }
-interface DailyLedgerSnapshot { rows: RecommendationPick[]; roi_combinations: PickRoiCombination[] }
+interface WalkForwardAccumulatorSet {
+  rows: RecommendationPick[]
+  qualifying_markets?: Array<{ market: string; first_qualified_date: string }>
+  qualifying_combinations?: Array<{ market: string; model_version: string; first_qualified_date: string }>
+}
+interface WalkForwardAccumulators {
+  thresholds: { min_picks: number; all_unique_roi: number; published_roi: number }
+  all_unique: WalkForwardAccumulatorSet
+  published: WalkForwardAccumulatorSet
+}
+interface DailyLedgerSnapshot { rows: RecommendationPick[]; roi_combinations: PickRoiCombination[]; walk_forward?: WalkForwardAccumulators | null }
 interface DailyUniquePicks {
   date: string
   metrics: PickMetric
@@ -124,7 +134,7 @@ export default function AnalyticsPage() {
       </div>
       <DataFreshness run={latestRun} />
       <div className="analytics-tabs" role="tablist" aria-label="Analytics views">
-        {([['daily', 'Daily picks'], ['performance', 'Performance'], ['ledger', 'Recommendation ledger'], ['methods', 'Research methods']] as [View, string][]).map(([id, label]) => <button key={id} id={`analytics-tab-${id}`} aria-controls="analytics-panel" tabIndex={view === id ? 0 : -1} role="tab" aria-selected={view === id} className={view === id ? 'active' : ''} onKeyDown={event => handleArrowTab(event, ['daily', 'performance', 'ledger', 'methods'] as const, view, setView, 'analytics-tab-')} onClick={() => setView(id)}>{label}</button>)}
+        {([['daily', 'Ledger picks'], ['performance', 'Performance'], ['ledger', 'Recommendation ledger'], ['methods', 'Research methods']] as [View, string][]).map(([id, label]) => <button key={id} id={`analytics-tab-${id}`} aria-controls="analytics-panel" tabIndex={view === id ? 0 : -1} role="tab" aria-selected={view === id} className={view === id ? 'active' : ''} onKeyDown={event => handleArrowTab(event, ['daily', 'performance', 'ledger', 'methods'] as const, view, setView, 'analytics-tab-')} onClick={() => setView(id)}>{label}</button>)}
       </div>
       <section id="analytics-panel" role="tabpanel" aria-labelledby={`analytics-tab-${view}`} tabIndex={0}>
       {view === 'daily' && <DailyQualifyingMatches />}
@@ -486,7 +496,7 @@ function DailyQualifyingMatches() {
         .then(response => response.ok ? response.json() : Promise.reject(new Error(`API ${response.status}`)))
         .then(value => { if (active) {
           setDaily(value.daily_unique ?? null)
-          setLedgerSnapshot({ rows: value.rows ?? [], roi_combinations: value.roi_combinations ?? [] })
+          setLedgerSnapshot({ rows: value.rows ?? [], roi_combinations: value.roi_combinations ?? [], walk_forward: value.walk_forward ?? null })
           setFailed(false)
         } })
         .catch(() => { if (active) setFailed(true) })
@@ -515,7 +525,7 @@ function DailyQualifyingMatches() {
   return <div className="daily-qualifying-stack">
     <DailyAccumulatorSummary snapshot={ledgerSnapshot} stake={flatStake} onStakeChange={setFlatStake} throughDate={shiftIsoDate(today, -1)} loading={loading} failed={failed} />
     <section className="analytics-card daily-qualifying-card">
-    <div className="section-header daily-qualifying-header"><div><span className="eyebrow">All Unique · all markets</span><h2 className="section-title">Daily picks</h2></div>
+    <div className="section-header daily-qualifying-header"><div><span className="eyebrow">All Unique · all markets</span><h2 className="section-title">Ledger picks</h2></div>
       <div className="daily-date-nav" aria-label="Choose qualifying match date">
         <button type="button" className="daily-date-arrow" aria-label="Previous day" onClick={() => setDate(value => shiftIsoDate(value, -1))}>‹</button>
         <div className="daily-date-strip">{dateOptions.map(option => {
@@ -531,7 +541,7 @@ function DailyQualifyingMatches() {
     </div>
     <span className="daily-selected-date">{dateLabel}</span>
     {loading && !daily ? <div className="daily-qualifying-status">Loading picks and results for {dateLabel}…</div>
-        : failed && !daily ? <AnalyticsEmpty title="Daily picks unavailable" body="Could not load All Unique picks for this date." compact />
+        : failed && !daily ? <AnalyticsEmpty title="Ledger picks unavailable" body="Could not load All Unique picks for this date." compact />
         : daily && <>
           <div className={`daily-qualifying-status${daily.qualifies ? ' qualifies' : ''}`}>
             <strong>{daily.qualifies ? `${daily.qualifying_markets.length} markets meet the criteria` : 'No markets meet the criteria'}</strong>
@@ -545,7 +555,7 @@ function DailyQualifyingMatches() {
           </div>}
           {daily.qualifies
             ? daily.rows.length > 0
-              ? <><DailyQualifyingMatchTable rows={daily.rows} /><DailyAccumulatorPreview title="Daily picks" rows={daily.rows} stake={flatStake} /></>
+              ? <><DailyQualifyingMatchTable rows={daily.rows} /><DailyAccumulatorPreview title="Ledger picks" rows={daily.rows} stake={flatStake} /></>
               : <AnalyticsEmpty title="No matches from qualifying markets on this date" body="The ledger markets meet the all-time thresholds, but none have a pick on the selected date." compact />
             : <p className="matrix-note">Matches appear when a market meets both thresholds in the all-time All Unique Recommended Ledger.</p>}
         </>}
@@ -642,13 +652,31 @@ function DailyAccumulatorSummary({ snapshot, stake, onStakeChange, throughDate, 
   const publishedRows = snapshot?.rows.filter(row => row.sources.includes('published') && row.model_versions.some(version => publishedCombos.has(`${row.market}\u0000${version}`))) ?? []
   const allUnique = summarizeAccumulators(allUniqueRows, stake, throughDate)
   const published = summarizeAccumulators(publishedRows, stake, throughDate)
+  const walkForward = snapshot?.walk_forward ?? null
+  const walkForwardAllUnique = summarizeAccumulators(walkForward?.all_unique.rows ?? [], stake, throughDate)
+  const walkForwardPublished = summarizeAccumulators(walkForward?.published.rows ?? [], stake, throughDate)
+  const walkForwardMarkets = walkForward?.all_unique.qualifying_markets ?? []
+  const walkForwardCombos = walkForward?.published.qualifying_combinations ?? []
+  const walkForwardMinPicks = walkForward?.thresholds.min_picks ?? 5
+  const walkForwardAllUniquePct = Math.round((walkForward?.thresholds.all_unique_roi ?? 0.10) * 100)
+  const walkForwardPublishedPct = Math.round((walkForward?.thresholds.published_roi ?? 0.05) * 100)
+  const walkForwardMarketDetail = !walkForward
+    ? 'Walk-forward data unavailable'
+    : walkForwardMarkets.length
+      ? `${walkForwardMarkets.length} ${walkForwardMarkets.length === 1 ? 'market' : 'markets'} qualified from earlier dates (min ${walkForwardMinPicks} picks, ROI ≥ ${walkForwardAllUniquePct}%)`
+      : 'No market cleared the thresholds on earlier dates'
+  const walkForwardComboDetail = !walkForward
+    ? 'Walk-forward data unavailable'
+    : walkForwardCombos.length
+      ? `${walkForwardCombos.length} market × model ${walkForwardCombos.length === 1 ? 'combination' : 'combinations'} qualified from earlier dates (min ${walkForwardMinPicks} picks, ROI ≥ ${walkForwardPublishedPct}%)`
+      : 'No market × model combination cleared the thresholds on earlier dates'
   const dateLabel = throughDate < '2026-10-01'
     ? 'No completed dates yet'
     : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'Africa/Blantyre' }).format(dateAtBlantyreNoon(throughDate))
 
   return <section className="analytics-card daily-acca-summary-card" aria-labelledby="daily-acca-summary-title">
     <div className="daily-acca-summary-header">
-      <div><span className="eyebrow">Daily picks + Published simulation</span><h2 className="section-title" id="daily-acca-summary-title">Accumulator performance</h2><p>October 1, 2026 through {dateLabel}</p></div>
+      <div><span className="eyebrow">Ledger picks + Published simulation · walk-forward vs in-sample</span><h2 className="section-title" id="daily-acca-summary-title">Accumulator performance</h2><p>October 1, 2026 through {dateLabel}</p></div>
       <label className="daily-acca-stake">Flat stake per ticket
         <input type="number" min="0.01" step="any" value={stake} onChange={event => onStakeChange(Math.max(0, Number(event.target.value) || 0))} aria-label="Flat stake per accumulator ticket" />
       </label>
@@ -658,16 +686,18 @@ function DailyAccumulatorSummary({ snapshot, stake, onStakeChange, throughDate, 
       : failed && !snapshot
         ? <AnalyticsEmpty title="Accumulator summary unavailable" body="Could not load the Recommended Ledger results." compact />
         : <div className="analytics-table-wrap daily-acca-summary-table-wrap"><table className="analytics-table daily-acca-summary-table"><thead><tr><th>Accumulator set</th><th>Settled tickets</th><th>Won</th><th>Lost</th><th>Pending</th><th>Hit rate</th><th>Settled P&amp;L</th><th>ROI</th></tr></thead><tbody>
-          <AccumulatorSummaryRow label="Daily picks - All Unique / 10% rule" totals={allUnique} />
-          <AccumulatorSummaryRow label="Published simulation - 5% rule" totals={published} />
+          <AccumulatorSummaryRow label="Ledger picks — All Unique / 10% rule (walk-forward)" detail={walkForwardMarketDetail} totals={walkForwardAllUnique} />
+          <AccumulatorSummaryRow label="Published simulation — 5% rule (walk-forward)" detail={walkForwardComboDetail} totals={walkForwardPublished} />
+          <AccumulatorSummaryRow label="Ledger picks — All Unique / 10% rule (in-sample)" detail="Thresholds fitted on the full ledger, including this period" totals={allUnique} />
+          <AccumulatorSummaryRow label="Published simulation — 5% rule (in-sample)" detail="Thresholds fitted on the full ledger, including this period" totals={published} />
         </tbody></table></div>}
-    <p className="daily-acca-summary-note">One flat stake per daily ticket. Hit rate is won / settled tickets; pending tickets are excluded from P&amp;L and ROI. P&amp;L and ROI use multiplied frozen pick odds; same-match combinations may receive a different bookmaker price.</p>
+    <p className="daily-acca-summary-note">Walk-forward rows recompute the qualifying markets and combinations for each date using only picks strictly before that date, so a ticket cannot select its own winners. In-sample rows use thresholds fitted on the full ledger, including the period shown, and are kept for comparison. One flat stake per daily ticket. Hit rate is won / settled tickets; pending tickets are excluded from P&amp;L and ROI. P&amp;L and ROI use multiplied frozen pick odds; same-match combinations may receive a different bookmaker price.</p>
   </section>
 }
 
-function AccumulatorSummaryRow({ label, totals }: { label: string; totals: AccumulatorTotals }) {
+function AccumulatorSummaryRow({ label, detail, totals }: { label: string; detail?: string; totals: AccumulatorTotals }) {
   const summaryPct = (value: number | null) => value == null ? '—' : `${(Math.round((value * 100 + 0.00000001) * 10) / 10).toFixed(1)}%`
-  return <tr><td><strong>{label}</strong></td><td>{totals.settled}</td><td>{totals.won}</td><td>{totals.lost}</td><td>{totals.pending}</td><td>{totals.hitRate == null ? '—' : summaryPct(totals.hitRate)}</td><td className={totals.profitLoss >= 0 ? 'positive' : 'negative'}>{fmtPnl(totals.profitLoss)}</td><td className={totals.roi != null && totals.roi >= 0 ? 'positive' : 'negative'}>{totals.roi == null ? '—' : summaryPct(totals.roi)}</td></tr>
+  return <tr><td><strong>{label}</strong>{detail && <small>{detail}</small>}</td><td>{totals.settled}</td><td>{totals.won}</td><td>{totals.lost}</td><td>{totals.pending}</td><td>{totals.hitRate == null ? '—' : summaryPct(totals.hitRate)}</td><td className={totals.profitLoss >= 0 ? 'positive' : 'negative'}>{fmtPnl(totals.profitLoss)}</td><td className={totals.roi != null && totals.roi >= 0 ? 'positive' : 'negative'}>{totals.roi == null ? '—' : summaryPct(totals.roi)}</td></tr>
 }
 
 function DailyAccumulatorPreview({ title, rows, stake }: { title: string; rows: RecommendationPick[]; stake: number }) {

@@ -367,10 +367,10 @@ export function AllMatches({
     <section className="selection-panel all-matches-panel">
       <div className="section-heading">
         <div>
-          <h2>Q-score candidate matches</h2>
+          <h2>Qualified selections</h2>
           <span className="section-note">
-            Q ≥75 only · final Acca publication also checks odds, edge,
-            freshness, data quality, diversification, and ticket construction
+            Q ≥75 only · ticket publication also checks odds, edge, freshness,
+            data quality, diversification, and ticket construction
           </span>
         </div>
         <span className="section-note match-count-summary">
