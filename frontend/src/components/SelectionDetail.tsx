@@ -65,6 +65,8 @@ interface Props {
   /** 'market': the leg's probability is the bookmaker's fair price, not a model estimate. */
   pricing?: 'market' | 'model'
   canViewMarketPrices?: boolean
+  /** Show internal research language. Product copy is the default. */
+  internal?: boolean
   onClose: () => void
   onOpenMatch?: (matchId: number, predictionId?: number) => void
 }
@@ -132,7 +134,7 @@ function decisionStrength(selection: DetailSelection, priceState: ReturnType<typ
   return { label: strong ? 'Strong' : caution ? 'Review' : 'Acceptable', tone: strong ? 'strong' : caution ? 'caution' : 'acceptable', cautions }
 }
 
-export default function SelectionDetail({ selection, modelVersion, publishedAt, pricing, canViewMarketPrices = false, onClose, onOpenMatch }: Props) {
+export default function SelectionDetail({ selection, modelVersion, publishedAt, pricing, canViewMarketPrices = false, internal = false, onClose, onOpenMatch }: Props) {
   const market = pricing === 'market'
   const label = market
     ? { prob: 'Fair chance', edge: 'Price vs fair', probRow: 'Fair chance (margin removed)', impliedRow: 'Quoted price implies', subtitle: 'Fair price vs quoted price', ev: 'Long-run return at this price against the fair chance. Negative values are the bookmaker margin.' }
@@ -253,7 +255,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
       market
         ? `fair chance ${pct(selection.model_probability)} · return at price ${pct(selection.expected_value, true)}`
         : `Q ${selection.q_score == null ? 'Pro only' : selection.q_score.toFixed(1)} · model ${pct(selection.model_probability)} · edge ${pct(selection.edge, true)}`,
-      'QwanEj research / paper trading only',
+      internal ? 'QwanEj research / paper trading only' : 'QwanEj selection summary',
     ].join('\n')
     await navigator.clipboard?.writeText(summary)
     setCopied(true)
@@ -404,11 +406,11 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
               {betting ? 'Recording…' : 'Confirm individual bet'}
             </button>
           </div>
-          {!hasPublishedBetSource && <p className="detail-bet-availability" id="individual-bet-availability">Available only for a published ticket leg with immutable odds provenance.</p>}
+          {!hasPublishedBetSource && <p className="detail-bet-availability" id="individual-bet-availability">Available for published ticket legs with recorded odds.</p>}
           {betMessage && <p className="detail-bet-message" role="status">{betMessage}</p>}
         </section>
         <div className="detail-footer-actions">
-          <button className="copy-summary-btn secondary" onClick={copySummary}>{copied ? 'Copied' : 'Copy research summary'}</button>
+          <button className="copy-summary-btn secondary" onClick={copySummary}>{copied ? 'Copied' : 'Copy selection summary'}</button>
         </div>
       </aside>
     </div>
@@ -455,7 +457,7 @@ function OddsComparison({ quotes, loading, failed, marketPrice, marketPriceLoadi
       </div>
       {loading && <div className="odds-state"><span className="spinner" />Loading price sources…</div>}
       {!loading && failed && <div className="odds-state">Price comparison is temporarily unavailable.</div>}
-      {!loading && !failed && quotes.length === 0 && <div className="odds-state">Only the immutable publication snapshot is available.</div>}
+      {!loading && !failed && quotes.length === 0 && <div className="odds-state">Only the odds captured at publication time are available.</div>}
       {!loading && quotes.length > 0 && (
         <div className="odds-table" role="table" aria-label="Bookmaker odds comparison">
           <div className="odds-table-head" role="row">

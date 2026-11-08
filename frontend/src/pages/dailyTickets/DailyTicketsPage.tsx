@@ -40,8 +40,8 @@ const MarketRoiDaily = lazy(() => import("./MarketRoiDaily").then((module) => ({
 const AllMatches = lazy(() => import("./AllMatches").then((module) => ({ default: module.AllMatches })));
 const FixtureExplorer = lazy(() => import("./FixtureExplorer").then((module) => ({ default: module.FixtureExplorer })));
 
-export default function DailyTicketsPage({ date, initialTab = "tickets", mode = "overview", onOpenMatch, onOpenTracker, onTabChange }: DailyTicketsPageProps & { onOpenMatch?: (matchId: number, predictionId?: number) => void }) {
-  const { user } = useAuth();
+export default function DailyTicketsPage({ date, initialTab = "fixtures", mode = "overview", onOpenMatch, onOpenTracker, onTabChange }: DailyTicketsPageProps & { onOpenMatch?: (matchId: number, predictionId?: number) => void }) {
+  const { user, loading: authLoading } = useAuth();
   const isAdmin = user?.role === "admin";
   const canExploreMarkets = isAdmin || user?.plan === "pro";
   const canAccessDailyPicks = isAdmin || user?.plan === "pro";
@@ -49,6 +49,7 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", mode = 
   const [rejected, setRejected] = useState<SelectionSummary[]>([]);
   const [matches, setMatches] = useState<SelectionSummary[]>([]);
   const [matchesTotal, setMatchesTotal] = useState(0);
+  const [pickedMatchTotal, setPickedMatchTotal] = useState(0);
   const [loadingMoreMatches, setLoadingMoreMatches] = useState(false);
   const [marketRoi, setMarketRoi] = useState<MarketRoiDailyData | null>(null);
   const [marketRoiError, setMarketRoiError] = useState<string | null>(null);
@@ -73,6 +74,16 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", mode = 
   const [stakePerTicket, setStakePerTicket] = useState("");
 
   useEffect(() => { setTab(initialTab); }, [initialTab, mode]);
+
+  // A shared link may name a tab this role cannot see; fall back to the
+  // start of the funnel rather than rendering an empty workspace.
+  useEffect(() => {
+    if (authLoading || mode !== "overview") return;
+    if (tab === "passed" && !isAdmin) {
+      setTab("fixtures");
+      onTabChange?.("fixtures");
+    }
+  }, [authLoading, isAdmin, mode, onTabChange, tab]);
 
   const flatStakeForTicket = (ticket: Ticket | null) => {
     const stake = Number(stakePerTicket);
@@ -115,6 +126,7 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", mode = 
       if (allRows) {
         setMatches(withRejectionEvidence(allRows.rows, rejectedRows ?? []));
         setMatchesTotal(allRows.total);
+        setPickedMatchTotal(allRows.matchTotal);
       }
       if (rejectedRows) setRejected(rejectedRows);
       if (customRows) setCustom(customRows.map(apiAccumulatorToUi));
@@ -126,7 +138,7 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", mode = 
     } catch (e) {
       if (request !== requestVersion.current) return;
       setError(
-        e instanceof Error ? e.message : "Failed to load research ledger",
+        e instanceof Error ? e.message : isAdmin ? "Failed to load research ledger" : "Failed to load recommendations",
       );
     } finally {
       if (request === requestVersion.current) {
@@ -146,6 +158,7 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", mode = 
         rejected,
       ));
       setMatchesTotal(page.total);
+      setPickedMatchTotal(page.matchTotal);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "More candidate selections could not be loaded");
     } finally {
@@ -237,18 +250,20 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", mode = 
         data.balanced,
       ].filter((ticket): ticket is Ticket => ticket != null)
     : [];
+  // Read the overview as a funnel: the fixture universe, then the system's
+  // qualified picks, then the tickets those picks produced, then rejections.
   const dailyTabs: [DailyTab, string][] = mode === "overview"
     ? [
-        ["tickets", "Accumulator tickets"],
-        ["picks", "System picks"],
         ["fixtures", "All fixtures"],
-        ...(isAdmin ? [["passed", "Passed / why"] as [DailyTab, string]] : []),
+        ["picks", "System picks"],
+        ["tickets", "Accumulator tickets"],
+        ...(isAdmin ? [["passed", "Rejected / why"] as [DailyTab, string]] : []),
       ]
     : [
         ["picks", "System picks"],
         ["market-roi", "Market edge"],
         ...(canAccessDailyPicks ? [["daily-match-picks", "Daily picks"] as [DailyTab, string]] : []),
-        ["passed", "Passed / why"],
+        ["passed", "Rejected / why"],
         ["odds-policy", "Policy"],
       ];
   const publicationTimes = publicPublishedTickets
@@ -362,13 +377,13 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", mode = 
 
       {mode === "overview" && (
         <div className="overview-summary" role="group" aria-label="Daily overview summary">
-          <button type="button" className={tab === "fixtures" ? "active" : ""} onClick={() => { setTab("fixtures"); onTabChange?.("fixtures"); }}>
-            <b>{fixtures.length}</b><span>Matches today</span>
+          <button type="button" title="Every fixture scheduled for this date" className={tab === "fixtures" ? "active" : ""} onClick={() => { setTab("fixtures"); onTabChange?.("fixtures"); }}>
+            <b>{fixtures.length}</b><span>Fixtures</span>
           </button>
-          <button type="button" className={tab === "picks" ? "active" : ""} onClick={() => { setTab("picks"); onTabChange?.("picks"); }} disabled={!canExploreMarkets} title={canExploreMarkets ? undefined : "System picks are available on Pro"}>
-            <b>{canExploreMarkets ? (matchesTotal || matches.length) : "—"}</b><span>System picks</span>
+          <button type="button" title={canExploreMarkets ? "Matches with at least one Q ≥75 pick for this date" : "System picks are available on Pro"} className={tab === "picks" ? "active" : ""} onClick={() => { setTab("picks"); onTabChange?.("picks"); }} disabled={!canExploreMarkets}>
+            <b>{canExploreMarkets ? (pickedMatchTotal || qScoreMatchCount) : "—"}</b><span>System picks</span>
           </button>
-          <button type="button" className={tab === "tickets" ? "active" : ""} onClick={() => { setTab("tickets"); onTabChange?.("tickets"); }}>
+          <button type="button" title="Accumulator tiers published for this date" className={tab === "tickets" ? "active" : ""} onClick={() => { setTab("tickets"); onTabChange?.("tickets"); }}>
             <b>{publicPublishedTickets.length}</b><span>Accumulator tickets</span>
           </button>
         </div>
@@ -410,8 +425,9 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", mode = 
               {selectionMessage}
             </p>
           )}
-          {tab === "fixtures" && <div className="view-intro"><div><span className="eyebrow">Fixtures</span><h2 className="section-title">All matches today</h2></div><p>Every fixture scheduled for this date, with competition, kickoff time, and current status.</p></div>}
-          {tab === "picks" && canExploreMarkets && <div className="view-intro"><div><span className="eyebrow">System picks</span><h2 className="section-title">Matches picked by the system</h2></div><p>Every Q ≥75 selection the model qualified for this date. A match appearing here does not mean it made a published accumulator.</p></div>}
+          {tab === "fixtures" && <div className="view-intro"><div><span className="eyebrow">Fixtures</span><h2 className="section-title">All fixtures for this date</h2></div><p>Every fixture scheduled for this date, with competition, kickoff time, and current status.</p></div>}
+          {tab === "picks" && canExploreMarkets && <div className="view-intro"><div><span className="eyebrow">System picks</span><h2 className="section-title">System picks for this date</h2></div><p>Every Q ≥75 selection the model qualified for this date, grouped by match. A pick appearing here does not mean it made a published accumulator.</p></div>}
+          {tab === "tickets" && <div className="view-intro"><div><span className="eyebrow">Accumulator tickets</span><h2 className="section-title">Tickets assembled from this date&rsquo;s picks</h2></div><p>Each published tier is a fixed combination of the system&rsquo;s qualified picks. Expand a leg to inspect its evidence; the stake field is a what-if calculation only.</p></div>}
           {tab === "fixtures" && <Suspense fallback={<div className="route-loading">Loading fixtures…</div>}><FixtureExplorer fixtures={fixtures} /></Suspense>}
           {tab === "picks" && canExploreMarkets && <Suspense fallback={<div className="route-loading">Loading system picks…</div>}><AllMatches rows={matchGroups} totalSelections={matchesTotal} loadedSelections={matches.length} loadingMore={loadingMoreMatches} onLoadMore={loadMoreMatches} onSelect={openSelection} onAdd={addToAccumulator} allowAdd={isAdmin} /></Suspense>}
           {tab === "picks" && !canExploreMarkets && <section className="decision-empty" role="status"><strong>System picks are available on Pro</strong><span>Upgrade to see the model’s qualified selections for this date.</span></section>}
@@ -512,6 +528,7 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", mode = 
                   tierName={tier.name}
                   tierDesc={tier.desc}
                   color={tier.color}
+                  internal={isAdmin}
                   onSelectLeg={canExploreMarkets ? openTicketLeg : undefined}
                   flatStake={flatStakeForTicket(data?.[tier.key] ?? null)}
                   showMarketSelections={user?.plan === "pro" || isAdmin}
@@ -538,6 +555,7 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", mode = 
           publishedAt={detail.publishedAt}
           pricing={detail.pricing}
           canViewMarketPrices={canExploreMarkets}
+          internal={isAdmin}
           onClose={() => setDetail(null)}
           onOpenMatch={isAdmin ? onOpenMatch : undefined}
         />
@@ -580,7 +598,7 @@ function PassedMatches({ rows, onSelect }: { rows: SelectionSummary[]; onSelect:
 
   return <section className="passed-matches-panel" aria-labelledby="passed-matches-title">
     <div className="section-heading">
-      <div><span className="eyebrow">Transparent rejection ledger</span><h2 id="passed-matches-title">Rejected opportunities and why</h2><span className="section-note">A passed rejection avoided a losing selection; a failed rejection excluded a winning selection.</span></div>
+      <div><span className="eyebrow">Transparent rejection ledger</span><h2 id="passed-matches-title">Rejected opportunities and why</h2><span className="section-note">A rejection marked Passed avoided a losing result; one marked Failed excluded a winning result.</span></div>
       <span className="section-note"><b>{rows.length}</b> reviewed</span>
     </div>
     <div className="passed-matches-tools" aria-label="Filter rejection ledger and summary">

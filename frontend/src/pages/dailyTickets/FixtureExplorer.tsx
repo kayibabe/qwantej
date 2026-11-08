@@ -60,7 +60,7 @@ export function FixtureExplorer({ fixtures }: { fixtures: MatchFixture[] }) {
           <h2 id="fixture-explorer-title">Fixture list</h2>
           <span className="section-note">Search, filter, and sort the full fixture list.</span>
         </div>
-        <span className="section-note"><b>{filtered.length}</b> of {fixtures.length} matches</span>
+        <span className="section-note"><b>{filtered.length}</b> of {fixtures.length} fixtures</span>
       </div>
       <div className="match-toolbar fixture-toolbar">
         <div className="match-explorer-controls">
@@ -111,7 +111,6 @@ export function FixtureExplorer({ fixtures }: { fixtures: MatchFixture[] }) {
                   >★</button>
                   <details className={`fixture-row ${fixture.status}`}>
                     <summary>
-                      <span className="fixture-league">{fixture.competition}</span>
                       <strong>{fixture.home_team} <span className="leg-match-vs">vs</span> {fixture.away_team}</strong>
                       <span className={`summary-match-status ${fixture.status}`}>{fixture.status === 'scheduled' ? 'Upcoming' : fixture.status === 'live' ? 'In play' : fixture.status[0].toUpperCase() + fixture.status.slice(1)}</span>
                       <span className="fixture-kickoff kickoff-time">{formatKickoff(fixture.kickoff_at)}</span>

@@ -32,7 +32,9 @@ export default function LoginPage({ onSuccess }: { onSuccess: () => void }) {
           <p>{mode === 'login' ? 'Sign in to your QwanEj workspace.' : 'Create an account to get started with QwanEj.'}</p>
           <form onSubmit={submit}>
             {mode === 'register' && <label>Username<input autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} required /></label>}
-            <label>Email<input type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} required /></label>
+            {mode === 'login'
+              ? <label>Email or username<input type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} value={email} onChange={event => setEmail(event.target.value)} required /></label>
+              : <label>Email<input type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} required /></label>}
             <label>Password<input type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={6} value={password} onChange={event => setPassword(event.target.value)} required /></label>
             {error && <div className="auth-error" role="alert" aria-live="assertive">{error}</div>}
             <button className="btn-primary" type="submit" disabled={busy}>{busy ? 'Working…' : mode === 'login' ? 'Sign in' : 'Create account'}</button>

@@ -29,6 +29,8 @@ type Page = ModulePage | 'home' | 'match' | 'upgrade' | 'login' | 'reset-passwor
 type Workspace = 'football' | 'research'
 type ResearchTab = 'picks' | 'odds-policy' | 'market-roi' | 'daily-match-picks' | 'passed'
 const RESEARCH_TABS: ResearchTab[] = ['picks', 'odds-policy', 'market-roi', 'daily-match-picks', 'passed']
+type OverviewTab = 'fixtures' | 'picks' | 'tickets' | 'passed'
+const OVERVIEW_TABS: OverviewTab[] = ['fixtures', 'picks', 'tickets', 'passed']
 const MATCH_RETURN_ROUTES = new Set(['/tickets', '/matches', '/research', '/live', '/insights'])
 
 class RouteErrorBoundary extends Component<{ children: ReactNode; onRetry: () => void }, { failed: boolean }> {
@@ -115,6 +117,7 @@ export default function App() {
   const [page, setPage] = useState<Page>(() => routePage(window.location.pathname))
   const [routeAttempt, setRouteAttempt] = useState(0)
   const [researchTab, setResearchTab] = useState<ResearchTab>(() => researchTabFromSearch(window.location.search))
+  const [overviewTab, setOverviewTab] = useState<OverviewTab>(() => overviewTabFromSearch(window.location.search))
   const [workspace, setWorkspace] = useState<Workspace>(() => workspaceForLocation(routePage(window.location.pathname), window.location.search) ?? 'football')
   const [matchId, setMatchId] = useState<number | null>(() => routeMatchId(window.location.pathname))
   const [predictionId, setPredictionId] = useState<number | null>(() => routePredictionId(window.location.search))
@@ -156,6 +159,7 @@ export default function App() {
       setPredictionId(routePredictionId(window.location.search))
       setMatchReturnTo(matchReturnPath(window.location.search))
       setResearchTab(researchTabFromSearch(window.location.search))
+      setOverviewTab(overviewTabFromSearch(window.location.search))
       setDate(dateFromSearch(window.location.search))
     }
     window.addEventListener('popstate', onPopState)
@@ -198,6 +202,7 @@ export default function App() {
   function navigate(next: Page, _requested?: ModulePage, replace = false) {
     if (next === 'research') { navigateResearch(researchTab, replace); return }
     setPage(next)
+    if (next === 'tickets') setOverviewTab('fixtures')
     const nextWorkspace = workspaceForPage(next)
     if (nextWorkspace) setWorkspace(nextWorkspace)
     const path = next === 'home' ? '/' : next === 'upgrade' ? '/upgrade' : `/${next}`
@@ -231,6 +236,7 @@ export default function App() {
     setMatchId(null)
     setPredictionId(null)
     setDate(dateFromSearch(targetUrl.search))
+    setOverviewTab(overviewTabFromSearch(targetUrl.search))
     window.history.pushState({}, '', `${targetUrl.pathname}${targetUrl.search}`)
   }
 
@@ -256,6 +262,25 @@ export default function App() {
     if (ticketId != null) params.set('ticket', String(ticketId))
     if (nextDate !== TODAY) params.set('date', nextDate)
     window.history.pushState({}, '', `/tracker?${params}`)
+  }
+
+  function updateOverviewTab(tab: OverviewTab) {
+    setOverviewTab(tab)
+    const url = new URL(window.location.href)
+    if (tab === 'fixtures') url.searchParams.delete('tab')
+    else url.searchParams.set('tab', tab)
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+  }
+
+  function navigateTicketSource(targetDate?: string) {
+    const nextDate = targetDate ?? date
+    setDate(nextDate)
+    setOverviewTab('tickets')
+    setPage('tickets')
+    setWorkspace('football')
+    const params = new URLSearchParams({ tab: 'tickets' })
+    if (nextDate !== TODAY) params.set('date', nextDate)
+    window.history.pushState({}, '', `/tickets?${params}`)
   }
 
   function switchWorkspace(next: Workspace) {
@@ -386,14 +411,14 @@ export default function App() {
         <RouteErrorBoundary key={`${page}-${routeAttempt}`} onRetry={() => setRouteAttempt(attempt => attempt + 1)}>
         <Suspense fallback={<PageLoading />}>
         {page === 'upgrade' && <UpgradePage onBack={() => goTo('tickets')} />}
-        {page === 'tickets' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab="tickets" mode="overview" onOpenMatch={navigateToMatch} onOpenTracker={ticketId => navigateTracker(ticketId, date)} />}
+        {page === 'tickets' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab={overviewTab} mode="overview" onTabChange={tab => updateOverviewTab(tab as OverviewTab)} onOpenMatch={navigateToMatch} onOpenTracker={ticketId => navigateTracker(ticketId, date)} />}
         {page === 'live' && <LiveMonitorPage />}
         {page === 'insights' && (user.plan === 'pro' || isInternal
           ? <InsightsPage />
           : <section className="insights-access-card"><h1>Stats &amp; trends</h1><p>League results and team tables are available on Pro.</p><button className="btn-primary" onClick={() => navigate('upgrade')}>View Pro access</button></section>)}
         {isInternal && page === 'research' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab={researchTab} mode="research" onTabChange={tab => navigateResearch(tab as ResearchTab)} onOpenMatch={navigateToMatch} onOpenTracker={ticketId => navigateTracker(ticketId, date)} />}
         {page === 'match' && matchId != null && (user?.plan === 'pro' || isInternal) && <MatchIntelligencePage matchId={matchId} selectedPredictionId={predictionId} onBack={returnFromMatch} returnLabel={matchReturnLabel(matchReturnTo)} />}
-        {isInternal && page === 'tracker' && <TrackerPage onOpenTickets={(targetDate) => { if (targetDate) setDate(targetDate); goTo('tickets') }} onOpenResearch={() => navigateResearch('picks')} onOpenValidation={() => goTo('analytics')} />}
+        {isInternal && page === 'tracker' && <TrackerPage onOpenTickets={navigateTicketSource} onOpenResearch={() => navigateResearch('picks')} onOpenValidation={() => goTo('analytics')} />}
         {isInternal && page === 'analytics' && <AnalyticsPage />}
         {isInternal && page === 'tools' && <ToolsPage />}
         {isInternal && page === 'admin' && <AdminPage />}
@@ -475,6 +500,11 @@ function researchTabFromSearch(search: string): ResearchTab {
   if (rawValue === 'acca-analysis' || rawValue === 'matches') return 'picks'
   const value = rawValue as ResearchTab | null
   return value && RESEARCH_TABS.includes(value) ? value : 'market-roi'
+}
+
+function overviewTabFromSearch(search: string): OverviewTab {
+  const value = new URLSearchParams(search).get('tab')
+  return value && OVERVIEW_TABS.includes(value as OverviewTab) ? value as OverviewTab : 'fixtures'
 }
 
 function matchReturnPath(search: string): string {

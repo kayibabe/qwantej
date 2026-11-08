@@ -117,3 +117,25 @@ async def test_revoked_or_expired_sessions_are_not_authenticated(monkeypatch):
     db = SimpleNamespace(scalar=AsyncMock(return_value=expired), get=AsyncMock())
     request = _request_with_cookie("token")
     assert await get_optional_current_user(request, db) is None
+
+
+def test_login_accepts_an_email_or_a_username():
+    from app.api.auth import LoginCredentials
+
+    by_email = LoginCredentials(email="  Cromwell@Example.com ", password="secret123")
+    assert by_email.email == "cromwell@example.com"
+
+    by_username = LoginCredentials(email=" Cromwell ", password="secret123")
+    assert by_username.email == "Cromwell"
+
+
+def test_registration_still_requires_an_email_address():
+    from pydantic import ValidationError
+
+    from app.api.auth import RegisterCredentials
+
+    with pytest.raises(ValidationError):
+        RegisterCredentials(username="Cromwell", email="Cromwell", password="secret123")
+
+    credentials = RegisterCredentials(username="Cromwell", email="Cromwell@Example.com", password="secret123")
+    assert credentials.email == "cromwell@example.com"

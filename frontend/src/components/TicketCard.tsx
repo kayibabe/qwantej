@@ -10,6 +10,8 @@ interface Props {
   tierDesc: string
   color: string
   research?: boolean
+  /** Show internal research language. Product copy is the default. */
+  internal?: boolean
   onSelectLeg?: (leg: Leg, ticket: Ticket) => void
   flatStake?: number | null
   showMarketSelections?: boolean
@@ -45,7 +47,7 @@ function matchStateLabel(leg: Leg): string {
   return 'Pending'
 }
 
-export default function TicketCard({ ticket, tierName, tierDesc, color, research, onSelectLeg, flatStake, showMarketSelections = true }: Props) {
+export default function TicketCard({ ticket, tierName, tierDesc, color, research, internal = false, onSelectLeg, flatStake, showMarketSelections = true }: Props) {
   const [legsExpanded, setLegsExpanded] = useState(false)
   const [showAllLegs, setShowAllLegs] = useState(false)
   if (!ticket) {
@@ -201,10 +203,14 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
         {ticket.settled_at && <div className="ticket-settlement-meta">Settled {new Date(ticket.settled_at).toLocaleString()} · {ticket.settlement_source ?? 'system'} · settlement revision {ticket.settlement_version ?? '—'}{ticket.settlement_version && ticket.settlement_version > 1 && <span className="settlement-correction">Corrected settlement</span>}</div>}
         {learningReady && (
           <div className={`ticket-learning-status ${roiLearningReady ? 'eligible' : 'limited'}`}>
-            <strong>Learning evidence recorded</strong>
-            <span>{roiLearningReady
-              ? 'Probability and pre-kickoff ROI evidence can enter future offline challenger windows; this published ticket remains immutable.'
-              : 'Probability evidence can enter future offline challenger windows; ROI learning is excluded where pre-kickoff odds provenance is incomplete.'}</span>
+            <strong>{internal ? 'Learning evidence recorded' : 'Result recorded'}</strong>
+            <span>{internal
+              ? roiLearningReady
+                ? 'Probability and pre-kickoff ROI evidence can enter future offline challenger windows; this published ticket remains immutable.'
+                : 'Probability evidence can enter future offline challenger windows; ROI learning is excluded where pre-kickoff odds provenance is incomplete.'
+              : roiLearningReady
+                ? 'This ticket is settled. Its model probability, captured price and result stay on record.'
+                : 'This ticket is settled. Where pre-kickoff odds were not fully captured, return figures are left out.'}</span>
           </div>
         )}
         <details className="ticket-secondary-details">

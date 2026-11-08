@@ -2,7 +2,7 @@ export function TicketGridSkeleton() {
   return (
     <div
       className="ticket-grid public-ticket-grid skeleton-grid"
-      aria-label="Loading published ledger"
+      aria-label="Loading published tickets"
       aria-busy="true"
       role="status"
       aria-live="polite"
@@ -22,7 +22,7 @@ export function TicketGridSkeleton() {
           ))}
         </div>
       ))}
-      <span className="sr-only">Loading published ledger…</span>
+      <span className="sr-only">Loading published tickets…</span>
     </div>
   );
 }

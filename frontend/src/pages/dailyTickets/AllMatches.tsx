@@ -367,14 +367,14 @@ export function AllMatches({
     <section className="selection-panel all-matches-panel">
       <div className="section-heading">
         <div>
-          <h2>Qualified selections</h2>
+          <h2>System picks by match</h2>
           <span className="section-note">
-            Q ≥75 only · ticket publication also checks odds, edge, freshness,
+            Q ≥75 selections only · ticket publication also checks odds, edge, freshness,
             data quality, diversification, and ticket construction
           </span>
         </div>
         <span className="section-note match-count-summary">
-          Showing <b>{sortedRows.length}</b> of <b>{rows.length}</b> loaded matches · {loadedSelections} of {totalSelections} candidate selections loaded
+          Showing <b>{sortedRows.length}</b> of <b>{rows.length}</b> matches with system picks · {loadedSelections} of {totalSelections} picks loaded
           {statusCounts.finished > 0 && <> · <b>{statusCounts.finished}</b> finished</>}
           {statusCounts.live > 0 && <> · <b>{statusCounts.live}</b> live</>}
           {statusCounts.scheduled > 0 && <> · <b>{statusCounts.scheduled}</b> upcoming</>}
@@ -382,14 +382,14 @@ export function AllMatches({
       </div>
       {rows.length === 0 ? (
         <p className="panel-empty">
-          No Q ≥75 model candidates are available for this date.
+          No Q ≥75 system picks are available for this date.
         </p>
       ) : (
         <div className="matches-workspace">
           <aside className="match-insights-column" aria-label="Match overview">
             <section className="match-sidebar-card">
-              <h3>Predictions</h3>
-              <p className="match-sidebar-caption">Qualified candidates for this date</p>
+              <h3>System picks</h3>
+              <p className="match-sidebar-caption">Qualified selections for this date</p>
               <div className="match-sidebar-stat"><span>Matches</span><strong>{discoveredRows.length}</strong></div>
               <div className="match-sidebar-stat"><span>Upcoming</span><strong>{statusCounts.scheduled}</strong></div>
               <div className="match-sidebar-stat"><span>In play</span><strong>{statusCounts.live}</strong></div>

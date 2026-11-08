@@ -123,7 +123,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
         <div className="public-hero-copy">
           <span className="public-eyebrow">EVIDENCE-LED FOOTBALL RESEARCH</span>
           <h1 id="public-hero-title">Football picks, <em>with a record.</em></h1>
-          <p>See what was published, the price context when captured, and the settled result when available. Research candidates stay separate from published selections.</p>
+          <p>See what was published, the price context when captured, and the settled result when available. Every recommendation keeps its original record.</p>
           <div className="public-hero-actions">
             <button className="public-cta public-cta-large" onClick={onCreateAccount}>Follow the daily slate</button>
             <a className="public-quiet-button" href="#public-matches">Browse fixtures</a>
@@ -228,7 +228,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
           <article className="public-product-card">
             <span className="public-product-number">02</span>
             <h3>Read the recommendation in context</h3>
-            <p>QwanEj keeps published selections distinct from research candidates. Where price evidence is available, the workspace shows the captured odds and timing.</p>
+            <p>QwanEj keeps every recommendation tied to its record. Where price evidence is available, the workspace shows the captured odds and timing.</p>
             <span className="public-product-note">Recommendations are opinions, not guarantees.</span>
           </article>
           <article className="public-product-card">
@@ -269,7 +269,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
         <div className="public-faq-heading"><span className="public-section-kicker">GOOD TO KNOW</span><h2 id="public-faq-title">A few quick answers.</h2></div>
         <div className="public-faq-list">
           <details><summary>What can I see without an account?</summary><p>Public fixtures include the competition, teams, kickoff or live status, and scores when available. Personal account information and workspace tools stay behind sign-in.</p></details>
-          <details><summary>What does QwanEj do with recommendations?</summary><p>QwanEj presents dated published selections separately from research. Where captured price evidence exists, it can be reviewed alongside the selection. A recommendation is never a promise of a result.</p></details>
+          <details><summary>What does QwanEj do with recommendations?</summary><p>QwanEj presents dated published selections with the price context captured for each one. A recommendation is never a promise of a result.</p></details>
           <details><summary>Does QwanEj guarantee wins or profit?</summary><p>No. Football outcomes are uncertain. Any historical result is a record of completed matches, not a guarantee or forecast of future performance.</p></details>
         </div>
         <div className="public-faq-cta"><div><strong>Ready to follow the next matchday?</strong><span>Create a free account to open your QwanEj workspace.</span></div><button className="public-cta" onClick={onCreateAccount}>Get started for free <span aria-hidden="true">→</span></button></div>

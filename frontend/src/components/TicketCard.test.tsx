@@ -238,7 +238,7 @@ describe('audited ticket surfaces', () => {
     expect(html).toContain('detail-bet-panel')
     expect(html).toContain('Stake amount')
     expect(html).toContain('Confirm individual bet')
-    expect(html).toContain('Copy research summary')
+    expect(html).toContain('Copy selection summary')
   })
 
   it('labels a fair-priced leg as a fair chance, not a model estimate', () => {
@@ -271,7 +271,7 @@ describe('audited ticket surfaces', () => {
     const html = renderToStaticMarkup(
       <SelectionDetail selection={candidate} onClose={() => undefined} />,
     )
-    expect(html).toContain('Available only for a published ticket leg')
+    expect(html).toContain('Available for published ticket legs with recorded odds')
     expect(html).toContain('aria-describedby="individual-bet-availability"')
     expect(html).toContain('disabled=""')
   })
@@ -299,8 +299,29 @@ describe('audited ticket surfaces', () => {
     expect(html).toContain('Unverified')
     expect(html).not.toContain('+8442.2%')
     expect(html).toContain('settlement revision 2')
+    expect(html).toContain('Result recorded')
+    expect(html).toContain('stay on record')
+    expect(html).not.toContain('offline challenger')
+  })
+
+  it('keeps internal research language for admin views only', () => {
+    const reviewedTicket: Ticket = {
+      ...ticket,
+      status: 'settled',
+      result: 'lost',
+      settled_at: '2026-08-28T18:00:00Z',
+      settlement_version: 2,
+      legs: [{
+        ...ticket.legs[0],
+        result: 'lost',
+        source_odds_at: '2026-08-28T09:00:00Z',
+      }],
+    }
+    const html = renderToStaticMarkup(
+      <TicketCard ticket={reviewedTicket} tierName="Balanced" tierDesc="Q ≥80" color="blue" internal />,
+    )
     expect(html).toContain('Learning evidence recorded')
-    expect(html).toContain('published ticket remains immutable')
+    expect(html).toContain('offline challenger windows')
   })
 
   it('blocks stale and already-started selections from personal accumulators', () => {

@@ -15,15 +15,25 @@ interface AuthContextValue {
   user: CurrentUser | null
   loading: boolean
   error: string | null
-  login: (email: string, password: string) => Promise<boolean>
+  login: (identifier: string, password: string) => Promise<boolean>
   register: (username: string, email: string, password: string) => Promise<boolean>
   logout: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-async function parseResponse(response: Response): Promise<{ user?: CurrentUser; detail?: string }> {
+async function parseResponse(response: Response): Promise<{ user?: CurrentUser; detail?: unknown }> {
   return response.json().catch(() => ({}))
+}
+
+/** FastAPI reports validation errors as an array of objects; only text is renderable. */
+function detailMessage(detail: unknown): string | null {
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    const first = detail.find(item => item && typeof item === 'object' && 'msg' in item) as { msg?: unknown } | undefined
+    if (first && typeof first.msg === 'string') return first.msg
+  }
+  return null
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -49,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       const data = await parseResponse(response)
       if (!response.ok || !data.user) {
-        setError(data.detail ?? 'Authentication failed')
+        setError(detailMessage(data.detail) ?? 'Authentication failed')
         return false
       }
       setUser(data.user)
@@ -60,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function login(email: string, password: string) { return authenticate('login', undefined, email, password) }
+  async function login(identifier: string, password: string) { return authenticate('login', undefined, identifier, password) }
   async function register(username: string, email: string, password: string) { return authenticate('register', username, email, password) }
 
   async function logout() {

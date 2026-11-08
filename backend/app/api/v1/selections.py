@@ -367,8 +367,13 @@ async def get_qualified_selections(
     )
     if market:
         candidate_query = candidate_query.where(Prediction.market == market)
-    total_result = await db.execute(select(func.count()).select_from(candidate_query.order_by(None).subquery()))
+    filtered = candidate_query.order_by(None).subquery()
+    total_result = await db.execute(select(func.count()).select_from(filtered))
+    match_total_result = await db.execute(
+        select(func.count(func.distinct(filtered.c.match_id))).select_from(filtered)
+    )
     response.headers["X-Total-Count"] = str(total_result.scalar_one())
+    response.headers["X-Distinct-Matches"] = str(match_total_result.scalar_one())
     response.headers["X-Page-Offset"] = str(offset)
     response.headers["X-Page-Limit"] = str(limit)
     pred_result = await db.execute(candidate_query.offset(offset).limit(limit))

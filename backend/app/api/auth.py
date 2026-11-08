@@ -5,7 +5,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -36,20 +36,34 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 class LoginCredentials(BaseModel):
-    email: str = Field(min_length=3, max_length=320)
+    # Carries either an email address or a username. The field keeps its
+    # original name so existing clients and stored payloads stay compatible.
+    email: str = Field(min_length=1, max_length=320, description="Email address or username")
     password: str = Field(min_length=6, max_length=256)
 
     @field_validator("email")
     @classmethod
-    def validate_email(cls, value: str) -> str:
-        value = normalize_email(value)
-        if "@" not in value or value.startswith("@"):  # Keep dependency-free validation conservative.
-            raise ValueError("A valid email address is required")
+    def validate_identifier(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Enter your email address or username")
+        if "@" in value:
+            value = normalize_email(value)
+            if value.startswith("@"):
+                raise ValueError("A valid email address is required")
         return value
 
 
 class RegisterCredentials(LoginCredentials):
     username: str = Field(min_length=2, max_length=80)
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        value = normalize_email(value)
+        if "@" not in value or value.startswith("@"):
+            raise ValueError("A valid email address is required")
+        return value
 
 
 class PasswordResetRequest(BaseModel):
@@ -175,19 +189,24 @@ async def register(payload: RegisterCredentials, request: Request, response: Res
 @router.post("/login", response_model=AuthResponse)
 async def login(payload: LoginCredentials, request: Request, response: Response, db: AsyncSession = Depends(get_db)):
     await enforce_auth_rate_limit(request, "login", settings.auth_login_rate_limit)
-    email = normalize_email(payload.email)
-    user = await db.scalar(select(User).where(User.email == email))
+    identifier = payload.email
+    user = await db.scalar(select(User).where(User.email == normalize_email(identifier)))
+    # Fall back to a case-insensitive username lookup for people who sign in
+    # with their handle instead of their address.
+    if user is None and "@" not in identifier:
+        user = await db.scalar(select(User).where(func.lower(User.username) == identifier.lower()))
+    attempted = user.email if user is not None else identifier
     if not user or not verify_password(user.password_hash, payload.password):
-        await _record_event(request, db, user_id=user.id if user else None, email=email, event_type="login", success=False, failure_reason="invalid_credentials")
+        await _record_event(request, db, user_id=user.id if user else None, email=attempted, event_type="login", success=False, failure_reason="invalid_credentials")
         await db.commit()
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        raise HTTPException(status_code=401, detail="Invalid sign-in details")
     if user.account_status != "active":
-        await _record_event(request, db, user_id=user.id, email=email, event_type="login", success=False, failure_reason="account_inactive")
+        await _record_event(request, db, user_id=user.id, email=attempted, event_type="login", success=False, failure_reason="account_inactive")
         await db.commit()
         raise HTTPException(status_code=403, detail="Account is not active")
     user.last_login_at = datetime.now(timezone.utc)
     token = await create_session(db, user)
-    await _record_event(request, db, user_id=user.id, email=email, event_type="login", success=True)
+    await _record_event(request, db, user_id=user.id, email=attempted, event_type="login", success=True)
     await db.commit()
     response.set_cookie(value=token, **_cookie_kwargs())
     return AuthResponse(user=_user_out(user))

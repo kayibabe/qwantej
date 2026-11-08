@@ -706,12 +706,16 @@ export async function fetchStrongestSelections(date: string): Promise<SelectionS
   return res.json()
 }
 
-export async function fetchQualifiedSelections(date: string, minQScore = 75, offset = 0): Promise<{ rows: SelectionSummary[]; total: number }> {
+export async function fetchQualifiedSelections(date: string, minQScore = 75, offset = 0): Promise<{ rows: SelectionSummary[]; total: number; matchTotal: number }> {
   const params = new URLSearchParams({ date, min_qscore: String(minQScore), offset: String(offset), limit: '100' })
   const res = await fetch(`/api/v1/selections/qualified?${params}`)
   if (!res.ok) throw new Error(`API error ${res.status}`)
   const rows = await res.json() as SelectionSummary[]
-  return { rows, total: Number(res.headers.get('X-Total-Count')) || rows.length }
+  return {
+    rows,
+    total: Number(res.headers.get('X-Total-Count')) || rows.length,
+    matchTotal: Number(res.headers.get('X-Distinct-Matches')) || new Set(rows.map(row => row.match_id)).size,
+  }
 }
 
 export interface AccaPrice {

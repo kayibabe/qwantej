@@ -41,7 +41,7 @@ export default function Under25Qualification({ assessment }: { assessment?: Asse
       {assessment.reasons.length > 0 && <details><summary>Qualification blockers ({assessment.reasons.length})</summary><ul>{assessment.reasons.map(reason => <li key={reason}>{reason.replace(/^UNDER25_/, '').replace(/_/g, ' ').toLowerCase()}</li>)}</ul></details>}
       <TotalGoalsBaseline distribution={assessment.shared_goals_forecast} />
     </> : <p>No qualification evidence was captured. This selection cannot qualify under the new policy.</p>}
-    <p>A+ ≥80%; A ≥72%; B ≥65% conditional research only; C ≥55% generally avoid; D below 55% reject. Primary selections require A/A+, validated calibration and positive EV. Preferred projected goals ≤1.8, ideally ≤1.7; the initial maximum is 2.0.</p>
+    <p>A+ ≥80%; A ≥72%; B ≥65% watch only; C ≥55% generally avoid; D below 55% reject. Primary selections require A/A+, validated calibration and positive EV. Preferred projected goals ≤1.8, ideally ≤1.7; the initial maximum is 2.0.</p>
     <p>Review defensive absences, chance quality and finishing slumps, attacking mismatches, open transitions, aggressive lineups, unexplained market disagreement and second-half escalation. Low recent scores alone are insufficient. No daily minimum is forced.</p>
     <details><summary>Illustrative Poisson calculator</summary>
       <p>Independent-Poisson illustration only. These inputs do not alter the selection, calibration or qualification decision.</p>

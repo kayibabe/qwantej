@@ -84,7 +84,7 @@ export default function UpgradePage({ onBack }: { onBack: () => void }) {
     <section className="auth-page" aria-labelledby="upgrade-title">
       <div className="auth-card upgrade-card">
         <span className="eyebrow">QwanEj Pro · monthly access</span>
-        <h1 id="upgrade-title">{hasProAccess ? 'Your Pro access is active' : 'Unlock the full research workspace'}</h1>
+        <h1 id="upgrade-title">{hasProAccess ? 'Your Pro access is active' : 'Unlock the full matchday workspace'}</h1>
         <p>{hasProAccess ? `Your ${user?.plan === 'pro' ? 'Pro' : 'admin'} account includes Pro features.` : 'Move from the daily published slate to deeper odds, complete ticket history and league context.'}</p>
 
         {!hasProAccess && <>

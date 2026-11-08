@@ -109,7 +109,7 @@ export function CustomAccumulatorPanel({
         <div>
           <h2>My accumulators</h2>
           <span className="section-note">
-            Personal accumulators are persisted with immutable selection snapshots and settle automatically after placement
+            Your picks are saved with each leg and settle automatically after placement
           </span>
         </div>
         <form className="custom-create-form" onSubmit={(event) => { event.preventDefault(); create(); }}>
