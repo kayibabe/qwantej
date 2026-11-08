@@ -14,9 +14,16 @@ function formatPrice(price: string | undefined) {
   return `K${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-export default function UpgradePage({ onBack }: { onBack: () => void }) {
+interface UpgradePageProps {
+  onBack: () => void
+  anonymous?: boolean
+  onSignIn?: () => void
+  onCreateAccount?: () => void
+}
+
+export default function UpgradePage({ onBack, anonymous = false, onSignIn, onCreateAccount }: UpgradePageProps) {
   const { user } = useAuth()
-  const hasProAccess = user?.plan === 'pro' || user?.role === 'admin'
+  const hasProAccess = !anonymous && (user?.plan === 'pro' || user?.role === 'admin')
   const [offer, setOffer] = useState<ProOffer | null>(null)
   const [txRef, setTxRef] = useState('')
   const [busy, setBusy] = useState(false)
@@ -56,14 +63,14 @@ export default function UpgradePage({ onBack }: { onBack: () => void }) {
 
     const url = new URL(window.location.href)
     const returnedRef = url.searchParams.get('tx_ref') ?? ''
-    if (url.searchParams.get('billing') === 'return' && returnedRef) {
+    if (!anonymous && url.searchParams.get('billing') === 'return' && returnedRef) {
       setTxRef(returnedRef)
       for (const key of ['billing', 'tx_ref', 'transaction_id', 'status']) url.searchParams.delete(key)
       window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
       void checkPayment(returnedRef)
     }
     return () => { active = false }
-  }, [])
+  }, [anonymous])
 
   async function beginCheckout() {
     setBusy(true)
@@ -85,27 +92,34 @@ export default function UpgradePage({ onBack }: { onBack: () => void }) {
       <div className="auth-card upgrade-card">
         <span className="eyebrow">QwanEj Pro · monthly access</span>
         <h1 id="upgrade-title">{hasProAccess ? 'Your Pro access is active' : 'Unlock the full matchday workspace'}</h1>
-        <p>{hasProAccess ? `Your ${user?.plan === 'pro' ? 'Pro' : 'admin'} account includes Pro features.` : 'Move from the daily published slate to deeper odds, complete ticket history and league context.'}</p>
+        <p>{hasProAccess ? `Your ${user?.plan === 'pro' ? 'Pro' : 'admin'} account includes Pro features.` : 'Move from the daily published record to the exact selections, captured prices and model evidence behind each ticket.'}</p>
 
         {!hasProAccess && <>
           <div className="upgrade-price" aria-label={`${formatPrice(offer?.price)} per month`}>
             <strong>{formatPrice(offer?.price)}</strong><span>/ month</span>
           </div>
           <ul className="upgrade-features">
-            <li>Detailed odds and market selections</li>
+            <li>Every Q ≥75 System pick, grouped by match</li>
+            <li>Selections, captured odds and model chance</li>
             <li>Expanded published ticket history</li>
             <li>Stats &amp; Trends with league context</li>
           </ul>
           <p className="upgrade-billing-note">Recurring monthly card payment. You can manage or cancel the subscription through Flutterwave’s subscription emails.</p>
-          <button className="btn-primary upgrade-checkout" onClick={beginCheckout} disabled={busy || !offer?.checkout_enabled}>
-            {busy ? 'Please wait…' : offer?.checkout_enabled ? 'Continue to secure checkout' : 'Checkout is being configured'}
-          </button>
-          {txRef && <button className="btn-ghost upgrade-check-status" onClick={() => void checkPayment(txRef)} disabled={busy}>Check payment status</button>}
-          {!offer?.checkout_enabled && !notice && <p className="upgrade-setup-note">Checkout will be available when this server’s payment settings are complete.</p>}
-          {notice && <p className="upgrade-notice" role="status" aria-live="polite">{notice}</p>}
+          {anonymous ? <>
+            <button className="btn-primary upgrade-checkout" onClick={onCreateAccount}>Create a free account</button>
+            <button className="btn-ghost upgrade-check-status" onClick={onSignIn}>I already have an account</button>
+            <p className="upgrade-setup-note">Create your account first. Pro is activated after the monthly card payment is confirmed.</p>
+          </> : <>
+            <button className="btn-primary upgrade-checkout" onClick={beginCheckout} disabled={busy || !offer?.checkout_enabled}>
+              {busy ? 'Please wait…' : offer?.checkout_enabled ? 'Continue to secure checkout' : 'Checkout is being configured'}
+            </button>
+            {txRef && <button className="btn-ghost upgrade-check-status" onClick={() => void checkPayment(txRef)} disabled={busy}>Check payment status</button>}
+            {!offer?.checkout_enabled && !notice && <p className="upgrade-setup-note">Checkout will be available when this server’s payment settings are complete.</p>}
+            {notice && <p className="upgrade-notice" role="status" aria-live="polite">{notice}</p>}
+          </>}
         </>}
 
-        <button className={hasProAccess ? 'btn-primary' : 'btn-ghost upgrade-back'} onClick={onBack}>{hasProAccess ? 'Return to tickets' : 'Not now'}</button>
+        <button className={hasProAccess ? 'btn-primary' : 'btn-ghost upgrade-back'} onClick={onBack}>{hasProAccess ? 'Return to tickets' : anonymous ? 'Back to home' : 'Not now'}</button>
       </div>
     </section>
   )

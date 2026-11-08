@@ -189,6 +189,18 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
   const stakeValue = Number(stake)
   const hasPublishedBetSource = Boolean(selection.selection_id && selection.best_odds)
   const canConfirmBet = hasPublishedBetSource && Number.isFinite(stakeValue) && stakeValue > 0
+  const lifecycleTime = (value?: string | null) => value
+    ? new Date(value).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+    : null
+  const resultLabel = selection.result
+    ? selection.result === 'pending' && selection.home_goals != null
+      ? 'Settling'
+      : selection.result.charAt(0).toUpperCase() + selection.result.slice(1)
+    : 'Pending'
+  const ratedTone = selection.q_score != null ? 'done' : 'pending'
+  const pricedTone = selection.best_odds == null ? 'pending' : priceState.state === 'fresh' ? 'done' : 'caution'
+  const publishedTone = publishedAt ? 'done' : 'pending'
+  const settledTone = selection.result === 'won' ? 'done' : selection.result === 'lost' ? 'caution' : 'pending'
 
   useEffect(() => {
     const priorOverflow = document.body.style.overflow
@@ -254,7 +266,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
       `${formatMarket(selection.market)} @ ${selection.best_odds?.toFixed(2) ?? 'n/a'}`,
       market
         ? `fair chance ${pct(selection.model_probability)} · return at price ${pct(selection.expected_value, true)}`
-        : `Q ${selection.q_score == null ? 'Pro only' : selection.q_score.toFixed(1)} · model ${pct(selection.model_probability)} · edge ${pct(selection.edge, true)}`,
+        : `Q ${selection.q_score == null ? '—' : selection.q_score.toFixed(1)} · model ${pct(selection.model_probability)} · edge ${pct(selection.edge, true)}`,
       internal ? 'QwanEj research / paper trading only' : 'QwanEj selection summary',
     ].join('\n')
     await navigator.clipboard?.writeText(summary)
@@ -291,6 +303,32 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
           {selection.result && <span className={`result-chip ${selection.result}`}>{selection.result === 'pending' && selection.home_goals != null ? 'Settlement pending' : selection.result}</span>}
         </div>
 
+        <section className="lifecycle-card" aria-label="Selection evidence lifecycle">
+          <div className="evidence-title"><h3>Evidence trail</h3><span>Capture → price → publish → settle</span></div>
+          <ol className="lifecycle-rail">
+            <li className={`lifecycle-step ${ratedTone}`}>
+              <span className="lifecycle-step-label">Rated</span>
+              <strong>{selection.q_score != null ? `Q ${selection.q_score.toFixed(1)}` : selection.q_grade ?? 'Unrated'}</strong>
+              <small>{selection.recommendation_status ?? 'Captured at snapshot'}</small>
+            </li>
+            <li className={`lifecycle-step ${pricedTone}`}>
+              <span className="lifecycle-step-label">Priced</span>
+              <strong>{selection.best_odds?.toFixed(2) ?? 'No quote'}</strong>
+              <small>{priceState.label}</small>
+            </li>
+            <li className={`lifecycle-step ${publishedTone}`}>
+              <span className="lifecycle-step-label">Published</span>
+              <strong>{publishedAt ? 'In a ticket' : 'View only'}</strong>
+              <small>{lifecycleTime(publishedAt) ?? (modelVersion ? `Model ${modelVersion}` : 'No publication link')}</small>
+            </li>
+            <li className={`lifecycle-step ${settledTone}`}>
+              <span className="lifecycle-step-label">Settled</span>
+              <strong>{resultLabel}</strong>
+              <small>{lifecycleTime(selection.selection_settled_at) ?? (selection.result ? 'Awaiting outcome' : `Kickoff ${formatKickoff(selection.kickoff_at)}`)}</small>
+            </li>
+          </ol>
+        </section>
+
         <section className="decision-strength-card" aria-label="Decision strength review">
           <div className="evidence-title"><h3>Decision strength</h3><span>Leg-level review · advisory</span></div>
           <div className="decision-strength-grid">
@@ -323,7 +361,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
         <section className="detail-pick">
           <div><span>Market</span><strong>{formatMarket(selection.market)}</strong></div>
           <div><span>Snapshot odds</span><strong>{selection.best_odds?.toFixed(2) ?? '—'}</strong></div>
-          <div><span>Q grade</span><strong>{selection.q_grade ? <GradeBadge grade={selection.q_grade} /> : `Q ${selection.q_score == null ? 'Pro only' : selection.q_score.toFixed(1)}`}</strong></div>
+          <div><span>Q grade</span><strong>{selection.q_grade ? <GradeBadge grade={selection.q_grade} /> : `Q ${selection.q_score == null ? '—' : selection.q_score.toFixed(1)}`}</strong></div>
           <div><span>Match result</span><strong>{selection.home_goals != null && selection.away_goals != null ? `${selection.home_goals}–${selection.away_goals}` : 'Unplayed'}</strong></div>
           <div><span>Market settlement</span><strong>{selection.result === 'pending' && selection.home_goals != null ? 'Pending' : selection.result ?? 'Pending'}</strong></div>
         </section>
@@ -350,7 +388,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
         {form && activeTab === 'overview' && <section className="form-evidence-card"><div className="evidence-title"><h3>Recent form</h3><span>Last {Math.max(form.home.matches, form.away.matches)} finished matches</span></div><div className="form-teams"><TeamForm team={form.home} /><span className="form-vs">vs</span><TeamForm team={form.away} /></div></section>}
         {form && activeTab === 'stats' && <section className="form-evidence-card"><div className="evidence-title"><h3>Recent team statistics</h3><span>Last five finished matches</span></div><div className="team-stats-grid"><TeamStats team={form.home} /><TeamStats team={form.away} /></div></section>}
         {form && activeTab === 'h2h' && <section className="form-evidence-card"><div className="evidence-title"><h3>Head-to-head</h3><span>Previous finished meetings</span></div>{form.h2h.length ? <div className="h2h-list">{form.h2h.map(game => <div key={game.date + game.score}><span>{game.date}</span><strong>{game.home_team} {game.score} {game.away_team}</strong></div>)}</div> : <div className="detail-empty-note">No previous meetings found in the persisted data.</div>}</section>}
-        {activeTab === 'signals' && <section className="form-evidence-card"><div className="evidence-title"><h3>QwanEj signal</h3><span>Current published selection</span></div><div className="signal-summary">{!selectionRepeatsMarket(selection.market, selection.selection) && <div><span>Market</span><strong>{formatMarket(selection.market)}</strong></div>}<div><span>Selection</span><strong>{formatSelection(selection.selection)}</strong></div><div><span>{market ? label.prob : 'Model probability'}</span><strong>{pct(selection.model_probability)}</strong></div><div><span>{market ? label.edge : 'Estimated edge'}</span><strong>{pct(selection.edge, true)}</strong></div><div><span>Q-score</span><strong>{selection.q_score == null ? 'Pro only' : `${selection.q_score.toFixed(1)} · ${selection.q_grade ? 'graded' : '—'}`}</strong></div><div><span>Expected value</span><strong>{pct(selection.expected_value, true)}</strong></div></div></section>}
+        {activeTab === 'signals' && <section className="form-evidence-card"><div className="evidence-title"><h3>QwanEj signal</h3><span>Current published selection</span></div><div className="signal-summary">{!selectionRepeatsMarket(selection.market, selection.selection) && <div><span>Market</span><strong>{formatMarket(selection.market)}</strong></div>}<div><span>Selection</span><strong>{formatSelection(selection.selection)}</strong></div><div><span>{market ? label.prob : 'Model probability'}</span><strong>{pct(selection.model_probability)}</strong></div><div><span>{market ? label.edge : 'Estimated edge'}</span><strong>{pct(selection.edge, true)}</strong></div><div><span>Q-score</span><strong>{selection.q_score == null ? '—' : `${selection.q_score.toFixed(1)} · ${selection.q_grade ? 'graded' : '—'}`}</strong></div><div><span>Expected value</span><strong>{pct(selection.expected_value, true)}</strong></div></div></section>}
 
         {activeTab === 'probability' && <section className="evidence-card">
           <div className="evidence-title"><h3>Probability evidence</h3><span>{label.subtitle}</span></div>
@@ -365,7 +403,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
         {activeTab === 'odds' && <OddsComparison quotes={quotes} loading={quotesLoading} failed={quotesError} marketPrice={accaPrice} marketPriceLoading={accaPriceLoading} marketPriceFailed={accaPriceError} modelProbability={selection.model_probability ?? null} probabilityLabel={market ? 'Fair chance' : 'Model estimate'} canViewMarketPrices={canViewMarketPrices} />}
 
         {activeTab === 'probability' && <section className="detail-metrics">
-          {!market && <Metric label="Q score" value={selection.q_score == null ? 'Pro only' : selection.q_score.toFixed(1)} />}
+          {!market && <Metric label="Q score" value={selection.q_score == null ? '—' : selection.q_score.toFixed(1)} />}
           <Metric label="Expected value" value={pct(selection.expected_value, true)} hint={label.ev} />
           {!market && <Metric label="Model spread" value={selection.model_agreement == null ? '—' : `${(selection.model_agreement * 100).toFixed(1)} pp`} note={spreadLabel(selection.model_agreement)} hint="Standard deviation between the active model probabilities. Up to 5 pp is strong alignment; above 15 pp triggers a confidence downgrade." />}
           <Metric label="Bookmakers" value={(quotes.length || selection.bookmaker_count)?.toString() ?? 'Snapshot'} />

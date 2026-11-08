@@ -548,6 +548,71 @@ export async function fetchPublicMatchFixtures(date: string): Promise<MatchFixtu
   return res.json()
 }
 
+export interface PublicProofLeg {
+  position: number
+  home_team: string
+  away_team: string
+  competition: string
+  kickoff_at: string
+  market: string
+  selection: string
+  result: string
+  match_status: string
+  home_goals: number | null
+  away_goals: number | null
+}
+
+export interface PublicProofTicket {
+  ticket_id: number
+  target_date: string
+  ticket_type: string
+  name: string
+  combined_odds: number
+  published_at: string
+  publication_timing: 'pre_kickoff' | 'post_kickoff' | 'unknown'
+  result: string | null
+  profit_units: number | null
+  settled_at: string | null
+  legs: PublicProofLeg[]
+}
+
+export interface PublicProofEquityPoint {
+  date: string
+  cumulative_units: number
+}
+
+export interface PublicProofTier {
+  ticket_type: string
+  name: string
+  settled: number
+  won: number
+  lost: number
+  void: number
+  win_rate: number | null
+  staked_units: number
+  profit_units: number
+  roi: number | null
+  equity: PublicProofEquityPoint[]
+  recent_tickets: PublicProofTicket[]
+}
+
+export interface PublicProof {
+  days: number | null
+  sample_size: number
+  first_settled_date: string | null
+  last_settled_date: string | null
+  tiers: PublicProofTier[]
+  latest_ticket: PublicProofTicket | null
+  generated_at: string
+}
+
+export async function fetchPublicProof(days: number | null = null): Promise<PublicProof> {
+  const query = days == null ? '' : `?days=${days}`
+  const res = await fetch(`/api/v1/tickets/public-proof${query}`)
+  if (!res.ok) throw new Error(`API error ${res.status}`)
+  return res.json()
+}
+
 export async function fetchMatchFavoriteIds(): Promise<number[]> {
   const res = await fetch('/api/v1/match-favorites')
   if (!res.ok) throw new Error(`API error ${res.status}`)

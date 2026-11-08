@@ -37,10 +37,12 @@ _MAX_LEGS_PER_LEAGUE = 2
 _MIN_ACTIVE_MODELS = 3
 _BEAM_WIDTH = 800
 _CANDIDATE_LIMIT = 30
+# Bands buy hit rate rather than headline odds: realised leg ROI degrades with
+# price, so both tiers sit low and narrow, and Conservative takes exactly 3 legs.
 _CONSERVATIVE_MIN_COMBINED_ODDS = 2.0
-_CONSERVATIVE_MAX_COMBINED_ODDS = 3.49
-_BALANCED_MIN_COMBINED_ODDS = 3.50
-_BALANCED_MAX_COMBINED_ODDS = 5.00
+_CONSERVATIVE_MAX_COMBINED_ODDS = 2.60
+_BALANCED_MIN_COMBINED_ODDS = 3.00
+_BALANCED_MAX_COMBINED_ODDS = 4.00
 _HIGH_ODDS_MIN_COMBINED_ODDS = 5.01
 
 
@@ -81,7 +83,7 @@ TICKET_SPECS: tuple[TicketSpec, ...] = (
 # probability, Q-score/edge (model judgements) no longer gate selection, and
 # each tier is the most likely ticket inside its odds band.
 MARKET_TICKET_SPECS: tuple[TicketSpec, ...] = (
-    TicketSpec(TicketType.SAFE, "Conservative", 2, 3, _CONSERVATIVE_MIN_COMBINED_ODDS, _CONSERVATIVE_MAX_COMBINED_ODDS, 0.0, 0.0, 1, 0.30, 0.05,
+    TicketSpec(TicketType.SAFE, "Conservative", 3, 3, _CONSERVATIVE_MIN_COMBINED_ODDS, _CONSERVATIVE_MAX_COMBINED_ODDS, 0.0, 0.0, 1, 0.30, 0.05,
                pricing="market", min_leg_odds=1.20, max_leg_odds=1.65),
     TicketSpec(TicketType.BALANCED, "Balanced", 3, 3, _BALANCED_MIN_COMBINED_ODDS, _BALANCED_MAX_COMBINED_ODDS, 0.0, 0.0, 1, 0.14, 0.10,
                pricing="market", min_leg_odds=1.25, max_leg_odds=2.30),

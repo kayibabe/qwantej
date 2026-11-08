@@ -142,6 +142,7 @@ def _slate():
         # evidence/calibration gates, which are covered by the qualification
         # suites. This slate is about market pricing and tier construction.
         for market, odds in (("double_chance_1x", 1.22 + 0.02 * (match % 5)),
+                             ("double_chance_12", 1.45 + 0.03 * (match % 3)),
                              ("btts_yes", 1.30 + 0.03 * (match % 4)),
                              ("home_win", 1.85 + 0.05 * (match % 5)),
                              ("away_win", 2.6 + 0.2 * (match % 4))):
@@ -178,11 +179,11 @@ def test_market_build_produces_public_tiers_inside_their_bands_with_honest_numbe
 
 def test_market_ticket_ranges_include_requested_high_odds_tier():
     assert SPEC[TicketType.SAFE].min_combined_odds == 2.0
-    assert SPEC[TicketType.SAFE].max_combined_odds == 3.49
-    assert SPEC[TicketType.SAFE].min_legs == 2
+    assert SPEC[TicketType.SAFE].max_combined_odds == 2.6
+    assert SPEC[TicketType.SAFE].min_legs == 3
     assert SPEC[TicketType.SAFE].max_legs == 3
-    assert SPEC[TicketType.BALANCED].min_combined_odds == 3.5
-    assert SPEC[TicketType.BALANCED].max_combined_odds == 5.0
+    assert SPEC[TicketType.BALANCED].min_combined_odds == 3.0
+    assert SPEC[TicketType.BALANCED].max_combined_odds == 4.0
     assert SPEC[TicketType.BALANCED].max_legs == 3
     assert SPEC[TicketType.HIGH_ODDS].min_combined_odds == 5.01
     assert math.isinf(SPEC[TicketType.HIGH_ODDS].max_combined_odds)
@@ -203,7 +204,7 @@ def test_normal_public_tiers_are_full_strength_or_missing():
     """Thin slates must not turn a failed normal tier into a relaxed ticket."""
     thin = [market_priced(_leg(i, odds=1.30, fair=0.74)) for i in range(1, 4)]
     built = asyncio.run(_builder(thin).build(TARGET))
-    assert built.conservative is not None  # two legs clear the 2.00 floor
+    assert built.conservative is not None  # three legs clear the 2.00 floor
     assert built.balanced is None  # three legs do not clear its normal floor
     assert built.conservative.relaxed is False
     assert built.balanced is None

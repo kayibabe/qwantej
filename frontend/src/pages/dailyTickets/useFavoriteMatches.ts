@@ -4,6 +4,26 @@ import { addMatchFavorite, fetchMatchFavoriteIds, removeMatchFavorite } from '..
 
 const STORAGE_KEY = 'qwantej.match-favorites.v2'
 
+// Tab switches remount the fixture and picks views; favourites are per-account
+// state, so share one remote read per session instead of refetching on mount.
+const remoteFavorites = new Map<string, number[]>()
+const remoteFavoritesInFlight = new Map<string, Promise<number[]>>()
+
+function loadRemoteFavorites(key: string) {
+  const cached = remoteFavorites.get(key)
+  if (cached) return Promise.resolve(cached)
+  const inFlight = remoteFavoritesInFlight.get(key)
+  if (inFlight) return inFlight
+  const request = fetchMatchFavoriteIds()
+    .then(ids => {
+      remoteFavorites.set(key, ids)
+      return ids
+    })
+    .finally(() => { remoteFavoritesInFlight.delete(key) })
+  remoteFavoritesInFlight.set(key, request)
+  return request
+}
+
 function readStoredFavorites(key: string): number[] {
   try {
     const saved = localStorage.getItem(key)
@@ -29,7 +49,14 @@ export function useFavoriteMatches() {
     setFavorites(readStoredFavorites(storageKey))
     if (!user) return () => { active = false }
 
-    fetchMatchFavoriteIds().then(ids => {
+    const cached = remoteFavorites.get(storageKey)
+    if (cached) {
+      setFavorites(cached)
+      setRemoteReady(true)
+      return () => { active = false }
+    }
+
+    loadRemoteFavorites(storageKey).then(ids => {
       if (!active) return
       setFavorites(ids)
       setRemoteReady(true)
@@ -51,13 +78,20 @@ export function useFavoriteMatches() {
   const favoriteIds = useMemo(() => new Set(favorites), [favorites])
   const toggleFavorite = useCallback((matchId: number) => {
     const adding = !favoriteIds.has(matchId)
-    setFavorites(current => current.includes(matchId)
-      ? current.filter(id => id !== matchId)
-      : [...current, matchId])
+    setFavorites(current => {
+      const next = current.includes(matchId)
+        ? current.filter(id => id !== matchId)
+        : [...current, matchId]
+      remoteFavorites.set(storageKey, next)
+      return next
+    })
     if (!user || !remoteReady) return
     const update = adding ? addMatchFavorite(matchId) : removeMatchFavorite(matchId)
-    update.then(setFavorites).catch(() => setRemoteReady(false))
-  }, [favoriteIds, remoteReady, user])
+    update.then(ids => {
+      remoteFavorites.set(storageKey, ids)
+      setFavorites(ids)
+    }).catch(() => setRemoteReady(false))
+  }, [favoriteIds, remoteReady, storageKey, user])
 
   return { favorites, favoriteIds, toggleFavorite }
 }

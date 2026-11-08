@@ -24,6 +24,7 @@ import SelectionDetail, {
 } from "../../components/SelectionDetail";
 import type { MarketRoiDailyData } from "./MarketRoiDaily";
 import { TicketGridSkeleton } from "./TicketGridSkeleton";
+import PipelineRibbon, { type PipelineStep } from "./PipelineRibbon";
 import "./DailyOverview.css";
 import {
   accumulatorBlockers,
@@ -40,7 +41,7 @@ const MarketRoiDaily = lazy(() => import("./MarketRoiDaily").then((module) => ({
 const AllMatches = lazy(() => import("./AllMatches").then((module) => ({ default: module.AllMatches })));
 const FixtureExplorer = lazy(() => import("./FixtureExplorer").then((module) => ({ default: module.FixtureExplorer })));
 
-export default function DailyTicketsPage({ date, initialTab = "fixtures", mode = "overview", onOpenMatch, onOpenTracker, onTabChange }: DailyTicketsPageProps & { onOpenMatch?: (matchId: number, predictionId?: number) => void }) {
+export default function DailyTicketsPage({ date, initialTab = "fixtures", mode = "overview", onOpenMatch, onOpenTracker, onTabChange, onUpgrade }: DailyTicketsPageProps & { onOpenMatch?: (matchId: number, predictionId?: number) => void }) {
   const { user, loading: authLoading } = useAuth();
   const isAdmin = user?.role === "admin";
   const canExploreMarkets = isAdmin || user?.plan === "pro";
@@ -54,12 +55,15 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
   const [marketRoi, setMarketRoi] = useState<MarketRoiDailyData | null>(null);
   const [marketRoiError, setMarketRoiError] = useState<string | null>(null);
   const [fixtures, setFixtures] = useState<MatchFixture[]>([]);
+  const [candidatesLoaded, setCandidatesLoaded] = useState(false);
+  const [rejectedLoaded, setRejectedLoaded] = useState(false);
   const [tab, setTab] = useState<DailyTab>(initialTab);
   const [custom, setCustom] = useState<CustomAccumulator[]>(() => {
     return [];
   });
   const [loading, setLoading] = useState(false);
   const firstLoad = useRef(true);
+  const loadedKey = useRef<string | null>(null);
   const requestVersion = useRef(0);
   const [dataCheckedAt, setDataCheckedAt] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +95,14 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
     return stake;
   };
 
-  const load = useCallback(async (targetDate: string) => {
+  const load = useCallback(async (targetDate: string, force = false) => {
+    const roleKey = isAdmin ? "admin" : canExploreMarkets ? "pro" : "free";
+    // The overview already preloads every headline tab, so switching tabs must
+    // not re-issue the same requests. The research workspace loads per tab.
+    const requestedKey = mode === "overview"
+      ? `${mode}:${targetDate}:${roleKey}`
+      : `${mode}:${targetDate}:${tab}:${roleKey}`;
+    if (!force && loadedKey.current === requestedKey) return;
     const request = ++requestVersion.current;
     if (firstLoad.current) setLoading(true);
     try {
@@ -101,7 +112,7 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
       const wantsTickets = overview || tab === "tickets";
       const wantsFixtures = overview || tab === "fixtures";
       const wantsCandidates = canExploreMarkets && (overview || tab === "picks" || tab === "passed");
-      const wantsRejected = isAdmin && tab === "passed";
+      const wantsRejected = isAdmin && (overview || tab === "passed");
       const wantsCustom = isAdmin && tab === "picks";
       const wantsMarketRoi = (isAdmin && tab === "market-roi") || (canAccessDailyPicks && tab === "daily-match-picks");
       const marketRoiPromise = wantsMarketRoi
@@ -127,13 +138,18 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
         setMatches(withRejectionEvidence(allRows.rows, rejectedRows ?? []));
         setMatchesTotal(allRows.total);
         setPickedMatchTotal(allRows.matchTotal);
+        setCandidatesLoaded(true);
       }
-      if (rejectedRows) setRejected(rejectedRows);
+      if (rejectedRows) {
+        setRejected(rejectedRows);
+        setRejectedLoaded(true);
+      }
       if (customRows) setCustom(customRows.map(apiAccumulatorToUi));
       if (wantsMarketRoi) {
         setMarketRoi(marketRoiRows);
         if (marketRoiRows) setMarketRoiError(null);
       }
+      loadedKey.current = requestedKey;
       setDataCheckedAt(new Date());
     } catch (e) {
       if (request !== requestVersion.current) return;
@@ -168,7 +184,7 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
 
   useEffect(() => {
     let active = true;
-    const refresh = () => { if (active && document.visibilityState === "visible") void load(date); };
+    const refresh = () => { if (active && document.visibilityState === "visible") void load(date, true); };
     // Always start the initial request. A background tab must still leave its
     // skeleton state; visibility only gates follow-up polling.
     void load(date);
@@ -177,6 +193,18 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
     document.addEventListener("visibilitychange", onVisibility);
     return () => { active = false; requestVersion.current += 1; window.clearInterval(timer); document.removeEventListener("visibilitychange", onVisibility); };
   }, [date, load]);
+
+  // The shell asks pages to refresh in place; cancelable so the shell knows the
+  // request was handled and does not remount the route.
+  useEffect(() => {
+    const onRefresh = (event: Event) => {
+      if (authLoading) return;
+      event.preventDefault();
+      void load(date, true);
+    };
+    window.addEventListener("qwantej:refresh", onRefresh);
+    return () => window.removeEventListener("qwantej:refresh", onRefresh);
+  }, [authLoading, date, load]);
   const replaceCustom = (row: ApiCustomAccumulator) => {
     const uiRow = apiAccumulatorToUi(row);
     setCustom((current) => [...current.filter((item) => item.id !== uiRow.id), uiRow]);
@@ -311,19 +339,70 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
       ? "Pipeline incomplete"
       : "Pipeline not run";
 
+  const pickCount = canExploreMarkets && candidatesLoaded ? pickedMatchTotal || qScoreMatchCount : null;
+  const publishedCount = publicPublishedTickets.length;
+  const latestPublicationTime = latestPublication
+    ? new Date(latestPublication).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Blantyre" })
+    : null;
+  const briefTitle = publishedCount > 0
+    ? `${publishedCount} ${publishedCount === 1 ? "ticket is" : "tickets are"} published for ${formatDate(data?.target_date ?? date)}.`
+    : generationFinishedWithoutTickets
+      ? "No ticket cleared every publication gate for this date."
+      : pipelineActive
+        ? "The ticket pipeline is running; publications may still appear."
+        : "No accumulator ticket is published for this date.";
+  const briefBody = publishedCount > 0
+    ? canExploreMarkets
+      ? `${pickCount != null ? `Built from ${pickCount} qualified ${pickCount === 1 ? "match" : "matches"}. ` : ""}Open a leg to review its captured quote, model, and settlement evidence before using the what-if stake.`
+      : "The published tiers are shown below with their match legs and settlement status. Pro reveals each selection, its captured price, model chance and evidence."
+    : generationFinishedWithoutTickets
+      ? "Candidates were evaluated, but no combination met the active tier rules. Zero tickets is a valid, evidence-backed outcome."
+      : pipelineActive
+        ? `Current stage: ${formatStage(data?.pipeline_current_stage ?? "starting")}. The workspace refreshes while the persisted run advances.`
+        : "Ticket cards stay hidden when there is no evidence that publication ran for this date.";
+  const pipelineSteps: PipelineStep[] = mode === "overview"
+    ? [
+        { key: "fixtures", label: "Fixtures", value: fixtures.length, note: "scheduled for this date" },
+        {
+          key: "picks",
+          label: "System picks",
+          value: pickCount ?? "—",
+          note: canExploreMarkets ? "matches with a qualified pick" : "Pro · open to preview",
+        },
+        {
+          key: "tickets",
+          label: "Tickets",
+          value: publishedCount,
+          note: publishedCount ? "published tiers" : "none published",
+        },
+        ...(isAdmin ? [{
+          key: "passed" as DailyTab,
+          label: "Gated out",
+          value: rejectedLoaded ? rejected.length : "—",
+          note: rejectedLoaded ? "rejected with reasons" : "open the ledger",
+        }] : []),
+      ]
+    : [];
+  const tabCounts: Partial<Record<DailyTab, number>> = {
+    fixtures: fixtures.length,
+    ...(pickCount != null ? { picks: pickCount } : {}),
+    ...(data ? { tickets: publishedCount } : {}),
+    ...(isAdmin && rejectedLoaded ? { passed: rejected.length } : {}),
+  };
+
   // Describe each tier by the rules its generation actually applied.
   const fairPriced = data?.pricing === "market";
   const publicTiers = [
     {
       key: "conservative" as const,
       name: "Conservative",
-      desc: fairPriced ? "2–3 legs · 2.00–3.49× · review first" : "Q ≥85 · 3–6 legs · 3–5×",
+      desc: fairPriced ? "3 legs · 2.00–2.60× · review first" : "Q ≥85 · 3–6 legs · 3–5×",
       color: "var(--conservative)",
     },
     {
       key: "balanced" as const,
       name: "Balanced",
-      desc: fairPriced ? "3 legs · 3.50–5.00× · secondary option" : "Q ≥80 · 60% Grade A/A+",
+      desc: fairPriced ? "3 legs · 3.00–4.00× · secondary option" : "Q ≥80 · 60% Grade A/A+",
       color: "var(--balanced)",
     },
   ];
@@ -338,10 +417,12 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
       <div className="meta-bar">
         <div>
           <h1 className="meta-date">
-            {mode === "overview" ? "Daily overview" : formatDate(data ? data.target_date : date)}
+            {mode === "overview"
+              ? date === TODAY ? "Today" : formatDate(date)
+              : formatDate(data ? data.target_date : date)}
           </h1>
           {mode === "overview" && <p className="overview-date">
-            <span className="event-date">{data ? formatDate(data.target_date) : formatDate(date)}</span>
+            {date === TODAY && <span className="event-date">{data ? formatDate(data.target_date) : formatDate(date)}</span>}
             {dataCheckedAt && <span className="overview-updated-at" title="Time when recommendation data was last checked">
               Data checked {dataCheckedAt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Blantyre" })} CAT
             </span>}
@@ -375,18 +456,42 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
         )}
       </div>
 
-      {mode === "overview" && (
-        <div className="overview-summary" role="group" aria-label="Daily overview summary">
-          <button type="button" title="Every fixture scheduled for this date" className={tab === "fixtures" ? "active" : ""} onClick={() => { setTab("fixtures"); onTabChange?.("fixtures"); }}>
-            <b>{fixtures.length}</b><span>Fixtures</span>
-          </button>
-          <button type="button" title={canExploreMarkets ? "Matches with at least one Q ≥75 pick for this date" : "System picks are available on Pro"} className={tab === "picks" ? "active" : ""} onClick={() => { setTab("picks"); onTabChange?.("picks"); }} disabled={!canExploreMarkets}>
-            <b>{canExploreMarkets ? (pickedMatchTotal || qScoreMatchCount) : "—"}</b><span>System picks</span>
-          </button>
-          <button type="button" title="Accumulator tiers published for this date" className={tab === "tickets" ? "active" : ""} onClick={() => { setTab("tickets"); onTabChange?.("tickets"); }}>
-            <b>{publicPublishedTickets.length}</b><span>Accumulator tickets</span>
-          </button>
-        </div>
+      {mode === "overview" && data && (
+        <>
+          <section className="today-brief" aria-label="Today decision brief">
+            <div className="today-brief-copy">
+              <strong>{briefTitle}</strong>
+              <p>{briefBody}</p>
+            </div>
+            <div className="today-brief-facts">
+              <div className={`today-brief-fact${publishedCount > 0 ? "" : " attention"}`}>
+                <span>Publication</span>
+                <b>{latestPublicationTime ? `${latestPublicationTime} CAT` : pipelineStateBadge}</b>
+              </div>
+              {dataCheckedAt && (
+                <div className="today-brief-fact">
+                  <span>Checked</span>
+                  <b>{dataCheckedAt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Blantyre" })} CAT</b>
+                </div>
+              )}
+              <div className="today-brief-fact">
+                <span>Pricing</span>
+                <b>{data ? (fairPriced ? "Fair price" : "Model price") : "—"}</b>
+              </div>
+              {isAdmin && modelVersions.length > 0 && (
+                <div className="today-brief-fact">
+                  <span>Model</span>
+                  <b>{modelVersions.join(", ")}</b>
+                </div>
+              )}
+            </div>
+          </section>
+          <PipelineRibbon
+            steps={pipelineSteps}
+            active={tab}
+            onSelect={(key) => { setTab(key); onTabChange?.(key); }}
+          />
+        </>
       )}
 
       {error && (
@@ -399,7 +504,7 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
               ? `The latest refresh failed${dataCheckedAt ? `; this view was loaded at ${dataCheckedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}. ${error}`
               : error}</span>
           </div>
-          <button onClick={async () => { setRetrying(true); try { await load(date); } finally { setRetrying(false); } }} disabled={retrying}>
+          <button onClick={async () => { setRetrying(true); try { await load(date, true); } finally { setRetrying(false); } }} disabled={retrying}>
             {retrying ? "Retrying…" : data && mode === "overview" ? "Refresh now" : "Try again"}
           </button>
         </div>
@@ -417,6 +522,7 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
                 onClick={() => { setTab(key); onTabChange?.(key); }}
               >
                 {label}
+                {tabCounts[key] != null && <span className="daily-tab-count">{tabCounts[key]}</span>}
               </button>
             ))}
           </nav>}
@@ -427,10 +533,28 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
           )}
           {tab === "fixtures" && <div className="view-intro"><div><span className="eyebrow">Fixtures</span><h2 className="section-title">All fixtures for this date</h2></div><p>Every fixture scheduled for this date, with competition, kickoff time, and current status.</p></div>}
           {tab === "picks" && canExploreMarkets && <div className="view-intro"><div><span className="eyebrow">System picks</span><h2 className="section-title">System picks for this date</h2></div><p>Every Q ≥75 selection the model qualified for this date, grouped by match. A pick appearing here does not mean it made a published accumulator.</p></div>}
-          {tab === "tickets" && <div className="view-intro"><div><span className="eyebrow">Accumulator tickets</span><h2 className="section-title">Tickets assembled from this date&rsquo;s picks</h2></div><p>Each published tier is a fixed combination of the system&rsquo;s qualified picks. Expand a leg to inspect its evidence; the stake field is a what-if calculation only.</p></div>}
+          {tab === "tickets" && <div className="view-intro"><div><span className="eyebrow">Accumulator tickets</span><h2 className="section-title">Tickets assembled from this date&rsquo;s picks</h2></div><p>{canExploreMarkets ? "Each published tier is a fixed combination of the system’s qualified picks. Expand a leg to inspect its evidence; the stake field is a what-if calculation only." : "Each published tier is a fixed combination of the system’s qualified picks. On Free you can review every match leg and its settlement status; Pro opens the selections and their evidence."}</p></div>}
           {tab === "fixtures" && <Suspense fallback={<div className="route-loading">Loading fixtures…</div>}><FixtureExplorer fixtures={fixtures} /></Suspense>}
           {tab === "picks" && canExploreMarkets && <Suspense fallback={<div className="route-loading">Loading system picks…</div>}><AllMatches rows={matchGroups} totalSelections={matchesTotal} loadedSelections={matches.length} loadingMore={loadingMoreMatches} onLoadMore={loadMoreMatches} onSelect={openSelection} onAdd={addToAccumulator} allowAdd={isAdmin} /></Suspense>}
-          {tab === "picks" && !canExploreMarkets && <section className="decision-empty" role="status"><strong>System picks are available on Pro</strong><span>Upgrade to see the model’s qualified selections for this date.</span></section>}
+          {tab === "picks" && !canExploreMarkets && (
+            <section className="plan-locked-panel" aria-labelledby="plan-locked-picks-title">
+              <div className="plan-locked-copy">
+                <span className="plan-locked-kicker">Pro workspace</span>
+                <h2 id="plan-locked-picks-title">See every qualified selection, not just the ticket</h2>
+                <p>System picks list each Q ≥75 selection behind this date’s tickets. Pro opens the full ledger for every match, with the evidence recorded when the pick qualified.</p>
+                <ul className="plan-locked-features">
+                  <li><strong>Market and selection</strong><span>Exactly what the model qualified, grouped by match.</span></li>
+                  <li><strong>Price and model chance</strong><span>Captured bookmaker odds next to the model’s probability.</span></li>
+                  <li><strong>Spread and edge</strong><span>How far the models disagreed and where the price sat above fair.</span></li>
+                </ul>
+                <div className="plan-locked-actions">
+                  {onUpgrade && <button className="btn-primary" onClick={onUpgrade}>Upgrade to Pro</button>}
+                  <button className="btn-ghost" onClick={() => { setTab("tickets"); onTabChange?.("tickets"); }}>View published tickets</button>
+                </div>
+                <p className="plan-locked-note">Recommendations are informational. Football outcomes are uncertain; no result is guaranteed.</p>
+              </div>
+            </section>
+          )}
           {isAdmin && tab === "odds-policy" && (
             <Suspense fallback={<div className="route-loading">Loading policy review…</div>}><ParameterSweepPicks
               date={date}
@@ -505,7 +629,16 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
               )}
 
               {publicPublishedTickets.length > 0 && <section className="published-ticket-tiers">
-                <header className="published-ticket-tiers-heading"><span><strong>Published accumulator tickets</strong><small>Combined odds, estimated chance, and full legs for {publicPublishedTickets.length} published tier{publicPublishedTickets.length === 1 ? "" : "s"}.</small></span></header>
+                <header className="published-ticket-tiers-heading"><span><strong>Published accumulator tickets</strong><small>{canExploreMarkets ? `Combined odds, estimated chance, and full legs for ${publicPublishedTickets.length} published tier${publicPublishedTickets.length === 1 ? "" : "s"}.` : `Match legs and settlement status for ${publicPublishedTickets.length} published tier${publicPublishedTickets.length === 1 ? "" : "s"}. Pro reveals the selections, odds and model evidence.`}</small></span></header>
+                {!canExploreMarkets && (
+                  <div className="plan-upsell" role="note">
+                    <div>
+                      <strong>Unlock the published selections</strong>
+                      <span>Pro shows each leg’s market, captured odds, model chance and evidence—plus every System pick behind these tickets.</span>
+                    </div>
+                    {onUpgrade && <button className="btn-primary" onClick={onUpgrade}>Upgrade to Pro</button>}
+                  </div>
+                )}
                 {canExploreMarkets && <div className="stake-planner-controls">
                   <label className="bankroll-input">
                     Stake per ticket
@@ -529,9 +662,10 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
                   tierDesc={tier.desc}
                   color={tier.color}
                   internal={isAdmin}
+                  locked={!canExploreMarkets}
                   onSelectLeg={canExploreMarkets ? openTicketLeg : undefined}
                   flatStake={flatStakeForTicket(data?.[tier.key] ?? null)}
-                  showMarketSelections={user?.plan === "pro" || isAdmin}
+                  showMarketSelections={canExploreMarkets}
                 />
               ))}
                 </div>
@@ -557,7 +691,7 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
           canViewMarketPrices={canExploreMarkets}
           internal={isAdmin}
           onClose={() => setDetail(null)}
-          onOpenMatch={isAdmin ? onOpenMatch : undefined}
+          onOpenMatch={canExploreMarkets ? onOpenMatch : undefined}
         />
       )}
     </>
@@ -595,6 +729,35 @@ function PassedMatches({ rows, onSelect }: { rows: SelectionSummary[]; onSelect:
   const netUnits = roiRows.reduce((total, row) => total + (row.result === "won" ? (row.best_odds ?? 1) - 1 : row.result === "lost" ? -1 : 0), 0);
   const hitRate = wins + losses > 0 ? `${((wins / (wins + losses)) * 100).toFixed(1)}%` : "—";
   const roi = roiRows.length ? `${((netUnits / roiRows.length) * 100).toFixed(1)}%` : "—";
+  const fmtUnits = (value: number) => `${value >= 0 ? "+" : "−"}${Math.abs(value).toFixed(1)}`;
+  const unitsSaved = roiRows.filter(row => row.result === "lost").length;
+  const unitsForfeited = roiRows.reduce((total, row) => total + (row.result === "won" ? (row.best_odds ?? 1) - 1 : 0), 0);
+  const weightedNet = unitsSaved - unitsForfeited;
+  const oddsBands = [
+    { label: "Under 1.50", test: (odds: number) => odds < 1.5 },
+    { label: "1.50–1.99", test: (odds: number) => odds >= 1.5 && odds < 2 },
+    { label: "2.00–2.99", test: (odds: number) => odds >= 2 && odds < 3 },
+    { label: "3.00–5.99", test: (odds: number) => odds >= 3 && odds < 6 },
+    { label: "6.00+", test: (odds: number) => odds >= 6 },
+  ];
+  const bandStats = oddsBands.map(band => {
+    const bandPriced = filteredRows.filter(row => row.best_odds != null && row.best_odds > 1 && band.test(row.best_odds));
+    const bandSettled = bandPriced.filter(row => row.result === "won" || row.result === "lost");
+    const bandWins = bandSettled.filter(row => row.result === "won").length;
+    const bandLosses = bandSettled.length - bandWins;
+    const bandNet = bandPriced.reduce((total, row) => total + (row.result === "won" ? (row.best_odds ?? 1) - 1 : row.result === "lost" ? -1 : 0), 0);
+    const bandWeighted = bandSettled.reduce((total, row) => total + (row.result === "won" ? -((row.best_odds ?? 1) - 1) : 1), 0);
+    return {
+      label: band.label,
+      priced: bandPriced.length,
+      settled: bandSettled.length,
+      wins: bandWins,
+      losses: bandLosses,
+      passRate: bandSettled.length ? `${((bandLosses / bandSettled.length) * 100).toFixed(1)}%` : "—",
+      roi: bandSettled.length ? `${((bandNet / bandPriced.length) * 100).toFixed(1)}%` : "—",
+      weighted: bandSettled.length ? fmtUnits(bandWeighted) : "—",
+    };
+  });
 
   return <section className="passed-matches-panel" aria-labelledby="passed-matches-title">
     <div className="section-heading">
@@ -611,7 +774,21 @@ function PassedMatches({ rows, onSelect }: { rows: SelectionSummary[]; onSelect:
         <div><span>W–L</span><strong>{wins}–{losses}</strong></div>
         <div><span>Hit rate</span><strong>{hitRate}</strong></div>
         <div><span>ROI</span><strong>{roi}</strong></div>
-        <small>{filteredRows.length} shown · {settledRows.length} settled · {roiRows.length} priced</small>
+        <div><span>Saved</span><strong>{roiRows.length ? fmtUnits(unitsSaved) : "—"}</strong></div>
+        <div><span>Forfeited</span><strong>{roiRows.length ? fmtUnits(-unitsForfeited) : "—"}</strong></div>
+        <div><span>Weighted net</span><strong>{roiRows.length ? fmtUnits(weightedNet) : "—"}</strong></div>
+        <small>{filteredRows.length} shown · {settledRows.length} settled · {roiRows.length} priced · weighted in flat stakes: +1 per Passed rejection, −(odds − 1) per Failed</small>
+      </div>
+    </div>
+    <div className="odds-band-audit" aria-label="Rejection audit by odds band">
+      <span className="odds-band-audit-title">Rejection audit by odds band</span>
+      <div className="odds-band-audit-grid">
+        {bandStats.map(band => <div key={band.label} className="odds-band-audit-card">
+          <strong>{band.label}</strong>
+          <span>{band.priced} priced · {band.settled} settled</span>
+          <span>W–L {band.wins}–{band.losses} · Pass {band.passRate}</span>
+          <span>ROI {band.roi} · Weighted net {band.weighted}</span>
+        </div>)}
       </div>
     </div>
     {rows.length === 0 ? <div className="decision-empty"><strong>No rejected candidates recorded</strong><span>When the candidate ledger is empty, there is no pass explanation to display.</span></div> : filteredRows.length === 0 ? <div className="decision-empty"><strong>No records match these filters</strong><span>Adjust one or more filters to show rejection ledger records.</span></div> : <div className="decision-table-wrap passed-matches-table-wrap">

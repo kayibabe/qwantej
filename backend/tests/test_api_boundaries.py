@@ -62,6 +62,15 @@ def test_customer_ticket_reads_require_an_authenticated_session():
         assert require_authenticated_user in dependency_callables, route.path
 
 
+def test_public_proof_is_readable_without_an_account():
+    route = _route("/tickets/public-proof", "GET", tickets.router)
+    dependency_callables = {
+        dependency.call for dependency in route.dependant.dependencies
+    }
+    assert require_authenticated_user not in dependency_callables
+    assert require_pro_access not in dependency_callables
+
+
 def test_custom_accumulator_mutations_require_authenticated_pro_access():
     for route in custom_accumulators.router.routes:
         if isinstance(route, APIRoute) and route.path in {"", "/{accumulator_id}"}:

@@ -16,6 +16,7 @@ import {
   matchDisplayState,
   matchStatusText,
   reasonLabel,
+  selectionStatusLabel,
   spreadLabel,
   spreadTone,
 } from "./helpers";
@@ -150,12 +151,6 @@ export function AllMatches({
     return () => { active = false; };
   }, []);
   const leagues = [...new Set(rows.map(([, selections]) => selections[0]?.competition).filter(Boolean))].sort();
-  const leagueCounts = rows.reduce<Record<string, number>>((counts, [, selections]) => {
-    const league = selections[0]?.competition;
-    if (league) counts[league] = (counts[league] ?? 0) + 1;
-    return counts;
-  }, {});
-  const topLeagues = Object.entries(leagueCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 8);
   const markets = [...new Set(rows.flatMap(([, selections]) => selections.map((row) => formatMarket(row.market))))].sort();
   const marketCounts = rows.reduce<Record<string, number>>((counts, [, selections]) => {
     for (const market of new Set(selections.map((row) => formatMarket(row.market)))) {
@@ -364,50 +359,87 @@ export function AllMatches({
     </button>
   );
   return (
-    <section className="selection-panel all-matches-panel">
-      <div className="section-heading">
-        <div>
-          <h2>System picks by match</h2>
-          <span className="section-note">
-            Q ≥75 selections only · ticket publication also checks odds, edge, freshness,
-            data quality, diversification, and ticket construction
-          </span>
-        </div>
-        <span className="section-note match-count-summary">
-          Showing <b>{sortedRows.length}</b> of <b>{rows.length}</b> matches with system picks · {loadedSelections} of {totalSelections} picks loaded
-          {statusCounts.finished > 0 && <> · <b>{statusCounts.finished}</b> finished</>}
-          {statusCounts.live > 0 && <> · <b>{statusCounts.live}</b> live</>}
-          {statusCounts.scheduled > 0 && <> · <b>{statusCounts.scheduled}</b> upcoming</>}
-        </span>
-      </div>
+    <section className="selection-panel all-matches-panel system-picks-panel">
       {rows.length === 0 ? (
         <p className="panel-empty">
           No Q ≥75 system picks are available for this date.
         </p>
       ) : (
-        <div className="matches-workspace">
-          <aside className="match-insights-column" aria-label="Match overview">
-            <section className="match-sidebar-card">
-              <h3>System picks</h3>
-              <p className="match-sidebar-caption">Qualified selections for this date</p>
-              <div className="match-sidebar-stat"><span>Matches</span><strong>{discoveredRows.length}</strong></div>
-              <div className="match-sidebar-stat"><span>Upcoming</span><strong>{statusCounts.scheduled}</strong></div>
-              <div className="match-sidebar-stat"><span>In play</span><strong>{statusCounts.live}</strong></div>
-            </section>
-            <section className="match-sidebar-card">
-              <div className="match-sidebar-heading"><h3>Top leagues</h3><button onClick={() => setLeagueFilter("all")}>All</button></div>
-              {topLeagues.length === 0 ? <p className="match-sidebar-caption">No competition data</p> : topLeagues.map(([league, count]) => (
-                <button key={league} className={`top-league-option${leagueFilter === league ? " active" : ""}`} onClick={() => setLeagueFilter(league)}>
-                  <span>{league}</span><b>{count}</b>
+        <>
+          <div className="picks-overview">
+            <div className="picks-overview-counts">
+              <span><b>{sortedRows.length}</b> of <b>{rows.length}</b> matches shown</span>
+              <span><b>{loadedSelections}</b> of <b>{totalSelections}</b> picks loaded</span>
+            </div>
+            <div className="picks-overview-statuses" aria-label="Match status totals">
+              {statusCounts.finished > 0 && <span className="finished"><b>{statusCounts.finished}</b> finished</span>}
+              {statusCounts.live > 0 && <span className="live"><b>{statusCounts.live}</b> in play</span>}
+              {statusCounts.scheduled > 0 && <span className="scheduled"><b>{statusCounts.scheduled}</b> upcoming</span>}
+              {statusCounts.postponed > 0 && <span><b>{statusCounts.postponed}</b> postponed</span>}
+              {statusCounts.cancelled > 0 && <span><b>{statusCounts.cancelled}</b> cancelled</span>}
+              {(statusCounts.abandoned > 0 || statusCounts.awarded > 0) && <span><b>{statusCounts.abandoned + statusCounts.awarded}</b> needing review</span>}
+            </div>
+            <p className="picks-overview-note">
+              Q ≥75 selections only. Publication also applies price, edge, freshness, quality, and diversification gates.
+            </p>
+          </div>
+
+          <div className="picks-controls">
+            <div className="picks-controls-row picks-controls-search">
+              <label className="picks-field picks-search">
+                <span>Search</span>
+                <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Team or competition" />
+              </label>
+              <label className="picks-field">
+                <span>Competition</span>
+                <select value={leagueFilter} onChange={(event) => setLeagueFilter(event.target.value)}>
+                  <option value="all">All competitions</option>
+                  {leagues.map((league) => <option key={league} value={league}>{league}</option>)}
+                </select>
+              </label>
+              <div className="picks-sort-group">
+                <label className="picks-field">
+                  <span>Sort by</span>
+                  <select aria-label="Sort matches" value={sort.key} onChange={(event) => changeSort(event.target.value as MatchSortKey)}>
+                    <option value="kickoff">Kickoff</option><option value="match">Match</option><option value="league">Competition</option>
+                    <option value="q">Q-score</option><option value="markets">Markets</option><option value="spread">Model agreement</option><option value="edge">Model edge</option>
+                  </select>
+                </label>
+                <button
+                  className="picks-sort-direction"
+                  type="button"
+                  onClick={() => setSort((current) => ({ ...current, direction: current.direction === "asc" ? "desc" : "asc" }))}
+                  title={`Sort ${sort.direction === "asc" ? "descending" : "ascending"}`}
+                >
+                  {sort.direction === "asc" ? "Asc ↑" : "Desc ↓"}
                 </button>
-              ))}
-            </section>
-          </aside>
-          <div className="matches-browser">
-          <div className="match-toolbar">
-            <div className="match-explorer-controls">
-              <label className="match-search"><span className="sr-only">Search team or competition</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Team or competition" /></label>
-              <label><span className="sr-only">Filter by league</span><select value={leagueFilter} onChange={(event) => setLeagueFilter(event.target.value)}><option value="all">All competitions</option>{leagues.map((league) => <option key={league} value={league}>{league}</option>)}</select></label>
+              </div>
+            </div>
+            <div className="picks-controls-row picks-controls-filter">
+              <div className="match-status-filters" aria-label="Filter matches by status">
+                {filterButton("all", "All", discoveredRows.length)}
+                {statusCounts.finished > 0 && filterButton("finished", "Finished", statusCounts.finished)}
+                {statusCounts.live > 0 && filterButton("live", "In play", statusCounts.live)}
+                {statusCounts.scheduled > 0 && filterButton("scheduled", "Upcoming", statusCounts.scheduled)}
+                {statusCounts.postponed > 0 && filterButton("postponed", "Postponed", statusCounts.postponed)}
+                {statusCounts.cancelled > 0 && filterButton("cancelled", "Cancelled", statusCounts.cancelled)}
+                {statusCounts.abandoned > 0 && filterButton("abandoned", "Abandoned · review", statusCounts.abandoned)}
+                {statusCounts.awarded > 0 && filterButton("awarded", "Awarded · review", statusCounts.awarded)}
+                <button className={`fixture-favorites-filter${favoriteOnly ? " active" : ""}`} onClick={() => setFavoriteOnly((current) => !current)} aria-pressed={favoriteOnly} title="Save matches to your account when signed in">
+                  <span aria-hidden="true">★</span> Favourites <b>{favorites.length}</b>
+                </button>
+              </div>
+              <div className="picks-controls-actions">
+                <button className="match-clear-filters" onClick={clearFilters} disabled={activeFilterCount === 0}>
+                  Clear filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
+                </button>
+                <button className="match-copy-link" onClick={copyViewLink} title="Copy a link with the selected date and filters">
+                  {copyState === "copied" ? "Link copied" : copyState === "failed" ? "Copy unavailable" : "Copy view link"}
+                </button>
+              </div>
+            </div>
+            <div className="picks-controls-row picks-controls-market">
+              <span className="picks-row-label">Market</span>
               <div className="market-quick-filters" role="group" aria-label="Quick market filters">
                 <button className={marketFilter === "all" ? "active" : ""} onClick={() => setMarketFilter("all")} aria-pressed={marketFilter === "all"}>All markets</button>
                 {quickMarkets.map((market) => (
@@ -417,41 +449,16 @@ export function AllMatches({
                 ))}
               </div>
               {markets.some((market) => !quickMarkets.includes(market)) && (
-                <label><span className="sr-only">Filter by another market</span><select value={quickMarkets.includes(marketFilter) || marketFilter === "all" ? "" : marketFilter} onChange={(event) => { if (event.target.value) setMarketFilter(event.target.value); }}>
-                  <option value="">More markets…</option>{markets.filter((market) => !quickMarkets.includes(market)).map((market) => <option key={market} value={market}>{market}</option>)}
-                </select></label>
+                <label className="picks-more-markets">
+                  <span className="sr-only">Filter by another market</span>
+                  <select value={quickMarkets.includes(marketFilter) || marketFilter === "all" ? "" : marketFilter} onChange={(event) => { if (event.target.value) setMarketFilter(event.target.value); }}>
+                    <option value="">More markets…</option>{markets.filter((market) => !quickMarkets.includes(market)).map((market) => <option key={market} value={market}>{market}</option>)}
+                  </select>
+                </label>
               )}
             </div>
-            <div className="match-status-filters" aria-label="Filter matches by status">
-              {filterButton("all", "All", discoveredRows.length)}
-              {filterButton("finished", "Finished", statusCounts.finished)}
-              {filterButton("live", "In play", statusCounts.live)}
-              {filterButton("scheduled", "Pending", statusCounts.scheduled)}
-              {statusCounts.postponed > 0 && filterButton("postponed", "Postponed", statusCounts.postponed)}
-              {statusCounts.cancelled > 0 && filterButton("cancelled", "Cancelled", statusCounts.cancelled)}
-              {statusCounts.abandoned > 0 && filterButton("abandoned", "Abandoned · review", statusCounts.abandoned)}
-              {statusCounts.awarded > 0 && filterButton("awarded", "Awarded · review", statusCounts.awarded)}
-              <button className={`fixture-favorites-filter${favoriteOnly ? " active" : ""}`} onClick={() => setFavoriteOnly((current) => !current)} aria-pressed={favoriteOnly} title="Save matches to your account when signed in">
-                <span aria-hidden="true">★</span> Favourites <b>{favorites.length}</b>
-              </button>
-            </div>
-            <div className="match-sort-controls">
-              <label><span>Sort</span><select aria-label="Sort matches" value={sort.key} onChange={(event) => changeSort(event.target.value as MatchSortKey)}>
-                <option value="kickoff">Kickoff</option><option value="match">Match</option><option value="league">Competition</option>
-                <option value="q">Q-score</option><option value="markets">Markets</option><option value="spread">Model agreement</option><option value="edge">Model edge</option>
-              </select></label>
-              <button type="button" onClick={() => setSort((current) => ({ ...current, direction: current.direction === "asc" ? "desc" : "asc" }))}>
-                {sort.direction === "asc" ? "Ascending ↑" : "Descending ↓"}
-              </button>
-            </div>
-            <button className="match-clear-filters" onClick={clearFilters} disabled={activeFilterCount === 0}>
-              Clear filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
-            </button>
-            <button className="match-copy-link" onClick={copyViewLink} title="Copy a link with the selected date and filters">
-              {copyState === "copied" ? "Link copied" : copyState === "failed" ? "Copy unavailable" : "Copy view link"}
-            </button>
-            <details className="match-more-filters">
-              <summary>More filters and saved views</summary>
+            <details className="match-more-filters picks-more-filters">
+              <summary>Advanced filters and saved views</summary>
               <div className="match-filter-presets">
               <label><span>Saved filters</span><select value={presetId} onChange={(event) => {
                 setPresetId(event.target.value);
@@ -478,6 +485,7 @@ export function AllMatches({
               </div>
             </details>
           </div>
+
           {filteredResults.length > 0 && <section className="match-scan-outcomes" aria-label="Settled results for this filtered match date">
             <div className="match-scan-outcomes-heading"><strong>Settled picks in this view</strong><span>{filteredResultCounts.matches.size} matches with settled picks · selected date only</span></div>
             <div className="match-scan-outcomes-table-wrap">
@@ -495,6 +503,13 @@ export function AllMatches({
             </div>
             <p>{filteredResultCounts.void} void picks excluded from hit rate and ROI. ROI assumes one unit per settled non-void pick with captured odds; priced picks: {filteredResultCounts.priced} of {decidedCount}. Net units and ROI exclude picks without valid captured odds. This one-date summary is not a strategy backtest or a profitability claim.</p>
           </section>}
+          <div className="picks-list-head" aria-hidden="true">
+            <span>Match</span>
+            <span className="picks-list-stats"><span>Kickoff</span><span>Q-score</span><span>Markets</span><span>Spread</span></span>
+            <span>Pick result</span>
+            <span>Status</span>
+            <span />
+          </div>
           {sortedRows.length === 0 ? (
             <p className="panel-empty">{favoriteOnly && favorites.length === 0 ? "No favourites yet. Select a star beside a match to save it here." : "No qualified matches match these filters."}</p>
           ) : (
@@ -515,8 +530,7 @@ export function AllMatches({
           {onLoadMore && loadedSelections < totalSelections && <button className="btn-ghost btn-sm" type="button" onClick={onLoadMore} disabled={loadingMore}>
             {loadingMore ? "Loading more candidates…" : `Load next 100 candidates (${totalSelections - loadedSelections} remaining)`}
           </button>}
-          </div>
-        </div>
+        </>
       )}
     </section>
   );
@@ -544,14 +558,19 @@ function MatchMarketGroup({
   const first = selections[0];
   const displayState = matchDisplayState(first);
   const best = selections.reduce((a, b) => (a.q_score > b.q_score ? a : b));
-  const outcomeCounts = selections.reduce(
+  const pickOutcomes = selections.reduce<Record<"won" | "lost" | "void" | "pending", number>>(
     (counts, row) => {
-      const outcome = row.result ?? "pending";
+      const outcome = row.result === "won" || row.result === "lost" || row.result === "void" ? row.result : "pending";
       counts[outcome] += 1;
       return counts;
     },
     { won: 0, lost: 0, void: 0, pending: 0 },
   );
+  const statusTone = displayState === "live" ? "inplay"
+    : displayState === "finished" ? "finished"
+    : displayState === "scheduled" ? "scheduled"
+    : displayState === "postponed" || displayState === "cancelled" ? "void"
+    : "pending";
   const sorted = [...selections].sort((a, b) => {
     const values: Record<typeof sort.key, [string | number, string | number]> =
       {
@@ -587,18 +606,37 @@ function MatchMarketGroup({
   );
   return (
     <details className={`match-accordion match-card ${displayState}`}>
-      <summary className="match-card-summary">
-        <div className="match-card-heading">
-          <div className="summary-match">
-            <small className="summary-league">{first.competition}</small>
-            <strong>
-              {first.home_team} <span className="leg-match-vs">vs</span>{" "}
-              {first.away_team}
-            </strong>
-          </div>
-          <small className={`summary-match-status ${displayState}`}>
-            {matchStatusText(first)}
-          </small>
+      <summary className="match-card-summary match-row-summary">
+        <div className="match-row-match">
+          <span className="match-row-league">{first.competition}</span>
+          <strong className="match-row-teams" title={`${first.home_team} vs ${first.away_team}`}>
+            {first.home_team} <span className="leg-match-vs">vs</span>{" "}
+            {first.away_team}
+          </strong>
+        </div>
+        <div className="match-row-stats">
+          <span><small>Kickoff</small><b className="kickoff-time">{formatKickoff(first.kickoff_at)}</b></span>
+          <span><small>Q-score</small><b>Q {best.q_score.toFixed(1)}</b></span>
+          <span><small>Markets</small><b>{selections.length}</b></span>
+          <span><small>Spread</small><b className={`spread-badge ${spreadTone(best.model_agreement)}`}>{best.model_agreement == null ? "—" : `${(best.model_agreement * 100).toFixed(1)} pp`}</b></span>
+        </div>
+        <div className="match-row-picks">
+          <small>Pick result</small>
+          <span className="match-row-picks-badges">
+            {(["won", "lost", "void", "pending"] as const)
+              .filter((outcome) => pickOutcomes[outcome] > 0)
+              .map((outcome) => (
+                <b key={outcome} className={`market-result ${outcome}`}>
+                  {selectionStatusLabel(outcome)}
+                  {pickOutcomes[outcome] > 1 ? ` ×${pickOutcomes[outcome]}` : ""}
+                </b>
+              ))}
+          </span>
+        </div>
+        <div className="match-row-status">
+          <b className={`match-result-badge ${statusTone}`}>{matchStatusText(first)}</b>
+        </div>
+        <div className="match-row-actions">
           <button
             type="button"
             className={`match-favorite${isFavorite ? " active" : ""}`}
@@ -607,24 +645,6 @@ function MatchMarketGroup({
             aria-pressed={isFavorite}
             title={isFavorite ? "Remove from favourites" : "Add to favourites"}
           >★</button>
-        </div>
-        <div className="match-card-metrics">
-          <span><small>Kickoff</small><b className="kickoff-time">{formatKickoff(first.kickoff_at)}</b></span>
-          <span><small>Q-score</small><b>Q {best.q_score.toFixed(1)}</b></span>
-          <span><small>Markets</small><b>{selections.length}</b></span>
-          <span><small>Spread</small><b className={`spread-badge ${spreadTone(best.model_agreement)}`}>{best.model_agreement == null ? "—" : `${(best.model_agreement * 100).toFixed(1)} pp`}</b></span>
-        </div>
-        <div className="match-card-statuses" aria-label="Match and market outcomes">
-          {displayState === "live" && <b className="match-result-badge inplay">In play</b>}
-          {displayState === "scheduled" && <b className="match-result-badge pending">Pending</b>}
-          {displayState === "postponed" && <b className="match-result-badge void">Postponed</b>}
-          {displayState === "cancelled" && <b className="match-result-badge void">Cancelled</b>}
-          {displayState === "abandoned" && <b className="match-result-badge pending">Abandoned · review</b>}
-          {displayState === "awarded" && <b className="match-result-badge pending">Awarded · review</b>}
-          {displayState === "finished" && outcomeCounts.won > 0 && <b className="match-result-badge won">{outcomeCounts.won > 1 ? `${outcomeCounts.won} Won` : "Won"}</b>}
-          {displayState === "finished" && outcomeCounts.lost > 0 && <b className="match-result-badge lost">{outcomeCounts.lost > 1 ? `${outcomeCounts.lost} Lost` : "Lost"}</b>}
-          {displayState === "finished" && outcomeCounts.void > 0 && <b className="match-result-badge void">{outcomeCounts.void > 1 ? `${outcomeCounts.void} Void` : "Void"}</b>}
-          {displayState === "finished" && outcomeCounts.pending > 0 && <b className="match-result-badge pending">{outcomeCounts.pending > 1 ? `${outcomeCounts.pending} Pending` : "Pending"}</b>}
           <span className="match-card-expand">View markets <b aria-hidden="true">⌄</b></span>
         </div>
       </summary>
@@ -641,44 +661,20 @@ function MatchMarketGroup({
           const blockers = accumulatorBlockers(row);
           const freshness = quoteFreshness(row);
           return <div className={`market-row${blockers.length > 0 ? " blocked" : ""}`} key={row.prediction_id}>
-            <div>
-              {!selectionRepeatsMarket(row.market, row.selection) && <strong>{formatMarket(row.market)}</strong>}
-              <small>
-                {formatSelection(row.selection)}{" "}
+            <div className="market-row-identity">
+              {!selectionRepeatsMarket(row.market, row.selection) && <span className="market-row-market">{formatMarket(row.market)}</span>}
+              <strong className="market-row-selection">{formatSelection(row.selection)}</strong>
+              <span className="market-row-badges">
                 <b className={`grade-badge grade-${gradeTone(row.q_grade)}`}>
                   {row.q_grade ?? "Qualified"}
                 </b>
                 <b className={`market-result ${row.result ?? "pending"}`}>{row.result === "won" ? "Won" : row.result === "lost" ? "Lost" : row.result === "void" ? "Void" : "Pending"}</b>
-              </small>
+              </span>
               <div className="market-chance-evidence">
                 <span>Model chance <b>{percent(row.model_probability)}</b></span>
                 <span>Bookmaker implied <b>{percent(row.source_implied_probability ?? row.avg_implied)}</b> <em>margin included</em></span>
               </div>
             </div>
-            <span className="market-stat">
-              <small>Q-score</small>
-              <b>Q {row.q_score.toFixed(1)}</b>
-            </span>
-            <span className="market-stat">
-              <small>Captured odds</small>
-              <b>{row.best_odds ? `${row.best_odds.toFixed(2)}×` : "—"}</b>
-              <small className="market-quote-meta">{row.source_bookmaker ?? "Bookmaker unavailable"} · {quoteTime(row.source_odds_at)} · <b className={freshness.state}>{freshness.label}</b></small>
-            </span>
-            <span
-              className={`market-stat spread-cell ${spreadTone(row.model_agreement)}`}
-              title={`Model spread: ${spreadLabel(row.model_agreement)}`}
-            >
-              <small>Spread</small>
-              <b>
-                {row.model_agreement == null
-                  ? "—"
-                  : `${(row.model_agreement * 100).toFixed(1)} pp`}
-              </b>
-            </span>
-            <span className={`market-stat ${row.edge && row.edge > 0 ? "positive" : ""}`}>
-              <small>Edge</small>
-              <b>{row.edge != null ? `${(row.edge * 100).toFixed(1)}%` : "—"}</b>
-            </span>
             <div className="market-row-actions">
               {allowAdd && <button
                 className="btn-ghost btn-sm"
@@ -692,6 +688,25 @@ function MatchMarketGroup({
                 Details
               </button>
             </div>
+            <dl className="market-row-facts">
+              <div>
+                <dt>Q-score</dt>
+                <dd>Q {row.q_score.toFixed(1)}</dd>
+              </div>
+              <div>
+                <dt>Captured odds</dt>
+                <dd>{row.best_odds ? `${row.best_odds.toFixed(2)}×` : "—"}</dd>
+                <small className="market-quote-meta">{row.source_bookmaker ?? "Bookmaker unavailable"} · {quoteTime(row.source_odds_at)} · <b className={freshness.state}>{freshness.label}</b></small>
+              </div>
+              <div className={spreadTone(row.model_agreement)} title={`Model spread: ${spreadLabel(row.model_agreement)}`}>
+                <dt>Spread</dt>
+                <dd>{row.model_agreement == null ? "—" : `${(row.model_agreement * 100).toFixed(1)} pp`}</dd>
+              </div>
+              <div className={row.edge != null && row.edge > 0 ? "positive" : undefined}>
+                <dt>Edge</dt>
+                <dd>{row.edge != null ? `${(row.edge * 100).toFixed(1)}%` : "—"}</dd>
+              </div>
+            </dl>
             {blockers.length > 0 && <small className="market-row-blockers">Not addable · {blockers.map(reasonLabel).join(" · ")}</small>}
           </div>
         })}

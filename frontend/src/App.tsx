@@ -1,10 +1,13 @@
-import { Component, lazy, Suspense, useEffect, useState, type ErrorInfo, type ReactNode } from 'react'
+import { Component, lazy, Suspense, useEffect, useState, type ErrorInfo, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import './App.css'
 import './WorkspaceNavigation.css'
+import './shell.css'
 import { TODAY } from './pages/dailyTickets/helpers'
 import { addDays } from './utils'
-import { AuthControls, useAuth } from './auth'
+import { useAuth } from './auth'
 import { fetchMarketCatalog, installMarketCatalog } from './lib/api'
+import AccountMenu, { type ThemePreference } from './components/AccountMenu'
+import CommandPalette, { type CommandAction } from './components/CommandPalette'
 
 const DailyTicketsPage = lazy(() => import('./pages/DailyTickets'))
 const TrackerPage = lazy(() => import('./pages/Tracker'))
@@ -23,7 +26,6 @@ function PageLoading() {
   return <div className="route-loading" role="status" aria-live="polite">Loading page…</div>
 }
 
-type Theme = 'dark' | 'light' | 'system'
 type ModulePage = 'tickets' | 'live' | 'insights' | 'research' | 'tracker' | 'analytics' | 'tools' | 'admin'
 type Page = ModulePage | 'home' | 'match' | 'upgrade' | 'login' | 'reset-password' | 'verify-email'
 type Workspace = 'football' | 'research'
@@ -32,6 +34,26 @@ const RESEARCH_TABS: ResearchTab[] = ['picks', 'odds-policy', 'market-roi', 'dai
 type OverviewTab = 'fixtures' | 'picks' | 'tickets' | 'passed'
 const OVERVIEW_TABS: OverviewTab[] = ['fixtures', 'picks', 'tickets', 'passed']
 const MATCH_RETURN_ROUTES = new Set(['/tickets', '/matches', '/research', '/live', '/insights'])
+const THEME_KEY = 'qwantej-theme'
+
+interface ShellNavItem {
+  id: ModulePage
+  label: string
+  group: 'Decide' | 'Research' | 'System'
+  adminOnly?: boolean
+}
+
+const SHELL_NAV: ShellNavItem[] = [
+  { id: 'tickets', label: 'Today', group: 'Decide' },
+  { id: 'live', label: 'Live', group: 'Decide' },
+  { id: 'insights', label: 'Stats & trends', group: 'Decide' },
+  { id: 'research', label: 'Research', group: 'Research', adminOnly: true },
+  { id: 'tracker', label: 'Track', group: 'Research', adminOnly: true },
+  { id: 'analytics', label: 'Validate', group: 'Research', adminOnly: true },
+  { id: 'tools', label: 'Tools', group: 'System', adminOnly: true },
+  { id: 'admin', label: 'Admin', group: 'System', adminOnly: true },
+]
+const NAV_GROUP_ORDER: ShellNavItem['group'][] = ['Decide', 'Research', 'System']
 
 class RouteErrorBoundary extends Component<{ children: ReactNode; onRetry: () => void }, { failed: boolean }> {
   state = { failed: false }
@@ -73,18 +95,34 @@ function datePath(path: string, date: string, extra?: Record<string, string>): s
   return query ? `${path}?${query}` : path
 }
 
-const NAV: { id: ModulePage; label: string }[] = [
-  { id: 'tickets', label: 'Today' },
-  { id: 'live', label: 'Live' },
-  { id: 'insights', label: 'Stats & trends' },
-]
-const INTERNAL_NAV: { id: ModulePage; label: string }[] = [
-  { id: 'research', label: 'Research' },
-  { id: 'tracker', label: 'Track' },
-  { id: 'analytics', label: 'Validate' },
-  { id: 'tools', label: 'Tools' },
-  { id: 'admin', label: 'Admin' },
-]
+function readStoredTheme(): ThemePreference {
+  try {
+    const stored = window.localStorage.getItem(THEME_KEY)
+    return stored === 'dark' || stored === 'light' ? stored : 'system'
+  } catch {
+    return 'system'
+  }
+}
+
+function pageTitle(page: Page): string {
+  switch (page) {
+    case 'tickets': return 'Today'
+    case 'live': return 'Live'
+    case 'insights': return 'Stats & trends'
+    case 'research': return 'Research'
+    case 'tracker': return 'Track'
+    case 'analytics': return 'Validate'
+    case 'tools': return 'Tools'
+    case 'admin': return 'Admin'
+    case 'match': return 'Match intelligence'
+    case 'upgrade': return 'Plans'
+    default: return 'Workspace'
+  }
+}
+
+function displayDate(value: string): string {
+  return new Date(`${value}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+}
 
 const NAV_META: Record<ModulePage, { icon: string; hint: string }> = {
   tickets: { icon: 'sparkles', hint: 'Today’s fixtures, system picks, and accumulator tickets' },
@@ -118,12 +156,12 @@ export default function App() {
   const [routeAttempt, setRouteAttempt] = useState(0)
   const [researchTab, setResearchTab] = useState<ResearchTab>(() => researchTabFromSearch(window.location.search))
   const [overviewTab, setOverviewTab] = useState<OverviewTab>(() => overviewTabFromSearch(window.location.search))
-  const [workspace, setWorkspace] = useState<Workspace>(() => workspaceForLocation(routePage(window.location.pathname), window.location.search) ?? 'football')
   const [matchId, setMatchId] = useState<number | null>(() => routeMatchId(window.location.pathname))
   const [predictionId, setPredictionId] = useState<number | null>(() => routePredictionId(window.location.search))
   const [matchReturnTo, setMatchReturnTo] = useState<string>(() => matchReturnPath(window.location.search))
   const [date, setDate] = useState(() => dateFromSearch(window.location.search))
-  const [theme, setTheme] = useState<Theme>('system')
+  const [theme, setTheme] = useState<ThemePreference>(readStoredTheme)
+  const [paletteOpen, setPaletteOpen] = useState(false)
   const [, setMarketCatalogLoaded] = useState(false)
 
   useEffect(() => {
@@ -141,6 +179,16 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    if (theme === 'system') document.documentElement.removeAttribute('data-theme')
+    else document.documentElement.setAttribute('data-theme', theme)
+    try {
+      window.localStorage.setItem(THEME_KEY, theme)
+    } catch {
+      // Private browsing can reject storage writes; the session still switches theme.
+    }
+  }, [theme])
+
+  useEffect(() => {
     const url = new URL(window.location.href)
     // The former standalone /matches page now lives inside Today.
     if (url.pathname.replace(/\/$/, '') === '/matches') url.pathname = '/tickets'
@@ -153,8 +201,6 @@ export default function App() {
     const onPopState = () => {
       const nextPage = routePage(window.location.pathname)
       setPage(nextPage)
-      const nextWorkspace = workspaceForLocation(nextPage, window.location.search)
-      if (nextWorkspace) setWorkspace(nextWorkspace)
       setMatchId(routeMatchId(window.location.pathname))
       setPredictionId(routePredictionId(window.location.search))
       setMatchReturnTo(matchReturnPath(window.location.search))
@@ -171,24 +217,33 @@ export default function App() {
   }, [page])
 
   useEffect(() => {
+    const onShortcut = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'k') return
+      event.preventDefault()
+      setPaletteOpen(current => !current)
+    }
+    window.addEventListener('keydown', onShortcut)
+    return () => window.removeEventListener('keydown', onShortcut)
+  }, [])
+
+  useEffect(() => {
     if (authLoading) return
     const path = window.location.pathname
-    if (!user && !['/', '/login', '/reset-password', '/verify-email'].includes(path)) {
+    if (!user && !['/', '/login', '/reset-password', '/verify-email', '/upgrade'].includes(path)) {
       window.history.replaceState({}, '', '/login')
       setPage('login')
-      setWorkspace('football')
       setMatchId(null)
     } else if (user && (path === '/login' || path === '/')) {
       window.history.replaceState({}, '', '/tickets')
       setPage('tickets')
-      setWorkspace('football')
     }
   }, [authLoading, user])
 
   useEffect(() => {
-    if (authLoading || !user || isInternal || !isInternalPage(page) || (page === 'match' && user.plan === 'pro')) return
+    // Match intelligence stays reachable for free users so they see a Pro gate
+    // instead of being bounced back to Today without an explanation.
+    if (authLoading || !user || isInternal || page === 'match' || !isInternalPage(page)) return
     setPage('tickets')
-    setWorkspace('football')
     setMatchId(null)
     window.history.replaceState({}, '', '/tickets')
   }, [authLoading, isInternal, page])
@@ -203,8 +258,6 @@ export default function App() {
     if (next === 'research') { navigateResearch(researchTab, replace); return }
     setPage(next)
     if (next === 'tickets') setOverviewTab('fixtures')
-    const nextWorkspace = workspaceForPage(next)
-    if (nextWorkspace) setWorkspace(nextWorkspace)
     const path = next === 'home' ? '/' : next === 'upgrade' ? '/upgrade' : `/${next}`
     window.history[replace ? 'replaceState' : 'pushState']({}, '', datePath(path, date))
   }
@@ -232,7 +285,6 @@ export default function App() {
     const targetUrl = new URL(target, window.location.origin)
     const nextPage = routePage(targetUrl.pathname)
     setPage(nextPage)
-    setWorkspace(workspaceForPage(nextPage) ?? 'football')
     setMatchId(null)
     setPredictionId(null)
     setDate(dateFromSearch(targetUrl.search))
@@ -247,7 +299,6 @@ export default function App() {
   function navigateResearch(tab: ResearchTab, replace = false) {
     setResearchTab(tab)
     setPage('research')
-    setWorkspace('research')
     const method = replace ? 'replaceState' : 'pushState'
     window.history[method]({}, '', datePath('/research', date, { tab }))
   }
@@ -256,7 +307,6 @@ export default function App() {
     const nextDate = targetDate ?? date
     setDate(nextDate)
     setPage('tracker')
-    setWorkspace('research')
     const params = new URLSearchParams()
     params.set('view', 'accumulators')
     if (ticketId != null) params.set('ticket', String(ticketId))
@@ -272,37 +322,44 @@ export default function App() {
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
   }
 
+  function openOverviewTab(tab: OverviewTab) {
+    setPage('tickets')
+    setOverviewTab(tab)
+    const params = new URLSearchParams()
+    if (tab !== 'fixtures') params.set('tab', tab)
+    if (date !== TODAY) params.set('date', date)
+    const query = params.toString()
+    window.history.pushState({}, '', query ? `/tickets?${query}` : '/tickets')
+  }
+
+  function refreshWorkspace() {
+    const refreshEvent = new CustomEvent('qwantej:refresh', { cancelable: true })
+    const handledByPage = window.dispatchEvent(refreshEvent) === false
+    if (!handledByPage) setRouteAttempt(attempt => attempt + 1)
+  }
+
   function navigateTicketSource(targetDate?: string) {
     const nextDate = targetDate ?? date
     setDate(nextDate)
     setOverviewTab('tickets')
     setPage('tickets')
-    setWorkspace('football')
     const params = new URLSearchParams({ tab: 'tickets' })
     if (nextDate !== TODAY) params.set('date', nextDate)
     window.history.pushState({}, '', `/tickets?${params}`)
   }
 
-  function switchWorkspace(next: Workspace) {
-    if (!isInternal || next === workspace) return
-    if (next === 'football') goTo('tickets')
-    else navigateResearch(researchTab)
-  }
-
-  const cycleTheme = () => {
-    setTheme(t => {
-      const next = t === 'system' ? 'dark' : t === 'dark' ? 'light' : 'system'
-      if (next === 'system') {
-        document.documentElement.removeAttribute('data-theme')
-      } else {
-        document.documentElement.setAttribute('data-theme', next)
-      }
-      return next
-    })
-  }
-
-  const nav = (n: number) => setDate(d => addDays(d, n))
   const navPage = page === 'match' ? routePage(new URL(matchReturnTo || '/tickets', window.location.origin).pathname) : page
+  const [openNavGroup, setOpenNavGroup] = useState<ShellNavItem['group'] | null>(
+    () => SHELL_NAV.find(item => item.id === navPage)?.group ?? null
+  )
+
+  useEffect(() => {
+    const activeGroup = SHELL_NAV.find(item => item.id === navPage)?.group
+    if (activeGroup) setOpenNavGroup(activeGroup)
+  }, [navPage])
+  const workspace: Workspace = page === 'match'
+    ? workspaceForPage(routePage(new URL(matchReturnTo || '/tickets', window.location.origin).pathname)) ?? 'football'
+    : workspaceForPage(page) ?? 'football'
 
   if (authLoading) {
     return <div className="auth-standalone" role="status" aria-live="polite">Checking your session…</div>
@@ -320,90 +377,218 @@ export default function App() {
 
   if (!user) {
     if (page === 'home') {
-      return <Suspense fallback={<PageLoading />}><PublicHome date={date} onDateChange={setDate} onSignIn={() => navigate('login')} onCreateAccount={() => { setPage('login'); window.history.pushState({}, '', '/login?mode=register') }} /></Suspense>
+      return <Suspense fallback={<PageLoading />}><PublicHome date={date} onDateChange={setDate} onSignIn={() => navigate('login')} onCreateAccount={() => { setPage('login'); window.history.pushState({}, '', '/login?mode=register') }} onViewPro={() => navigate('upgrade')} /></Suspense>
     }
-    return <div className="auth-standalone"><Suspense fallback={<PageLoading />}><LoginPage onSuccess={() => navigate('tickets', undefined, true)} /></Suspense></div>
+    if (page === 'upgrade') {
+      return <div className="auth-standalone"><Suspense fallback={<PageLoading />}><UpgradePage
+        anonymous
+        onBack={() => navigate('home')}
+        onSignIn={() => { setPage('login'); window.history.pushState({}, '', '/login?next=upgrade') }}
+        onCreateAccount={() => { setPage('login'); window.history.pushState({}, '', '/login?mode=register&next=upgrade') }}
+      /></Suspense></div>
+    }
+    return <div className="auth-standalone"><Suspense fallback={<PageLoading />}><LoginPage onSuccess={() => {
+      const next = new URLSearchParams(window.location.search).get('next')
+      navigate(next === 'upgrade' ? 'upgrade' : 'tickets', undefined, true)
+    }} /></Suspense></div>
   }
 
   if (page === 'home' || page === 'login') {
     return <div className="auth-standalone" role="status" aria-live="polite">Opening your workspace...</div>
   }
 
+  const visibleNav = SHELL_NAV.filter(item => !item.adminOnly || isInternal)
+  const navGroups = NAV_GROUP_ORDER
+    .map(label => ({ label, items: visibleNav.filter(item => item.group === label) }))
+    .filter(group => group.items.length > 0)
+
+  function moduleHref(id: ModulePage): string {
+    return id === 'research'
+      ? datePath('/research', date, { tab: researchTab })
+      : datePath(`/${id}`, date)
+  }
+
+  function navClick(id: ModulePage) {
+    return (event: ReactMouseEvent<HTMLAnchorElement>) => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+      event.preventDefault()
+      goTo(id)
+    }
+  }
+
+  const showDateNav = page === 'tickets' || (page === 'research' && isInternal)
+  const dateNav = showDateNav ? (
+    <div className="date-nav">
+      <button className="date-btn" onClick={() => setDate(addDays(date, -1))} title="Previous day" aria-label="Previous day">‹</button>
+      <div className="date-strip" role="group" aria-label="Choose match date">
+        {[-2, -1, 0, 1, 2].map(offset => {
+          const value = addDays(date, offset)
+          const localDate = new Date(`${value}T12:00:00`)
+          const label = localDate.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })
+          return <button
+            key={value}
+            className={`date-strip-day${date === value ? ' active' : ''}${value === TODAY ? ' today' : ''}`}
+            onClick={() => setDate(value)}
+            aria-label={label}
+            aria-pressed={date === value}
+          >
+            <span>{value === TODAY ? 'Today' : localDate.toLocaleDateString('en-GB', { weekday: 'short' })}</span>
+            <b>{localDate.getDate()}</b>
+          </button>
+        })}
+      </div>
+      <div className="date-nav-tools">
+        {date !== TODAY && <button className="today-btn" onClick={() => setDate(TODAY)}>Today</button>}
+        <label className="date-picker-control" title="Choose any date">
+          <span aria-hidden="true">▦</span>
+          <input
+            className="date-input"
+            type="date"
+            value={date}
+            aria-label="Choose any date"
+            onChange={event => setDate(event.target.value)}
+          />
+        </label>
+      </div>
+      <button className="date-btn" onClick={() => setDate(addDays(date, 1))} title="Next day" aria-label="Next day">›</button>
+    </div>
+  ) : null
+
+  const bottomBase: ModulePage[] = isInternal ? ['tickets', 'research', 'tracker'] : ['tickets', 'live', 'insights']
+  const activeNavItem = visibleNav.find(item => item.id === navPage)
+  const bottomItems = bottomBase
+    .map(id => visibleNav.find(item => item.id === id))
+    .filter((item): item is ShellNavItem => Boolean(item))
+    .slice(0, 3)
+  if (activeNavItem && !bottomItems.some(item => item.id === activeNavItem.id)) {
+    bottomItems[bottomItems.length - 1] = activeNavItem
+  }
+
+  const commandActions: CommandAction[] = [
+    ...visibleNav.map(item => ({
+      id: `go-${item.id}`,
+      label: item.label,
+      group: 'Go to',
+      hint: NAV_META[item.id].hint,
+      keywords: ['navigate', 'page', item.id].join(' '),
+      onRun: () => goTo(item.id),
+    })),
+    { id: 'date-previous', label: 'Previous day', group: 'Date', hint: displayDate(addDays(date, -1)), keywords: 'date yesterday', onRun: () => setDate(addDays(date, -1)) },
+    { id: 'date-today', label: 'Jump to today', group: 'Date', hint: displayDate(TODAY), keywords: 'date now', onRun: () => setDate(TODAY) },
+    { id: 'date-next', label: 'Next day', group: 'Date', hint: displayDate(addDays(date, 1)), keywords: 'date tomorrow', onRun: () => setDate(addDays(date, 1)) },
+    { id: 'theme-system', label: 'Use system theme', group: 'Appearance', hint: 'Follow the operating system', keywords: 'theme auto', onRun: () => setTheme('system') },
+    { id: 'theme-light', label: 'Use light theme', group: 'Appearance', keywords: 'theme appearance', onRun: () => setTheme('light') },
+    { id: 'theme-dark', label: 'Use dark theme', group: 'Appearance', keywords: 'theme appearance', onRun: () => setTheme('dark') },
+    { id: 'refresh-view', label: 'Refresh this view', group: 'Workspace', hint: 'Reload data without leaving the page', keywords: 'reload retry sync', onRun: refreshWorkspace },
+    ...(isInternal ? [
+      { id: 'today-picks', label: 'Open system picks', group: 'Today', hint: 'Qualified selections for the selected date', keywords: 'today candidates', onRun: () => openOverviewTab('picks') },
+      { id: 'today-tickets', label: 'Open accumulator tickets', group: 'Today', hint: 'Published tiers for the selected date', keywords: 'today acca', onRun: () => openOverviewTab('tickets') },
+      { id: 'today-rejected', label: 'Open rejection ledger', group: 'Today', hint: 'Why candidates were passed', keywords: 'today passed why', onRun: () => openOverviewTab('passed') },
+    ] : []),
+  ]
+
   return (
-    <div className="app">
+    <div className="app app-v2">
       <aside className="app-sidebar">
-        <a className="brand" href="/" aria-label="QwanEj home" onClick={(event) => { event.preventDefault(); goTo('tickets') }}>
+        <a className="shell-brand" href={moduleHref('tickets')} aria-label="QwanEj home" onClick={navClick('tickets')}>
           <img className="brand-logo brand-logo-light" src="/light/icon-128.png?v=qwanej-1" alt="" />
           <img className="brand-logo brand-logo-dark" src="/dark/icon-128.png?v=qwanej-1" alt="" />
           <span className="brand-copy"><strong className="brand-name">QwanEj</strong><small className="brand-tagline">Intelligence beyond numbers</small></span>
         </a>
-        {isInternal && <WorkspaceSwitcher workspace={workspace} onChange={switchWorkspace} className="workspace-switcher-sidebar" />}
-        <nav className="sidebar-nav" aria-label="Primary navigation">
-          <span className="sidebar-label">{workspace === 'football' ? 'Football' : 'Research workspace'}</span>
-          {(workspace === 'research' ? INTERNAL_NAV : NAV).map(n => (
-            <button key={n.id} className={`nav-tab${navPage === n.id ? ' active' : ''}`} onClick={() => goTo(n.id)} title={NAV_META[n.id].hint} aria-current={navPage === n.id ? 'page' : undefined}>
-              <span className="nav-icon"><NavIcon name={NAV_META[n.id].icon} /></span>{n.label}
-            </button>
-          ))}
+
+        <nav className="shell-nav" aria-label="Primary navigation">
+          {navGroups.map(group => {
+            const expanded = openNavGroup === group.label
+            const panelId = `shell-nav-${group.label.toLowerCase()}`
+            const hasActive = group.items.some(item => item.id === navPage)
+            return (
+              <div className={`shell-nav-group${expanded ? ' expanded' : ''}`} key={group.label}>
+                <button
+                  type="button"
+                  className={`shell-nav-label${hasActive ? ' has-active' : ''}`}
+                  aria-expanded={expanded}
+                  aria-controls={panelId}
+                  onClick={() => setOpenNavGroup(current => current === group.label ? null : group.label)}
+                >
+                  <span>{group.label}</span>
+                  <svg className="shell-nav-chevron" viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M3.5 6 8 10.5 12.5 6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <div className="shell-nav-items" id={panelId} hidden={!expanded}>
+                  {group.items.map(item => (
+                    <a
+                      key={item.id}
+                      className={`shell-nav-link${navPage === item.id ? ' active' : ''}`}
+                      href={moduleHref(item.id)}
+                      title={NAV_META[item.id].hint}
+                      aria-current={navPage === item.id ? 'page' : undefined}
+                      onClick={navClick(item.id)}
+                    >
+                      <span className="shell-nav-icon"><NavIcon name={NAV_META[item.id].icon} /></span>
+                      <span>{item.label}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
         </nav>
-        <div className="sidebar-account">
-          <AuthControls onSignIn={() => navigate('login')} onSignedOut={() => navigate('login', undefined, true)} />
+
+        <div className="shell-sidebar-footer">
+          <span className="shell-status"><span className="shell-status-dot" aria-hidden="true" />{isInternal ? 'Paper-trading workspace' : 'Dated publishing record'}</span>
+          <small>{isInternal || user?.plan === 'pro'
+            ? 'Every published pick keeps its quote, model, and settlement evidence.'
+            : 'Free keeps every published ticket, its match legs and settlement. Pro adds prices and leg evidence.'}</small>
+          <button type="button" className="shell-shortcut" onClick={() => setPaletteOpen(true)}>
+            <span>Search or jump</span><kbd>⌘K</kbd>
+          </button>
         </div>
       </aside>
       <header className="app-header">
-        <a className="topbar-brand" href="/tickets" aria-label="QwanEj home" onClick={(event) => { event.preventDefault(); goTo('tickets') }}>
-          <img className="topbar-mark topbar-logo-light" src="/light/icon-128.png?v=qwanej-1" alt="" />
-          <img className="topbar-mark topbar-logo-dark" src="/dark/icon-128.png?v=qwanej-1" alt="" />
-          <span>QwanEj</span>
+        <a className="shell-mobile-brand" href={moduleHref('tickets')} aria-label="QwanEj home" onClick={navClick('tickets')}>
+          <img className="brand-logo brand-logo-light" src="/light/icon-128.png?v=qwanej-1" alt="" />
+          <img className="brand-logo brand-logo-dark" src="/dark/icon-128.png?v=qwanej-1" alt="" />
+          <strong>QwanEj</strong>
         </a>
-        {isInternal && <WorkspaceSwitcher workspace={workspace} onChange={switchWorkspace} className="workspace-switcher-header" />}
-        {(page === 'tickets' || (page === 'research' && isInternal)) && (
-          <div className="date-nav">
-            <button className="date-btn" onClick={() => nav(-1)} title="Previous day" aria-label="Previous day">‹</button>
-            <div className="date-strip" role="group" aria-label="Choose match date">
-              {[-2, -1, 0, 1, 2].map(offset => {
-                const value = addDays(date, offset)
-                const localDate = new Date(`${value}T12:00:00`)
-                const label = localDate.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })
-                return <button
-                  key={value}
-                  className={`date-strip-day${date === value ? ' active' : ''}${value === TODAY ? ' today' : ''}`}
-                  onClick={() => setDate(value)}
-                  aria-label={label}
-                  aria-pressed={date === value}
-                >
-                  <span>{value === TODAY ? 'Today' : localDate.toLocaleDateString('en-GB', { weekday: 'short' })}</span>
-                  <b>{localDate.getDate()}</b>
-                </button>
-              })}
-            </div>
-            <div className="date-nav-tools">
-              {date !== TODAY && <button className="today-btn" onClick={() => setDate(TODAY)}>Today</button>}
-              <label className="date-picker-control" title="Choose any date">
-                <span aria-hidden="true">▦</span>
-              <input
-                className="date-input"
-                type="date"
-                value={date}
-                aria-label="Choose any date"
-                onChange={e => setDate(e.target.value)}
-              />
-              </label>
-            </div>
-            <button className="date-btn" onClick={() => nav(1)} title="Next day" aria-label="Next day">›</button>
+
+        <div className="shell-context">
+          <div className="shell-scope">
+            <span>{workspace === 'research' ? 'Research workspace' : 'Football workspace'}</span>
+            <strong>{pageTitle(page)}</strong>
           </div>
-        )}
-        <div className="header-page-title">
-        <span className="research-status"><span className="status-dot" /> {page === 'tickets' ? 'Decision workspace' : page === 'match' ? 'Match intelligence' : page === 'upgrade' ? 'System' : NAV_META[page].hint}</span>
-          <button className="theme-btn" onClick={cycleTheme} title={`Theme: ${theme}`} aria-label={`Theme: ${theme}. Change theme`}>
-            <span className="theme-auto">{theme === 'system' ? 'Auto' : theme}</span>
-          </button>
+          {dateNav}
         </div>
-        <div className="header-refresh">
-          <AuthControls onSignIn={() => navigate('login')} onSignedOut={() => navigate('login', undefined, true)} />
-          {user?.plan !== 'pro' && <button className="premium-button" onClick={() => navigate('upgrade')}>Go Premium</button>}
-          <button className="theme-btn settings-btn" onClick={cycleTheme} title={`Theme: ${theme}`} aria-label={`Theme: ${theme}. Change theme`}>⚙</button>
-          <button className="global-refresh" onClick={() => window.location.reload()} title="Reload current page" aria-label="Reload current page">↻ <span>Reload</span></button>
+
+        <div className="shell-actions">
+          <button
+            type="button"
+            className="shell-search"
+            onClick={() => setPaletteOpen(true)}
+            aria-haspopup="dialog"
+            aria-expanded={paletteOpen}
+            aria-label="Open command palette"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true">
+              <circle cx="10.8" cy="10.8" r="6.6" /><path d="m16 16 4.5 4.5" />
+            </svg>
+            <span>Search</span>
+            <kbd>⌘K</kbd>
+          </button>
+          <button type="button" className="shell-icon-btn" onClick={refreshWorkspace} title="Refresh this view" aria-label="Refresh this view">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M20 11a8 8 0 1 0-2.3 5.7" /><path d="M20 5v6h-6" />
+            </svg>
+          </button>
+          <AccountMenu
+            theme={theme}
+            onThemeChange={setTheme}
+            onRefresh={refreshWorkspace}
+            onOpenPalette={() => setPaletteOpen(true)}
+            onUpgrade={() => navigate('upgrade')}
+            onSignIn={() => navigate('login')}
+            onSignedOut={() => navigate('login', undefined, true)}
+          />
         </div>
       </header>
 
@@ -411,13 +596,32 @@ export default function App() {
         <RouteErrorBoundary key={`${page}-${routeAttempt}`} onRetry={() => setRouteAttempt(attempt => attempt + 1)}>
         <Suspense fallback={<PageLoading />}>
         {page === 'upgrade' && <UpgradePage onBack={() => goTo('tickets')} />}
-        {page === 'tickets' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab={overviewTab} mode="overview" onTabChange={tab => updateOverviewTab(tab as OverviewTab)} onOpenMatch={navigateToMatch} onOpenTracker={ticketId => navigateTracker(ticketId, date)} />}
+        {page === 'tickets' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab={overviewTab} mode="overview" onTabChange={tab => updateOverviewTab(tab as OverviewTab)} onOpenMatch={navigateToMatch} onOpenTracker={ticketId => navigateTracker(ticketId, date)} onUpgrade={() => navigate('upgrade')} />}
         {page === 'live' && <LiveMonitorPage />}
         {page === 'insights' && (user.plan === 'pro' || isInternal
           ? <InsightsPage />
-          : <section className="insights-access-card"><h1>Stats &amp; trends</h1><p>League results and team tables are available on Pro.</p><button className="btn-primary" onClick={() => navigate('upgrade')}>View Pro access</button></section>)}
+          : <section className="insights-access-card" aria-labelledby="insights-pro-gate-title">
+              <span className="eyebrow">Pro</span>
+              <h1 id="insights-pro-gate-title">Stats &amp; trends is part of Pro</h1>
+              <p>Review league results, team form and historical performance alongside the picks and tickets they came from.</p>
+              <div className="plan-locked-actions">
+                <button className="btn-primary" onClick={() => navigate('upgrade')}>Upgrade to Pro</button>
+                <button className="btn-ghost" onClick={() => navigate('tickets')}>Back to Today</button>
+              </div>
+            </section>)}
         {isInternal && page === 'research' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab={researchTab} mode="research" onTabChange={tab => navigateResearch(tab as ResearchTab)} onOpenMatch={navigateToMatch} onOpenTracker={ticketId => navigateTracker(ticketId, date)} />}
         {page === 'match' && matchId != null && (user?.plan === 'pro' || isInternal) && <MatchIntelligencePage matchId={matchId} selectedPredictionId={predictionId} onBack={returnFromMatch} returnLabel={matchReturnLabel(matchReturnTo)} />}
+        {page === 'match' && matchId != null && user?.plan !== 'pro' && !isInternal && (
+          <section className="insights-access-card" aria-labelledby="match-pro-gate-title">
+            <span className="eyebrow">Pro</span>
+            <h1 id="match-pro-gate-title">Match intelligence is part of Pro</h1>
+            <p>Open every qualified selection for this match with its captured price, model chance, spread and recorded evidence.</p>
+            <div className="plan-locked-actions">
+              <button className="btn-primary" onClick={() => navigate('upgrade')}>Upgrade to Pro</button>
+              <button className="btn-ghost" onClick={returnFromMatch}>Back to {matchReturnLabel(matchReturnTo)}</button>
+            </div>
+          </section>
+        )}
         {isInternal && page === 'tracker' && <TrackerPage onOpenTickets={navigateTicketSource} onOpenResearch={() => navigateResearch('picks')} onOpenValidation={() => goTo('analytics')} />}
         {isInternal && page === 'analytics' && <AnalyticsPage />}
         {isInternal && page === 'tools' && <ToolsPage />}
@@ -427,28 +631,26 @@ export default function App() {
       </main>
 
 
-      <nav className={`bottom-nav ${isInternal ? 'internal' : 'public'} ${workspace}`} aria-label="Primary navigation">
-        {(isInternal && workspace === 'research' ? INTERNAL_NAV : NAV).map(item => (
-          <button
+      <nav className="bottom-nav" aria-label="Primary navigation">
+        {bottomItems.map(item => (
+          <a
             key={item.id}
             className={navPage === item.id ? 'active' : ''}
-            onClick={() => goTo(item.id)}
+            href={moduleHref(item.id)}
             aria-current={navPage === item.id ? 'page' : undefined}
+            onClick={navClick(item.id)}
           >
             <span aria-hidden="true"><NavIcon name={NAV_META[item.id].icon} /></span>
             {item.label}
-          </button>
+          </a>
         ))}
+        <button type="button" className="bottom-more" onClick={() => setPaletteOpen(true)} aria-haspopup="dialog" aria-expanded={paletteOpen}>
+          <span aria-hidden="true">⌘</span>
+          More
+        </button>
       </nav>
-    </div>
-  )
-}
 
-function WorkspaceSwitcher({ workspace, onChange, className }: { workspace: Workspace; onChange: (workspace: Workspace) => void; className: string }) {
-  return (
-    <div className={`workspace-switcher ${className}`} role="group" aria-label="Choose workspace">
-      <button type="button" className={workspace === 'football' ? 'active' : ''} aria-pressed={workspace === 'football'} onClick={() => onChange('football')}>Football</button>
-      <button type="button" className={workspace === 'research' ? 'active' : ''} aria-pressed={workspace === 'research'} onClick={() => onChange('research')}>Research</button>
+      <CommandPalette open={paletteOpen} actions={commandActions} onClose={() => setPaletteOpen(false)} />
     </div>
   )
 }
@@ -476,12 +678,6 @@ function workspaceForPage(page: Page): Workspace | null {
   if (isInternalPage(page)) return 'research'
   if (page === 'tickets' || page === 'live' || page === 'insights') return 'football'
   return null
-}
-
-function workspaceForLocation(page: Page, search: string): Workspace | null {
-  if (page !== 'match') return workspaceForPage(page)
-  const target = matchReturnPath(search)
-  return target ? workspaceForPage(routePage(new URL(target, window.location.origin).pathname)) : 'football'
 }
 
 function routeMatchId(pathname: string): number | null {

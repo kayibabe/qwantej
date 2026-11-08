@@ -7,6 +7,7 @@ export interface DailyTicketsPageProps {
   mode?: "overview" | "research";
   onOpenTracker?: (ticketId: number) => void;
   onTabChange?: (tab: DailyTab) => void;
+  onUpgrade?: () => void;
 }
 
 export type DailyTab =

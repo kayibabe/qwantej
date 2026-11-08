@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import date, timezone
-from typing import Literal, Optional
+from datetime import date, datetime, timedelta, timezone
+from typing import Annotated, Literal, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
@@ -127,6 +127,64 @@ class TicketOut(BaseModel):
     settlement_source: Optional[str]
     settlement_version: Optional[int]
     locked_fields: list[str] = Field(default_factory=list)
+
+
+class PublicProofLegOut(BaseModel):
+    position: int
+    home_team: str
+    away_team: str
+    competition: str
+    kickoff_at: str
+    market: str
+    selection: str
+    result: str
+    match_status: str
+    home_goals: Optional[int]
+    away_goals: Optional[int]
+
+
+class PublicProofTicketOut(BaseModel):
+    ticket_id: int
+    target_date: str
+    ticket_type: str
+    name: str
+    combined_odds: float
+    published_at: str
+    publication_timing: Literal["pre_kickoff", "post_kickoff", "unknown"]
+    result: Optional[str]
+    profit_units: Optional[float]
+    settled_at: Optional[str]
+    legs: list[PublicProofLegOut]
+
+
+class PublicProofEquityPointOut(BaseModel):
+    date: str
+    cumulative_units: float
+
+
+class PublicProofTierOut(BaseModel):
+    ticket_type: str
+    name: str
+    settled: int
+    won: int
+    lost: int
+    void: int
+    win_rate: Optional[float]
+    staked_units: float
+    profit_units: float
+    roi: Optional[float]
+    equity: list[PublicProofEquityPointOut] = Field(default_factory=list)
+    recent_tickets: list[PublicProofTicketOut] = Field(default_factory=list)
+
+
+class PublicProofOut(BaseModel):
+    days: Optional[int]
+    sample_size: int
+    first_settled_date: Optional[str]
+    last_settled_date: Optional[str]
+    tiers: list[PublicProofTierOut]
+    latest_ticket: Optional[PublicProofTicketOut]
+    generated_at: str
 
 
 class DailyTicketsOut(BaseModel):
@@ -488,6 +546,193 @@ async def get_match_history(
                 elif item["outcome"] != selection.result.value:
                     item["outcome"] = "mixed"
     return sorted(grouped.values(), key=lambda item: (item["target_date"], item["kickoff_at"]), reverse=True)
+
+
+def _public_proof_leg(selection: TicketSelection) -> PublicProofLegOut:
+    match = selection.match
+    return PublicProofLegOut(
+        position=selection.position,
+        home_team=match.home_team.name,
+        away_team=match.away_team.name,
+        competition=match.competition.name if match.competition else str(match.competition_id),
+        kickoff_at=match.kickoff_at.isoformat(),
+        market=selection.market,
+        selection=selection.selection,
+        result=selection.result.value,
+        match_status=match.status.value,
+        home_goals=match.home_goals,
+        away_goals=match.away_goals,
+    )
+
+
+def _proof_ticket(ticket: AccumulatorTicket) -> PublicProofTicketOut:
+    latest_result = max(ticket.results, key=lambda item: item.version, default=None)
+    profit = getattr(latest_result, "profit_loss", None) if latest_result else None
+    if latest_result is not None and profit is None:
+        stake = getattr(latest_result, "stake", None)
+        returned = getattr(latest_result, "return_amount", None)
+        if stake is not None and returned is not None:
+            profit = returned - stake
+    return PublicProofTicketOut(
+        ticket_id=ticket.id,
+        target_date=ticket.target_date.isoformat(),
+        ticket_type=ticket.ticket_type.value,
+        name=TICKET_NAMES[ticket.ticket_type],
+        combined_odds=ticket.combined_odds,
+        published_at=ticket.published_at.isoformat() if ticket.published_at else "",
+        publication_timing=_ticket_publication_timing(ticket),
+        result=latest_result.result.value if latest_result else None,
+        profit_units=round(profit, 2) if profit is not None else None,
+        settled_at=latest_result.settled_at.isoformat() if latest_result and latest_result.settled_at else None,
+        legs=[
+            _public_proof_leg(selection)
+            for selection in sorted(ticket.selections, key=lambda item: item.position)
+        ],
+    )
+
+
+@router.get("/public-proof", response_model=PublicProofOut)
+async def get_public_proof(
+    db: AsyncSession = Depends(get_db),
+    days: Annotated[Optional[int], Query(ge=1, le=365)] = None,
+):
+    """Return a read-only settled-record sample for the public landing page.
+
+    ``days`` limits the window to the most recent calendar days. Only public
+    ticket tiers are counted. Per-leg odds, model probability, Q score and
+    decision evidence stay behind the paid workspace boundary.
+    """
+    latest_versions = (
+        select(
+            AccumulatorTicket.target_date.label("target_date"),
+            AccumulatorTicket.ticket_type.label("ticket_type"),
+            func.max(AccumulatorTicket.version).label("version"),
+        )
+        .where(
+            AccumulatorTicket.ticket_type.in_(PUBLIC_TICKET_TYPES),
+            AccumulatorTicket.status == TicketStatus.SETTLED,
+        )
+        .group_by(AccumulatorTicket.target_date, AccumulatorTicket.ticket_type)
+        .subquery()
+    )
+    latest_join = (
+        (AccumulatorTicket.target_date == latest_versions.c.target_date)
+        & (AccumulatorTicket.ticket_type == latest_versions.c.ticket_type)
+        & (AccumulatorTicket.version == latest_versions.c.version)
+    )
+
+    settled_query = (
+        select(AccumulatorTicket)
+        .join(latest_versions, latest_join)
+        .where(AccumulatorTicket.status == TicketStatus.SETTLED)
+        .options(
+            selectinload(AccumulatorTicket.results),
+            selectinload(AccumulatorTicket.selections)
+            .selectinload(TicketSelection.match)
+            .selectinload(Match.home_team),
+            selectinload(AccumulatorTicket.selections)
+            .selectinload(TicketSelection.match)
+            .selectinload(Match.away_team),
+            selectinload(AccumulatorTicket.selections)
+            .selectinload(TicketSelection.match)
+            .selectinload(Match.competition),
+        )
+        .order_by(
+            AccumulatorTicket.target_date.desc(),
+            AccumulatorTicket.published_at.desc(),
+            AccumulatorTicket.id.desc(),
+        )
+    )
+    if days is not None:
+        settled_query = settled_query.where(
+            AccumulatorTicket.target_date >= cat_today() - timedelta(days=days - 1)
+        )
+
+    settled_rows = (await db.execute(settled_query)).scalars().all()
+
+    tier_totals: dict[str, dict] = {}
+    settled_dates: list[date] = []
+    for ticket in settled_rows:
+        latest_result = max(ticket.results, key=lambda item: item.version, default=None)
+        if latest_result is None:
+            continue
+        entry = tier_totals.setdefault(
+            ticket.ticket_type.value,
+            {"settled": 0, "won": 0, "lost": 0, "void": 0, "profit": 0.0, "daily": {}, "recent": []},
+        )
+        entry["settled"] += 1
+        result_value = latest_result.result.value
+        if result_value == "won":
+            entry["won"] += 1
+        elif result_value == "lost":
+            entry["lost"] += 1
+        else:
+            entry["void"] += 1
+        profit = getattr(latest_result, "profit_loss", None)
+        if profit is None:
+            stake = getattr(latest_result, "stake", None)
+            returned = getattr(latest_result, "return_amount", None)
+            profit = (returned - stake) if stake is not None and returned is not None else 0.0
+        entry["profit"] += float(profit)
+        entry["daily"][ticket.target_date] = entry["daily"].get(ticket.target_date, 0.0) + float(profit)
+        if len(entry["recent"]) < 5:
+            entry["recent"].append(_proof_ticket(ticket))
+        settled_dates.append(ticket.target_date)
+
+    tiers: list[PublicProofTierOut] = []
+    for ticket_type in PUBLIC_TICKET_TYPES:
+        counts = tier_totals.get(ticket_type.value)
+        if not counts:
+            continue
+        decided = counts["won"] + counts["lost"]
+        # A void stake is returned, so only won/lost tickets count as turnover.
+        staked = float(decided)
+        profit = counts["profit"]
+        running = 0.0
+        equity: list[PublicProofEquityPointOut] = []
+        for point_date in sorted(counts["daily"]):
+            running += counts["daily"][point_date]
+            equity.append(
+                PublicProofEquityPointOut(
+                    date=point_date.isoformat(),
+                    cumulative_units=round(running, 2),
+                )
+            )
+        tiers.append(
+            PublicProofTierOut(
+                ticket_type=ticket_type.value,
+                name=TICKET_NAMES[ticket_type],
+                settled=counts["settled"],
+                won=counts["won"],
+                lost=counts["lost"],
+                void=counts["void"],
+                win_rate=(counts["won"] / decided) if decided else None,
+                staked_units=staked,
+                profit_units=round(profit, 2),
+                roi=round(profit / staked, 4) if staked else None,
+                equity=equity,
+                recent_tickets=counts["recent"],
+            )
+        )
+
+    sample_ticket = None
+    for ticket in settled_rows:
+        latest_result = max(ticket.results, key=lambda item: item.version, default=None)
+        if latest_result is not None and latest_result.result.value in {"won", "lost"}:
+            sample_ticket = ticket
+            break
+    if sample_ticket is None and settled_rows:
+        sample_ticket = settled_rows[0]
+
+    return PublicProofOut(
+        days=days,
+        sample_size=sum(counts["settled"] for counts in tier_totals.values()),
+        first_settled_date=min(settled_dates).isoformat() if settled_dates else None,
+        last_settled_date=max(settled_dates).isoformat() if settled_dates else None,
+        tiers=tiers,
+        latest_ticket=_proof_ticket(sample_ticket) if sample_ticket is not None else None,
+        generated_at=datetime.now(timezone.utc).isoformat(),
+    )
 
 
 @router.get("/{ticket_id}", response_model=TicketOut)

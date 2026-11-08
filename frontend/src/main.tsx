@@ -8,6 +8,13 @@ import './table-sorters.css'
 
 installTableSorters()
 
+try {
+  const storedTheme = window.localStorage.getItem('qwantej-theme')
+  if (storedTheme === 'dark' || storedTheme === 'light') document.documentElement.setAttribute('data-theme', storedTheme)
+} catch {
+  // Storage can be unavailable; the system theme remains the fallback.
+}
+
 interface ErrorBoundaryState { hasError: boolean }
 
 class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {

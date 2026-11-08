@@ -15,6 +15,8 @@ interface Props {
   onSelectLeg?: (leg: Leg, ticket: Ticket) => void
   flatStake?: number | null
   showMarketSelections?: boolean
+  /** Free plan: the API hides prices, probabilities and selections. */
+  locked?: boolean
 }
 
 const PCT = (n: number) => `${n >= 0 ? '+' : ''}${(n * 100).toFixed(1)}%`
@@ -47,7 +49,7 @@ function matchStateLabel(leg: Leg): string {
   return 'Pending'
 }
 
-export default function TicketCard({ ticket, tierName, tierDesc, color, research, internal = false, onSelectLeg, flatStake, showMarketSelections = true }: Props) {
+export default function TicketCard({ ticket, tierName, tierDesc, color, research, internal = false, onSelectLeg, flatStake, showMarketSelections = true, locked = false }: Props) {
   const [legsExpanded, setLegsExpanded] = useState(false)
   const [showAllLegs, setShowAllLegs] = useState(false)
   if (!ticket) {
@@ -131,20 +133,30 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
           </div>
           <div className="ticket-tier-badges">
             <span className={`ticket-status-badge ${ticketStatusTone}`}>{ticketStatusLabel}</span>
-            {marketPriced ? <span className="market-pricing-badge">Market-priced</span> : <GradeBadge grade={ticket.legs[0]?.q_grade ?? 'C'} />}
+            {locked
+              ? <span className="ticket-lock-badge">Pro</span>
+              : marketPriced
+                ? <span className="market-pricing-badge">Market-priced</span>
+                : ticket.legs[0]?.q_grade && <GradeBadge grade={ticket.legs[0].q_grade} />}
             {flaggedLegs.length > 0 && <span className="review-badge">Value review · {flaggedLegs.length}</span>}
           </div>
         </div>
+        {locked ? (
+          <div className="ticket-locked-metrics">
+            <span className="ticket-lock-badge">Free plan</span>
+            <div><strong>Odds, chance and leg evidence are locked</strong><span>Free keeps the published record: match legs, kickoff, score and settlement.</span></div>
+          </div>
+        ) : (
         <div className="ticket-stats">
           <div className="stat" title="Combined decimal odds for every leg">
             <span className="stat-label">Ticket odds</span>
-            <span className="stat-value neutral">{ticket.combined_odds == null ? 'Pro only' : `${ticket.combined_odds.toFixed(2)}×`}</span>
+            <span className="stat-value neutral">{ticket.combined_odds == null ? 'Unavailable' : `${ticket.combined_odds.toFixed(2)}×`}</span>
           </div>
           <div className="stat" title={marketPriced ? "Estimated joint chance from each bookmaker fair probability, assuming the legs are independent" : 'Estimated ticket probability after the configured correlation adjustment'}>
             <span className="stat-label">Estimated chance</span>
             <span className="stat-value neutral">
               {ticket.adjusted_probability == null
-                ? 'Pro only'
+                ? 'Unavailable'
                 : `${(ticket.adjusted_probability * 100).toFixed(1)}%`}
               {marketPriced && ticket.adjusted_probability != null && ticket.adjusted_probability > 0 && (
                 <small className="stat-sub">about 1 in {Math.max(1, Math.round(1 / ticket.adjusted_probability))}</small>
@@ -156,18 +168,19 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
               <span className="stat-label">Return / unit</span>
               {/* Never styled as a win: any small positive figure is price noise, not claimed value. */}
               <span className="stat-value neutral">
-                {ticket.expected_value == null ? 'Pro only' : PCT(ticket.expected_value)}
+                {ticket.expected_value == null ? 'Unavailable' : PCT(ticket.expected_value)}
               </span>
             </div>
           ) : (<>
           <div className="stat" title={flaggedLegs.length > 0 ? 'Provisional expected value: one or more legs require a value review' : 'Expected value based on the recorded model probabilities and odds'}>
             <span className="stat-label">Ticket EV</span>
             <span className={`stat-value ${flaggedLegs.length > 0 ? 'review' : evPositive ? 'positive' : 'neutral'}`}>
-              {flaggedLegs.length > 0 ? 'Unverified' : ticket.expected_value == null ? 'Pro only' : PCT(ticket.expected_value)}
+              {flaggedLegs.length > 0 ? 'Unverified' : ticket.expected_value == null ? 'Unavailable' : PCT(ticket.expected_value)}
             </span>
           </div>
           </>)}
         </div>
+        )}
         {ticket.adjusted_probability != null && <p className="ticket-probability-note">{marketPriced
           ? "This estimate multiplies fair leg probabilities and assumes the legs are independent. It is not a validated joint probability."
           : "This estimate uses the model probabilities and configured correlation adjustment; ongoing calibration is still required."}</p>}
@@ -201,7 +214,7 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
           <span className={`ticket-summary-chevron ${legsExpanded ? 'expanded' : ''}`} aria-hidden="true" />
         </button>
         {ticket.settled_at && <div className="ticket-settlement-meta">Settled {new Date(ticket.settled_at).toLocaleString()} · {ticket.settlement_source ?? 'system'} · settlement revision {ticket.settlement_version ?? '—'}{ticket.settlement_version && ticket.settlement_version > 1 && <span className="settlement-correction">Corrected settlement</span>}</div>}
-        {learningReady && (
+        {learningReady && !locked && (
           <div className={`ticket-learning-status ${roiLearningReady ? 'eligible' : 'limited'}`}>
             <strong>{internal ? 'Learning evidence recorded' : 'Result recorded'}</strong>
             <span>{internal
@@ -215,22 +228,22 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
         )}
         <details className="ticket-secondary-details">
           <summary>Risk, model and publication details</summary>
-          <div className="ticket-secondary-metrics">
+          {locked ? <p className="ticket-locked-note">Risk, average Q-score and average edge are available on Pro.</p> : <div className="ticket-secondary-metrics">
             <div className="stat" title="Higher scores indicate a riskier accumulator">
               <span className="stat-label">Risk score</span>
-              <span className={`stat-value risk-${riskTone}`}>{ticket.risk_score == null ? 'Pro only' : `${ticket.risk_score.toFixed(0)}/100`}</span>
+              <span className={`stat-value risk-${riskTone}`}>{ticket.risk_score == null ? 'Unavailable' : `${ticket.risk_score.toFixed(0)}/100`}</span>
             </div>
             {!marketPriced && <>
               <div className="stat" title="Average Q-score across all ticket legs">
                 <span className="stat-label">Average Q-score</span>
-                <span className="stat-value neutral">{ticket.avg_q_score == null ? 'Pro only' : ticket.avg_q_score.toFixed(1)}</span>
+                <span className="stat-value neutral">{ticket.avg_q_score == null ? 'Unavailable' : ticket.avg_q_score.toFixed(1)}</span>
               </div>
               <div className="stat" title="Average model edge across all ticket legs">
                 <span className="stat-label">Average edge</span>
                 <span className={flaggedLegs.length > 0 ? 'stat-value review' : ticket.avg_edge == null ? 'stat-value neutral' : 'stat-value positive'}>{flaggedLegs.length > 0 ? 'Review' : ticket.avg_edge == null ? '—' : PCT(ticket.avg_edge)}</span>
               </div>
             </>}
-          </div>
+          </div>}
           <div className="ticket-audit">
             <span>Version {ticket.version} · model {ticket.model_version}</span>
             <span title={ticket.publication_hash}>Publication hash {ticket.publication_hash.slice(0, 10)}…</span>
@@ -269,7 +282,8 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
                 </div>
               </div>
               <div className="leg-right">
-                <span className="leg-odds">{leg.best_odds == null ? 'Pro only' : `${leg.best_odds.toFixed(2)}×`}</span>
+                {locked ? <span className="leg-locked">Pro</span> : <>
+                <span className="leg-odds">{leg.best_odds == null ? 'Unavailable' : `${leg.best_odds.toFixed(2)}×`}</span>
                 {marketPriced ? (
                   leg.model_probability != null && <span className="leg-chance">{(leg.model_probability * 100).toFixed(0)}% chance</span>
                 ) : (<>
@@ -277,11 +291,12 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
                   <span className="leg-edge">{PCT(leg.edge)} edge</span>
                 )}
                 {leg.edge != null && leg.edge > 0.30 && leg.best_odds != null && leg.best_odds > 1 && <span className="leg-review">Implied {(100 / leg.best_odds).toFixed(0)}% · review</span>}
-                <span className="leg-q">Q {leg.q_score == null ? 'Pro only' : leg.q_score.toFixed(1)}</span>
+                <span className="leg-q">{leg.q_score == null ? 'Q —' : `Q ${leg.q_score.toFixed(1)}`}</span>
                 </>)}
                 {!marketPriced && <span className={`leg-spread ${leg.model_agreement == null ? 'unknown' : leg.model_agreement <= 0.05 ? 'strong' : leg.model_agreement <= 0.10 ? 'acceptable' : leg.model_agreement <= 0.15 ? 'caution' : 'high'}`}>Spread {leg.model_agreement == null ? '—' : `${(leg.model_agreement * 100).toFixed(1)} pp`}</span>}
+                </>}
               </div>
-              <span className="leg-open-icon" aria-hidden="true">›</span>
+              {onSelectLeg && <span className="leg-open-icon" aria-hidden="true">›</span>}
             </button>
           </li>
         ))}
