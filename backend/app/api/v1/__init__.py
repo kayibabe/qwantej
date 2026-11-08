@@ -44,6 +44,8 @@ router.include_router(custom_accumulators.router)
 router.include_router(singles.router)
 from app.api.v1 import sweet_spot
 router.include_router(sweet_spot.router)
+from app.api.v1 import paper_rules
+router.include_router(paper_rules.router)
 router.include_router(match_favorites.router)
 router.include_router(match_filters.router)
 router.include_router(insights.router)

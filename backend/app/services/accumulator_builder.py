@@ -255,6 +255,7 @@ class AccumulatorBuilder:
         research_min_qscore: float | None = None,
         horizon_dates: list[date] | None = None,
         market_policy_excluded_markets: frozenset[str] | None = None,
+        research_grade_b_preferred: bool = False,
     ) -> DailyTickets:
         """Build the day's portfolio.
 
@@ -286,6 +287,14 @@ class AccumulatorBuilder:
             ticket_type: None for ticket_type in PUBLIC_TICKET_TYPES
         }
         diagnostics: dict[str, dict] = {"pricing": {"source": pricing}}
+        if research_grade_b_preferred:
+            diagnostics["grade_prior"] = {
+                "applied": True,
+                "prior": GRADE_COHORT_PRIOR,
+                "basis": ("Research-only ranking prior from settled grade cohorts: "
+                          "B is the only positive-ROI/positive-CLV cohort; B+ has "
+                          "negative CLV. Never applied to the daily pipeline."),
+            }
         for spec in specs:
             effective_spec = spec
             if research_min_qscore is not None:
@@ -335,7 +344,13 @@ class AccumulatorBuilder:
                     if pricing == "market" else settings.max_shared_matches_between_tickets),
                 max_match_market_exposure=settings.max_public_ticket_exposure_per_match_market,
                 max_match_exposure=settings.max_public_ticket_exposure_per_match,
+                grade_prior=GRADE_COHORT_PRIOR if research_grade_b_preferred else None,
             )
+            chosen = output[spec.ticket_type]
+            diagnostics[spec.ticket_type.value]["chosen_grade_mix"] = dict(Counter(
+                leg.q_grade.value if hasattr(leg.q_grade, "value") else str(leg.q_grade)
+                for leg in (chosen.legs if chosen else [])
+            ))
 
         used_horizon: list[date] = []
         if research_min_qscore is None and settings.ticket_relaxation_enabled:
@@ -1072,6 +1087,15 @@ def _partial_score(legs: tuple[Leg, ...]) -> float:
     return average_q + positive_ev * 20.0 + len({_market_family(leg.market) for leg in legs})
 
 
+# Research-only leg-ranking prior from settled cohort evidence (Performance
+# research, Oct-Nov 2026): grade B is the only cohort with positive flat ROI
+# and positive CLV; B+ is the only grade with negative CLV; A+ is a tiny,
+# deeply negative sample. Magnitudes stay small against _partial_score's
+# q + 20*EV scale, and the prior applies only to explicit research generation
+# requests — never to the daily pipeline.
+GRADE_COHORT_PRIOR = {"B": 3.0, "A": 0.5, "C": 0.0, "A+": -1.0, "B+": -2.5}
+
+
 def _market_leg_target(spec: TicketSpec) -> float:
     """Typical leg price for a tier: geometric-mid combined odds of its band,
     spread over its mid leg count."""
@@ -1116,6 +1140,7 @@ def _find_best_ticket(
     max_shared_matches: int | None = None,
     max_match_market_exposure: int | None = None,
     max_match_exposure: int | None = None,
+    grade_prior: dict[str, float] | None = None,
 ) -> Optional[Ticket]:
     # Deterministic tie-break on prediction_id rather than model_probability,
     # for exact (q_score, expected_value) ties only. Not a calibration fix:
@@ -1154,6 +1179,14 @@ def _find_best_ticket(
         partial_score = _partial_score
     if len(candidates) < spec.min_legs:
         return None
+    if grade_prior:
+        base_partial_score = partial_score
+
+        def partial_score(legs: tuple[Leg, ...]) -> float:
+            return base_partial_score(legs) + sum(
+                grade_prior.get(leg.q_grade.value if hasattr(leg.q_grade, "value") else str(leg.q_grade), 0.0)
+                for leg in legs
+            )
     partials: list[tuple[tuple[int, ...], tuple[Leg, ...]]] = [(tuple(), tuple())]
     best: Ticket | None = None
     best_score = -math.inf

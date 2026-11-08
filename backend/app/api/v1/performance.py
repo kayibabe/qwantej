@@ -10,6 +10,7 @@ from app.api.security import require_research_access
 from app.config import CURRENT_MODEL_VERSION
 from app.services.performance import performance_summary, individual_selection_summary, market_reliability_matrix, all_market_research_summary, clv_summary, totals_calibration_review, probability_calibration_analysis
 from app.services.performance_export import probability_calibration_workbook
+from app.services.recalibration import recalibration_analysis
 from app.services.recommendation_ledger import recommendation_pick_ledger
 from app.services.market_roi_daily import daily_market_roi
 
@@ -42,6 +43,12 @@ async def totals_calibration(date_from: date | None = None, date_to: date | None
 async def probability_calibration(date_from: date | None = None, date_to: date | None = None, model_version: str | None = None, db: AsyncSession = Depends(get_db)):
     """Bucket Qwantej model probability vs. market-implied probability by 5pp band, whole-system."""
     return await probability_calibration_analysis(db, date_from, date_to, model_version)
+
+
+@router.get("/recalibration")
+async def recalibration(date_from: date | None = None, date_to: date | None = None, model_version: str | None = None, db: AsyncSession = Depends(get_db)):
+    """Fit an isotonic recalibration on settled point-in-time samples and compare raw vs calibrated edge ROI. Research only."""
+    return await recalibration_analysis(db, date_from, date_to, model_version)
 
 
 @router.get("/probability-calibration/export")

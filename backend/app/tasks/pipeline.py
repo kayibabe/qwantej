@@ -779,6 +779,25 @@ def track_sweet_spot(self):
         raise self.retry(exc=exc, countdown=60)
 
 
+@celery_app.task(name="pipeline.track_paper_rules", bind=True, max_retries=2)
+def track_paper_rules(self):
+    if not settings.paper_rules_tracking_enabled:
+        return {"status": "disabled"}
+    from app.database import AsyncSessionLocal
+    from app.services.paper_rules import tick
+
+    async def _run():
+        async with AsyncSessionLocal() as db:
+            result = await tick(db)
+            await db.commit()
+            return result
+    try:
+        return _run_async(_run())
+    except Exception as exc:
+        logger.exception("Paper-rule tracking failed")
+        raise self.retry(exc=exc, countdown=60)
+
+
 @celery_app.task(name="pipeline.capture_singles_ledger", bind=True, max_retries=1)
 def capture_singles_ledger(self):
     """Freeze today's real prospective singles decision into the DB ledger.

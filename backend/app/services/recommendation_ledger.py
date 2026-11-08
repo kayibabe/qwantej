@@ -39,6 +39,36 @@ ACCUMULATOR_MIN_PICKS = 5
 ACCUMULATOR_ALL_UNIQUE_ROI = 0.10
 ACCUMULATOR_PUBLISHED_ROI = 0.05
 
+# Decay guard: a cohort qualifies on full-history ROI only while its most
+# recent settled evidence is not decaying. All-history windows let retired
+# edge keep qualifying a market (e.g. Away Win +42% early, -9.6% later).
+DECAY_WINDOW = 10
+DECAY_MIN_ROI = 0.0
+
+
+def _decay_guard(
+    history: list[dict],
+    stake: float,
+    window: int = DECAY_WINDOW,
+    min_roi: float = DECAY_MIN_ROI,
+) -> tuple[bool, int, float | None]:
+    """Return (passes, recent_settled_count, recent_roi) for one cohort.
+
+    Only the last `window` settled (won/lost) rows vote. Cohorts with fewer
+    than `window` settled rows are too young to judge and pass, so a newly
+    qualified market is not suspended before it has a recent track record.
+    """
+    settled = [
+        row
+        for row in history
+        if row["result"] in (SelectionResult.WON.value, SelectionResult.LOST.value)
+    ]
+    recent = settled[-window:]
+    if len(recent) < window:
+        return True, len(recent), None
+    roi = recommendation_metrics(recent, stake)["roi"]
+    return (roi is not None and roi >= min_roi), len(recent), roi
+
 
 async def capture_strongest_snapshots(
     db: AsyncSession,
@@ -220,6 +250,44 @@ def recommendation_metrics(rows: list[dict], stake: float = 1.0) -> dict:
     }
 
 
+def _source_assessment(metrics: dict) -> dict:
+    """Evidence-based weight for each recommendation source.
+
+    Settled evidence consistently shows the gate-based Published set beating
+    the top-Q Strongest overlay (Strongest picks the overconfident A+/A tail),
+    so Strongest is demoted to research-only weight whenever its settled ROI
+    trails Published within the current filter scope.
+    """
+    published = metrics.get("published") or {}
+    strongest = metrics.get("strongest") or {}
+    published_roi = published.get("roi")
+    strongest_roi = strongest.get("roi")
+    strongest_demoted = (
+        published_roi is not None
+        and strongest_roi is not None
+        and strongest_roi < published_roi
+    )
+    return {
+        "published": {
+            "weight": "primary",
+            "roi": published_roi,
+            "hit_rate": published.get("hit_rate"),
+        },
+        "strongest": {
+            "weight": "research_only" if strongest_demoted else "secondary",
+            "roi": strongest_roi,
+            "hit_rate": strongest.get("hit_rate"),
+            "note": (
+                "Strongest (top-Q) cohort trails the gate-based Published set on "
+                "settled evidence; treat as research evidence, not a promotion signal."
+                if strongest_demoted
+                else None
+            ),
+        },
+        "basis": "settled cohort comparison within the current filter scope",
+    }
+
+
 def _source_rows(rows: list[dict], source: str) -> list[dict]:
     if source == "published":
         return [row for row in rows if "published" in row["sources"]]
@@ -253,6 +321,8 @@ def walk_forward_accumulator_selections(
     min_picks: int = ACCUMULATOR_MIN_PICKS,
     all_unique_roi: float = ACCUMULATOR_ALL_UNIQUE_ROI,
     published_roi: float = ACCUMULATOR_PUBLISHED_ROI,
+    decay_window: int = DECAY_WINDOW,
+    decay_min_roi: float = DECAY_MIN_ROI,
 ) -> dict:
     """Select each date's accumulator legs using only earlier evidence.
 
@@ -260,7 +330,10 @@ def walk_forward_accumulator_selections(
     contribute to a date's ticket only when its record over strictly earlier
     dates clears the same pick-count and ROI thresholds the Analytics summary
     uses. The current date's rows never vote on their own selection, which
-    removes the look-ahead an all-time threshold introduces.
+    removes the look-ahead an all-time threshold introduces. On top of that,
+    the decay guard suspends any cohort whose most recent settled window has
+    dropped below `decay_min_roi`, so retired full-history ROI cannot keep a
+    decayed market in the ticket.
     """
     by_date: dict[str, list[dict]] = {}
     for row in rows:
@@ -272,18 +345,46 @@ def walk_forward_accumulator_selections(
     published_selected: list[dict] = []
     first_market_date: dict[str, str] = {}
     first_combo_date: dict[tuple[str, str], str] = {}
+    suspended_markets: dict[str, dict] = {}
+    suspended_combos: dict[tuple[str, str], dict] = {}
 
     for target_date in sorted(by_date):
-        qualified_markets = {
-            market
-            for market, history in market_history.items()
-            if _walk_forward_qualifies(history, stake, min_picks, all_unique_roi)
-        }
-        qualified_combos = {
-            combo
-            for combo, history in combo_history.items()
-            if _walk_forward_qualifies(history, stake, min_picks, published_roi)
-        }
+        qualified_markets: dict[str, dict] = {}
+        for market, history in market_history.items():
+            if not _walk_forward_qualifies(history, stake, min_picks, all_unique_roi):
+                continue
+            decay_ok, recent_n, recent_roi = _decay_guard(
+                history, stake, decay_window, decay_min_roi
+            )
+            if decay_ok:
+                qualified_markets[market] = {
+                    "recent_picks": recent_n,
+                    "recent_roi": recent_roi,
+                }
+                suspended_markets.pop(market, None)
+            else:
+                suspended_markets[market] = {
+                    "recent_picks": recent_n,
+                    "recent_roi": recent_roi,
+                }
+        qualified_combos: dict[tuple[str, str], dict] = {}
+        for combo, history in combo_history.items():
+            if not _walk_forward_qualifies(history, stake, min_picks, published_roi):
+                continue
+            decay_ok, recent_n, recent_roi = _decay_guard(
+                history, stake, decay_window, decay_min_roi
+            )
+            if decay_ok:
+                qualified_combos[combo] = {
+                    "recent_picks": recent_n,
+                    "recent_roi": recent_roi,
+                }
+                suspended_combos.pop(combo, None)
+            else:
+                suspended_combos[combo] = {
+                    "recent_picks": recent_n,
+                    "recent_roi": recent_roi,
+                }
         for market in qualified_markets:
             first_market_date.setdefault(market, target_date)
         for combo in qualified_combos:
@@ -315,6 +416,8 @@ def walk_forward_accumulator_selections(
             "min_picks": min_picks,
             "all_unique_roi": all_unique_roi,
             "published_roi": published_roi,
+            "decay_window": decay_window,
+            "decay_min_roi": decay_min_roi,
         },
         "all_unique": {
             "rows": all_unique_selected,
@@ -322,8 +425,13 @@ def walk_forward_accumulator_selections(
                 {
                     "market": market,
                     "first_qualified_date": first_market_date[market],
+                    **qualified_markets.get(market, {}),
                 }
                 for market in sorted(first_market_date)
+            ],
+            "suspended_markets": [
+                {"market": market, **suspended_markets[market]}
+                for market in sorted(suspended_markets)
             ],
         },
         "published": {
@@ -333,8 +441,17 @@ def walk_forward_accumulator_selections(
                     "market": market,
                     "model_version": version,
                     "first_qualified_date": first_combo_date[(market, version)],
+                    **qualified_combos.get((market, version), {}),
                 }
                 for market, version in sorted(first_combo_date)
+            ],
+            "suspended_combinations": [
+                {
+                    "market": market,
+                    "model_version": version,
+                    **suspended_combos[(market, version)],
+                }
+                for market, version in sorted(suspended_combos)
             ],
         },
     }
@@ -543,6 +660,7 @@ async def recommendation_pick_ledger(
         "strongest": recommendation_metrics(_source_rows(scoped, "strongest"), stake),
         "overlap": recommendation_metrics(_source_rows(scoped, "overlap"), stake),
     }
+    source_assessment = _source_assessment(metrics)
 
     # Compare every observed source × market × model group over
     # the selected date range. Other ledger filters intentionally do not alter
@@ -599,6 +717,7 @@ async def recommendation_pick_ledger(
         for row in rows:
             market_groups.setdefault(row["market"], []).append(row)
         qualifying_markets = []
+        decayed_markets = []
         qualifying_market_names: set[str] = set()
         for market_name, market_rows in sorted(market_groups.items()):
             market_metrics = recommendation_metrics(market_rows, stake)
@@ -607,11 +726,18 @@ async def recommendation_pick_ledger(
                 and market_metrics["roi"] is not None
                 and market_metrics["roi"] >= 0.10
             ):
-                qualifying_market_names.add(market_name)
-                qualifying_markets.append({
+                decay_ok, recent_n, recent_roi = _decay_guard(market_rows, stake)
+                entry = {
                     "market": market_name,
                     "metrics": market_metrics,
-                })
+                    "recent_picks": recent_n,
+                    "recent_roi": recent_roi,
+                }
+                if decay_ok:
+                    qualifying_market_names.add(market_name)
+                    qualifying_markets.append(entry)
+                else:
+                    decayed_markets.append(entry)
         daily_qualifies = bool(qualifying_market_names)
         # The second daily view reproduces the Published-only simulation using
         # all-time Source × Market × Model combinations at the 5% threshold.
@@ -627,6 +753,7 @@ async def recommendation_pick_ledger(
                     (row["market"], version), []
                 ).append(row)
         published_qualifying_combinations = []
+        published_decayed_combinations = []
         published_qualifying_keys: set[tuple[str, str]] = set()
         for (market_name, version), combination_rows in sorted(
             published_combination_groups.items()
@@ -637,12 +764,19 @@ async def recommendation_pick_ledger(
                 and combination_metrics["roi"] is not None
                 and combination_metrics["roi"] >= 0.05
             ):
-                published_qualifying_keys.add((market_name, version))
-                published_qualifying_combinations.append({
+                decay_ok, recent_n, recent_roi = _decay_guard(combination_rows, stake)
+                entry = {
                     "market": market_name,
                     "model_version": version,
                     "metrics": combination_metrics,
-                })
+                    "recent_picks": recent_n,
+                    "recent_roi": recent_roi,
+                }
+                if decay_ok:
+                    published_qualifying_keys.add((market_name, version))
+                    published_qualifying_combinations.append(entry)
+                else:
+                    published_decayed_combinations.append(entry)
         published_simulation_rows = [
             _serialize_pick(row)
             for row in published_daily_rows
@@ -656,6 +790,7 @@ async def recommendation_pick_ledger(
             "metrics": daily_metrics,
             "qualifies": daily_qualifies,
             "qualifying_markets": qualifying_markets,
+            "decayed_markets": decayed_markets,
             "rows": [
                 _serialize_pick(row)
                 for row in daily_rows
@@ -664,6 +799,7 @@ async def recommendation_pick_ledger(
             "published_simulation": {
                 "qualifies": bool(published_qualifying_keys),
                 "qualifying_combinations": published_qualifying_combinations,
+                "decayed_combinations": published_decayed_combinations,
                 "rows": published_simulation_rows,
             },
         }
@@ -680,6 +816,9 @@ async def recommendation_pick_ledger(
                 "qualifying_markets": walk_forward_selection["all_unique"][
                     "qualifying_markets"
                 ],
+                "suspended_markets": walk_forward_selection["all_unique"][
+                    "suspended_markets"
+                ],
             },
             "published": {
                 "rows": [
@@ -688,6 +827,9 @@ async def recommendation_pick_ledger(
                 ],
                 "qualifying_combinations": walk_forward_selection["published"][
                     "qualifying_combinations"
+                ],
+                "suspended_combinations": walk_forward_selection["published"][
+                    "suspended_combinations"
                 ],
             },
         }
@@ -702,6 +844,7 @@ async def recommendation_pick_ledger(
         "total_rows": total_rows,
         "returned_rows": len(serialized),
         "metrics": metrics,
+        "source_assessment": source_assessment,
         "roi_combinations": roi_combinations,
         "daily_unique": daily_unique,
         "walk_forward": walk_forward,

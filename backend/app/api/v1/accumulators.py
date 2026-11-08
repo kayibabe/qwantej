@@ -19,6 +19,7 @@ class GenerateAccumulatorRequest(BaseModel):
     target_date: date | None = None
     model_run_id: int | None = None
     research_min_qscore: float | None = Field(default=None, ge=0, le=100)
+    research_grade_b_preferred: bool = False
 
 
 class GenerateAccumulatorResponse(BaseModel):
@@ -45,6 +46,7 @@ async def generate_accumulators(
             payload.target_date or cat_today(),
             model_run_id=payload.model_run_id,
             research_min_qscore=payload.research_min_qscore,
+            research_grade_b_preferred=payload.research_grade_b_preferred,
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

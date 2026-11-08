@@ -155,6 +155,12 @@ async def lifespan(app: FastAPI):
             id="sweet_spot_paper_tracker", replace_existing=True,
             coalesce=True, max_instances=1, next_run_time=datetime.now(timezone.utc),
         )
+    if settings.paper_rules_tracking_enabled:
+        scheduler.add_job(
+            _trigger_paper_rules, IntervalTrigger(minutes=5),
+            id="paper_rule_trackers", replace_existing=True,
+            coalesce=True, max_instances=1, next_run_time=datetime.now(timezone.utc),
+        )
     scheduler.start()
     early_cat_minutes = (settings.pipeline_early_cron_hour * 60 + settings.pipeline_early_cron_minute + 120) % (24 * 60)
     morning_cat_minutes = (settings.pipeline_morning_cron_hour * 60 + settings.pipeline_morning_cron_minute + 120) % (24 * 60)
@@ -366,6 +372,13 @@ async def _trigger_sweet_spot():
         if leader:
             from app.tasks.pipeline import track_sweet_spot
             track_sweet_spot.delay()
+
+
+async def _trigger_paper_rules():
+    async with _scheduler_leadership("paper_rule_trackers") as leader:
+        if leader:
+            from app.tasks.pipeline import track_paper_rules
+            track_paper_rules.delay()
 
 
 async def _trigger_singles_ledger_capture():

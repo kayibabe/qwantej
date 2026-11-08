@@ -44,6 +44,7 @@ class TicketPublisher:
         research_min_qscore: float | None = None,
         pipeline_run_id: int | None = None,
         horizon_dates: list[date] | None = None,
+        research_grade_b_preferred: bool = False,
     ) -> TicketGeneration:
         # Lock the publication date across model runs and concurrent workers.
         # The first non-empty optimiser publication is the day's immutable set.
@@ -69,6 +70,7 @@ class TicketPublisher:
             model_run_id=model_run_id,
             research_min_qscore=research_min_qscore,
             horizon_dates=horizon_dates,
+            research_grade_b_preferred=research_grade_b_preferred,
         )
         if built.model_run_id is None:
             raise ValueError("No completed model run exists for the requested date")
@@ -113,6 +115,7 @@ class TicketPublisher:
                 ],
                 "pricing": (built.selection_diagnostics.get("pricing") or {}).get("source", "model"),
                 "research_min_qscore": research_min_qscore,
+                "research_grade_b_preferred": research_grade_b_preferred,
                 "publication_mode": "immutable_paper_trading",
                 "shadow_ticket_types": [TicketType.HIGH_ODDS.value],
                 "selection_diagnostics": built.selection_diagnostics,

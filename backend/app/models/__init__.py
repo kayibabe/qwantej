@@ -39,9 +39,10 @@ from app.models.research import (
 )
 
 from app.models.sweet_spot import SweetSpotEvent
+from app.models.paper_rule import PaperRuleEvent
 
 __all__ = [
-    "SweetSpotEvent",
+    "SweetSpotEvent", "PaperRuleEvent",
     "Competition", "LeagueTier",
     "Team",
     "Match", "MatchStatus", "TeamStats",

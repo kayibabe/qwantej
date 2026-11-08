@@ -123,8 +123,14 @@ def test_walk_forward_never_selects_a_date_before_its_threshold_is_met():
     assert "2026-10-05" not in _selected_dates(selection, "all_unique")
     assert _selected_dates(selection, "all_unique") == ["2026-10-06"]
     assert selection["all_unique"]["qualifying_markets"] == [
-        {"market": "home_win", "first_qualified_date": "2026-10-06"}
+        {
+            "market": "home_win",
+            "first_qualified_date": "2026-10-06",
+            "recent_picks": 5,
+            "recent_roi": None,
+        }
     ]
+    assert selection["all_unique"]["suspended_markets"] == []
 
 
 def test_walk_forward_does_not_let_todays_result_qualify_todays_ticket():

@@ -326,6 +326,7 @@ class Settings(BaseSettings):
 
     # Explicit local opt-in; never enable a new experiment on another deployment implicitly.
     sweet_spot_tracking_enabled: bool = False
+    paper_rules_tracking_enabled: bool = False
 
     # Cache TTLs (seconds)
     cache_ttl_fixtures: int = 86400   # 24 h — retain pulled fixture lists for reference
