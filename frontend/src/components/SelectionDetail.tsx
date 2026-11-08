@@ -141,9 +141,6 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
     : { prob: 'Calibrated probability', edge: 'Positive edge', probRow: 'QwanEj model', impliedRow: 'Market implied', subtitle: 'Model vs market', ev: 'Theoretical value based on the model probability and captured odds. It is not a guaranteed return or win probability.' }
   const [activeTab, setActiveTab] = useState<DetailTab>('probability')
   const [copied, setCopied] = useState(false)
-  const [stake, setStake] = useState('10')
-  const [betMessage, setBetMessage] = useState('')
-  const [betting, setBetting] = useState(false)
   const [quotes, setQuotes] = useState<OddsQuote[]>([])
   const [quotesLoading, setQuotesLoading] = useState(true)
   const [quotesError, setQuotesError] = useState(false)
@@ -186,9 +183,6 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
     if (!selection.active_models?.length) risks.push('active model set unavailable')
     return risks.slice(0, 4)
   }, [selection, priceState.state])
-  const stakeValue = Number(stake)
-  const hasPublishedBetSource = Boolean(selection.selection_id && selection.best_odds)
-  const canConfirmBet = hasPublishedBetSource && Number.isFinite(stakeValue) && stakeValue > 0
   const lifecycleTime = (value?: string | null) => value
     ? new Date(value).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
     : null
@@ -272,17 +266,6 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
     await navigator.clipboard?.writeText(summary)
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1600)
-  }
-
-  async function confirmIndividualBet() {
-    if (!selection.selection_id) { setBetMessage('This selection cannot be confirmed from the current view.'); return }
-    setBetting(true); setBetMessage('')
-    try {
-      const response = await fetch('/api/v1/bets/individual', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ selection_id: selection.selection_id, stake: Number(stake) }) })
-      const body = await response.json()
-      if (!response.ok) throw new Error(body.detail || 'Could not record the bet')
-      setBetMessage(`Recorded as pending bet #${body.id}.`)
-    } catch (error) { setBetMessage(error instanceof Error ? error.message : 'Could not record the bet') } finally { setBetting(false) }
   }
 
   return (
@@ -422,31 +405,6 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
         </section>
 
         <div className="detail-disclaimer">Probabilities are estimates, not guarantees. Expected value is theoretical, not a guaranteed return, and price movement after publication can materially change the calculation.</div>
-        <section className="detail-bet-panel" aria-labelledby="individual-bet-title">
-          <div className="detail-bet-heading">
-            <strong id="individual-bet-title">Individual bet</strong>
-            <p>Record this published selection separately for settlement and P&amp;L tracking.</p>
-          </div>
-          <div className="detail-bet-controls">
-            <label className="detail-stake-field">
-              <span>Stake amount</span>
-              <input
-                type="number"
-                min="0.01"
-                step="0.01"
-                inputMode="decimal"
-                value={stake}
-                onChange={event => setStake(event.target.value)}
-                aria-describedby={!hasPublishedBetSource ? 'individual-bet-availability' : undefined}
-              />
-            </label>
-            <button className="copy-summary-btn detail-bet-confirm" disabled={betting || !canConfirmBet} onClick={confirmIndividualBet}>
-              {betting ? 'Recording…' : 'Confirm individual bet'}
-            </button>
-          </div>
-          {!hasPublishedBetSource && <p className="detail-bet-availability" id="individual-bet-availability">Available for published ticket legs with recorded odds.</p>}
-          {betMessage && <p className="detail-bet-message" role="status">{betMessage}</p>}
-        </section>
         <div className="detail-footer-actions">
           <button className="copy-summary-btn secondary" onClick={copySummary}>{copied ? 'Copied' : 'Copy selection summary'}</button>
         </div>

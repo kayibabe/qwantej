@@ -4,5 +4,4 @@
 // already uses (App.tsx, Admin.tsx, TicketCard.test.tsx) so none of them
 // needed to change.
 export { default } from "./dailyTickets/DailyTicketsPage";
-export { accumulatorBlockers, localDateString, TODAY } from "./dailyTickets/helpers";
-export { SelectionPanel } from "./dailyTickets/SelectionPanel";
+export { localDateString, TODAY } from "./dailyTickets/helpers";

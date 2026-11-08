@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { fetchTicket, fetchTicketHistory, formatDate, formatKickoff, formatMarket, formatSelection, formatTicketType, type CustomAccumulator, type Ticket, type TicketHistoryItem } from '../lib/api'
+import { fetchTicket, fetchTicketHistory, formatDate, formatKickoff, formatMarket, formatSelection, formatTicketType, type Ticket, type TicketHistoryItem } from '../lib/api'
 import GradeBadge from './GradeBadge'
 import { fmtPnl } from '../utils/currency'
 import { localDateString } from '../pages/dailyTickets/helpers'
@@ -8,72 +8,6 @@ interface PerformanceSummary { current_model_version: string }
 
 const pct = (value: number) => `${(value * 100).toFixed(1)}%`
 const cohortKey = (row: TicketHistoryItem) => `${row.target_date}:${row.ticket_type}`
-export interface AccumulatorPerformanceSummary {
-  tickets: number
-  open: number
-  settled: number
-  won: number
-  lost: number
-  void: number
-  exposure: number
-  settledStake: number
-  returned: number
-  profitLoss: number
-}
-
-export function accumulatorPerformance(rows: CustomAccumulator[]): AccumulatorPerformanceSummary {
-  return rows.reduce((summary, row) => {
-    const settled = row.status === 'won' || row.status === 'lost' || row.status === 'void'
-    const stake = row.stake ?? 0
-    summary.tickets += 1
-    summary.exposure += !settled ? stake : 0
-    if (!settled) summary.open += 1
-    if (settled) {
-      summary.settled += 1
-      summary.settledStake += stake
-      const returned = accumulatorReturnAmount(row)
-      summary.returned += returned
-      if (row.status === 'won') summary.won += 1
-      if (row.status === 'lost') summary.lost += 1
-      if (row.status === 'void') summary.void += 1
-      summary.profitLoss += returned - stake
-    }
-    return summary
-  }, { tickets: 0, open: 0, settled: 0, won: 0, lost: 0, void: 0, exposure: 0, settledStake: 0, returned: 0, profitLoss: 0 } as AccumulatorPerformanceSummary)
-}
-
-export function roiFromTotals(profitLoss: number, staked: number): number | null {
-  return staked > 0 ? profitLoss / staked : null
-}
-
-export function simulatorTotals(rows: Array<{ settled: boolean; returnAmount: number | null | undefined }>, stake: number) {
-  const settledRows = rows.filter(row => row.settled)
-  const staked = settledRows.length * stake
-  const returned = settledRows.reduce((sum, row) => sum + (row.returnAmount ?? 0) * stake, 0)
-  return { staked, returned, profitLoss: returned - staked }
-}
-
-/** Return the settled payout, including the legacy fallback for won rows. */
-export function accumulatorReturnAmount(row: Pick<CustomAccumulator, 'status' | 'stake' | 'actual_return' | 'potential_return' | 'combined_odds'>): number {
-  if (row.status === 'lost') return 0
-  if (row.status === 'void') return row.actual_return ?? row.stake ?? 0
-  if (row.status === 'won') {
-    if (row.actual_return != null) return row.actual_return
-    if (row.potential_return != null) return row.potential_return
-    return row.stake != null && row.stake > 0 ? row.stake * row.combined_odds : 0
-  }
-  return 0
-}
-
-export function accumulatorReturnMultiplier(row: Pick<CustomAccumulator, 'status' | 'stake' | 'actual_return' | 'combined_odds'>): number {
-  if (row.status === 'lost') return 0
-  if (row.status === 'void') return 1
-  if (row.status === 'won') {
-    if (row.actual_return != null && row.stake != null && row.stake > 0) return row.actual_return / row.stake
-    return row.combined_odds
-  }
-  return 0
-}
 
 export function latestTicketCohorts(rows: TicketHistoryItem[]) {
   const latest = new Map<string, TicketHistoryItem>()
@@ -83,14 +17,6 @@ export function latestTicketCohorts(rows: TicketHistoryItem[]) {
     if (!current || row.version > current.version || (row.version === current.version && row.ticket_id > current.ticket_id)) latest.set(key, row)
   }
   return [...latest.values()].sort((a, b) => b.target_date.localeCompare(a.target_date) || a.ticket_type.localeCompare(b.ticket_type))
-}
-
-export function wilsonInterval(wins: number, total: number): [number, number] {
-  if (!total) return [0, 0]
-  const z = 1.96, rate = wins / total, denominator = 1 + z * z / total
-  const centre = rate + z * z / (2 * total)
-  const spread = z * Math.sqrt((rate * (1 - rate) + z * z / (4 * total)) / total)
-  return [Math.max(0, (centre - spread) / denominator), Math.min(1, (centre + spread) / denominator)]
 }
 
 export default function PaperLedger({ onOpenValidation }: { onOpenValidation?: () => void }) {

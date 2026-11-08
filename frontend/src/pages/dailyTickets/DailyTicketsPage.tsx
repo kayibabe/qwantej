@@ -1,20 +1,17 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../../auth";
-import type { CustomAccumulator as ApiCustomAccumulator, DailyTickets, Leg, MatchFixture, SelectionSummary, Ticket } from "../../lib/api";
+import type { DailyTickets, Leg, MatchFixture, SelectionSummary, Ticket } from "../../lib/api";
 import {
-  createCustomAccumulator,
   fetchDailyTickets,
   fetchMatchFixtures,
   fetchQualifiedSelections,
   fetchRejectedSelections,
-  fetchCustomAccumulators,
   formatDate,
   formatKickoff,
   formatMarket,
   formatSelection,
   selectionRepeatsMarket,
   selectionTone,
-  updateCustomAccumulator,
   formatStage,
 } from "../../lib/api";
 import TicketCard from "../../components/TicketCard";
@@ -27,25 +24,21 @@ import { TicketGridSkeleton } from "./TicketGridSkeleton";
 import PipelineRibbon, { type PipelineStep } from "./PipelineRibbon";
 import "./DailyOverview.css";
 import {
-  accumulatorBlockers,
-  apiAccumulatorToUi,
   reasonLabel,
   TODAY,
   withRejectionEvidence,
 } from "./helpers";
-import type { CustomAccumulator, DailyTab, DailyTicketsPageProps } from "./types";
+import type { DailyTab, DailyTicketsPageProps } from "./types";
 
 const ParameterSweepPicks = lazy(() => import("./ParameterSweepPicks").then((module) => ({ default: module.ParameterSweepPicks })));
-const DailyMatchPicks = lazy(() => import("./MarketRoiDaily").then((module) => ({ default: module.DailyMatchPicks })));
 const MarketRoiDaily = lazy(() => import("./MarketRoiDaily").then((module) => ({ default: module.MarketRoiDaily })));
 const AllMatches = lazy(() => import("./AllMatches").then((module) => ({ default: module.AllMatches })));
 const FixtureExplorer = lazy(() => import("./FixtureExplorer").then((module) => ({ default: module.FixtureExplorer })));
 
-export default function DailyTicketsPage({ date, initialTab = "fixtures", mode = "overview", onOpenMatch, onOpenTracker, onTabChange, onUpgrade }: DailyTicketsPageProps & { onOpenMatch?: (matchId: number, predictionId?: number) => void }) {
+export default function DailyTicketsPage({ date, initialTab = "fixtures", mode = "overview", onOpenMatch, onTabChange, onUpgrade }: DailyTicketsPageProps & { onOpenMatch?: (matchId: number, predictionId?: number) => void }) {
   const { user, loading: authLoading } = useAuth();
   const isAdmin = user?.role === "admin";
   const canExploreMarkets = isAdmin || user?.plan === "pro";
-  const canAccessDailyPicks = isAdmin || user?.plan === "pro";
   const [data, setData] = useState<DailyTickets | null>(null);
   const [rejected, setRejected] = useState<SelectionSummary[]>([]);
   const [matches, setMatches] = useState<SelectionSummary[]>([]);
@@ -58,9 +51,6 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
   const [candidatesLoaded, setCandidatesLoaded] = useState(false);
   const [rejectedLoaded, setRejectedLoaded] = useState(false);
   const [tab, setTab] = useState<DailyTab>(initialTab);
-  const [custom, setCustom] = useState<CustomAccumulator[]>(() => {
-    return [];
-  });
   const [loading, setLoading] = useState(false);
   const firstLoad = useRef(true);
   const loadedKey = useRef<string | null>(null);
@@ -74,7 +64,6 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
     pricing?: "market" | "model";
     publishedAt?: string;
   } | null>(null);
-  const [selectionMessage, setSelectionMessage] = useState<string | null>(null);
   const [stakePerTicket, setStakePerTicket] = useState("");
 
   useEffect(() => { setTab(initialTab); }, [initialTab, mode]);
@@ -113,8 +102,7 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
       const wantsFixtures = overview || tab === "fixtures";
       const wantsCandidates = canExploreMarkets && (overview || tab === "picks" || tab === "passed");
       const wantsRejected = isAdmin && (overview || tab === "passed");
-      const wantsCustom = isAdmin && tab === "picks";
-      const wantsMarketRoi = (isAdmin && tab === "market-roi") || (canAccessDailyPicks && tab === "daily-match-picks");
+      const wantsMarketRoi = isAdmin && tab === "market-roi";
       const marketRoiPromise = wantsMarketRoi
         ? import("./MarketRoiDaily").then(({ fetchDailyMarketRoi }) => fetchDailyMarketRoi(targetDate)).catch((cause) => {
           const message = cause instanceof Error ? cause.message : "Daily market ROI is unavailable";
@@ -122,12 +110,11 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
           return null;
         })
         : Promise.resolve(null);
-      const [tickets, fixtureRows, allRows, rejectedRows, customRows, marketRoiRows] = await Promise.all([
+      const [tickets, fixtureRows, allRows, rejectedRows, marketRoiRows] = await Promise.all([
         wantsTickets ? fetchDailyTickets(targetDate) : Promise.resolve(null),
         wantsFixtures ? fetchMatchFixtures(targetDate) : Promise.resolve(null),
         wantsCandidates ? fetchQualifiedSelections(targetDate) : Promise.resolve(null),
         wantsRejected ? fetchRejectedSelections(targetDate) : Promise.resolve(null),
-        wantsCustom ? fetchCustomAccumulators(targetDate) : Promise.resolve(null),
         marketRoiPromise,
       ]);
       if (request !== requestVersion.current) return;
@@ -144,7 +131,6 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
         setRejected(rejectedRows);
         setRejectedLoaded(true);
       }
-      if (customRows) setCustom(customRows.map(apiAccumulatorToUi));
       if (wantsMarketRoi) {
         setMarketRoi(marketRoiRows);
         if (marketRoiRows) setMarketRoiError(null);
@@ -162,7 +148,7 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
         firstLoad.current = false;
       }
     }
-  }, [canAccessDailyPicks, canExploreMarkets, isAdmin, mode, tab]);
+  }, [canExploreMarkets, isAdmin, mode, tab]);
 
   const loadMoreMatches = async () => {
     if (loadingMoreMatches || matches.length >= matchesTotal) return;
@@ -205,52 +191,6 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
     window.addEventListener("qwantej:refresh", onRefresh);
     return () => window.removeEventListener("qwantej:refresh", onRefresh);
   }, [authLoading, date, load]);
-  const replaceCustom = (row: ApiCustomAccumulator) => {
-    const uiRow = apiAccumulatorToUi(row);
-    setCustom((current) => [...current.filter((item) => item.id !== uiRow.id), uiRow]);
-  };
-
-  const addOrUpdateCustom = async (
-    ticket: CustomAccumulator | null,
-    name: string,
-    legs: SelectionSummary[],
-    stake: number | null,
-    status: "draft" | "placed",
-  ) => {
-    const payload = {
-      name,
-      target_date: date,
-      prediction_ids: legs.map((leg) => leg.prediction_id),
-      stake,
-      status,
-    } as const;
-    const saved = ticket
-      ? await updateCustomAccumulator(ticket.id, payload)
-      : await createCustomAccumulator(payload);
-    replaceCustom(saved);
-    return apiAccumulatorToUi(saved);
-  };
-
-  const addToAccumulator = async (row: SelectionSummary) => {
-    const blockers = accumulatorBlockers(row);
-    if (blockers.length > 0) {
-      setSelectionMessage(`Selection not added: ${blockers.map(reasonLabel).join(", ")}`);
-      return;
-    }
-    const current = custom.find(
-      (ticket) => ticket.date === date && ticket.status === "draft" && !ticket.automatic,
-    );
-    let saved: CustomAccumulator;
-    if (current) {
-      if (current.legs.some((leg) => leg.match_id === row.match_id)) return;
-      saved = await addOrUpdateCustom(current, current.name, [...current.legs, row], current.stake, "draft");
-    } else {
-      saved = await addOrUpdateCustom(null, `${formatDate(date)} accumulator`, [row], null, "draft");
-    }
-    setSelectionMessage(null);
-    onOpenTracker?.(saved.id);
-  };
-
   const openTicketLeg = (leg: Leg, ticket: Ticket) => {
     setDetail({
       selection: leg,
@@ -290,7 +230,6 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
     : [
         ["picks", "System picks"],
         ["market-roi", "Market edge"],
-        ...(canAccessDailyPicks ? [["daily-match-picks", "Daily picks"] as [DailyTab, string]] : []),
         ["passed", "Rejected / why"],
         ["odds-policy", "Policy"],
       ];
@@ -304,7 +243,6 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
   ];
   const qScoreMatchCount = new Set(matches.map((row) => row.match_id)).size;
   const q85Count = matches.filter((row) => row.q_score >= 85).length;
-  const addableCount = matches.filter((row) => accumulatorBlockers(row).length === 0).length;
   const rejectionReasonCounts = matches.reduce<Record<string, number>>((counts, row) => {
     for (const reason of row.reason_codes ?? []) counts[reason] = (counts[reason] ?? 0) + 1;
     return counts;
@@ -526,16 +464,11 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
               </button>
             ))}
           </nav>}
-          {tab === "picks" && selectionMessage && (
-            <p className="pipeline-banner-message tickets-operation-message negative" role="status">
-              {selectionMessage}
-            </p>
-          )}
           {tab === "fixtures" && <div className="view-intro"><div><span className="eyebrow">Fixtures</span><h2 className="section-title">All fixtures for this date</h2></div><p>Every fixture scheduled for this date, with competition, kickoff time, and current status.</p></div>}
           {tab === "picks" && canExploreMarkets && <div className="view-intro"><div><span className="eyebrow">System picks</span><h2 className="section-title">System picks for this date</h2></div><p>Every Q ≥75 selection the model qualified for this date, grouped by match. A pick appearing here does not mean it made a published accumulator.</p></div>}
           {tab === "tickets" && <div className="view-intro"><div><span className="eyebrow">Accumulator tickets</span><h2 className="section-title">Tickets assembled from this date&rsquo;s picks</h2></div><p>{canExploreMarkets ? "Each published tier is a fixed combination of the system’s qualified picks. Expand a leg to inspect its evidence; the stake field is a what-if calculation only." : "Each published tier is a fixed combination of the system’s qualified picks. On Free you can review every match leg and its settlement status; Pro opens the selections and their evidence."}</p></div>}
           {tab === "fixtures" && <Suspense fallback={<div className="route-loading">Loading fixtures…</div>}><FixtureExplorer fixtures={fixtures} /></Suspense>}
-          {tab === "picks" && canExploreMarkets && <Suspense fallback={<div className="route-loading">Loading system picks…</div>}><AllMatches rows={matchGroups} totalSelections={matchesTotal} loadedSelections={matches.length} loadingMore={loadingMoreMatches} onLoadMore={loadMoreMatches} onSelect={openSelection} onAdd={addToAccumulator} allowAdd={isAdmin} /></Suspense>}
+          {tab === "picks" && canExploreMarkets && <Suspense fallback={<div className="route-loading">Loading system picks…</div>}><AllMatches rows={matchGroups} totalSelections={matchesTotal} loadedSelections={matches.length} loadingMore={loadingMoreMatches} onLoadMore={loadMoreMatches} onSelect={openSelection} /></Suspense>}
           {tab === "picks" && !canExploreMarkets && (
             <section className="plan-locked-panel" aria-labelledby="plan-locked-picks-title">
               <div className="plan-locked-copy">
@@ -559,11 +492,9 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
             <Suspense fallback={<div className="route-loading">Loading policy review…</div>}><ParameterSweepPicks
               date={date}
               onSelect={openSelection}
-              onAdd={addToAccumulator}
             /></Suspense>
           )}
           {isAdmin && tab === "market-roi" && <Suspense fallback={<div className="route-loading">Loading market report…</div>}><MarketRoiDaily data={marketRoi} error={marketRoiError} /></Suspense>}
-          {canAccessDailyPicks && tab === "daily-match-picks" && <Suspense fallback={<div className="route-loading">Loading match report…</div>}><DailyMatchPicks data={marketRoi} error={marketRoiError} /></Suspense>}
           {isAdmin && tab === "passed" && (
             <PassedMatches rows={rejected} onSelect={openSelection} />
           )}
@@ -607,8 +538,6 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
                     <i aria-hidden="true">→</i>
                     <span><b>{q85Count}</b><small>Q ≥85 selections</small></span>
                     <i aria-hidden="true">→</i>
-                    <span className={addableCount === 0 ? "blocked" : ""}><b>{addableCount}</b><small>conservative draft legs</small></span>
-                    <i aria-hidden="true">→</i>
                     <span className="blocked"><b>0</b><small>published tickets</small></span>
                   </div>
                   {leadingRejectionReasons.length > 0 && (
@@ -619,7 +548,6 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
                       ))}
                     </div>
                   )}
-                  <p>Personal drafts cannot accept stale, invalid, or already-started selections.</p>
                 </section>
               )}
               {isAdmin && (data?.superseded_versions?.length ?? 0) > 0 && (

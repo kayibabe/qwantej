@@ -1,7 +1,6 @@
-import type { CustomAccumulator as ApiCustomAccumulator, SelectionSummary } from "../../lib/api";
+import type { SelectionSummary } from "../../lib/api";
 import { dateStringInProductTimeZone } from "../../utils";
 import type {
-  CustomAccumulator,
   MatchDisplayState,
   SelectionDisplayState,
 } from "./types";
@@ -82,20 +81,6 @@ export function selectionStatusLabel(state: SelectionDisplayState): string {
     pending: "Pending",
   }[state];
 }
-
-const HARD_ACCUMULATOR_BLOCKERS = new Set([
-  "MISSING_ODDS",
-  "LEG_ODDS_OUT_OF_RANGE",
-  "MISSING_EDGE",
-  "EDGE_BELOW_NO_BET_THRESHOLD",
-  "INSUFFICIENT_MODEL_SET",
-  "DATA_QUALITY_BELOW_THRESHOLD",
-  "MISSING_ODDS_TIMESTAMP",
-  "STALE_ODDS",
-  "LEAGUE_CALIBRATION_BELOW_THRESHOLD",
-  "MARKET_CALIBRATION_UNRELIABLE",
-  "EDGE_BAND_CALIBRATION_UNRELIABLE",
-]);
 
 const REJECTION_REASON_LABELS: Record<string, string> = {
   INSUFFICIENT_RECENT_SAMPLE: "There are not enough recent home and away matches to assess this fixture.",
@@ -190,25 +175,6 @@ export function reasonLabel(code: string): string {
   return REJECTION_REASON_LABELS[normalized] ?? normalized.toLowerCase().replace(/_/g, " ").replace(/^./, char => char.toUpperCase());
 }
 
-export function accumulatorBlockers(row: SelectionSummary): string[] {
-  const blockers = (row.reason_codes ?? []).filter((code) =>
-    HARD_ACCUMULATOR_BLOCKERS.has(code),
-  );
-  if (matchDisplayState(row) !== "scheduled") blockers.push("MATCH_NOT_UPCOMING");
-  if (row.best_odds == null || row.best_odds <= 0) blockers.push("MISSING_ODDS");
-  if (row.edge == null) blockers.push("MISSING_EDGE");
-  if (row.market === "over_4.5" && row.over45_qualification?.status !== "QUALIFY") blockers.push("OVER45_NOT_QUALIFIED");
-  if (row.market === "over_1.5" && row.over15_qualification?.status !== "QUALIFY") blockers.push("OVER15_NOT_QUALIFIED");
-  if (row.market === "over_2.5" && row.over25_qualification?.status !== "QUALIFY") blockers.push("OVER25_NOT_QUALIFIED");
-  if (row.market === "over_3.5" && row.over35_qualification?.status !== "QUALIFY") blockers.push("OVER35_NOT_QUALIFIED");
-  if (row.market === "under_2.5" && row.under25_qualification?.status !== "QUALIFY") blockers.push("UNDER25_NOT_QUALIFIED");
-  if (row.market === "under_3.5" && row.under35_qualification?.status !== "QUALIFY") blockers.push("UNDER35_NOT_QUALIFIED");
-  if (row.market === "under_1.5" && row.under15_qualification?.status !== "QUALIFY") blockers.push("UNDER15_NOT_QUALIFIED");
-  if (row.market === "under_0.5" && row.under05_qualification?.status !== "QUALIFY") blockers.push("UNDER05_NOT_QUALIFIED");
-  if (!passesUnder05Value(row)) blockers.push("UNDER05_NO_POSITIVE_STRESSED_VALUE");
-  return [...new Set(blockers)];
-}
-
 export function passesUnder05Value(row: SelectionSummary): boolean {
   return row.market !== "under_0.5" ||
     (row.under05_qualification?.status === "QUALIFY" &&
@@ -226,35 +192,4 @@ export function withRejectionEvidence(
     ...row,
     reason_codes: reasons.get(row.prediction_id) ?? row.reason_codes,
   }));
-}
-
-export function apiAccumulatorToUi(row: ApiCustomAccumulator): CustomAccumulator {
-  return {
-    id: row.id,
-    name: row.name,
-    date: row.target_date,
-    legs: row.legs.map((leg) => ({
-      prediction_id: leg.prediction_id,
-      match_id: leg.match_id,
-      home_team: leg.home_team,
-      away_team: leg.away_team,
-      competition: leg.competition,
-      kickoff_at: leg.kickoff_at,
-      market: leg.market,
-      selection: leg.selection,
-      model_probability: leg.probability_snapshot ?? undefined,
-      q_score: leg.q_score_snapshot ?? 0,
-      edge: leg.edge_snapshot,
-      source_ticket_id: leg.source_ticket_id,
-      source_ticket_type: leg.source_ticket_type,
-      source_ticket_version: leg.source_ticket_version,
-      source_conflict: leg.source_conflict,
-      best_odds: leg.odds_snapshot,
-      result: leg.result === "pending" ? null : leg.result,
-    })),
-    stake: row.stake,
-    status: row.status,
-    automatic: row.automatic,
-    source_ticket_snapshots: row.source_ticket_snapshots,
-  };
 }

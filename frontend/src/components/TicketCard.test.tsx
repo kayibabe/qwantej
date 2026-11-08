@@ -4,8 +4,8 @@ import { createRoot } from 'react-dom/client'
 import { describe, expect, it } from 'vitest'
 import TicketCard from './TicketCard'
 import SelectionDetail from './SelectionDetail'
+import RejectionReasons from './RejectionReasons'
 import type { Ticket } from '../lib/api'
-import { accumulatorBlockers, SelectionPanel } from '../pages/DailyTickets'
 
 const ticket: Ticket = {
   ticket_id: 42,
@@ -177,25 +177,7 @@ describe('audited ticket surfaces', () => {
 
   it('reveals rejected-selection reason codes on demand', () => {
     const view = renderInteractive(
-      <SelectionPanel
-        title="Rejected matches"
-        empty="None"
-        rejected
-        rows={[{
-          prediction_id: 4,
-          match_id: 5,
-          home_team: 'Alpha',
-          away_team: 'Beta',
-          competition: 'Test League',
-          kickoff_at: '2026-08-28T12:00:00Z',
-          market: 'home_win',
-          selection: 'home_win',
-          q_score: 74,
-          edge: -0.01,
-          best_odds: 1.8,
-          reason_codes: ['Q_SCORE_BELOW_TIER', 'NON_POSITIVE_EDGE'],
-        }]}
-      />,
+      <RejectionReasons reasons={['Q_SCORE_BELOW_TIER', 'NON_POSITIVE_EDGE']} />,
     )
     expect(view.container.textContent).not.toContain('minimum')
     act(() => view.container.querySelector<HTMLButtonElement>('.rejection-reasons-trigger')?.click())
@@ -235,9 +217,6 @@ describe('audited ticket surfaces', () => {
     expect(html).toContain('Market implied')
     expect(html).toContain('Probabilities are estimates, not guarantees')
     expect(html).toContain('0.2.1')
-    expect(html).toContain('detail-bet-panel')
-    expect(html).toContain('Stake amount')
-    expect(html).toContain('Confirm individual bet')
     expect(html).toContain('Copy selection summary')
   })
 
@@ -264,16 +243,6 @@ describe('audited ticket surfaces', () => {
     expect(html).toContain('Flat stake')
     expect(html).toContain('Potential return')
     expect(html).toContain('Potential profit')
-  })
-
-  it('explains when individual-bet confirmation is unavailable', () => {
-    const candidate = { ...ticket.legs[0], selection_id: undefined }
-    const html = renderToStaticMarkup(
-      <SelectionDetail selection={candidate} onClose={() => undefined} />,
-    )
-    expect(html).toContain('Available for published ticket legs with recorded odds')
-    expect(html).toContain('aria-describedby="individual-bet-availability"')
-    expect(html).toContain('disabled=""')
   })
 
   it('suppresses unverified edge and EV figures and labels learning provenance', () => {
@@ -322,24 +291,5 @@ describe('audited ticket surfaces', () => {
     )
     expect(html).toContain('Learning evidence recorded')
     expect(html).toContain('offline challenger windows')
-  })
-
-  it('blocks stale and already-started selections from personal accumulators', () => {
-    const base = {
-      prediction_id: 4,
-      match_id: 5,
-      home_team: 'Alpha',
-      away_team: 'Beta',
-      competition: 'Test League',
-      kickoff_at: '2026-08-28T12:00:00Z',
-      market: 'home_win',
-      selection: 'home_win',
-      q_score: 90,
-      edge: 0.1,
-      best_odds: 1.8,
-    }
-    expect(accumulatorBlockers({ ...base, match_status: 'scheduled', reason_codes: ['STALE_ODDS'] })).toContain('STALE_ODDS')
-    expect(accumulatorBlockers({ ...base, match_status: 'finished' })).toContain('MATCH_NOT_UPCOMING')
-    expect(accumulatorBlockers({ ...base, match_status: 'scheduled' })).toEqual([])
   })
 })

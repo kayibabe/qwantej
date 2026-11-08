@@ -1,11 +1,8 @@
-import type { SelectionSummary } from "../../lib/api";
-
 export interface DailyTicketsPageProps {
   date: string;
   initialTab?: DailyTab;
   /** "overview" is the public decision page; "research" is the internal workspace. */
   mode?: "overview" | "research";
-  onOpenTracker?: (ticketId: number) => void;
   onTabChange?: (tab: DailyTab) => void;
   onUpgrade?: () => void;
 }
@@ -16,21 +13,9 @@ export type DailyTab =
   | "fixtures"
   | "passed"
   | "odds-policy"
-  | "market-roi"
-  | "daily-match-picks";
+  | "market-roi";
 
 export type MatchDisplayState =
   "finished" | "live" | "scheduled" | "postponed" | "cancelled" | "abandoned" | "awarded";
 
 export type SelectionDisplayState = "won" | "lost" | "void" | "inplay" | "pending";
-
-export interface CustomAccumulator {
-  id: number;
-  name: string;
-  date: string;
-  legs: SelectionSummary[];
-  stake: number | null;
-  status: "draft" | "placed" | "won" | "lost" | "void" | "cashout";
-  automatic: boolean;
-  source_ticket_snapshots?: Record<string, { ticket_id?: number | null; ticket_type?: string; version?: number | null; model_version?: string; publication_hash?: string; published_at?: string }>;
-}

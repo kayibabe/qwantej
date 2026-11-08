@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { accumulatorPerformance, accumulatorReturnAmount, accumulatorReturnMultiplier, latestTicketCohorts, roiFromTotals, simulatorTotals, wilsonInterval } from '../components/PaperLedger'
-import type { CustomAccumulator, TicketHistoryItem } from '../lib/api'
-import { groupJournalBets, groupMatchHistory, type Bet } from '../lib/trackerGrouping'
+import { latestTicketCohorts } from '../components/PaperLedger'
+import type { TicketHistoryItem } from '../lib/api'
+import { groupMatchHistory } from '../lib/trackerGrouping'
 
 const historyRow = (ticketId: number, version: number, targetDate = '2026-08-30'): TicketHistoryItem => ({
   ticket_id: ticketId,
@@ -27,88 +27,12 @@ const historyRow = (ticketId: number, version: number, targetDate = '2026-08-30'
   settled_at: `${targetDate}T20:00:00Z`,
 })
 
-const bet = (id: number, date: string): Bet => ({
-  id,
-  label: `Bet ${id}`,
-  odds: 2,
-  stake: 10,
-  potential_return: 20,
-  ticket_type: null,
-  ticket_date: date,
-  status: 'pending',
-  actual_return: null,
-  profit_loss: null,
-  roi: null,
-  notes: null,
-  created_at: `${date}T08:00:00Z`,
-  source_selection_id: null,
-  match_id: null,
-  market: null,
-  selection: null,
-})
-
 describe('Tracker evidence helpers', () => {
-  it('keeps open accumulator exposure separate from settled performance', () => {
-    const row = (id: number, status: CustomAccumulator['status'], stake: number, actualReturn: number | null): CustomAccumulator => ({
-      id, name: `Accu-${id}`, target_date: '2026-10-06', status, stake, combined_odds: 2,
-      potential_return: stake * 2, actual_return: actualReturn, created_at: '2026-10-06T08:00:00Z',
-      placed_at: '2026-10-06T08:01:00Z', settled_at: status === 'placed' ? null : '2026-10-06T20:00:00Z', automatic: true,
-      legs: [],
-    })
-    const summary = accumulatorPerformance([row(1, 'placed', 5000, null), row(2, 'won', 1, 2.5), row(3, 'lost', 1, 0)])
-    expect(summary).toMatchObject({ tickets: 3, open: 1, settled: 2, won: 1, lost: 1, exposure: 5000, settledStake: 2, returned: 2.5, profitLoss: 0.5 })
-  })
-
   it('keeps only the latest displayed cohort while retaining prior versions for audit', () => {
     const rows = [historyRow(1, 1), historyRow(2, 2), historyRow(3, 1, '2026-08-29')]
     const latest = latestTicketCohorts(rows)
     expect(latest).toHaveLength(2)
     expect(latest.find(row => row.target_date === '2026-08-30')?.version).toBe(2)
-  })
-
-  it('reports a wide confidence interval for the current small ticket sample', () => {
-    const [low, high] = wilsonInterval(3, 11)
-    expect(low).toBeCloseTo(.0975, 3)
-    expect(high).toBeCloseTo(.5656, 3)
-  })
-
-  it('calculates simulator ROI from simulated P&L and stake', () => {
-    expect(roiFromTotals(5.87, 17)).toBeCloseTo(0.345294, 5)
-    expect(roiFromTotals(-2, 10)).toBe(-0.2)
-    expect(roiFromTotals(0, 0)).toBeNull()
-  })
-
-  it('calculates accumulator simulator totals from accumulator rows, not ticket rows', () => {
-    const totals = simulatorTotals([
-      { settled: true, returnAmount: 43.21 },
-    ], 1)
-    expect(totals).toEqual({ staked: 1, returned: 43.21, profitLoss: 42.21 })
-  })
-
-  it('counts each settled winning stake and its payout when actual return is absent', () => {
-    const row = (id: number, status: CustomAccumulator['status'], odds: number, actualReturn: number | null): CustomAccumulator => ({
-      id, name: `Accu-${id}`, target_date: '2026-10-06', status, stake: 5000, combined_odds: odds,
-      potential_return: status === 'won' ? 5000 * odds : status === 'lost' ? 0 : 5000, actual_return: actualReturn,
-      created_at: '2026-10-06T08:00:00Z', placed_at: '2026-10-06T08:01:00Z', settled_at: '2026-10-06T20:00:00Z', automatic: true,
-      legs: [],
-    })
-    const summary = accumulatorPerformance([row(1, 'lost', 7.09, 0), row(2, 'won', 7.33, null), row(3, 'won', 3.18, null)])
-    expect(summary).toMatchObject({ settled: 3, won: 2, lost: 1, settledStake: 15000, returned: 52550, profitLoss: 37550 })
-    expect(accumulatorReturnAmount(row(2, 'won', 7.33, null))).toBe(36650)
-  })
-
-  it('uses combined odds when a won accumulator has no stored return', () => {
-    expect(accumulatorReturnMultiplier({ status: 'won', stake: null, actual_return: null, combined_odds: 6.5 })).toBe(6.5)
-    expect(accumulatorReturnMultiplier({ status: 'won', stake: 2, actual_return: 13, combined_odds: 6.5 })).toBe(6.5)
-    expect(accumulatorReturnMultiplier({ status: 'void', stake: 1, actual_return: null, combined_odds: 6.5 })).toBe(1)
-    expect(accumulatorReturnMultiplier({ status: 'lost', stake: 1, actual_return: 0, combined_odds: 6.5 })).toBe(0)
-  })
-
-  it('groups journal rows once by year, month and date', () => {
-    const groups = groupJournalBets([bet(1, '2026-08-30'), bet(2, '2026-08-29'), bet(3, '2025-12-31')])
-    expect(groups.map(group => group.year)).toEqual(['2026', '2025'])
-    expect(groups[0].months).toHaveLength(1)
-    expect(groups[0].months[0].dates).toHaveLength(2)
   })
 
   it('groups match history by newest year, month and date without repeated headings', () => {

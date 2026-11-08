@@ -105,7 +105,7 @@ const ageAtRefresh = (minutes: number) => minutes < 60
 
 type CandidateSortKey = "kickoff" | "match" | "market" | "odds" | "q_score" | "hit_rate" | "roi" | "sample_size";
 
-function MarketRoiDailyContent({ data, error, view }: { data: MarketRoiDailyData | null; error: string | null; view: "market-roi" | "daily-match-picks" }) {
+export function MarketRoiDaily({ data, error }: { data: MarketRoiDailyData | null; error: string | null }) {
   const [minimumQuality, setMinimumQuality] = useState("70");
   const [grade, setGrade] = useState("all");
   const fixtures = useMemo(() => {
@@ -141,10 +141,10 @@ function MarketRoiDailyContent({ data, error, view }: { data: MarketRoiDailyData
 
   return (
     <section className="market-roi-panel">
-      <header className={`market-roi-heading${view === "daily-match-picks" ? " daily-match-picks-heading" : ""}`}>
+      <header className="market-roi-heading">
         <div>
           <span className="eyebrow">Daily market scan · research only</span>
-          {view === "daily-match-picks" && data && <section className="daily-picks-performance" aria-label="Settled Daily Match Picks performance">
+          {data && <section className="daily-picks-performance" aria-label="Settled Daily Match Picks performance">
             <div className="daily-picks-performance-heading">
               <div><h3>Settled Daily Match Picks performance</h3><p>From {data.settled_daily_pick_market_performance.date_from} · Q ≥ {data.min_q_score} · odds {data.min_decimal_odds.toFixed(2)} to below {data.max_decimal_odds_exclusive.toFixed(2)}</p></div>
               <small>{data.settled_daily_pick_market_performance.completed_through
@@ -169,11 +169,8 @@ function MarketRoiDailyContent({ data, error, view }: { data: MarketRoiDailyData
               </table></div>}
             <p className="daily-picks-performance-note">One unit per settled selection at its captured odds. Void picks and dates still awaiting settlement are excluded. ROI is sorted from highest to lowest; this is historical paper performance, not a profitability guarantee.</p>
           </section>}
-          <h2 className="section-title">{view === "market-roi" ? "Hit rate and ROI by market" : `Daily Match Picks · ${data?.target_date ?? "selected date"}`}</h2>
-          {view === "daily-match-picks" && <p className="daily-picks-research-warning" role="note"><strong>Experimental shortlist.</strong> Its historical market rule has no minimum settled sample size. Check the number of picks and the later-date results before interpreting ROI; these are reconstructed paper results, not recorded bookmaker bets.</p>}
-          <p>{view === "market-roi"
-            ? "Compare historical market results, then inspect the selected date’s qualifying research candidates. Small samples remain exploratory."
-            : `Research candidates for ${data?.target_date ?? "the selected date"} from historically qualifying markets. Each row keeps the match, pick, current result, and quote status together.`}</p>
+          <h2 className="section-title">Hit rate and ROI by market</h2>
+          <p>Compare historical market results, then inspect the selected date’s qualifying research candidates. Small samples remain exploratory.</p>
         </div>
         <div className="market-roi-refresh">
           <span>Auto refresh · 5 min</span>
@@ -185,14 +182,14 @@ function MarketRoiDailyContent({ data, error, view }: { data: MarketRoiDailyData
       {!data && !error && <p className="panel-empty">Loading daily market performance…</p>}
 
       {data && <>
-        {view === "market-roi" && <div className="market-roi-kpis">
+        <div className="market-roi-kpis">
           <span><small>History through {data.historical_through}</small><b>{data.historical_unique_selections} selections</b></span>
           <span><small>Historical fixtures</small><b>{data.historical_fixture_summary.unique_fixtures}</b></span>
           <span><small>Markets meeting configured formula</small><b>{data.qualifying_markets.length}</b></span>
           <span><small>{data.target_date} research set</small><b>{fixtures.length} matches · {fixtures.reduce((count, rows) => count + rows.length, 0)} picks</b></span>
-        </div>}
+        </div>
 
-        {view === "market-roi" && <details className="market-roi-method-details">
+        <details className="market-roi-method-details">
           <summary>Qualification and sample details</summary>
           <div className="market-roi-method-content">
             <p>Historical performance uses the latest valid pre-kickoff prediction per fixture, market and selection. A market meets the configured formula when hit rate is above {pct(data.hit_rate_threshold)} and flat-stake ROI is above {pct(data.roi_threshold)}. This formula does not set a minimum sample size; check the evidence label and pick count before interpreting a result.</p>
@@ -204,9 +201,9 @@ function MarketRoiDailyContent({ data, error, view }: { data: MarketRoiDailyData
               <span>{data.historical_fixture_summary.mixed} mixed outcomes</span>
             </div>
           </div>
-        </details>}
+        </details>
 
-        {view === "market-roi" && <div className="market-roi-table-wrap">
+        <div className="market-roi-table-wrap">
           <h3>Historical market ranking</h3>
           {data.historical_markets.length === 0 ? <p className="panel-empty">No settled historical picks are available for Q ≥ {data.min_q_score}, odds {data.min_decimal_odds.toFixed(2)} to below {data.max_decimal_odds_exclusive.toFixed(2)}, and quote age ≤ {data.max_quote_age_hours} hours.</p> : (
             <table className="market-roi-table">
@@ -221,10 +218,11 @@ function MarketRoiDailyContent({ data, error, view }: { data: MarketRoiDailyData
               </tr>)}</tbody>
             </table>
           )}
-        </div>}
+        </div>
 
-        {view === "daily-match-picks" && <div className="market-roi-table-wrap market-roi-candidates">
-          <h3>Matches qualifying today · {data.target_date}</h3>
+        <div className="market-roi-table-wrap market-roi-candidates">
+          <h3>Research candidates · {data.target_date}</h3>
+          <p className="daily-picks-research-warning" role="note"><strong>Experimental shortlist.</strong> Its historical market rule has no minimum settled sample size. Check the number of picks and the later-date results before interpreting ROI; these are reconstructed paper results, not recorded bookmaker bets.</p>
           <div className="market-roi-filters">
             <label>Minimum Q
               <select value={minimumQuality} onChange={(event) => setMinimumQuality(event.target.value)}>
@@ -272,16 +270,8 @@ function MarketRoiDailyContent({ data, error, view }: { data: MarketRoiDailyData
             </table>
             </div>
           )}
-        </div>}
+        </div>
       </>}
     </section>
   );
-}
-
-export function MarketRoiDaily({ data, error }: { data: MarketRoiDailyData | null; error: string | null }) {
-  return <MarketRoiDailyContent data={data} error={error} view="market-roi" />;
-}
-
-export function DailyMatchPicks({ data, error }: { data: MarketRoiDailyData | null; error: string | null }) {
-  return <MarketRoiDailyContent data={data} error={error} view="daily-match-picks" />;
 }

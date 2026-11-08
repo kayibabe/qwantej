@@ -1,27 +1,20 @@
 import { useEffect, useState } from "react";
-import type { MatchFilterCriteria, MatchFilterPreset, SelectionSummary } from "../../lib/api";
+import type { SelectionSummary } from "../../lib/api";
 import {
-  createMatchFilterPreset,
-  deleteMatchFilterPreset,
-  fetchMatchFilterPresets,
   formatKickoff,
   formatMarket,
   selectionRepeatsMarket,
   formatSelection,
-  updateMatchFilterPreset,
 } from "../../lib/api";
 import {
-  accumulatorBlockers,
   gradeTone,
   matchDisplayState,
   matchStatusText,
-  reasonLabel,
   selectionStatusLabel,
   spreadLabel,
   spreadTone,
 } from "./helpers";
 import type { MatchDisplayState } from "./types";
-import { useFavoriteMatches } from "./useFavoriteMatches";
 
 type MatchSortKey = "match" | "kickoff" | "league" | "q" | "markets" | "spread" | "edge";
 const MATCH_STATUSES: MatchDisplayState[] = ["finished", "live", "scheduled", "postponed", "cancelled", "abandoned", "awarded"];
@@ -29,19 +22,6 @@ const MATCH_SORT_KEYS: MatchSortKey[] = ["match", "kickoff", "league", "q", "mar
 
 function matchUrlParam(name: string) {
   return new URLSearchParams(window.location.search).get(`match_${name}`);
-}
-
-function numberParam(name: string, fallback = "") {
-  const value = matchUrlParam(name);
-  if (value == null || value.trim() === "") return fallback;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? String(parsed) : fallback;
-}
-
-function numberOrNull(value: string): number | null {
-  if (!value.trim()) return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function quoteFreshness(row: SelectionSummary) {
@@ -74,8 +54,6 @@ export function AllMatches({
   loadingMore = false,
   onLoadMore,
   onSelect,
-  onAdd,
-  allowAdd = true,
 }: {
   rows: [number, SelectionSummary[]][];
   totalSelections?: number;
@@ -83,8 +61,6 @@ export function AllMatches({
   loadingMore?: boolean;
   onLoadMore?: () => void;
   onSelect: (row: SelectionSummary) => void;
-  onAdd: (row: SelectionSummary) => void;
-  allowAdd?: boolean;
 }) {
   const [statusFilter, setStatusFilter] = useState<"all" | MatchDisplayState>(() => {
     const value = matchUrlParam("status");
@@ -93,19 +69,6 @@ export function AllMatches({
   const [query, setQuery] = useState(() => matchUrlParam("q") ?? "");
   const [leagueFilter, setLeagueFilter] = useState(() => matchUrlParam("league") ?? "all");
   const [marketFilter, setMarketFilter] = useState(() => matchUrlParam("market") ?? "all");
-  const [favoriteOnly, setFavoriteOnly] = useState(() => matchUrlParam("favorites") === "1");
-  const [minProbability, setMinProbability] = useState(() => numberParam("pmin"));
-  const [maxProbability, setMaxProbability] = useState(() => numberParam("pmax"));
-  const [minOdds, setMinOdds] = useState(() => numberParam("omin"));
-  const [maxOdds, setMaxOdds] = useState(() => numberParam("omax"));
-  const [minEdge, setMinEdge] = useState(() => numberParam("emin"));
-  const [minQScore, setMinQScore] = useState(() => numberParam("qmin", "75"));
-  const [maxQScore, setMaxQScore] = useState(() => numberParam("qmax"));
-  const { favorites, favoriteIds, toggleFavorite } = useFavoriteMatches();
-  const [presets, setPresets] = useState<MatchFilterPreset[]>([]);
-  const [presetId, setPresetId] = useState("");
-  const [presetName, setPresetName] = useState("");
-  const [presetMessage, setPresetMessage] = useState("");
   const [sort, setSort] = useState<{ key: MatchSortKey; direction: "asc" | "desc" }>(() => {
     const key = matchUrlParam("sort");
     const direction = matchUrlParam("order");
@@ -114,7 +77,6 @@ export function AllMatches({
       direction: direction === "desc" ? "desc" : "asc",
     };
   });
-  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
   useEffect(() => {
     const url = new URL(window.location.href);
     const params: Record<string, string | null> = {
@@ -122,14 +84,6 @@ export function AllMatches({
       match_league: leagueFilter === "all" ? null : leagueFilter,
       match_market: marketFilter === "all" ? null : marketFilter,
       match_status: statusFilter === "all" ? null : statusFilter,
-      match_favorites: favoriteOnly ? "1" : null,
-      match_pmin: minProbability || null,
-      match_pmax: maxProbability || null,
-      match_omin: minOdds || null,
-      match_omax: maxOdds || null,
-      match_emin: minEdge || null,
-      match_qmin: minQScore === "75" ? null : minQScore || null,
-      match_qmax: maxQScore || null,
       match_sort: sort.key === "kickoff" && sort.direction === "asc" ? null : sort.key,
       match_order: sort.key === "kickoff" && sort.direction === "asc" ? null : sort.direction,
     };
@@ -138,18 +92,7 @@ export function AllMatches({
       else url.searchParams.delete(key);
     }
     window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
-  }, [query, leagueFilter, marketFilter, statusFilter, favoriteOnly, minProbability, maxProbability, minOdds, maxOdds, minEdge, minQScore, maxQScore, sort]);
-  useEffect(() => {
-    let active = true;
-    fetchMatchFilterPresets().then((items) => {
-      if (active) {
-        setPresets(items);
-      }
-    }).catch(() => {
-      if (active) setPresetMessage("Saved filters could not be loaded.");
-    });
-    return () => { active = false; };
-  }, []);
+  }, [query, leagueFilter, marketFilter, statusFilter, sort]);
   const leagues = [...new Set(rows.map(([, selections]) => selections[0]?.competition).filter(Boolean))].sort();
   const markets = [...new Set(rows.flatMap(([, selections]) => selections.map((row) => formatMarket(row.market))))].sort();
   const marketCounts = rows.reduce<Record<string, number>>((counts, [, selections]) => {
@@ -166,36 +109,17 @@ export function AllMatches({
   const discoveredRows = rows.flatMap(([id, selections]) => {
     const first = selections[0];
     const matchesText = !queryText || `${first.home_team} ${first.away_team} ${first.competition}`.toLocaleLowerCase().includes(queryText);
-    const marketRows = (marketFilter === "all" ? selections : selections.filter((row) => formatMarket(row.market) === marketFilter))
-      .filter((row) => {
-        const probability = numberOrNull(minProbability);
-        const probabilityMax = numberOrNull(maxProbability);
-        const odds = numberOrNull(minOdds);
-        const oddsMax = numberOrNull(maxOdds);
-        const edge = numberOrNull(minEdge);
-        const qMin = numberOrNull(minQScore) ?? 75;
-        const qMax = numberOrNull(maxQScore);
-        if (probability != null && (row.model_probability == null || row.model_probability < probability / 100)) return false;
-        if (probabilityMax != null && (row.model_probability == null || row.model_probability > probabilityMax / 100)) return false;
-        if (odds != null && (row.best_odds == null || row.best_odds < odds)) return false;
-        if (oddsMax != null && (row.best_odds == null || row.best_odds > oddsMax)) return false;
-        if (edge != null && (row.edge == null || row.edge < edge / 100)) return false;
-        if (row.q_score < qMin || (qMax != null && row.q_score > qMax)) return false;
-        return true;
-      });
+    const marketRows = marketFilter === "all" ? selections : selections.filter((row) => formatMarket(row.market) === marketFilter);
     if (!matchesText || (leagueFilter !== "all" && first.competition !== leagueFilter) || marketRows.length === 0) return [];
     return [[id, marketRows] as [number, SelectionSummary[]]];
   });
-  const filteredRows = (statusFilter === "all"
+  const filteredRows = statusFilter === "all"
     ? discoveredRows
-    : discoveredRows.filter(([, selections]) => matchDisplayState(selections[0]) === statusFilter))
-    .filter(([matchId]) => !favoriteOnly || favoriteIds.has(matchId));
+    : discoveredRows.filter(([, selections]) => matchDisplayState(selections[0]) === statusFilter);
   const activeFilterCount = Number(Boolean(query.trim()))
     + Number(leagueFilter !== "all")
     + Number(marketFilter !== "all")
-    + Number(statusFilter !== "all")
-    + Number(favoriteOnly)
-    + Number(Boolean(minProbability || maxProbability || minOdds || maxOdds || minEdge || (minQScore && minQScore !== "75") || maxQScore));
+    + Number(statusFilter !== "all");
   const sortedRows = [...filteredRows].sort(([, a], [, b]) => {
     const left = a[0];
     const right = b[0];
@@ -248,94 +172,6 @@ export function AllMatches({
     setQuery("");
     setLeagueFilter("all");
     setMarketFilter("all");
-    setFavoriteOnly(false);
-    setMinProbability("");
-    setMaxProbability("");
-    setMinOdds("");
-    setMaxOdds("");
-    setMinEdge("");
-    setMinQScore("75");
-    setMaxQScore("");
-    setPresetId("");
-  };
-  const currentCriteria: MatchFilterCriteria = {
-    query: query.trim(),
-    competition: leagueFilter,
-    market: marketFilter,
-    status: statusFilter,
-    favorite_only: favoriteOnly,
-    min_probability: numberOrNull(minProbability) == null ? null : Number(minProbability) / 100,
-    max_probability: numberOrNull(maxProbability) == null ? null : Number(maxProbability) / 100,
-    min_odds: numberOrNull(minOdds),
-    max_odds: numberOrNull(maxOdds),
-    min_edge: numberOrNull(minEdge) == null ? null : Number(minEdge) / 100,
-    min_q_score: numberOrNull(minQScore) ?? 75,
-    max_q_score: numberOrNull(maxQScore),
-  };
-  const applyPreset = (preset: MatchFilterPreset) => {
-    const criteria = preset.criteria;
-    setQuery(criteria.query);
-    setLeagueFilter(criteria.competition);
-    setMarketFilter(criteria.market);
-    setStatusFilter(criteria.status);
-    setFavoriteOnly(criteria.favorite_only);
-    setMinProbability(criteria.min_probability == null ? "" : String(criteria.min_probability * 100));
-    setMaxProbability(criteria.max_probability == null ? "" : String(criteria.max_probability * 100));
-    setMinOdds(criteria.min_odds == null ? "" : String(criteria.min_odds));
-    setMaxOdds(criteria.max_odds == null ? "" : String(criteria.max_odds));
-    setMinEdge(criteria.min_edge == null ? "" : String(criteria.min_edge * 100));
-    setMinQScore(String(criteria.min_q_score));
-    setMaxQScore(criteria.max_q_score == null ? "" : String(criteria.max_q_score));
-  };
-  const savePreset = async () => {
-    if (!presetName.trim()) return;
-    setPresetMessage("");
-    try {
-      const preset = await createMatchFilterPreset(presetName.trim(), currentCriteria);
-      setPresets((current) => [preset, ...current]);
-      setPresetId(String(preset.id));
-      setPresetName("");
-      setPresetMessage("Filter saved to your account.");
-    } catch {
-      setPresetMessage("Could not save this filter. Check your connection and try again.");
-    }
-  };
-  const selectedPreset = presets.find((item) => String(item.id) === presetId);
-  const selectedPresetChanged = Boolean(selectedPreset && Object.entries(currentCriteria).some(([key, value]) =>
-    selectedPreset.criteria[key as keyof MatchFilterCriteria] !== value,
-  ));
-  const updatePreset = async () => {
-    if (!selectedPreset || !selectedPresetChanged) return;
-    setPresetMessage("");
-    try {
-      const updated = await updateMatchFilterPreset(selectedPreset.id, selectedPreset.name, currentCriteria);
-      setPresets((current) => current.map((item) => item.id === updated.id ? updated : item));
-      setPresetMessage("Saved filter updated.");
-    } catch {
-      setPresetMessage("Could not update this filter. Check your connection and try again.");
-    }
-  };
-  const removePreset = async () => {
-    const selected = presets.find((item) => String(item.id) === presetId);
-    if (!selected) return;
-    setPresetMessage("");
-    try {
-      await deleteMatchFilterPreset(selected.id);
-      setPresets((current) => current.filter((item) => item.id !== selected.id));
-      setPresetId("");
-      setPresetMessage("Saved filter removed.");
-    } catch {
-      setPresetMessage("Could not remove this filter. Check your connection and try again.");
-    }
-  };
-  const copyViewLink = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      setCopyState("copied");
-    } catch {
-      setCopyState("failed");
-    }
-    window.setTimeout(() => setCopyState("idle"), 2000);
   };
   const statusCounts = discoveredRows.reduce<Record<MatchDisplayState, number>>(
     (counts, [, selections]) => {
@@ -425,16 +261,10 @@ export function AllMatches({
                 {statusCounts.cancelled > 0 && filterButton("cancelled", "Cancelled", statusCounts.cancelled)}
                 {statusCounts.abandoned > 0 && filterButton("abandoned", "Abandoned · review", statusCounts.abandoned)}
                 {statusCounts.awarded > 0 && filterButton("awarded", "Awarded · review", statusCounts.awarded)}
-                <button className={`fixture-favorites-filter${favoriteOnly ? " active" : ""}`} onClick={() => setFavoriteOnly((current) => !current)} aria-pressed={favoriteOnly} title="Save matches to your account when signed in">
-                  <span aria-hidden="true">★</span> Favourites <b>{favorites.length}</b>
-                </button>
               </div>
               <div className="picks-controls-actions">
                 <button className="match-clear-filters" onClick={clearFilters} disabled={activeFilterCount === 0}>
                   Clear filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
-                </button>
-                <button className="match-copy-link" onClick={copyViewLink} title="Copy a link with the selected date and filters">
-                  {copyState === "copied" ? "Link copied" : copyState === "failed" ? "Copy unavailable" : "Copy view link"}
                 </button>
               </div>
             </div>
@@ -457,33 +287,6 @@ export function AllMatches({
                 </label>
               )}
             </div>
-            <details className="match-more-filters picks-more-filters">
-              <summary>Advanced filters and saved views</summary>
-              <div className="match-filter-presets">
-              <label><span>Saved filters</span><select value={presetId} onChange={(event) => {
-                setPresetId(event.target.value);
-                const selected = presets.find((item) => String(item.id) === event.target.value);
-                if (selected) applyPreset(selected);
-              }}>
-                <option value="">Choose a saved filter</option>
-                {presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
-              </select></label>
-              <label><span className="sr-only">Name this filter</span><input value={presetName} onChange={(event) => setPresetName(event.target.value)} maxLength={80} placeholder="Name this filter" /></label>
-              <button className="match-copy-link" onClick={savePreset} disabled={!presetName.trim()}>Save as new filter</button>
-              <button className="match-copy-link" onClick={updatePreset} disabled={!selectedPresetChanged}>Update selected filter</button>
-              <button className="match-clear-filters" onClick={removePreset} disabled={!presetId}>Delete saved filter</button>
-              {presetMessage && <span className="match-filter-message" role="status">{presetMessage}</span>}
-            </div>
-              <div className="match-advanced-filters" aria-label="Advanced match filters">
-              <label><span>Model probability min %</span><input type="number" min="0" max="100" step="1" value={minProbability} onChange={(event) => setMinProbability(event.target.value)} placeholder="Any" /></label>
-              <label><span>Model probability max %</span><input type="number" min="0" max="100" step="1" value={maxProbability} onChange={(event) => setMaxProbability(event.target.value)} placeholder="Any" /></label>
-              <label><span>Odds min</span><input type="number" min="1" max="1000" step="0.01" value={minOdds} onChange={(event) => setMinOdds(event.target.value)} placeholder="Any" /></label>
-              <label><span>Odds max</span><input type="number" min="1" max="1000" step="0.01" value={maxOdds} onChange={(event) => setMaxOdds(event.target.value)} placeholder="Any" /></label>
-              <label><span>Edge min %</span><input type="number" min="-100" max="100" step="0.1" value={minEdge} onChange={(event) => setMinEdge(event.target.value)} placeholder="Any" /></label>
-              <label><span>Q-score min</span><input type="number" min="0" max="100" step="1" value={minQScore} onChange={(event) => setMinQScore(event.target.value)} /></label>
-              <label><span>Q-score max</span><input type="number" min="0" max="100" step="1" value={maxQScore} onChange={(event) => setMaxQScore(event.target.value)} placeholder="Any" /></label>
-              </div>
-            </details>
           </div>
 
           {filteredResults.length > 0 && <section className="match-scan-outcomes" aria-label="Settled results for this filtered match date">
@@ -511,7 +314,7 @@ export function AllMatches({
             <span />
           </div>
           {sortedRows.length === 0 ? (
-            <p className="panel-empty">{favoriteOnly && favorites.length === 0 ? "No favourites yet. Select a star beside a match to save it here." : "No qualified matches match these filters."}</p>
+            <p className="panel-empty">No qualified matches match these filters.</p>
           ) : (
             <div className="match-card-grid">
               {sortedRows.map(([matchId, selections]) => (
@@ -519,10 +322,6 @@ export function AllMatches({
                   key={matchId}
                   selections={selections}
                   onSelect={onSelect}
-                  onAdd={onAdd}
-                  allowAdd={allowAdd}
-                  isFavorite={favoriteIds.has(matchId)}
-                  onToggleFavorite={() => toggleFavorite(matchId)}
                 />
               ))}
             </div>
@@ -539,17 +338,9 @@ export function AllMatches({
 function MatchMarketGroup({
   selections,
   onSelect,
-  onAdd,
-  allowAdd,
-  isFavorite,
-  onToggleFavorite,
 }: {
   selections: SelectionSummary[];
   onSelect: (row: SelectionSummary) => void;
-  onAdd: (row: SelectionSummary) => void;
-  allowAdd: boolean;
-  isFavorite: boolean;
-  onToggleFavorite: () => void;
 }) {
   const [sort, setSort] = useState<{
     key: "market" | "q" | "odds" | "spread" | "edge";
@@ -637,14 +428,6 @@ function MatchMarketGroup({
           <b className={`match-result-badge ${statusTone}`}>{matchStatusText(first)}</b>
         </div>
         <div className="match-row-actions">
-          <button
-            type="button"
-            className={`match-favorite${isFavorite ? " active" : ""}`}
-            onClick={(event) => { event.preventDefault(); event.stopPropagation(); onToggleFavorite(); }}
-            aria-label={`${isFavorite ? "Remove" : "Add"} ${first.home_team} vs ${first.away_team} ${isFavorite ? "from" : "to"} favourites`}
-            aria-pressed={isFavorite}
-            title={isFavorite ? "Remove from favourites" : "Add to favourites"}
-          >★</button>
           <span className="match-card-expand">View markets <b aria-hidden="true">⌄</b></span>
         </div>
       </summary>
@@ -658,9 +441,8 @@ function MatchMarketGroup({
           {button("edge", "Edge")}
         </div>
         {sorted.map((row) => {
-          const blockers = accumulatorBlockers(row);
           const freshness = quoteFreshness(row);
-          return <div className={`market-row${blockers.length > 0 ? " blocked" : ""}`} key={row.prediction_id}>
+          return <div className="market-row" key={row.prediction_id}>
             <div className="market-row-identity">
               {!selectionRepeatsMarket(row.market, row.selection) && <span className="market-row-market">{formatMarket(row.market)}</span>}
               <strong className="market-row-selection">{formatSelection(row.selection)}</strong>
@@ -676,14 +458,6 @@ function MatchMarketGroup({
               </div>
             </div>
             <div className="market-row-actions">
-              {allowAdd && <button
-                className="btn-ghost btn-sm"
-                onClick={() => onAdd(row)}
-                disabled={blockers.length > 0}
-                title={blockers.length > 0 ? `Unavailable: ${blockers.map(reasonLabel).join(", ")}` : "Add to personal accumulator"}
-              >
-                {blockers.length > 0 ? "Unavailable" : "Add"}
-              </button>}
               <button className="btn-ghost btn-sm" onClick={() => onSelect(row)}>
                 Details
               </button>
@@ -707,8 +481,7 @@ function MatchMarketGroup({
                 <dd>{row.edge != null ? `${(row.edge * 100).toFixed(1)}%` : "—"}</dd>
               </div>
             </dl>
-            {blockers.length > 0 && <small className="market-row-blockers">Not addable · {blockers.map(reasonLabel).join(" · ")}</small>}
-          </div>
+          </div>;
         })}
       </div>
     </details>

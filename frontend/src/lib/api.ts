@@ -442,73 +442,6 @@ export interface MatchIntelligence {
   evidence_note: string
 }
 
-export interface CustomAccumulatorLeg {
-  id: number
-  position: number
-  prediction_id: number
-  match_id: number
-  home_team: string
-  away_team: string
-  competition: string
-  kickoff_at: string
-  match_status?: string
-  home_goals?: number | null
-  away_goals?: number | null
-  market: string
-  selection: string
-  odds_snapshot: number
-  probability_snapshot: number | null
-  q_score_snapshot: number | null
-  edge_snapshot: number | null
-  source_ticket_id: number | null
-  source_ticket_type: 'safe' | 'balanced' | 'high_odds' | null
-  source_ticket_version: number | null
-  source_conflict: boolean
-  result: 'pending' | 'won' | 'lost' | 'void'
-  settled_at: string | null
-}
-
-export interface CustomAccumulator {
-  id: number
-  name: string
-  target_date: string
-  status: 'draft' | 'placed' | 'won' | 'lost' | 'void' | 'cashout'
-  stake: number | null
-  combined_odds: number
-  potential_return: number | null
-  actual_return: number | null
-  created_at: string
-  placed_at: string | null
-  settled_at: string | null
-  automatic: boolean
-  source_ticket_snapshots?: Record<string, { ticket_id?: number | null; ticket_type?: string; version?: number | null; model_version?: string; publication_hash?: string; published_at?: string }>
-  legs: CustomAccumulatorLeg[]
-}
-
-export async function fetchCustomAccumulators(date?: string): Promise<CustomAccumulator[]> {
-  const query = date ? `?target_date=${encodeURIComponent(date)}` : ''
-  const res = await fetch(`/api/v1/custom-accumulators${query}`)
-  if (!res.ok) throw new Error(`API error ${res.status}`)
-  return res.json()
-}
-
-export async function createCustomAccumulator(payload: { name: string; target_date: string; prediction_ids: number[]; stake: number | null; status: 'draft' | 'placed' }): Promise<CustomAccumulator> {
-  const res = await fetch('/api/v1/custom-accumulators', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail ?? `API error ${res.status}`)
-  return res.json()
-}
-
-export async function updateCustomAccumulator(id: number, payload: { name: string; target_date: string; prediction_ids: number[]; stake: number | null; status: 'draft' | 'placed' }): Promise<CustomAccumulator> {
-  const res = await fetch(`/api/v1/custom-accumulators/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload }) })
-  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail ?? `API error ${res.status}`)
-  return res.json()
-}
-
-export async function deleteCustomAccumulator(id: number): Promise<void> {
-  const res = await fetch(`/api/v1/custom-accumulators/${id}`, { method: 'DELETE' })
-  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail ?? `API error ${res.status}`)
-}
-
 export interface OddsQuote {
   bookmaker: string
   decimal_odds: number
@@ -636,59 +569,6 @@ export async function removeMatchFavorite(matchId: number): Promise<number[]> {
   if (!res.ok) throw new Error(`API error ${res.status}`)
   const data: { match_ids: number[] } = await res.json()
   return data.match_ids
-}
-
-export interface MatchFilterCriteria {
-  query: string
-  competition: string
-  market: string
-  status: 'all' | 'finished' | 'live' | 'scheduled' | 'postponed' | 'cancelled' | 'abandoned' | 'awarded'
-  favorite_only: boolean
-  min_probability: number | null
-  max_probability: number | null
-  min_odds: number | null
-  max_odds: number | null
-  min_edge: number | null
-  min_q_score: number
-  max_q_score: number | null
-}
-
-export interface MatchFilterPreset {
-  id: number
-  name: string
-  criteria: MatchFilterCriteria
-  created_at: string
-}
-
-export async function fetchMatchFilterPresets(): Promise<MatchFilterPreset[]> {
-  const res = await fetch('/api/v1/match-filters')
-  if (!res.ok) throw new Error(`API error ${res.status}`)
-  return res.json()
-}
-
-export async function createMatchFilterPreset(name: string, criteria: MatchFilterCriteria): Promise<MatchFilterPreset> {
-  const res = await fetch('/api/v1/match-filters', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, criteria }),
-  })
-  if (!res.ok) throw new Error(`API error ${res.status}`)
-  return res.json()
-}
-
-export async function updateMatchFilterPreset(presetId: number, name: string, criteria: MatchFilterCriteria): Promise<MatchFilterPreset> {
-  const res = await fetch(`/api/v1/match-filters/${presetId}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, criteria }),
-  })
-  if (!res.ok) throw new Error(`API error ${res.status}`)
-  return res.json()
-}
-
-export async function deleteMatchFilterPreset(presetId: number): Promise<void> {
-  const res = await fetch(`/api/v1/match-filters/${presetId}`, { method: 'DELETE' })
-  if (!res.ok) throw new Error(`API error ${res.status}`)
 }
 
 export interface InsightsCompetition {

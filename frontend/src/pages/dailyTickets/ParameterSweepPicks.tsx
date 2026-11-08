@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { ParameterSweepPick, ParameterSweepSelections, SelectionSummary } from "../../lib/api";
 import { fetchParameterSweepSelections, formatKickoff, formatMarket, formatSelection, selectionRepeatsMarket } from "../../lib/api";
 import { useSortableRows } from "../../components/SortableTable";
-import { accumulatorBlockers, gradeTone, reasonLabel } from "./helpers";
+import { gradeTone } from "./helpers";
 
 const pct = (value: number | null | undefined) => value == null ? "—" : `${(value * 100).toFixed(1)}%`;
 
@@ -29,11 +29,9 @@ function toSelection(row: ParameterSweepPick): SelectionSummary {
 export function ParameterSweepPicks({
   date,
   onSelect,
-  onAdd,
 }: {
   date: string;
   onSelect: (row: SelectionSummary) => void;
-  onAdd: (row: SelectionSummary) => void;
 }) {
   const [data, setData] = useState<ParameterSweepSelections | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -102,7 +100,7 @@ export function ParameterSweepPicks({
             </div>
           )}
 
-          {rows.length > 0 && <SweepTable rows={rows} onSelect={onSelect} onAdd={onAdd} />}
+          {rows.length > 0 && <SweepTable rows={rows} onSelect={onSelect} />}
           {scan.status === "qualified" && rows.length === 0 && <p className="panel-empty">The policy cleared historical gates, but no today selections passed its pre-kickoff filters.</p>}
           <p className="matrix-note">Paper research only. Historical ROI is not a promise of profit, and a policy is not exposed when its evidence gate fails.</p>
         </>
@@ -111,7 +109,7 @@ export function ParameterSweepPicks({
   );
 }
 
-function SweepTable({ rows, onSelect, onAdd }: { rows: ParameterSweepPick[]; onSelect: (row: SelectionSummary) => void; onAdd: (row: SelectionSummary) => void }) {
+function SweepTable({ rows, onSelect }: { rows: ParameterSweepPick[]; onSelect: (row: SelectionSummary) => void }) {
   const { sorted, header } = useSortableRows(rows, {
     kickoff: row => new Date(row.kickoff_at).getTime(),
     match: row => `${row.home_team} ${row.away_team} ${row.competition}`,
@@ -128,7 +126,6 @@ function SweepTable({ rows, onSelect, onAdd }: { rows: ParameterSweepPick[]; onS
         <thead><tr>{header('kickoff', 'Kickoff')}{header('match', 'Match / league')}{header('market', 'Market')}{header('probability', 'Probability')}{header('odds', 'Odds')}{header('qScore', 'Q-score')}<th><span className="sr-only">Actions</span></th></tr></thead>
         <tbody>{sorted.map(row => {
           const selection = toSelection(row);
-          const blockers = accumulatorBlockers(selection);
           return <tr key={row.prediction_id}>
             <td><strong className="kickoff-time">{formatKickoff(row.kickoff_at)}</strong></td>
             <td><strong>{row.home_team} <span className="match-vs">vs</span> {row.away_team}</strong><small>{row.competition}</small></td>
@@ -136,7 +133,7 @@ function SweepTable({ rows, onSelect, onAdd }: { rows: ParameterSweepPick[]; onS
             <td>{pct(row.model_probability)}</td>
             <td><b>{row.odds.toFixed(2)}</b></td>
             <td><b className={`grade-badge grade-${gradeTone(row.q_grade)}`}>{row.q_grade}</b> {row.q_score.toFixed(1)}</td>
-            <td><div className="policy-sweep-actions"><button type="button" className="btn-ghost btn-sm" onClick={() => onSelect(selection)}>Details</button><button type="button" className="btn-ghost btn-sm" onClick={() => onAdd(selection)} disabled={blockers.length > 0} title={blockers.length > 0 ? `Unavailable: ${blockers.map(reasonLabel).join(", ")}` : "Add to personal accumulator"}>Add</button></div></td>
+            <td><div className="policy-sweep-actions"><button type="button" className="btn-ghost btn-sm" onClick={() => onSelect(selection)}>Details</button></div></td>
           </tr>;
         })}</tbody>
       </table>

@@ -2,23 +2,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { localDateString } from './DailyTickets'
 import { formatMarket, formatSelection, formatStage, formatTicketType, selectionRepeatsMarket, ticketTierBadgeClass } from '../lib/api'
 
-interface SystemStats {
-  matches: number
-  predictions: number
-  competitions: number
-  teams: number
-  bets: number
-}
-
-interface CacheStats {
-  fixtures: number
-  odds: number
-  stats: number
-  injuries: number
-  total: number
-  error?: string
-}
-
 interface PipelineSchedule {
   schedules: { name: string; hour_utc: number; minute_utc: number; time_cat: string }[]
   jobs: { id: string; next_run_utc: string | null }[]
@@ -81,14 +64,10 @@ const JOB_LABELS: Record<string, string> = {
 }
 
 export default function AdminPage() {
-  const [sysStats, setSysStats] = useState<SystemStats | null>(null)
-  const [cacheStats, setCacheStats] = useState<CacheStats | null>(null)
   const [schedule, setSchedule] = useState<PipelineSchedule | null>(null)
-  const [loading, setLoading] = useState(true)
   const [pipelineDate, setPipelineDate] = useState(localDateString())
   const [triggering, setTriggering] = useState(false)
   const [triggerMsg, setTriggerMsg] = useState<{ ok: boolean; text: string } | null>(null)
-  const [clearingCache, setClearingCache] = useState(false)
   const [pipelineRuns, setPipelineRuns] = useState<PipelineStatus[]>([])
   const [alerts, setAlerts] = useState<AutomationAlert[]>([])
   const [operational, setOperational] = useState<OperationalStatus | null>(null)
@@ -106,10 +85,7 @@ export default function AdminPage() {
   const [userError, setUserError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    setLoading(true)
-    const [sys, cache, sched, status, alertData, ops, shadow, userData] = await Promise.all([
-      fetchJson<SystemStats | null>('/api/v1/admin/system/stats', null),
-      fetchJson<CacheStats | null>('/api/v1/admin/cache/stats', null),
+    const [sched, status, alertData, ops, shadow, userData] = await Promise.all([
       fetchJson<PipelineSchedule | null>('/api/v1/admin/pipeline/schedule', null),
       fetchJson<{ runs: PipelineStatus[] }>('/api/v1/admin/pipeline/status', { runs: [] }),
       fetchJson<{ alerts: AutomationAlert[] }>('/api/v1/admin/alerts', { alerts: [] }),
@@ -117,15 +93,12 @@ export default function AdminPage() {
       fetchJson<MarketPolicyShadow | null>(`/api/v1/selections/market-policy-shadow?date=${localDateString()}`, null),
       fetchJson<{ users: UserRecord[] }>('/api/v1/admin/users', { users: [] }),
     ])
-    setSysStats(sys)
-    setCacheStats(cache)
     setSchedule(sched)
     setPipelineRuns(status.runs)
     setAlerts(alertData.alerts)
     setOperational(ops)
     setMarketPolicyShadow(shadow)
     setUsers(userData.users)
-    setLoading(false)
   }, [])
 
   function updateUserField<K extends keyof UserForm>(field: K, value: UserForm[K]) {
@@ -208,19 +181,6 @@ export default function AdminPage() {
       setTriggerMsg({ ok: false, text: 'Failed to reach server' })
     } finally {
       setTriggering(false)
-    }
-  }
-
-  async function clearCache(prefix?: string) {
-    setClearingCache(true)
-    try {
-      const url = prefix ? `/api/v1/admin/cache/clear?prefix=${prefix}` : '/api/v1/admin/cache/clear'
-      const res = await fetch(url, { method: 'DELETE' })
-      const data = await res.json()
-      setTriggerMsg({ ok: res.ok, text: `Cleared ${data.deleted_keys} cache keys` })
-      await load()
-    } finally {
-      setClearingCache(false)
     }
   }
 
@@ -409,78 +369,6 @@ export default function AdminPage() {
           <div className="admin-user-list">
             {users.map(user => <div className="admin-user-row" key={user.id}><div><strong>{user.username}</strong><span>{user.email}</span></div><span>{user.role} · {user.plan} · {user.account_status}</span><div><button className="btn-ghost btn-sm" onClick={() => editUser(user)}>Edit</button><button className="btn-danger-outline btn-sm" onClick={() => removeUser(user)}>Delete</button></div></div>)}
             {users.length === 0 && <div className="admin-loading">No users found</div>}
-          </div>
-        </div>
-
-        {/* System stats */}
-        <div className="admin-card">
-          <h3 className="admin-card-title">Database</h3>
-          {loading ? (
-            <div className="admin-loading">Loading…</div>
-          ) : sysStats ? (
-            <div className="admin-info-list">
-              {Object.entries(sysStats).map(([k, v]) => (
-                <div key={k} className="admin-info-row">
-                  <span className="admin-info-label">{k.charAt(0).toUpperCase() + k.slice(1)}</span>
-                  <span className="admin-info-value admin-count">{(v as number).toLocaleString()}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="admin-loading">Could not load stats</div>
-          )}
-        </div>
-
-        {/* Cache */}
-        <div className="admin-card">
-          <h3 className="admin-card-title">API Cache</h3>
-          <p className="admin-hint">Redis-backed — preserves API quota across pipeline runs.</p>
-          {loading ? (
-            <div className="admin-loading">Loading…</div>
-          ) : cacheStats ? (
-            <>
-              <div className="admin-info-list">
-                {Object.entries(cacheStats).filter(([k]) => k !== 'error').map(([k, v]) => (
-                  <div key={k} className="admin-info-row">
-                    <span className="admin-info-label">{k}</span>
-                    <span className="admin-info-value admin-count">{v as number} keys</span>
-                  </div>
-                ))}
-              </div>
-              <div className="admin-action-row" style={{ marginTop: 16, flexWrap: 'wrap', gap: 8 }}>
-                {['fixtures', 'odds', 'stats', 'injuries'].map(p => (
-                  <button key={p} className="btn-ghost btn-sm" onClick={() => clearCache(p)} disabled={clearingCache}>
-                    Clear {p}
-                  </button>
-                ))}
-                <button className="btn-danger-outline btn-sm" onClick={() => clearCache()} disabled={clearingCache}>
-                  Clear All
-                </button>
-              </div>
-            </>
-          ) : (
-            <div className="admin-loading">Could not load cache stats</div>
-          )}
-        </div>
-
-        {/* API info */}
-        <div className="admin-card">
-          <h3 className="admin-card-title">Pipeline Stages</h3>
-          <div className="stage-list">
-            {[
-              { n: 1, name: 'Fixture Ingestion', desc: 'API-Football → Match rows for all Tier 1 leagues', ttl: '6 h cache' },
-              { n: 2, name: 'Live Odds',          desc: 'API-Football → Odds rows (bookmaker prices)',       ttl: '30 min cache' },
-              { n: 3, name: 'Data Enrichment',    desc: 'Rolling form strings, xG averages',                ttl: 'DB only' },
-              { n: 4, name: 'Model Run',          desc: 'Poisson + ZINB + Elo + xG + Bayesian → ensemble',  ttl: 'DB only' },
-            ].map(s => (
-              <div key={s.n} className="stage-row">
-                <span className="stage-num">{s.n}</span>
-                <div>
-                  <div className="stage-name">{s.name} <span className="stage-ttl">{s.ttl}</span></div>
-                  <div className="stage-desc">{s.desc}</div>
-                </div>
-              </div>
-            ))}
           </div>
         </div>
 

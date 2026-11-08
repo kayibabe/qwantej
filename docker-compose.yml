@@ -2,14 +2,14 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_USER: lohela
-      POSTGRES_PASSWORD: lohela_pass
-      POSTGRES_DB: lohela
+      POSTGRES_USER: qwantej
+      POSTGRES_PASSWORD: qwantej_pass
+      POSTGRES_DB: qwantej
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lohela -d lohela"]
+      test: ["CMD-SHELL", "pg_isready -U qwantej -d qwantej"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -30,7 +30,7 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://lohela:lohela_pass@postgres:5432/lohela
+      DATABASE_URL: postgresql+asyncpg://qwantej:qwantej_pass@postgres:5432/qwantej
     depends_on:
       postgres:
         condition: service_healthy
@@ -51,7 +51,7 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://lohela:lohela_pass@postgres:5432/lohela
+      DATABASE_URL: postgresql+asyncpg://qwantej:qwantej_pass@postgres:5432/qwantej
       REDIS_URL: redis://redis:6379/0
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
       FLUTTERWAVE_SECRET_KEY: ${FLUTTERWAVE_SECRET_KEY:-}
@@ -80,7 +80,7 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://lohela:lohela_pass@postgres:5432/lohela
+      DATABASE_URL: postgresql+asyncpg://qwantej:qwantej_pass@postgres:5432/qwantej
       REDIS_URL: redis://redis:6379/0
       CELERY_WORKER: "1"
     depends_on:

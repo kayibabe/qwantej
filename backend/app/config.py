@@ -39,7 +39,7 @@ class Settings(BaseSettings):
         return v.lstrip("﻿").strip() if isinstance(v, str) else v
 
     # Database
-    database_url: str = "postgresql+asyncpg://lohela:lohela_pass@localhost:5432/lohela"
+    database_url: str = "postgresql+asyncpg://qwantej:qwantej_pass@localhost:5432/qwantej"
     # The API keeps a bounded pool. Celery workers use NullPool because each
     # task runs its own asyncio.run() loop.
     db_pool_size: int = 10
