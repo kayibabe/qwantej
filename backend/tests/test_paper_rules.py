@@ -33,9 +33,13 @@ def test_protocols_are_json_frozen():
         assert rule['stake_units'] == 1
         datetime.fromisoformat(rule['earliest_kickoff_date'])
         datetime.fromisoformat(rule['minimum_review_date'])
-        if 'market' in rule:
+        if 'market' in rule or 'markets' in rule:
             assert rule['q_min'] >= 65
             assert rule['odds_min_inclusive'] < rule['odds_max_exclusive']
+            if 'markets' in rule:
+                assert rule['markets'], 'basket rule needs at least one market'
+                assert len(set(rule['markets'])) == len(rule['markets'])
+                assert not set(rule['markets']) & set(rule.get('excluded_markets', []))
         else:
             # JSON round-trip safety: bands must be lists, not tuples.
             assert isinstance(rule['model_band'], list)
@@ -87,6 +91,35 @@ def decision(rule, match_id, result_day, **changes):
                    market='over_4.5', selection='over 4.5', competition='L', model_version='v1')
     payload.update(changes)
     return event('decision', payload)
+
+
+def test_basket_rule_predicates_and_protocol():
+    rule = 'policy-q75-nodc-v1'
+    assert 'market' not in RULES[rule] and 'markets' in RULES[rule]
+    assert _predicate_reasons(rule, opportunity(rule, market='btts_no', odds=2.1, q_score=80)) == []
+    assert 'q_below_75_or_invalid' in _predicate_reasons(rule, opportunity(rule, q_score=74.9))
+    assert 'odds_outside_range' in _predicate_reasons(rule, opportunity(rule, q_score=80, odds=1.49))
+    assert 'odds_outside_range' in _predicate_reasons(rule, opportunity(rule, q_score=80, odds=8.0))
+    protocol = RULES[rule]
+    assert protocol['requires_positive_clv'] is True
+    assert protocol['required_settled'] == 300
+    assert protocol['required_matchdays'] == 30
+    assert not set(protocol['markets']) & set(protocol['excluded_markets'])
+
+
+def test_clv_gate_blocks_review_for_policy_rule():
+    rule = 'policy-q75-nodc-v1'
+    events = [
+        event('protocol', {**RULES[rule], 'rule': rule, 'activated_at': NOW.isoformat()}),
+        decision(rule, 1, '2026-11-09', market='btts_no', selection='btts no'),
+        event('settlement', dict(rule=rule, match_id=1, result='won', profit=1.0,
+                                 clv_percentage=-1.2, beat_close=False)),
+    ]
+    report = build_report(events, NOW, rule)
+    assert report['clv']['samples'] == 1
+    assert report['clv']['mean_clv'] == -1.2
+    assert report['clv_gate_met'] is False
+    assert report['review_due'] is False
 
 
 def test_report_review_gate_and_integrity():

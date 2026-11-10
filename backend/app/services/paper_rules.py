@@ -19,7 +19,7 @@ import math
 
 from sqlalchemy import select, text
 from app.models.paper_rule import PaperRuleEvent
-from app.models import Match
+from app.models import Match, Prediction
 from app.services.sweet_spot import digest, metrics as cohort_metrics, parse
 
 CAT = timezone(timedelta(hours=2))
@@ -78,6 +78,30 @@ RULES: dict[str, dict] = {
                    '(45.9% hit). Model sees value the market prices below 50%.'),
         **_COMMON,
     ),
+    # Basket policy motivated by the 2026-11-10 Q>=75 backtest: no market
+    # cleared a bootstrap lower bound, double chance was the reproducible loser,
+    # and the model showed no information beyond the price. This rule therefore
+    # stops ranking on Q/edge, excludes double chance and the high overs, and
+    # takes the pick the bookmaker prices most likely within the allowed basket.
+    'policy-q75-nodc-v1': {
+        **_COMMON,
+        'markets': ['away_win', 'btts_no', 'over_1.5', 'under_2.5', 'under_3.5'],
+        'q_min': 75, 'odds_min_inclusive': 1.5, 'odds_max_exclusive': 8.0,
+        'excluded_markets': ['double_chance_1x', 'double_chance_12', 'double_chance_x2',
+                             'over_3.5', 'over_4.5', 'under_0.5', 'under_1.5'],
+        'q_role': 'Universe filter only. Q and model edge are not value or ranking signals.',
+        'selection_rank': 'Highest bookmaker-implied probability, then earliest prediction; one pick per fixture',
+        'clv_gate': 'Promotion requires mean CLV > 0 and beat-close rate > 50% over the review window',
+        'requires_positive_clv': True,
+        'earliest_kickoff_date': '2026-11-11', 'minimum_review_date': '2027-02-15',
+        'required_settled': 300, 'required_matchdays': 30,
+        'selection': 'Best-priced allowed pick per fixture: highest implied probability, then earliest prediction; no replacements',
+        'rationale': ('Q>=75 backtest (3,080 picks, 45 matchdays): no cell cleared a day-cluster bootstrap '
+                      'lower bound; double chance was consistently negative and the largest bucket; '
+                      'away win / BTTS no / over 1.5 / under 2.5-3.5 were the least-bad markets. '
+                      'Walk-forward calibration audit: isotonic cut Brier 4.7% but still lost to the '
+                      'bookmaker, and the model coefficient beyond price was 0.003 [-0.107, 0.110].'),
+    },
 }
 
 
@@ -121,7 +145,7 @@ def _predicate_reasons(rule_key: str, row) -> list:
     rule = RULES[rule_key]
     result = []
     odds = row.get('odds')
-    if 'market' in rule:
+    if 'market' in rule or 'markets' in rule:
         q_min = rule['q_min']
         q_score = row.get('q_score')
         if not _is_number(q_score) or not (q_min <= q_score <= 100):
@@ -162,6 +186,19 @@ async def _tick_rule(db, rule_key: str, now: datetime) -> dict:
         lateral = """LEFT JOIN LATERAL (SELECT * FROM predictions p WHERE p.match_id=m.id AND p.market=:market
                        ORDER BY p.created_at,p.id LIMIT 1) p ON TRUE"""
         params['market'] = rule['market']
+    elif 'markets' in rule:
+        # Basket rules take one pick per fixture, ranked by bookmaker-implied
+        # probability (shortest price first), not by model edge or Q.
+        allowed = ', '.join(f"'{market}'" for market in rule['markets'])
+        lateral = f"""LEFT JOIN LATERAL (SELECT * FROM predictions p WHERE p.match_id=m.id
+                       AND p.market IN ({allowed})
+                       AND p.source_decimal_odds IS NOT NULL
+                       AND p.source_decimal_odds >= :odds_min
+                       AND p.source_decimal_odds < :odds_max
+                       AND p.source_implied_probability IS NOT NULL
+                       ORDER BY p.source_implied_probability DESC, p.created_at, p.id
+                       LIMIT 1) p ON TRUE"""
+        params.update(odds_min=rule['odds_min_inclusive'], odds_max=rule['odds_max_exclusive'])
     else:
         m_lo, m_hi = rule['model_band']
         k_lo, k_hi = rule['market_band']
@@ -176,7 +213,7 @@ async def _tick_rule(db, rule_key: str, now: datetime) -> dict:
                h.name home_team, a.name away_team, c.name competition,
                p.id prediction_id, p.created_at, p.decision_at, p.source_odds_at,
                p.as_of_at, p.q_score, p.source_decimal_odds odds, p.model_version,
-               p.edge model_edge, p.model_probability, p.market, p.selection,
+               p.source_implied_probability, p.edge model_edge, p.model_probability, p.market, p.selection,
                p.feature_snapshot, p.source_odds_provenance
         FROM matches m JOIN teams h ON h.id=m.home_team_id JOIN teams a ON a.id=m.away_team_id
         JOIN competitions c ON c.id=m.competition_id
@@ -212,6 +249,17 @@ async def _tick_rule(db, rule_key: str, now: datetime) -> dict:
     matches = {}
     if ids:
         matches = {m.id: m for m in (await db.execute(select(Match).where(Match.id.in_(ids)))).scalars().all()}
+    prediction_ids = [
+        r.payload['prediction_id'] for r in decisions
+        if r.payload['qualified'] and r.payload.get('prediction_id')
+    ]
+    predictions = {}
+    if prediction_ids:
+        predictions = {
+            pred.id: pred for pred in (
+                await db.execute(select(Prediction).where(Prediction.id.in_(prediction_ids)))
+            ).scalars().all()
+        }
     settled = 0
     for event in decisions:
         p = event.payload
@@ -230,9 +278,14 @@ async def _tick_rule(db, rule_key: str, now: datetime) -> dict:
                 except ValueError:
                     outcome = SelectionResult.VOID
             result = {SelectionResult.WON: 'won', SelectionResult.LOST: 'lost'}.get(outcome, 'pending')
+        pred = predictions.get(p.get('prediction_id'))
+        closing_odds = float(pred.closing_decimal_odds) if pred and pred.closing_decimal_odds else None
+        clv = float(pred.clv_percentage) if pred and pred.clv_percentage is not None else None
         body = dict(rule=rule_key, match_id=m.id, status=m.status.value,
                     home_goals=m.home_goals, away_goals=m.away_goals,
-                    result=result, profit=(p['odds'] - 1 if result == 'won' else -1 if result == 'lost' else None))
+                    result=result, profit=(p['odds'] - 1 if result == 'won' else -1 if result == 'lost' else None),
+                    closing_odds=closing_odds, clv_percentage=clv,
+                    beat_close=(clv > 0) if clv is not None else None)
         prior = latest.get(m.id)
         if prior and all(prior.get(k) == v for k, v in body.items()):
             continue
@@ -285,14 +338,32 @@ def build_report(events, now, rule_key: str) -> dict:
         days.append(dict(day=day, collection_observed=day in run_days, **cohort_metrics([p for p in picks if p['day'] == day])))
     health = ('not_started' if not runs
               else 'current' if now - parse(runs[-1]['at']) <= timedelta(minutes=15) else 'stale')
+    clv_values = [
+        p['clv_percentage'] for p in picks
+        if p.get('result') in ('won', 'lost') and p.get('clv_percentage') is not None
+    ]
+    clv = dict(
+        samples=len(clv_values),
+        mean_clv=round(sum(clv_values) / len(clv_values), 4) if clv_values else None,
+        beat_close_rate=(round(sum(1 for v in clv_values if v > 0) / len(clv_values), 4)
+                         if clv_values else None),
+    )
+    clv_gate_met = bool(
+        not rule.get('requires_positive_clv')
+        or (clv['samples'] > 0
+            and (clv['mean_clv'] or 0) > 0
+            and (clv['beat_close_rate'] or 0) > 0.5)
+    )
     return dict(
         rule=rule_key, mode='paper_only', promotion_ready=False,
         protocol=protocols[0] if protocols else {**rule, 'rule': rule_key},
         collection_status=health, last_run=runs[-1] if runs else None,
         summary=summary, rationale=rule['rationale'],
+        clv=clv, clv_gate_met=clv_gate_met,
         review_due=(today >= date.fromisoformat(rule['minimum_review_date'])
                     and summary['settled'] >= rule['required_settled']
-                    and summary['matchdays'] >= rule['required_matchdays']),
+                    and summary['matchdays'] >= rule['required_matchdays']
+                    and clv_gate_met),
         review_requirements=dict(minimum_review_date=rule['minimum_review_date'],
                                  required_settled=rule['required_settled'],
                                  required_matchdays=rule['required_matchdays']),
@@ -324,11 +395,13 @@ async def list_summaries(db) -> list:
         summaries.append(dict(
             rule=rule_key,
             mode='paper_only',
-            hypothesis='market' if 'market' in rule else 'band_mix',
+            hypothesis='portfolio' if 'markets' in rule else 'market' if 'market' in rule else 'band_mix',
             market=rule.get('market'),
+            markets=rule.get('markets'),
             rationale=rule['rationale'],
             collection_status=report['collection_status'],
             summary=report['summary'],
+            clv=report['clv'],
             review_due=report['review_due'],
             observed_opportunities=report['observed_opportunities'],
         ))

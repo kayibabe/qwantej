@@ -362,6 +362,8 @@ export interface SelectionSummary {
   bookmaker_count?: number | null
   avg_implied?: number | null
   source_implied_probability?: number | null
+  closing_decimal_odds?: number | null
+  clv_percentage?: number | null
   match_status?: string
   home_goals?: number | null
   away_goals?: number | null
@@ -661,6 +663,36 @@ export async function fetchQualifiedSelections(date: string, minQScore = 75, off
     total: Number(res.headers.get('X-Total-Count')) || rows.length,
     matchTotal: Number(res.headers.get('X-Distinct-Matches')) || new Set(rows.map(row => row.match_id)).size,
   }
+}
+
+export interface BlockPerformanceCell {
+  market: string
+  kind: 'chance' | 'implied'
+  /** Cumulative "≥ block%" threshold, 20 … 90 */
+  block: number
+  picks: number
+  settled: number
+  won: number
+  lost: number
+  void: number
+  priced: number
+  net_units: number
+  hit_rate: number | null
+  roi: number | null
+}
+
+export interface BlockPerformance {
+  window_days: number
+  start_date: string
+  end_date: string
+  cells: BlockPerformanceCell[]
+}
+
+export async function fetchBlockPerformance(days = 45, minQScore = 75): Promise<BlockPerformance> {
+  const params = new URLSearchParams({ days: String(days), min_qscore: String(minQScore) })
+  const res = await fetch(`/api/v1/selections/qualified/block-performance?${params}`)
+  if (!res.ok) throw new Error(`API error ${res.status}`)
+  return res.json()
 }
 
 export interface AccaPrice {

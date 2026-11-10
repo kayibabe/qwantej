@@ -17,7 +17,7 @@ interface Props {
 export default function PipelineRibbon({ steps, active, onSelect }: Props) {
   return (
     <div className="flow-ribbon" data-steps={steps.length} role="group" aria-label="Daily decision pipeline">
-      {steps.map((step, index) => (
+      {steps.map((step) => (
         <button
           key={step.key}
           type="button"
@@ -27,10 +27,7 @@ export default function PipelineRibbon({ steps, active, onSelect }: Props) {
           aria-pressed={active === step.key}
           title={`${step.label}: ${step.note}`}
         >
-          <span className="flow-step-label">
-            <span className="flow-step-index" aria-hidden="true">{index + 1}</span>
-            {step.label}
-          </span>
+          <span className="flow-step-label">{step.label}</span>
           <strong className="flow-step-value">{step.value}</strong>
           <span className="flow-step-note">{step.note}</span>
         </button>

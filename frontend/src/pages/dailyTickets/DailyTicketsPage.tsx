@@ -298,9 +298,10 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
       : pipelineActive
         ? `Current stage: ${formatStage(data?.pipeline_current_stage ?? "starting")}. The workspace refreshes while the persisted run advances.`
         : "Ticket cards stay hidden when there is no evidence that publication ran for this date.";
+  const isOverviewWithRibbon = mode === "overview" && !!data;
   const pipelineSteps: PipelineStep[] = mode === "overview"
     ? [
-        { key: "fixtures", label: "Fixtures", value: fixtures.length, note: "scheduled for this date" },
+        { key: "fixtures", label: "All fixtures", value: fixtures.length, note: "scheduled for this date" },
         {
           key: "picks",
           label: "System picks",
@@ -309,13 +310,13 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
         },
         {
           key: "tickets",
-          label: "Tickets",
+          label: "Accumulator tickets",
           value: publishedCount,
           note: publishedCount ? "published tiers" : "none published",
         },
         ...(isAdmin ? [{
           key: "passed" as DailyTab,
-          label: "Gated out",
+          label: "Rejected / why",
           value: rejectedLoaded ? rejected.length : "—",
           note: rejectedLoaded ? "rejected with reasons" : "open the ledger",
         }] : []),
@@ -452,7 +453,9 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
         <TicketGridSkeleton />
       ) : (
         <>
-          {dailyTabs.length > 1 && <nav className="daily-tabs" aria-label="Daily ticket workspace">
+          {/* Overview navigation lives in the PipelineRibbon cards above; keep the tab bar
+              for the research workspace and as a fallback before any data has loaded. */}
+          {!isOverviewWithRibbon && dailyTabs.length > 1 && <nav className="daily-tabs" aria-label="Daily ticket workspace">
             {dailyTabs.map(([key, label]) => (
               <button
                 key={key}
@@ -464,9 +467,9 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
               </button>
             ))}
           </nav>}
-          {tab === "fixtures" && <div className="view-intro"><div><span className="eyebrow">Fixtures</span><h2 className="section-title">All fixtures for this date</h2></div><p>Every fixture scheduled for this date, with competition, kickoff time, and current status.</p></div>}
-          {tab === "picks" && canExploreMarkets && <div className="view-intro"><div><span className="eyebrow">System picks</span><h2 className="section-title">System picks for this date</h2></div><p>Every Q ≥75 selection the model qualified for this date, grouped by match. A pick appearing here does not mean it made a published accumulator.</p></div>}
-          {tab === "tickets" && <div className="view-intro"><div><span className="eyebrow">Accumulator tickets</span><h2 className="section-title">Tickets assembled from this date&rsquo;s picks</h2></div><p>{canExploreMarkets ? "Each published tier is a fixed combination of the system’s qualified picks. Expand a leg to inspect its evidence; the stake field is a what-if calculation only." : "Each published tier is a fixed combination of the system’s qualified picks. On Free you can review every match leg and its settlement status; Pro opens the selections and their evidence."}</p></div>}
+          {tab === "fixtures" && <div className="view-intro"><span className="eyebrow">Fixtures</span><h2 className="section-title">All fixtures for this date</h2><p>Every fixture scheduled for this date, with competition, kickoff time, and current status.</p></div>}
+          {tab === "picks" && canExploreMarkets && <div className="view-intro"><span className="eyebrow">System picks</span><h2 className="section-title">System picks for this date</h2><p>Every Q ≥75 selection the model qualified for this date, grouped by match. A pick appearing here does not mean it made a published accumulator.</p></div>}
+          {tab === "tickets" && <div className="view-intro"><span className="eyebrow">Accumulator tickets</span><h2 className="section-title">Tickets assembled from this date&rsquo;s picks</h2><p>{canExploreMarkets ? "Each published tier is a fixed combination of the system’s qualified picks. Expand a leg to inspect its evidence; the stake field is a what-if calculation only." : "Each published tier is a fixed combination of the system’s qualified picks. On Free you can review every match leg and its settlement status; Pro opens the selections and their evidence."}</p></div>}
           {tab === "fixtures" && <Suspense fallback={<div className="route-loading">Loading fixtures…</div>}><FixtureExplorer fixtures={fixtures} /></Suspense>}
           {tab === "picks" && canExploreMarkets && <Suspense fallback={<div className="route-loading">Loading system picks…</div>}><AllMatches rows={matchGroups} totalSelections={matchesTotal} loadedSelections={matches.length} loadingMore={loadingMoreMatches} onLoadMore={loadMoreMatches} onSelect={openSelection} /></Suspense>}
           {tab === "picks" && !canExploreMarkets && (

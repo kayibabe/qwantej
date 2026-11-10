@@ -141,7 +141,7 @@ export function MarketRoiDaily({ data, error }: { data: MarketRoiDailyData | nul
 
   return (
     <section className="market-roi-panel">
-      <header className="market-roi-heading">
+      <header className="market-roi-heading daily-match-picks-heading">
         <div>
           <span className="eyebrow">Daily market scan · research only</span>
           {data && <section className="daily-picks-performance" aria-label="Settled Daily Match Picks performance">
@@ -155,7 +155,7 @@ export function MarketRoiDaily({ data, error }: { data: MarketRoiDailyData | nul
             </div>
             {data.settled_daily_pick_market_performance.markets.length === 0
               ? <p className="panel-empty">No fully settled Daily Match Picks are available for this period yet.</p>
-              : <div className="daily-picks-performance-table-wrap"><table className="market-roi-table daily-picks-performance-table">
+              : <div className="daily-picks-performance-table-wrap" role="region" aria-label="Settled market performance columns" tabIndex={0}><table className="market-roi-table daily-picks-performance-table">
                 <thead><tr><th>Market</th><th>Selections</th><th>Won</th><th>Lost</th><th>Hit rate</th><th>Net units</th><th>ROI</th><th>Earlier ROI<br />(through Oct 19)</th><th>Later ROI<br />(from Oct 20)</th></tr></thead>
                 <tbody>{data.settled_daily_pick_market_performance.markets.map((row) => <tr key={row.market}>
                   <td><span className="market-roi-selection-chip">{title(row.market)}</span></td>

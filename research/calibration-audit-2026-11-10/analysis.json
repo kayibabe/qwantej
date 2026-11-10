@@ -1,0 +1,581 @@
+{
+  "settings": {
+    "min_train": 300,
+    "market_min": 250,
+    "as_at": "2026-11-10T04:27:26.655324+00:00",
+    "eligible_all_q": 25543,
+    "exclusions": {
+      "missing_or_invalid_odds": 211775,
+      "later_repeat": 50248,
+      "replay_snapshot": 1851
+    }
+  },
+  "overall": {
+    "scope": "all picks",
+    "n": 25095,
+    "hit_rate": 47.94580593743773,
+    "raw_prob": 47.995882701750666,
+    "calibrated_prob": 48.15671223845583,
+    "implied_prob": 51.67430411412032,
+    "brier_raw": 0.2183049967197589,
+    "brier_platt": 0.20684831769135348,
+    "brier_isotonic": 0.2081401958537481,
+    "brier_implied": 0.19862711677391953,
+    "logloss_raw": 0.6301905526651347,
+    "logloss_isotonic": 0.6187437839820119,
+    "logloss_implied": 0.5812823776977774,
+    "ece_raw": 0.05981993926875954,
+    "ece_isotonic": 0.01144140747118792,
+    "ece_implied": 0.03728498176682574
+  },
+  "q75": {
+    "scope": "Q >= 75",
+    "n": 3021,
+    "hit_rate": 57.431314134392586,
+    "raw_prob": 76.97981017698203,
+    "calibrated_prob": 65.66405114611678,
+    "implied_prob": 59.977151841868825,
+    "brier_raw": 0.257340759609847,
+    "brier_platt": 0.225595153200977,
+    "brier_isotonic": 0.23035634424813856,
+    "brier_implied": 0.2117157015043856,
+    "logloss_raw": 0.7336782325242962,
+    "logloss_isotonic": 0.7005105729566902,
+    "logloss_implied": 0.6110788319523424,
+    "ece_raw": 0.19548496042589458,
+    "ece_isotonic": 0.08232737011724187,
+    "ece_implied": 0.02629473368221394
+  },
+  "edge_raw": [
+    {
+      "edge_source": "raw edge",
+      "edge_band": "<=0",
+      "n": 15464,
+      "hit_rate": 48.96533885152613,
+      "roi": -5.358704086911535
+    },
+    {
+      "edge_source": "raw edge",
+      "edge_band": "0-5pp",
+      "n": 3450,
+      "hit_rate": 48.434782608695656,
+      "roi": -7.9797101449275365
+    },
+    {
+      "edge_source": "raw edge",
+      "edge_band": "5-10pp",
+      "n": 2337,
+      "hit_rate": 49.20838682071032,
+      "roi": -4.930252460419341
+    },
+    {
+      "edge_source": "raw edge",
+      "edge_band": "10-20pp",
+      "n": 2535,
+      "hit_rate": 43.98422090729783,
+      "roi": -9.214990138067062
+    },
+    {
+      "edge_source": "raw edge",
+      "edge_band": "20pp+",
+      "n": 1309,
+      "hit_rate": 40.0305576776165,
+      "roi": -1.7226890756302526
+    }
+  ],
+  "edge_calibrated": [
+    {
+      "edge_source": "calibrated edge",
+      "edge_band": "<=0",
+      "n": 16841,
+      "hit_rate": 52.15248500682858,
+      "roi": -4.708508995902856
+    },
+    {
+      "edge_source": "calibrated edge",
+      "edge_band": "0-5pp",
+      "n": 4135,
+      "hit_rate": 43.16807738814994,
+      "roi": -6.96614268440145
+    },
+    {
+      "edge_source": "calibrated edge",
+      "edge_band": "5-10pp",
+      "n": 2149,
+      "hit_rate": 40.43741275011633,
+      "roi": -6.1651931130758495
+    },
+    {
+      "edge_source": "calibrated edge",
+      "edge_band": "10-20pp",
+      "n": 1495,
+      "hit_rate": 32.10702341137124,
+      "roi": -10.868227424749163
+    },
+    {
+      "edge_source": "calibrated edge",
+      "edge_band": "20pp+",
+      "n": 475,
+      "hit_rate": 24.210526315789473,
+      "roi": -20.917894736842108
+    }
+  ],
+  "edge_raw_q75": [
+    {
+      "edge_source": "raw edge",
+      "edge_band": "<=0",
+      "n": 19,
+      "hit_rate": 100.0,
+      "roi": 6.736842105263162
+    },
+    {
+      "edge_source": "raw edge",
+      "edge_band": "0-5pp",
+      "n": 175,
+      "hit_rate": 85.71428571428571,
+      "roi": -2.097142857142857
+    },
+    {
+      "edge_source": "raw edge",
+      "edge_band": "5-10pp",
+      "n": 495,
+      "hit_rate": 78.58585858585857,
+      "roi": 2.450505050505049
+    },
+    {
+      "edge_source": "raw edge",
+      "edge_band": "10-20pp",
+      "n": 1323,
+      "hit_rate": 55.78231292517006,
+      "roi": -3.962207105064248
+    },
+    {
+      "edge_source": "raw edge",
+      "edge_band": "20pp+",
+      "n": 1009,
+      "hit_rate": 43.50842418235877,
+      "roi": 1.136769078295342
+    }
+  ],
+  "edge_calibrated_q75": [
+    {
+      "edge_source": "calibrated edge",
+      "edge_band": "<=0",
+      "n": 927,
+      "hit_rate": 67.09816612729233,
+      "roi": 0.0021574973031279416
+    },
+    {
+      "edge_source": "calibrated edge",
+      "edge_band": "0-5pp",
+      "n": 698,
+      "hit_rate": 63.323782234957015,
+      "roi": -0.40401146131805227
+    },
+    {
+      "edge_source": "calibrated edge",
+      "edge_band": "5-10pp",
+      "n": 599,
+      "hit_rate": 57.76293823038397,
+      "roi": 0.2604340567612683
+    },
+    {
+      "edge_source": "calibrated edge",
+      "edge_band": "10-20pp",
+      "n": 517,
+      "hit_rate": 46.03481624758221,
+      "roi": -2.56092843326886
+    },
+    {
+      "edge_source": "calibrated edge",
+      "edge_band": "20pp+",
+      "n": 280,
+      "hit_rate": 31.071428571428573,
+      "roi": -5.975000000000001
+    }
+  ],
+  "markets": [
+    {
+      "market": "away_win",
+      "n": 1690,
+      "hit_rate": 30.650887573964496,
+      "raw_prob": 36.06934115857112,
+      "calibrated_prob": 33.14321628685969,
+      "implied_prob": 34.0517593623556,
+      "brier_raw": 0.21012156140358068,
+      "brier_isotonic": 0.20580217331720216,
+      "brier_implied": 0.18849714674298243,
+      "roi": -9.08698224852071
+    },
+    {
+      "market": "draw",
+      "n": 1690,
+      "hit_rate": 22.24852071005917,
+      "raw_prob": 24.703373038906612,
+      "calibrated_prob": 24.178925750800772,
+      "implied_prob": 26.81684579994365,
+      "brier_raw": 0.17542072380121684,
+      "brier_isotonic": 0.17860107170443543,
+      "brier_implied": 0.173444417511636,
+      "roi": -12.230769230769232
+    },
+    {
+      "market": "home_win",
+      "n": 1690,
+      "hit_rate": 47.10059171597633,
+      "raw_prob": 39.22728580252225,
+      "calibrated_prob": 45.43289626070878,
+      "implied_prob": 46.789590232835536,
+      "brier_raw": 0.24640513172422784,
+      "brier_isotonic": 0.2400375850955686,
+      "brier_implied": 0.2186478868785553,
+      "roi": 2.89585798816568
+    },
+    {
+      "market": "btts_no",
+      "n": 1689,
+      "hit_rate": 43.63528715216104,
+      "raw_prob": 49.54251752521,
+      "calibrated_prob": 43.73808464244179,
+      "implied_prob": 47.37934481504976,
+      "brier_raw": 0.26456743440739866,
+      "brier_isotonic": 0.24777717453926507,
+      "brier_implied": 0.24483085721220546,
+      "roi": -4.229129662522203
+    },
+    {
+      "market": "btts_yes",
+      "n": 1689,
+      "hit_rate": 56.36471284783896,
+      "raw_prob": 50.457482474790005,
+      "calibrated_prob": 56.31951321317803,
+      "implied_prob": 60.534773269897656,
+      "brier_raw": 0.26456743440739866,
+      "brier_isotonic": 0.2475666834596747,
+      "brier_implied": 0.24498684413848876,
+      "roi": -4.40023682652457
+    },
+    {
+      "market": "double_chance_1x",
+      "n": 1689,
+      "hit_rate": 69.39017169923032,
+      "raw_prob": 62.60091470647707,
+      "calibrated_prob": 66.43670643848625,
+      "implied_prob": 73.10355201246159,
+      "brier_raw": 0.21735797938962517,
+      "brier_isotonic": 0.20776352090671177,
+      "brier_implied": 0.18827980892144744,
+      "roi": -2.44404973357016
+    },
+    {
+      "market": "double_chance_x2",
+      "n": 1689,
+      "hit_rate": 52.871521610420366,
+      "raw_prob": 62.03724451587212,
+      "calibrated_prob": 54.650371326890024,
+      "implied_prob": 60.44895902576898,
+      "brier_raw": 0.25351243720327526,
+      "brier_isotonic": 0.24049357870692392,
+      "brier_implied": 0.224259082571927,
+      "roi": -11.668442865600946
+    },
+    {
+      "market": "over_1.5",
+      "n": 1689,
+      "hit_rate": 79.21847246891652,
+      "raw_prob": 74.38852400370305,
+      "calibrated_prob": 77.45461844233604,
+      "implied_prob": 82.82112399947842,
+      "brier_raw": 0.18635499306475078,
+      "brier_isotonic": 0.1701339129225815,
+      "brier_implied": 0.1636423624264373,
+      "roi": -1.6915334517465956
+    },
+    {
+      "market": "over_2.5",
+      "n": 1689,
+      "hit_rate": 55.00296033155714,
+      "raw_prob": 52.877415643750716,
+      "calibrated_prob": 55.136111797007736,
+      "implied_prob": 59.2906789800248,
+      "brier_raw": 0.2661789958591061,
+      "brier_isotonic": 0.24768183656269938,
+      "brier_implied": 0.24312699224488732,
+      "roi": -4.098875074008289
+    },
+    {
+      "market": "over_3.5",
+      "n": 1689,
+      "hit_rate": 33.45174659561871,
+      "raw_prob": 34.165401911163954,
+      "calibrated_prob": 35.14128886540836,
+      "implied_prob": 37.78019267522343,
+      "brier_raw": 0.2344173010411515,
+      "brier_isotonic": 0.22196925523474315,
+      "brier_implied": 0.21667136152856897,
+      "roi": -7.647128478389581
+    },
+    {
+      "market": "over_4.5",
+      "n": 1689,
+      "hit_rate": 18.82770870337478,
+      "raw_prob": 20.35662678023442,
+      "calibrated_prob": 19.665578749236044,
+      "implied_prob": 21.35294510058079,
+      "brier_raw": 0.16209646590565657,
+      "brier_isotonic": 0.15658933769217537,
+      "brier_implied": 0.14764953516942095,
+      "roi": -6.7246891651865
+    },
+    {
+      "market": "under_2.5",
+      "n": 1689,
+      "hit_rate": 44.997039668442866,
+      "raw_prob": 47.1225843562493,
+      "calibrated_prob": 44.89813633182897,
+      "implied_prob": 47.45278991915476,
+      "brier_raw": 0.2661789958591061,
+      "brier_isotonic": 0.247764997099569,
+      "brier_implied": 0.2415953259972663,
+      "roi": -1.0840734162226167
+    },
+    {
+      "market": "under_3.5",
+      "n": 1689,
+      "hit_rate": 66.54825340438128,
+      "raw_prob": 65.83459808883605,
+      "calibrated_prob": 64.74771939863591,
+      "implied_prob": 69.47928553828696,
+      "brier_raw": 0.2344173010411515,
+      "brier_isotonic": 0.22181934513418555,
+      "brier_implied": 0.2157746583525633,
+      "roi": -1.3966844286560092
+    },
+    {
+      "market": "under_4.5",
+      "n": 1689,
+      "hit_rate": 81.17229129662522,
+      "raw_prob": 79.64337321976558,
+      "calibrated_prob": 80.1564275008923,
+      "implied_prob": 86.26309522124954,
+      "brier_raw": 0.1620964659056566,
+      "brier_isotonic": 0.157008851187695,
+      "brier_implied": 0.14973643659176436,
+      "roi": -3.2924807578448787
+    },
+    {
+      "market": "under_0.5",
+      "n": 723,
+      "hit_rate": 5.255878284923928,
+      "raw_prob": 8.512298525406461,
+      "calibrated_prob": 9.566254468106065,
+      "implied_prob": 8.81228272278206,
+      "brier_raw": 0.05527888208168745,
+      "brier_isotonic": 0.058592821383243905,
+      "brier_implied": 0.05021442392633299,
+      "roi": -35.78146611341632
+    },
+    {
+      "market": "under_1.5",
+      "n": 723,
+      "hit_rate": 20.055325034578146,
+      "raw_prob": 24.268625999670775,
+      "calibrated_prob": 23.95065095761232,
+      "implied_prob": 24.22758826615293,
+      "brier_raw": 0.17713342078685085,
+      "brier_isotonic": 0.1776990549944296,
+      "brier_implied": 0.15932479900546573,
+      "roi": -11.500691562932227
+    }
+  ],
+  "markets_q75": [
+    {
+      "market": "double_chance_x2",
+      "n": 483,
+      "hit_rate": 51.5527950310559,
+      "raw_prob": 76.53497155812387,
+      "calibrated_prob": 64.08232201110185,
+      "implied_prob": 58.07813969880705,
+      "brier_raw": 0.30174958633808935,
+      "brier_isotonic": 0.2574060439839296,
+      "brier_implied": 0.23414152414258008,
+      "roi": -8.658385093167702
+    },
+    {
+      "market": "under_3.5",
+      "n": 419,
+      "hit_rate": 70.64439140811456,
+      "raw_prob": 84.90532043365342,
+      "calibrated_prob": 75.05662049405926,
+      "implied_prob": 71.0860256074554,
+      "brier_raw": 0.22097836887728745,
+      "brier_isotonic": 0.20501040238059853,
+      "brier_implied": 0.19846240012990332,
+      "roi": 2.105011933174224
+    },
+    {
+      "market": "under_2.5",
+      "n": 330,
+      "hit_rate": 51.515151515151516,
+      "raw_prob": 72.62399432302354,
+      "calibrated_prob": 55.27693195360883,
+      "implied_prob": 50.94149714213564,
+      "brier_raw": 0.29161945954442076,
+      "brier_isotonic": 0.25625514152551415,
+      "brier_implied": 0.23730546955744197,
+      "roi": 3.378787878787877
+    },
+    {
+      "market": "under_4.5",
+      "n": 315,
+      "hit_rate": 83.17460317460318,
+      "raw_prob": 93.01102632284606,
+      "calibrated_prob": 87.82916331584552,
+      "implied_prob": 85.87885773431596,
+      "brier_raw": 0.14451715612653684,
+      "brier_isotonic": 0.14178749857852033,
+      "brier_implied": 0.1333856765072702,
+      "roi": -0.7333333333333344
+    },
+    {
+      "market": "btts_no",
+      "n": 298,
+      "hit_rate": 49.664429530201346,
+      "raw_prob": 71.79691030876268,
+      "calibrated_prob": 51.380950073591734,
+      "implied_prob": 50.08135212607863,
+      "brier_raw": 0.3053365934594555,
+      "brier_isotonic": 0.2548480500951869,
+      "brier_implied": 0.2505071321419784,
+      "roi": 3.513422818791946
+    },
+    {
+      "market": "over_2.5",
+      "n": 224,
+      "hit_rate": 58.48214285714286,
+      "raw_prob": 78.71921082665982,
+      "calibrated_prob": 65.68803574145309,
+      "implied_prob": 62.60622239423894,
+      "brier_raw": 0.28609655737922385,
+      "brier_isotonic": 0.24768688814389314,
+      "brier_implied": 0.2449737091148472,
+      "roi": -2.486607142857143
+    },
+    {
+      "market": "away_win",
+      "n": 216,
+      "hit_rate": 31.01851851851852,
+      "raw_prob": 57.06953545604565,
+      "calibrated_prob": 47.65212640927883,
+      "implied_prob": 32.82712446244856,
+      "brier_raw": 0.27867583167977505,
+      "brier_isotonic": 0.24407664550774236,
+      "brier_implied": 0.20649236945113525,
+      "roi": 7.64814814814815
+    },
+    {
+      "market": "over_1.5",
+      "n": 179,
+      "hit_rate": 83.79888268156425,
+      "raw_prob": 91.00747808613997,
+      "calibrated_prob": 85.32714762410733,
+      "implied_prob": 84.04699851689278,
+      "brier_raw": 0.145541150642175,
+      "brier_isotonic": 0.1421311799700037,
+      "brier_implied": 0.14023626062847505,
+      "roi": 2.938547486033519
+    },
+    {
+      "market": "double_chance_1x",
+      "n": 146,
+      "hit_rate": 58.21917808219178,
+      "raw_prob": 81.38240573154037,
+      "calibrated_prob": 79.94223326570646,
+      "implied_prob": 66.5240063405088,
+      "brier_raw": 0.274449991237012,
+      "brier_isotonic": 0.27704191167415404,
+      "brier_implied": 0.22139228513401607,
+      "roi": -12.006849315068493
+    },
+    {
+      "market": "over_3.5",
+      "n": 135,
+      "hit_rate": 39.25925925925926,
+      "raw_prob": 68.08904751584105,
+      "calibrated_prob": 51.436339521071105,
+      "implied_prob": 45.15523145414463,
+      "brier_raw": 0.3230328651406532,
+      "brier_isotonic": 0.2611484892888958,
+      "brier_implied": 0.23692372531854364,
+      "roi": -9.251851851851853
+    },
+    {
+      "market": "btts_yes",
+      "n": 115,
+      "hit_rate": 62.60869565217392,
+      "raw_prob": 76.8247352385504,
+      "calibrated_prob": 66.59751815213728,
+      "implied_prob": 62.74008298343685,
+      "brier_raw": 0.25777104799914646,
+      "brier_isotonic": 0.24667946709382027,
+      "brier_implied": 0.23325328861589112,
+      "roi": 2.6695652173913063
+    },
+    {
+      "market": "home_win",
+      "n": 87,
+      "hit_rate": 35.63218390804598,
+      "raw_prob": 58.58711074720118,
+      "calibrated_prob": 59.934805226982135,
+      "implied_prob": 37.0687536430396,
+      "brier_raw": 0.26470020549878936,
+      "brier_isotonic": 0.2785941732964159,
+      "brier_implied": 0.21700901984657409,
+      "roi": -1.7011494252873536
+    },
+    {
+      "market": "over_4.5",
+      "n": 33,
+      "hit_rate": 27.27272727272727,
+      "raw_prob": 57.083768614667186,
+      "calibrated_prob": 38.2778245739387,
+      "implied_prob": 31.117764458874458,
+      "brier_raw": 0.271890501706498,
+      "brier_isotonic": 0.24803485184474341,
+      "brier_implied": 0.184946466675989,
+      "roi": -15.151515151515154
+    },
+    {
+      "market": "under_1.5",
+      "n": 33,
+      "hit_rate": 30.303030303030305,
+      "raw_prob": 56.44059932925077,
+      "calibrated_prob": 41.641700989243326,
+      "implied_prob": 28.96451382395382,
+      "brier_raw": 0.27677120387946696,
+      "brier_isotonic": 0.270447872264278,
+      "brier_implied": 0.19687613891078573,
+      "roi": 3.333333333333335
+    }
+  ],
+  "relative_skill": {
+    "fitted": true,
+    "n": 25095,
+    "market_coefficient": 0.96615507311366,
+    "model_coefficient": 0.0032456127784236503,
+    "model_ci_low": -0.10722669883163634,
+    "model_ci_high": 0.11036751346669248,
+    "model_p_le_zero": 0.4717607973421927,
+    "draws": 300
+  },
+  "relative_skill_q75": {
+    "fitted": true,
+    "n": 3021,
+    "market_coefficient": 1.0242374613604037,
+    "model_coefficient": -0.1042374313246145,
+    "model_ci_low": -0.4592288647187048,
+    "model_ci_high": 0.23230756525791169,
+    "model_p_le_zero": 0.7242524916943521,
+    "draws": 300
+  }
+}

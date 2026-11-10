@@ -177,6 +177,8 @@ class SelectionOut(BaseModel):
     bookmaker_count: int | None
     avg_implied: float | None
     source_implied_probability: float | None = None
+    closing_decimal_odds: float | None = None
+    clv_percentage: float | None = None
     match_status: str
     home_goals: int | None
     away_goals: int | None
@@ -436,6 +438,8 @@ async def get_qualified_selections(
             bookmaker_count=quote_bookmaker_count or None,
             avg_implied=pred.source_implied_probability,
             source_implied_probability=pred.source_implied_probability,
+            closing_decimal_odds=pred.closing_decimal_odds,
+            clv_percentage=pred.clv_percentage,
             match_status=match.status.value,
             home_goals=match.home_goals,
             away_goals=match.away_goals,
@@ -459,6 +463,151 @@ async def get_qualified_selections(
         ))
 
     return output
+
+
+CHANCE_STEPS = [20, 30, 40, 50, 60, 70, 80, 90]
+
+
+def _chance_band(probability: float | None) -> int | None:
+    """Bucket a 0–1 probability into the 10-point band ≥20% … ≥90%. None = below 20%."""
+    if probability is None or probability < 0 or probability > 1:
+        return None
+    band = int(probability * 100 // 10) * 10
+    return band if band >= 20 else None
+
+
+class BlockPerformanceCell(BaseModel):
+    model_config = {"protected_namespaces": ()}
+    market: str
+    kind: str  # "chance" (model probability) or "implied" (bookmaker implied)
+    block: int  # 20 … 90, counted cumulatively as "≥ block%"
+    picks: int
+    settled: int
+    won: int
+    lost: int
+    void: int
+    priced: int
+    net_units: float
+    hit_rate: float | None
+    roi: float | None
+
+
+class BlockPerformanceOut(BaseModel):
+    window_days: int
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    cells: list[BlockPerformanceCell]
+
+
+@router.get("/qualified/block-performance", response_model=BlockPerformanceOut, dependencies=[Depends(require_pro_access)])
+async def get_block_performance(
+    days: int = Query(default=45, ge=7, le=120),
+    min_qscore: float = Query(default=75.0, ge=0, le=100),
+    date: Optional[date] = Query(default=None, description="Window ends on this date (default: today)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Historical hit-rate and ROI per market for each Model-chance / Bookmaker-implied
+    block, aggregated over the trailing window of settled system picks.
+
+    Cells are cumulative: a pick with a 45% model chance contributes to the
+    ≥20%, ≥30% and ≥40% rows of its market. Unpriced picks are counted but
+    excluded from ROI. This is descriptive research, not a backtest guarantee.
+    """
+    end_date = date or cat_today()
+    start_date = end_date - timedelta(days=days - 1)
+
+    latest_prediction_run = (
+        select(
+            Prediction.match_id,
+            Prediction.market,
+            func.max(Prediction.id).label("latest_prediction_id"),
+        )
+        .join(ModelRun, Prediction.model_run_id == ModelRun.id)
+        .where(
+            ModelRun.status == RunStatus.COMPLETED,
+            ModelRun.target_date >= start_date,
+            ModelRun.target_date <= end_date,
+        )
+        .group_by(Prediction.match_id, Prediction.market)
+        .subquery()
+    )
+    candidate_query = (
+        select(Prediction)
+        .join(Match, Prediction.match_id == Match.id)
+        .join(
+            latest_prediction_run,
+            (latest_prediction_run.c.match_id == Prediction.match_id)
+            & (latest_prediction_run.c.market == Prediction.market)
+            & (latest_prediction_run.c.latest_prediction_id == Prediction.id),
+        )
+        .where(
+            Prediction.q_score >= min_qscore,
+            Match.kickoff_at >= cat_day_bounds_utc(start_date)[0],
+            Match.kickoff_at < cat_day_bounds_utc(end_date)[1],
+            Match.excluded_from_models == False,
+        )
+        .options(
+            selectinload(Prediction.match).selectinload(Match.home_team),
+            selectinload(Prediction.match).selectinload(Match.away_team),
+        )
+    )
+    pred_rows = (await db.execute(candidate_query)).scalars().all()
+
+    cell_picks: dict[tuple[str, str, int], list[dict]] = {}
+    for pred in pred_rows:
+        match = pred.match
+        if match is None or match.home_team is None or match.away_team is None:
+            continue
+        result = _finished_selection_result(match, pred.market)
+        odds = pred.source_decimal_odds
+        chance_band = _chance_band(pred.model_probability)
+        implied_band = _chance_band(pred.source_implied_probability)
+        shares: list[tuple[str, list[int]]] = []
+        if chance_band is not None:
+            shares.append(("chance", [step for step in CHANCE_STEPS if step <= chance_band]))
+        if implied_band is not None:
+            shares.append(("implied", [step for step in CHANCE_STEPS if step <= implied_band]))
+        for kind, blocks in shares:
+            for block in blocks:
+                cell_picks.setdefault((pred.market, kind, block), []).append(
+                    {"result": result, "odds": odds}
+                )
+
+    cells = []
+    for (market_key, kind, block), picks in cell_picks.items():
+        results = [pick["result"] for pick in picks]
+        settled = [pick for pick in picks if pick["result"] is not None]
+        won = results.count("won")
+        lost = results.count("lost")
+        void = results.count("void")
+        priced_picks = [pick for pick in picks if pick["result"] in ("won", "lost") and pick["odds"] is not None]
+        net_units = sum(
+            (pick["odds"] - 1) if pick["result"] == "won" else -1
+            for pick in priced_picks
+        )
+        decided = won + lost
+        cells.append(BlockPerformanceCell(
+            market=market_key,
+            kind=kind,
+            block=block,
+            picks=len(picks),
+            settled=len(settled),
+            won=won,
+            lost=lost,
+            void=void,
+            priced=len(priced_picks),
+            net_units=round(net_units, 4),
+            hit_rate=round(won / decided, 4) if decided else None,
+            roi=round(net_units / len(priced_picks), 4) if priced_picks else None,
+        ))
+    cells.sort(key=lambda cell: (cell.kind == "chance", cell.market, -cell.block))
+    return BlockPerformanceOut(
+        window_days=days,
+        start_date=start_date.isoformat(),
+        end_date=end_date.isoformat(),
+        cells=cells,
+    )
 
 
 @router.get("/match-intelligence/{match_id}", response_model=MatchIntelligenceOut, dependencies=[Depends(require_research_access)])
