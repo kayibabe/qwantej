@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from typing import Literal
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -11,6 +11,39 @@ CAT = ZoneInfo("Africa/Blantyre")
 # runs and API defaults. Historical rows retain the version they were created
 # with, so changing this value starts a new auditable model lineage.
 CURRENT_MODEL_VERSION = "0.3.0"
+
+# ---------------------------------------------------------------------------
+# Market-exclusion ownership — one config source for every exclusion list.
+#
+# Owner: market-policy research (see docs/FOOTBALL_MARKET_FRAMEWORK.md).
+#
+# PRODUCT_RESTRICTED_MARKETS is the public-product restriction. The shadow
+# portfolio intentionally mirrors it and stays behind `market_policy_shadow_
+# enabled` until the current paper trial reports; the shadow can never filter
+# or replace a public ticket.
+#
+# PAPER_POLICY_EXCLUDED_MARKETS belongs to the frozen paper experiments. It is
+# deliberately different rather than a copy: the paper basket tests
+# under_2.5/under_3.5, which the product restricts, so deriving one list from
+# the other would silently change a frozen protocol.
+# ---------------------------------------------------------------------------
+PRODUCT_RESTRICTED_MARKETS: tuple[str, ...] = (
+    "draw",
+    "under_2.5",
+    "under_3.5",
+    "home_win",
+    "double_chance_1x",
+)
+
+PAPER_POLICY_EXCLUDED_MARKETS: tuple[str, ...] = (
+    "double_chance_1x",
+    "double_chance_12",
+    "double_chance_x2",
+    "over_3.5",
+    "over_4.5",
+    "under_0.5",
+    "under_1.5",
+)
 
 
 def cat_today():
@@ -182,25 +215,19 @@ class Settings(BaseSettings):
     min_edge_band_calibration_sample: int = 20
     max_edge_band_calibration_error: float = 0.20
     # Single-game research focus. Restricted markets remain available for
-    # diagnostics but are excluded from generated paper tickets.
+    # diagnostics but are excluded from generated paper tickets. Derived from
+    # PRODUCT_RESTRICTED_MARKETS so there is one owner for the public list.
     research_focus_markets: list[str] = ["over_1.5", "over_2.5"]
-    research_restricted_markets: list[str] = [
-        "draw",
-        "under_2.5",
-        "under_3.5",
-        "home_win",
-        "double_chance_1x",
-    ]
+    research_restricted_markets: list[str] = Field(
+        default_factory=lambda: list(PRODUCT_RESTRICTED_MARKETS)
+    )
     # The live market-priced portfolio deliberately remains unchanged. This
     # list defines a *shadow-only* counterfactual that is captured separately
     # for comparison; it can never filter, replace, or promote public tickets.
-    market_policy_shadow_excluded_markets: list[str] = [
-        "draw",
-        "under_2.5",
-        "under_3.5",
-        "home_win",
-        "double_chance_1x",
-    ]
+    # It mirrors the same source while `market_policy_shadow_enabled` is True.
+    market_policy_shadow_excluded_markets: list[str] = Field(
+        default_factory=lambda: list(PRODUCT_RESTRICTED_MARKETS)
+    )
     market_policy_shadow_enabled: bool = True
     # Authentication throttles are fail-open on an infrastructure outage so a
     # Redis incident cannot lock legitimate users out of the product.

@@ -215,6 +215,95 @@ def _positive_profit_evidence(metrics: dict) -> bool:
     )
 
 
+def _market_relative_evidence(
+    examples: list[LearningExample],
+    probabilities: list[float],
+    *,
+    min_samples: int,
+    bootstrap: int = 1000,
+) -> dict:
+    """Compare the challenger with the bookmaker on the same priced picks.
+
+    The incumbent comparison asks whether the challenger beats the previous
+    model. This asks the harder, decision-relevant question: does it beat
+    ``1 / decimal_odds``? A challenger that only beats another model but loses
+    to the price is not evidence of edge, so promotion fails closed.
+
+    Advantages are paired per pick (market error minus challenger error), so a
+    positive value means the challenger is better. Matchdays are resampled as
+    clusters, matching the research audits.
+    """
+    pairs = [
+        (example, min(1.0 - 1e-6, max(1e-6, float(probability))))
+        for example, probability in zip(examples, probabilities)
+        if example.decimal_odds and math.isfinite(example.decimal_odds) and example.decimal_odds > 1.0
+    ]
+    if len(pairs) < min_samples:
+        return {"fitted": False, "samples": len(pairs), "min_samples": min_samples}
+
+    outcomes = np.asarray([example.outcome for example, _ in pairs], dtype=float)
+    challenger = np.asarray([probability for _, probability in pairs], dtype=float)
+    market = np.asarray([1.0 / example.decimal_odds for example, _ in pairs], dtype=float)
+    market = np.clip(market, 1e-6, 1.0 - 1e-6)
+
+    brier_advantage = (market - outcomes) ** 2 - (challenger - outcomes) ** 2
+    challenger_ll = -(outcomes * np.log(challenger) + (1.0 - outcomes) * np.log(1.0 - challenger))
+    market_ll = -(outcomes * np.log(market) + (1.0 - outcomes) * np.log(1.0 - market))
+    logloss_advantage = market_ll - challenger_ll
+
+    by_day = {}
+    for (example, _), brier, logloss in zip(pairs, brier_advantage, logloss_advantage):
+        key = example.kickoff_at.date().isoformat()
+        by_day.setdefault(key, []).append((brier, logloss))
+    days = list(by_day)
+    generator = np.random.default_rng(17)
+    brier_samples, logloss_samples = [], []
+    for _ in range(bootstrap):
+        chosen = generator.choice(len(days), size=len(days), replace=True)
+        block = [by_day[days[index]] for index in chosen]
+        brier_samples.append(np.mean([row[0] for group in block for row in group]))
+        logloss_samples.append(np.mean([row[1] for group in block for row in group]))
+
+    return {
+        "fitted": True,
+        "samples": len(pairs),
+        "min_samples": min_samples,
+        "market_brier": round(float(np.mean((market - outcomes) ** 2)), 6),
+        "challenger_brier": round(float(np.mean((challenger - outcomes) ** 2)), 6),
+        "market_log_loss": round(float(np.mean(market_ll)), 6),
+        "challenger_log_loss": round(float(np.mean(challenger_ll)), 6),
+        "brier_advantage": round(float(brier_advantage.mean()), 6),
+        "brier_advantage_ci": [
+            round(float(np.quantile(brier_samples, 0.025)), 6),
+            round(float(np.quantile(brier_samples, 0.975)), 6),
+        ],
+        "logloss_advantage": round(float(logloss_advantage.mean()), 6),
+        "logloss_advantage_ci": [
+            round(float(np.quantile(logloss_samples, 0.025)), 6),
+            round(float(np.quantile(logloss_samples, 0.975)), 6),
+        ],
+    }
+
+
+def _beats_market_baseline(evidence: dict, interval_key: str) -> bool:
+    """True only when the challenger wins the paired comparison convincingly.
+
+    Requires a fitted comparison, a positive mean advantage, and a
+    day-clustered 95% interval whose lower bound is above zero. An interval
+    that straddles zero means the apparent edge is indistinguishable from
+    noise, which is exactly the failure mode that must not be promoted.
+    """
+    if not evidence.get("fitted"):
+        return False
+    interval = evidence.get(interval_key)
+    return bool(
+        isinstance(interval, (list, tuple))
+        and len(interval) == 2
+        and all(isinstance(value, (int, float)) and math.isfinite(value) for value in interval)
+        and interval[0] > 0
+    )
+
+
 def _eligible_learning_quote(prediction: Prediction, match: Match) -> bool:
     def utc(value: datetime) -> datetime:
         return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
@@ -260,6 +349,11 @@ def fit_market_challenger(
         "incumbent": _metric_bundle(validation, incumbent_validation, minimum_edge),
         "challenger": _metric_bundle(validation, candidate_validation, minimum_edge),
     }
+    market_baseline = _market_relative_evidence(
+        validation, candidate_validation, min_samples=min_validation_bets
+    )
+    validation_metrics["market_baseline"] = market_baseline
+
     incumbent = validation_metrics["incumbent"]
     challenger = validation_metrics["challenger"]
     checks = {
@@ -272,6 +366,11 @@ def fit_market_challenger(
             and incumbent["roi"] is not None
             and challenger["roi"] >= incumbent["roi"] - max_roi_regression
         ),
+        # The decision-relevant gate: beating another model is not edge. The
+        # challenger must forecast better than the price it would be betting
+        # into, and the day-clustered interval must not straddle zero.
+        "beats_market_brier": _beats_market_baseline(market_baseline, "brier_advantage_ci"),
+        "beats_market_log_loss": _beats_market_baseline(market_baseline, "logloss_advantage_ci"),
     }
     return {
         "weights": weights,

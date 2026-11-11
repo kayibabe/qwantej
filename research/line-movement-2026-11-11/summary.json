@@ -1,0 +1,26 @@
+{
+  "generated_at": "2026-11-11T14:58:05.815267+00:00",
+  "selection_mode": "latest",
+  "min_gap_hours": 1,
+  "max_gap_hours": 0,
+  "eligible_picks": 17595,
+  "picks_with_prior": 1310,
+  "coverage_pct": 7.445296959363455,
+  "median_books": 5.0,
+  "prepare_exclusions": {
+    "missing_or_invalid_odds": 211187,
+    "later_repeat": 50248,
+    "replay_snapshot": 10387
+  },
+  "skill": {
+    "fitted": true,
+    "n": 1310,
+    "price_coefficient": 0.9648456978991367,
+    "move_coefficient": -0.8967045077595227,
+    "move_ci_low": -2.015079297850552,
+    "move_ci_high": 0.8637484820571114,
+    "p_move_le_zero": 0.7876061969015492,
+    "draws": 2000
+  },
+  "move_corr_q": -0.04231046361597334
+}

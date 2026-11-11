@@ -18,8 +18,10 @@ import json
 import math
 
 from sqlalchemy import select, text
+from app.config import PAPER_POLICY_EXCLUDED_MARKETS
 from app.models.paper_rule import PaperRuleEvent
 from app.models import Match, Prediction
+from app.services.clv import clv_is_valid
 from app.services.sweet_spot import digest, metrics as cohort_metrics, parse
 
 CAT = timezone(timedelta(hours=2))
@@ -87,8 +89,7 @@ RULES: dict[str, dict] = {
         **_COMMON,
         'markets': ['away_win', 'btts_no', 'over_1.5', 'under_2.5', 'under_3.5'],
         'q_min': 75, 'odds_min_inclusive': 1.5, 'odds_max_exclusive': 8.0,
-        'excluded_markets': ['double_chance_1x', 'double_chance_12', 'double_chance_x2',
-                             'over_3.5', 'over_4.5', 'under_0.5', 'under_1.5'],
+        'excluded_markets': list(PAPER_POLICY_EXCLUDED_MARKETS),
         'q_role': 'Universe filter only. Q and model edge are not value or ranking signals.',
         'selection_rank': 'Highest bookmaker-implied probability, then earliest prediction; one pick per fixture',
         'clv_gate': 'Promotion requires mean CLV > 0 and beat-close rate > 50% over the review window',
@@ -101,6 +102,31 @@ RULES: dict[str, dict] = {
                       'away win / BTTS no / over 1.5 / under 2.5-3.5 were the least-bad markets. '
                       'Walk-forward calibration audit: isotonic cut Brier 4.7% but still lost to the '
                       'bookmaker, and the model coefficient beyond price was 0.003 [-0.107, 0.110].'),
+    },
+    # v2 is a new pre-registered rule, not an edit of v1 (whose protocol is
+    # already frozen in the ledger). It fixes two mechanical problems found in
+    # v1's first days: the 1.50 floor made over_1.5 effectively inert (2 of 180
+    # picks cleared it), and ranking by highest implied probability selected
+    # short-priced favourites, the bucket with the worst observed ROI.
+    'policy-q75-nodc-v2': {
+        **_COMMON,
+        'markets': ['away_win', 'btts_no', 'over_1.5', 'under_2.5', 'under_3.5'],
+        'q_min': 75, 'odds_min_inclusive': 1.2, 'odds_max_exclusive': 8.0,
+        'excluded_markets': list(PAPER_POLICY_EXCLUDED_MARKETS),
+        'q_role': 'Universe filter only. Q and model edge are not value or ranking signals.',
+        'selection_rank': 'Longest entry price (lowest bookmaker-implied probability), then earliest prediction; one pick per fixture',
+        'selection_rank_direction': 'longest_price',
+        'clv_gate': 'Promotion requires mean CLV > 0 and beat-close rate > 50% over the review window',
+        'requires_positive_clv': True,
+        'earliest_kickoff_date': '2026-11-12', 'minimum_review_date': '2027-02-20',
+        'required_settled': 300, 'required_matchdays': 30,
+        'selection': 'Longest-priced allowed pick per fixture: lowest implied probability, then earliest prediction; no replacements',
+        'rationale': ('v1 audit: odds floor 1.50 made over_1.5 inert (2/180 picks); implied-probability '
+                      'ranking selected favourites, and observed ROI fell monotonically with implied '
+                      'probability (0-40%: +1.8%, 50-60%: -3.2%, 60-70%: -5.6%). v2 lowers the floor to '
+                      '1.20 and ranks by longest price. This is an underpowered hypothesis (3,080 picks '
+                      'cannot resolve small effects), not a promotion: it is paper-only and must pass the '
+                      'same CLV and 300-pick review gates as v1.'),
     },
 }
 
@@ -187,16 +213,22 @@ async def _tick_rule(db, rule_key: str, now: datetime) -> dict:
                        ORDER BY p.created_at,p.id LIMIT 1) p ON TRUE"""
         params['market'] = rule['market']
     elif 'markets' in rule:
-        # Basket rules take one pick per fixture, ranked by bookmaker-implied
-        # probability (shortest price first), not by model edge or Q.
+        # Basket rules take one pick per fixture. v1 ranks by shortest price
+        # (highest implied probability); v2 ranks by longest price. The ranking
+        # is part of the frozen protocol, so it is chosen per rule and not
+        # silently changed for the live v1 experiment.
         allowed = ', '.join(f"'{market}'" for market in rule['markets'])
+        if rule.get('selection_rank_direction') == 'longest_price':
+            order_clause = 'p.source_decimal_odds DESC, p.created_at, p.id'
+        else:
+            order_clause = 'p.source_implied_probability DESC, p.created_at, p.id'
         lateral = f"""LEFT JOIN LATERAL (SELECT * FROM predictions p WHERE p.match_id=m.id
                        AND p.market IN ({allowed})
                        AND p.source_decimal_odds IS NOT NULL
                        AND p.source_decimal_odds >= :odds_min
                        AND p.source_decimal_odds < :odds_max
                        AND p.source_implied_probability IS NOT NULL
-                       ORDER BY p.source_implied_probability DESC, p.created_at, p.id
+                       ORDER BY {order_clause}
                        LIMIT 1) p ON TRUE"""
         params.update(odds_min=rule['odds_min_inclusive'], odds_max=rule['odds_max_exclusive'])
     else:
@@ -279,12 +311,18 @@ async def _tick_rule(db, rule_key: str, now: datetime) -> dict:
                     outcome = SelectionResult.VOID
             result = {SelectionResult.WON: 'won', SelectionResult.LOST: 'lost'}.get(outcome, 'pending')
         pred = predictions.get(p.get('prediction_id'))
-        closing_odds = float(pred.closing_decimal_odds) if pred and pred.closing_decimal_odds else None
-        clv = float(pred.clv_percentage) if pred and pred.clv_percentage is not None else None
+        valid_clv = bool(pred is not None and clv_is_valid(pred))
+        closing_odds = float(pred.closing_decimal_odds) if valid_clv else None
+        clv = float(pred.clv_percentage) if valid_clv and pred.clv_percentage is not None else None
         body = dict(rule=rule_key, match_id=m.id, status=m.status.value,
                     home_goals=m.home_goals, away_goals=m.away_goals,
                     result=result, profit=(p['odds'] - 1 if result == 'won' else -1 if result == 'lost' else None),
-                    closing_odds=closing_odds, clv_percentage=clv,
+                    closing_odds=closing_odds, clv_percentage=clv, clv_valid=valid_clv,
+                    closing_odds_at=(pred.closing_odds_at.isoformat()
+                                     if valid_clv and pred.closing_odds_at else None),
+                    entry_odds_at=(pred.source_odds_at.isoformat()
+                                   if pred is not None and pred.source_odds_at else None),
+                    closing_bookmaker=(pred.closing_bookmaker if valid_clv else None),
                     beat_close=(clv > 0) if clv is not None else None)
         prior = latest.get(m.id)
         if prior and all(prior.get(k) == v for k, v in body.items()):
@@ -340,10 +378,19 @@ def build_report(events, now, rule_key: str) -> dict:
               else 'current' if now - parse(runs[-1]['at']) <= timedelta(minutes=15) else 'stale')
     clv_values = [
         p['clv_percentage'] for p in picks
-        if p.get('result') in ('won', 'lost') and p.get('clv_percentage') is not None
+        if p.get('result') in ('won', 'lost')
+        and p.get('clv_valid') is True
+        and p.get('clv_percentage') is not None
     ]
+    unresolved_clv = sum(
+        1 for p in picks
+        if p.get('result') in ('won', 'lost')
+        and p.get('clv_percentage') is not None
+        and p.get('clv_valid') is not True
+    )
     clv = dict(
         samples=len(clv_values),
+        excluded_invalid=unresolved_clv,
         mean_clv=round(sum(clv_values) / len(clv_values), 4) if clv_values else None,
         beat_close_rate=(round(sum(1 for v in clv_values if v > 0) / len(clv_values), 4)
                          if clv_values else None),

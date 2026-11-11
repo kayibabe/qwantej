@@ -40,13 +40,37 @@ def test_improving_a_losing_incumbent_does_not_make_challenger_ready(monkeypatch
                   "roi_confidence_interval_95": [-0.3, 0.1]}
     metrics = iter([incumbent, challenger, incumbent, challenger])
     monkeypatch.setattr(model_learning, "_metric_bundle", lambda *args: next(metrics))
-    rows = [SimpleNamespace(outcome=1, incumbent_probability=0.6)]
+    rows = [SimpleNamespace(outcome=1, incumbent_probability=0.6, decimal_odds=2.0,
+                            kickoff_at=datetime(2026, 9, 1, 12, tzinfo=timezone.utc))]
     result = model_learning.fit_market_challenger(rows, rows, minimum_edge=0.03,
         regularization=0.1, min_validation_bets=10, min_brier_improvement=0.0025,
         max_calibration_regression=0.01, max_roi_regression=0.02)
     assert result["promotion_checks"]["roi_not_worse"]
     assert not result["promotion_checks"]["positive_roi_evidence"]
+    assert not result["promotion_checks"]["beats_market_brier"]
     assert not result["shadow_ready"]
+
+
+def test_market_gate_requires_beating_the_price(monkeypatch):
+    from app.services.model_learning import _market_relative_evidence
+
+    kickoff = datetime(2026, 11, 1, 12, tzinfo=timezone.utc)
+    examples = [
+        SimpleNamespace(outcome=1.0, decimal_odds=1.50, kickoff_at=kickoff),
+        SimpleNamespace(outcome=0.0, decimal_odds=4.00, kickoff_at=kickoff),
+    ]
+    good = _market_relative_evidence(examples, [0.90, 0.20], min_samples=2)
+    assert good["fitted"] is True
+    assert good["brier_advantage"] > 0
+    assert good["brier_advantage_ci"][0] > 0
+    assert good["logloss_advantage_ci"][0] > 0
+
+    bad = _market_relative_evidence(examples, [0.40, 0.60], min_samples=2)
+    assert bad["brier_advantage"] < 0
+    assert bad["brier_advantage_ci"][1] < 0
+
+    thin = _market_relative_evidence(examples, [0.90, 0.20], min_samples=10)
+    assert thin["fitted"] is False
 
 
 @pytest.mark.parametrize("quote_offset,odds,expected", [

@@ -1,0 +1,30 @@
+{
+  "generated_at": "2026-11-11T14:51:07.567796+00:00",
+  "coverage": {
+    "q_min": 75.0,
+    "eligible_q75_picks": 3080,
+    "prepare_exclusions": {
+      "missing_or_invalid_odds": 211775,
+      "later_repeat": 50248,
+      "replay_snapshot": 1851
+    },
+    "picks_with_entry_quote": 3080,
+    "avg_books_per_pick": 6.571103896103896,
+    "picks_with_3plus_books": 3068,
+    "recorded_price_equals_best_pct": 100.0,
+    "recorded_price_below_best_pct": 0.0,
+    "bookmakers_in_snapshots": [
+      "1xBet",
+      "Bet365",
+      "BetVictor",
+      "Betano",
+      "Betfair",
+      "Dafabet",
+      "Marathonbet",
+      "Pinnacle",
+      "SBO",
+      "William Hill"
+    ]
+  },
+  "quote_lookback_hours": 3
+}

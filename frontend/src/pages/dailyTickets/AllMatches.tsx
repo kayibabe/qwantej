@@ -18,7 +18,7 @@ import {
 import { BlockHeatmap } from "./BlockHeatmap";
 import type { MatchDisplayState } from "./types";
 
-type MatchSortKey = "match" | "kickoff" | "league" | "q" | "markets" | "spread" | "edge";
+type MatchSortKey = "match" | "kickoff" | "league" | "q" | "fair" | "markets" | "spread" | "edge";
 type OutcomeFilter = "" | "won" | "lost" | "void" | "pending";
 type RecommendationFilter = "" | "BET" | "WATCH" | "PASS";
 
@@ -48,7 +48,7 @@ function saveSavedPresets(presets: SavedPreset[]) {
   }
 }
 const MATCH_STATUSES: MatchDisplayState[] = ["finished", "live", "scheduled", "postponed", "cancelled", "abandoned", "awarded"];
-const MATCH_SORT_KEYS: MatchSortKey[] = ["match", "kickoff", "league", "q", "markets", "spread", "edge"];
+const MATCH_SORT_KEYS: MatchSortKey[] = ["match", "kickoff", "league", "q", "fair", "markets", "spread", "edge"];
 const CHANCE_BLOCKS = [20, 30, 40, 50, 60, 70, 80, 90];
 
 /** Bookmaker implied probability (margin included), as displayed per pick. */
@@ -374,6 +374,11 @@ export function AllMatches({
           Math.max(...a.map((row) => row.q_score)),
           Math.max(...b.map((row) => row.q_score)),
         ],
+        // Opt-in market order: de-vigged (fair) probability, not the default.
+        fair: [
+          Math.max(...a.map((row) => row.source_fair_probability ?? -1)),
+          Math.max(...b.map((row) => row.source_fair_probability ?? -1)),
+        ],
         markets: [a.length, b.length],
         spread: [a[0].model_agreement ?? 999, b[0].model_agreement ?? 999],
         edge: [Math.max(...a.map((row) => row.edge ?? -999)), Math.max(...b.map((row) => row.edge ?? -999))],
@@ -533,7 +538,7 @@ export function AllMatches({
                   <span>Sort by</span>
                   <select aria-label="Sort matches" value={sort.key} onChange={(event) => changeSort(event.target.value as MatchSortKey)}>
                     <option value="kickoff">Kickoff</option><option value="match">Match</option><option value="league">Competition</option>
-                    <option value="q">Q-score</option><option value="markets">Markets</option><option value="spread">Model agreement</option><option value="edge">Model edge</option>
+                    <option value="q">Q-score</option><option value="fair">Market probability (no-vig)</option><option value="markets">Markets</option><option value="spread">Model agreement</option><option value="edge">Model edge</option>
                   </select>
                 </label>
                 <button

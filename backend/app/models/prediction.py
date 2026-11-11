@@ -84,7 +84,14 @@ class Prediction(Base):
     )
     source_odds_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     source_decimal_odds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # 1 / source_decimal_odds, averaged across bookmakers. Still contains the
+    # bookmaker margin (overround); kept for backwards compatibility.
     source_implied_probability: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Proportional no-vig probability from the same quote set. This is the
+    # probability to rank by when the goal is "what does the market think",
+    # not "what does the price include as margin". Null when a complete
+    # outcome group cannot be built for a bookmaker.
+    source_fair_probability: Mapped[float | None] = mapped_column(Float, nullable=True)
     source_odds_provenance: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     # Exact model/Q-score inputs at scoring time. Empty for legacy predictions
     # whose original feature state was not persisted.
@@ -107,6 +114,9 @@ class Prediction(Base):
     closing_decimal_odds: Mapped[float | None] = mapped_column(Float, nullable=True)
     closing_implied_probability: Mapped[float | None] = mapped_column(Float, nullable=True)
     closing_odds_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Provenance for the closing quote, so a consumer can distinguish a true
+    # post-entry pre-kickoff close from a stale or same-fetch value.
+    closing_bookmaker: Mapped[str | None] = mapped_column(String(100), nullable=True)
     # (entry_odds / closing_odds) - 1. Positive = we got a better price than
     # the market settled on (beat the close); negative = the market moved
     # our way after we already had the worse price.

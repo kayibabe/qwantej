@@ -362,6 +362,7 @@ export interface SelectionSummary {
   bookmaker_count?: number | null
   avg_implied?: number | null
   source_implied_probability?: number | null
+  source_fair_probability?: number | null
   closing_decimal_odds?: number | null
   clv_percentage?: number | null
   match_status?: string

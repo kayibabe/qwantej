@@ -172,11 +172,25 @@ class SelectionOut(BaseModel):
     expected_value: float | None
     q_score: float
     q_grade: str
-    best_odds: float | None
+    best_odds: float | None = Field(
+        ...,
+        description=(
+            "Best tracked bookmaker quote at entry (max decimal odds across the "
+            "books captured at source_odds_at), not a live or guaranteed price. "
+            "See source_bookmaker and source_odds_at for provenance."
+        ),
+    )
     source_bookmaker: str | None = None
     bookmaker_count: int | None
     avg_implied: float | None
     source_implied_probability: float | None = None
+    source_fair_probability: float | None = Field(
+        default=None,
+        description=(
+            "Proportional no-vig probability from the entry quote set. Null for "
+            "historical rows and when a complete outcome group was unavailable."
+        ),
+    )
     closing_decimal_odds: float | None = None
     clv_percentage: float | None = None
     match_status: str
@@ -438,6 +452,7 @@ async def get_qualified_selections(
             bookmaker_count=quote_bookmaker_count or None,
             avg_implied=pred.source_implied_probability,
             source_implied_probability=pred.source_implied_probability,
+            source_fair_probability=pred.source_fair_probability,
             closing_decimal_odds=pred.closing_decimal_odds,
             clv_percentage=pred.clv_percentage,
             match_status=match.status.value,

@@ -93,6 +93,21 @@ def decision(rule, match_id, result_day, **changes):
     return event('decision', payload)
 
 
+def test_v2_is_a_separate_rule_with_longest_price_ranking():
+    v1 = RULES['policy-q75-nodc-v1']
+    v2 = RULES['policy-q75-nodc-v2']
+    assert v2 is not v1
+    assert v2['odds_min_inclusive'] == 1.2
+    assert v2['selection_rank_direction'] == 'longest_price'
+    assert 'selection_rank_direction' not in v1
+    # The floor change makes over_1.5 reachable: it was inert at 1.50.
+    assert _predicate_reasons('policy-q75-nodc-v2', opportunity('policy-q75-nodc-v2', market='over_1.5', odds=1.35, q_score=80)) == []
+    assert 'odds_outside_range' in _predicate_reasons(
+        'policy-q75-nodc-v2', opportunity('policy-q75-nodc-v2', market='over_1.5', odds=1.19, q_score=80))
+    assert v2['required_settled'] == 300 and v2['required_matchdays'] == 30
+    assert v2['requires_positive_clv'] is True
+
+
 def test_basket_rule_predicates_and_protocol():
     rule = 'policy-q75-nodc-v1'
     assert 'market' not in RULES[rule] and 'markets' in RULES[rule]
@@ -113,13 +128,28 @@ def test_clv_gate_blocks_review_for_policy_rule():
         event('protocol', {**RULES[rule], 'rule': rule, 'activated_at': NOW.isoformat()}),
         decision(rule, 1, '2026-11-09', market='btts_no', selection='btts no'),
         event('settlement', dict(rule=rule, match_id=1, result='won', profit=1.0,
-                                 clv_percentage=-1.2, beat_close=False)),
+                                 clv_percentage=-1.2, clv_valid=True, beat_close=False)),
     ]
     report = build_report(events, NOW, rule)
     assert report['clv']['samples'] == 1
     assert report['clv']['mean_clv'] == -1.2
     assert report['clv_gate_met'] is False
     assert report['review_due'] is False
+
+
+def test_clv_gate_ignores_invalid_closing_values():
+    rule = 'policy-q75-nodc-v1'
+    events = [
+        event('protocol', {**RULES[rule], 'rule': rule, 'activated_at': NOW.isoformat()}),
+        decision(rule, 1, '2026-11-09', market='btts_no', selection='btts no'),
+        # A stale row: closing equalled the source quote, so clv_valid is false.
+        event('settlement', dict(rule=rule, match_id=1, result='won', profit=1.0,
+                                 clv_percentage=0.0, clv_valid=False, beat_close=False)),
+    ]
+    report = build_report(events, NOW, rule)
+    assert report['clv']['samples'] == 0
+    assert report['clv']['excluded_invalid'] == 1
+    assert report['clv_gate_met'] is False
 
 
 def test_report_review_gate_and_integrity():

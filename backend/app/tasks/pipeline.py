@@ -710,18 +710,24 @@ def train_shadow_challenger(self):
 
     validation_end = cat_today() - timedelta(days=1)
     validation_start = validation_end - timedelta(days=settings.learning_validation_days - 1)
-    train_end = validation_start - timedelta(days=1)
-    train_start = train_end - timedelta(days=settings.learning_train_days - 1)
-    if validation_start < settings.learning_validation_not_before:
+    if validation_end < settings.learning_validation_not_before:
         result = {
             "status": "skipped",
-            "reason": "validation window predates the configured prospective holdout start",
-            "validation_start": validation_start.isoformat(),
+            "reason": "prospective holdout has not started yet",
             "validation_end": validation_end.isoformat(),
             "validation_not_before": settings.learning_validation_not_before.isoformat(),
         }
         logger.info("Weekly shadow learning skipped: %s", result)
         return result
+
+    # Clamp rather than skip: once the holdout has started, the usable window
+    # is [not_before, validation_end], not a full lookback that reaches into
+    # the pre-holdout period. Skipping on a short window would idle the loop
+    # for weeks after the holdout begins.
+    requested_start = validation_start
+    validation_start = max(validation_start, settings.learning_validation_not_before)
+    train_end = validation_start - timedelta(days=1)
+    train_start = train_end - timedelta(days=settings.learning_train_days - 1)
 
     async def _run():
         async with AsyncSessionLocal() as db:
@@ -744,6 +750,12 @@ def train_shadow_challenger(self):
                 return {
                     "learning_run_id": run.id,
                     "challenger_version": run.challenger_version,
+                    "validation_window": {
+                        "requested_start": requested_start.isoformat(),
+                        "start": validation_start.isoformat(),
+                        "end": validation_end.isoformat(),
+                        "clamped": validation_start != requested_start,
+                    },
                     "summary": run.summary,
                     "promotion_required": True,
                 }

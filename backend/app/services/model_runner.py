@@ -456,6 +456,7 @@ class ModelRunner:
             # None = no bookmaker odds for this market; 0.0 would falsely imply odds of ∞
             best_odds = bundle.best.decimal_odds if bundle else None
             implied_prob = bundle.avg_implied if bundle else None
+            fair_prob = bundle.avg_fair_implied if bundle else None
 
             source_odds_at = bundle.best.fetched_at if bundle else None
             age_hours: float | None = None
@@ -729,6 +730,7 @@ class ModelRunner:
                 source_odds_at=source_odds_at,
                 source_decimal_odds=bundle.best.decimal_odds if bundle else None,
                 source_implied_probability=implied_prob,
+                source_fair_probability=fair_prob,
                 source_odds_provenance={
                     "quote_id": bundle.best.id if bundle else None,
                     "bookmaker": bundle.best.bookmaker if bundle else None,
@@ -798,6 +800,7 @@ class ModelRunner:
             by_market.setdefault(key, []).append(o)
 
         bundles: dict[str, "_OddsBundle"] = {}
+        fair = fair_implied_probabilities(all_odds)
         for market, entries in by_market.items():
             best = max(entries, key=lambda x: x.decimal_odds)
             all_implied = [e.implied_probability for e in entries]
@@ -809,12 +812,14 @@ class ModelRunner:
                 consensus = max(0.0, 1.0 - std / avg_implied) if avg_implied > 0 else 0.5
             else:
                 consensus = 0.6  # single bookmaker — moderate confidence
+            avg_fair = sum(fair[e.id] for e in entries) / len(entries)
             bundles[market] = _OddsBundle(
                 best=best,
                 all_odds=entries,
                 consensus=consensus,
                 bookmaker_count=len(entries),
                 avg_implied=avg_implied,
+                avg_fair_implied=avg_fair,
             )
 
         return bundles
@@ -823,12 +828,61 @@ class ModelRunner:
 class _OddsBundle:
     """Aggregated odds data for a single market across all bookmakers."""
     def __init__(self, best: Odds, all_odds: list[Odds], consensus: float,
-                 bookmaker_count: int, avg_implied: float) -> None:
+                 bookmaker_count: int, avg_implied: float,
+                 avg_fair_implied: Optional[float] = None) -> None:
         self.best = best
         self.all_odds = all_odds
         self.consensus = consensus
         self.bookmaker_count = bookmaker_count
         self.avg_implied = avg_implied
+        self.avg_fair_implied = avg_fair_implied
+
+
+# Mutually exclusive outcome groups used for proportional margin removal. A
+# market not listed here has no complete group, so its raw implied probability
+# is kept rather than inventing a no-vig number.
+_THREE_WAY = ("home_win", "draw", "away_win")
+_TWO_WAY = (("btts_yes", "btts_no"),)
+
+
+def devig_group(market: str) -> tuple[str, ...]:
+    """Return the mutually exclusive outcomes that share ``market``'s margin."""
+    key = market.lower().replace(" ", "_")
+    if key in _THREE_WAY:
+        return _THREE_WAY
+    for pair in _TWO_WAY:
+        if key in pair:
+            return pair
+    if key.startswith("over_"):
+        return (key, "under_" + key[len("over_"):])
+    if key.startswith("under_"):
+        return ("over_" + key[len("under_"):], key)
+    return (key,)
+
+
+def fair_implied_probabilities(entries: list[Odds]) -> dict[int, float]:
+    """Map odds-row id to a proportional no-vig implied probability.
+
+    For each bookmaker the implied probabilities of a complete outcome group
+    are normalised to sum to one. If a bookmaker is missing outcomes, that
+    entry keeps its raw implied probability instead of being over-normalised.
+    """
+    by_book: dict[str, dict[str, Odds]] = defaultdict(dict)
+    for entry in entries:
+        by_book[entry.bookmaker][entry.market.lower().replace(" ", "_")] = entry
+
+    fair: dict[int, float] = {}
+    for entry in entries:
+        key = entry.market.lower().replace(" ", "_")
+        group = [by_book[entry.bookmaker].get(name) for name in devig_group(key)]
+        present = [item for item in group if item is not None]
+        total = sum(item.implied_probability for item in present)
+        if len(present) >= 2 and total > 0:
+            fair[entry.id] = entry.implied_probability / total
+        else:
+            fair[entry.id] = entry.implied_probability
+    return fair
+
 
 
 def _compute_market_consensus(bundle: "_OddsBundle | None") -> Optional[float]:
