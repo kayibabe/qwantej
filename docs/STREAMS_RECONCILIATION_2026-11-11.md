@@ -291,6 +291,10 @@ Outputs committed under `research/bookmaker-price-2026-11-11/`,
   than the 3h quote limit. Those decisions stay in the ledger; the rule has no
   replacements. Future predictions are captured on the next 5-minute tick after
   creation, so this first-cohort burn is not structural.
+- First pulse (2026-11-13): v2 qualified **1 of 25** observed fixtures —
+  `under_2.5` at **4.00**, Q 82.1. The remaining first-cohort rejections are
+  stale-quote (22) or Q < 75 (22; reasons overlap). One pick is not evidence,
+  but it confirms the rule trades.
 - Review gates unchanged: 300 settled / 30 matchdays, mean CLV > 0, beat-close
   > 50%, no automatic promotion.
 
@@ -307,10 +311,24 @@ Outputs committed under `research/bookmaker-price-2026-11-11/`,
   not guaranteed), with `source_bookmaker`, `source_odds_at`, and the new
   `source_fair_probability` exposed alongside it.
 
-### P4 — deferred
+### P4 — partial (closing-line capture)
 
-P4 is conditional on P2 showing a pulse. v2 currently has **0 qualified picks**,
-and P1 found no market that beats the price. Changing prediction cadence now
-would add cost without a measurable decision to improve. Revisit only after v2
-produces settled picks and valid CLV.
+P2 showed a first pulse, so the measurement half of P4 is now implemented:
+near-kickoff quote refresh now includes **qualified paper-rule picks**, not only
+published market tickets. That gives the experiment a genuine closing line
+within 3h of kickoff without a global cadence or quota increase.
+
+Pre-kickoff re-prediction and line-movement measurement remain **deferred**:
+the entry decision is already frozen, and P1 found no market that beats the
+price, so re-predicting would add cost without a measurable decision to
+improve.
+
+Two-day health check (2026-11-13):
+
+- Valid CLV rows: **12,753**; mean CLV **-0.030%**; beat-close **36.57%**.
+- `source_fair_probability` populated for **592** new predictions since the
+  migration; historical rows remain NULL by design (no lookahead backfill).
+- v1: 8 qualified, 2 settlement events (one superseded invalid-CLV revision,
+  one valid at -8.7% CLV). v2: 1 qualified.
+
 

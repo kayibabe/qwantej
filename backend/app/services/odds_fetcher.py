@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import cat_day_bounds_utc, cat_today, settings
 from app.models import (
     AccumulatorTicket, Match, MatchStatus, Odds, OddsSnapshot,
-    TicketSelection, TicketStatus,
+    PaperRuleEvent, TicketSelection, TicketStatus,
 )
 from app.services.fixture_ingestor import APIFootballClient
 from app.services.market_catalog import (
@@ -47,7 +47,12 @@ class LiveOddsFetcher:
         return {"status": "partial" if errors else "ok", "inserted": inserted, "fixtures": len(matches), "errors": errors}
 
     async def refresh_published_closing_quotes(self, now: datetime | None = None) -> dict:
-        """Capture fresh, unchanged-inclusive odds for imminent published market picks.
+        """Capture fresh quotes for imminent matches that need a closing line.
+
+        Candidates are published market-priced ticket legs **and** qualified
+        paper-rule picks. The paper experiments need a genuine near-kickoff
+        quote to measure CLV; without this they only get the last scheduled
+        odds refresh, which can be many hours before kickoff.
 
         The live-status task calls this every minute; per-fixture cooldowns limit
         provider traffic to one forced refresh per 15 minutes within 3 hours of
@@ -94,12 +99,32 @@ class LiveOddsFetcher:
             .distinct()
             .order_by(Match.kickoff_at, Match.id)
         )
-        candidate_ids = candidate_result.scalars().all()
+        candidate_ids = list(candidate_result.scalars().all())
+        paper_result = await self.db.execute(
+            select(PaperRuleEvent.payload.op("->>")("match_id"))
+            .where(
+                PaperRuleEvent.event_key.like("decision:policy%"),
+                PaperRuleEvent.payload.op("->>")("qualified") == "true",
+            )
+        )
+        for raw in paper_result.scalars().all():
+            try:
+                candidate_ids.append(int(raw))
+            except (TypeError, ValueError):
+                continue
+        # De-duplicate while preserving the published-first order; the match
+        # query below re-sorts by kickoff anyway.
+        candidate_ids = list(dict.fromkeys(candidate_ids))
         if not candidate_ids:
             return {"status": "ok", "candidates": 0, "attempted": 0, "snapshots": 0,
                     "errors": []}
         result = await self.db.execute(
-            select(Match).where(Match.id.in_(candidate_ids)).order_by(Match.kickoff_at, Match.id)
+            select(Match).where(
+                Match.id.in_(candidate_ids),
+                Match.status == MatchStatus.SCHEDULED,
+                Match.kickoff_at > now,
+                Match.kickoff_at <= now + CLOSING_REFRESH_HORIZON,
+            ).order_by(Match.kickoff_at, Match.id)
         )
         matches = result.scalars().all()
         if not matches:
