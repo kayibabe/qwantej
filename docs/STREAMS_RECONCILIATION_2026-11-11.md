@@ -328,7 +328,30 @@ Two-day health check (2026-11-13):
 - Valid CLV rows: **12,753**; mean CLV **-0.030%**; beat-close **36.57%**.
 - `source_fair_probability` populated for **592** new predictions since the
   migration; historical rows remain NULL by design (no lookahead backfill).
-- v1: 8 qualified, 2 settlement events (one superseded invalid-CLV revision,
-  one valid at -8.7% CLV). v2: 1 qualified.
+- v1: 8 qualified, 4 settled (2W 2L). v2: 1 qualified, 1 settled (1W).
+- Learning run 3: 18 of 19 profiles carry a market baseline, **0 ready**.
+
+### Forward health check
+
+`backend/scripts/forward_health.py` is read-only (no provider calls, no writes)
+and is the standing check for this phase:
+
+```bash
+# inside the backend container
+python scripts/forward_health.py
+python scripts/forward_health.py --json
+```
+
+It reports paper-tick age, qualified and settled counts, upcoming picks and
+whether closing capture is due, valid/invalid CLV, fair-probability coverage,
+the last learning run, and the next scheduled run. It exits non-zero on invalid
+CLV, a stale tick, or a post-fix settled pick without valid CLV.
+
+Next operational checkpoints:
+
+1. v1 picks **32916 / 32918** kick off in ~15h; when they enter the 3h horizon,
+   `closing_capture_due` should flip and a closing quote should be stored.
+2. The weekly learning run fires **2026-11-15 04:30 UTC**; verify it no longer
+   skips and still rejects on the market gate.
 
 

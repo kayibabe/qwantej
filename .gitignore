@@ -50,3 +50,6 @@ node_modules/
 
 # Frontend build copied into the API image at docker build time
 backend/static/
+
+# Local agent tooling metadata
+.workik/
