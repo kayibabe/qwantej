@@ -162,6 +162,11 @@ Also note: the only cell positive in both halves with n ≥ 40 is
 `under_4.5 / 1.00-1.49 / chance ≥ 90%` (+2.8%, bootstrap low -4.7%). It is not
 in the basket, and its price band is below the odds floor.
 
+A third flaw was found later, from live decisions: both v1 and v2 rank markets
+**before** applying the Q >= 75 predicate, so a fixture with a qualifying market
+is rejected whenever a different market ranks first. See §8 P5. That is what
+`policy-q75-nodc-v3` exists to test.
+
 ## 5. Work queue
 
 Ordered by value per unit of risk. P0 and P1 are correctness; P2 is the
@@ -373,5 +378,59 @@ confirmed, not merely deployed.
 
 Next operational checkpoint: the weekly learning run fires **2026-11-15
 04:30 UTC**; verify it no longer skips and still rejects on the market gate.
+
+### P5 — the Q ordering flaw, corrected and pre-registered as v3
+
+Section 4.3 identified two design flaws in v1. A third one surfaced from the
+first two days of forward decisions, and the corrected measurement matters more
+than the headline number.
+
+**What is wrong.** For basket rules the lateral orders markets by price and
+takes one row, and only then does `_predicate_reasons` apply `q_score >= 75`.
+So a fixture is rejected when a non-qualifying market ranks first, even though
+a qualifying market exists. The protocol text calls Q a "universe filter"; the
+code treats it as a post-selection veto.
+
+**First-pass claim, and its correction.** A naive count said v2 discarded a
+qualifying pick on **11 of 25** fixtures (roughly 44% of its universe). That
+overstates the *immediate* effect: in the first cohort, 12 of those alternatives
+were themselves stale at capture, because every v2 decision was taken from
+predictions created before the rule existed. Staleness, not Q ordering, was the
+binding constraint on that cohort.
+
+**The structural effect is still real.** Simulating the v3 lateral (Q filter
+inside the lateral, fresh quote at prediction creation) on the same 25 fixtures:
+
+| rule | qualified / 25 fixtures |
+|---|---|
+| v1 (Q after ranking, shortest price) | 8 |
+| v2 (Q after ranking, longest price) | 1 |
+| v3 (Q before ranking, longest price) | **14** |
+
+v1 is affected too, not just v2: **13 of 25** v1 decisions were rejected
+`q_below_75_or_invalid` because the shortest-priced market failed the veto, not
+because the fixture had no qualifying market. v2 is hit hardest because
+longest-price ranking lands on exactly the long-priced markets that miss Q.
+
+**What was pre-registered.** `policy-q75-nodc-v3` (new rule, not an edit) holds
+v1's universe and v2's floor and ranking, and moves the Q predicate into the
+lateral (`q_in_lateral`). That gives two clean pairwise contrasts instead of
+one confounded one:
+
+- **v1 vs v3** isolates ranking direction, both holding Q >= 75.
+- **v2 vs v3** isolates the Q >= 75 universe, both ranking by longest price.
+
+**Multiple-testing position.** Three arms share one window. v1 and v3 are the
+primary arms. v2 is **exploratory**: its realised universe ignores Q, so its
+name overstates what it tests, and its results may not be used to promote a
+model or a market. No arm is promoted on a single favourable pairwise contrast;
+each must still clear the 300-settled / 30-matchday gate and positive mean CLV.
+
+**First v3 cohort (2026-11-14 05:20 UTC).** Five decisions, **0 qualified**:
+four were `fixture_excluded_from_models` plus `stale_quote_at_capture` (their
+predictions pre-dated the rule), and one had already kicked off. As with v2,
+these stay in the append-only ledger; the rule has no replacements. Future
+decisions are captured on the next 5-minute tick after prediction creation, so
+this burn is not structural.
 
 

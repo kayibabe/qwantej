@@ -128,6 +128,40 @@ RULES: dict[str, dict] = {
                       'cannot resolve small effects), not a promotion: it is paper-only and must pass the '
                       'same CLV and 300-pick review gates as v1.'),
     },
+    # v3 is a new pre-registered rule, not an edit of v1 or v2. Both frozen
+    # rules order a LATERAL by price and only then apply the Q>=75 predicate to
+    # the selected row, so a fixture is rejected whenever a different market
+    # ranks first — even though the protocol calls Q a "universe filter". v3
+    # moves the Q filter into the lateral. It keeps v2's basket, floor and
+    # longest-price ranking, which makes two clean pairwise contrasts possible:
+    # v1 vs v3 isolates ranking direction (both hold Q>=75) and v2 vs v3
+    # isolates the Q>=75 universe (both rank by longest price).
+    'policy-q75-nodc-v3': {
+        **_COMMON,
+        'markets': ['away_win', 'btts_no', 'over_1.5', 'under_2.5', 'under_3.5'],
+        'q_min': 75, 'odds_min_inclusive': 1.2, 'odds_max_exclusive': 8.0,
+        'excluded_markets': list(PAPER_POLICY_EXCLUDED_MARKETS),
+        'q_in_lateral': True,
+        'q_role': 'Universe filter applied before selection, never a ranking signal.',
+        'selection_rank': 'Longest entry price (lowest bookmaker-implied probability) among Q>=75 predictions, then earliest prediction; one pick per fixture',
+        'selection_rank_direction': 'longest_price',
+        'clv_gate': 'Promotion requires mean CLV > 0 and beat-close rate > 50% over the review window',
+        'requires_positive_clv': True,
+        'earliest_kickoff_date': '2026-11-14', 'minimum_review_date': '2027-02-25',
+        'required_settled': 300, 'required_matchdays': 30,
+        'selection': 'Longest-priced allowed pick among Q>=75 predictions per fixture; no replacements',
+        'multiple_testing': ('Three arms share the same window. v1 vs v3 isolates ranking '
+                             '(both hold Q>=75); v2 vs v3 isolates the Q>=75 universe (both rank '
+                             'by longest price). v2 is exploratory: its post-ranking Q check '
+                             'means its realised universe ignores Q. No arm is promoted on one '
+                             'favourable pairwise contrast.'),
+        'rationale': ('Counterfactual on the v2 cohort: 22 of 25 decisions chose a market with '
+                      'Q<75, and a Q>=75 market existed at capture for 11 of those fixtures. '
+                      'A v3-style lateral would have picked on roughly 56% of fixtures versus '
+                      '4% for v2 and 32% for v1. Q was never a value signal; it is only a '
+                      'universe definition, so applying it after selection admitted '
+                      'non-qualifying picks and discarded qualifying ones.'),
+    },
 }
 
 
@@ -195,6 +229,40 @@ async def _append(db, key, kind, payload):
     await db.flush()
 
 
+def _basket_lateral(rule: dict) -> tuple[str, dict]:
+    """Build the one-pick-per-fixture lateral for a basket rule.
+
+    Ranking is part of the frozen protocol, so it is chosen per rule and not
+    silently changed for the live experiments. Q is a universe filter, never a
+    ranking signal: v3 applies it *inside* the lateral so ranking only ever
+    considers qualifying rows. v1/v2 rank first and are checked afterwards,
+    which rejects a fixture whenever a non-qualifying market ranks first.
+    """
+    allowed = ', '.join(f"'{market}'" for market in rule['markets'])
+    if rule.get('selection_rank_direction') == 'longest_price':
+        order_clause = 'p.source_decimal_odds DESC, p.created_at, p.id'
+    else:
+        order_clause = 'p.source_implied_probability DESC, p.created_at, p.id'
+    q_clause = ''
+    params = {
+        'odds_min': rule['odds_min_inclusive'],
+        'odds_max': rule['odds_max_exclusive'],
+    }
+    if rule.get('q_in_lateral'):
+        q_clause = 'AND p.q_score >= :q_min AND p.q_score <= 100'
+        params['q_min'] = rule['q_min']
+    lateral = f"""LEFT JOIN LATERAL (SELECT * FROM predictions p WHERE p.match_id=m.id
+                   AND p.market IN ({allowed})
+                   AND p.source_decimal_odds IS NOT NULL
+                   AND p.source_decimal_odds >= :odds_min
+                   AND p.source_decimal_odds < :odds_max
+                   AND p.source_implied_probability IS NOT NULL
+                   {q_clause}
+                   ORDER BY {order_clause}
+                   LIMIT 1) p ON TRUE"""
+    return lateral, params
+
+
 async def _tick_rule(db, rule_key: str, now: datetime) -> dict:
     rule = RULES[rule_key]
     protocol_key = f'protocol:{rule_key}'
@@ -213,24 +281,9 @@ async def _tick_rule(db, rule_key: str, now: datetime) -> dict:
                        ORDER BY p.created_at,p.id LIMIT 1) p ON TRUE"""
         params['market'] = rule['market']
     elif 'markets' in rule:
-        # Basket rules take one pick per fixture. v1 ranks by shortest price
-        # (highest implied probability); v2 ranks by longest price. The ranking
-        # is part of the frozen protocol, so it is chosen per rule and not
-        # silently changed for the live v1 experiment.
-        allowed = ', '.join(f"'{market}'" for market in rule['markets'])
-        if rule.get('selection_rank_direction') == 'longest_price':
-            order_clause = 'p.source_decimal_odds DESC, p.created_at, p.id'
-        else:
-            order_clause = 'p.source_implied_probability DESC, p.created_at, p.id'
-        lateral = f"""LEFT JOIN LATERAL (SELECT * FROM predictions p WHERE p.match_id=m.id
-                       AND p.market IN ({allowed})
-                       AND p.source_decimal_odds IS NOT NULL
-                       AND p.source_decimal_odds >= :odds_min
-                       AND p.source_decimal_odds < :odds_max
-                       AND p.source_implied_probability IS NOT NULL
-                       ORDER BY {order_clause}
-                       LIMIT 1) p ON TRUE"""
-        params.update(odds_min=rule['odds_min_inclusive'], odds_max=rule['odds_max_exclusive'])
+        # Basket rules take one pick per fixture.
+        lateral, basket_params = _basket_lateral(rule)
+        params.update(basket_params)
     else:
         m_lo, m_hi = rule['model_band']
         k_lo, k_hi = rule['market_band']

@@ -4,6 +4,7 @@ import pytest
 from app.services.paper_rules import (
     RULES,
     _base_reasons,
+    _basket_lateral,
     _predicate_reasons,
     build_report,
     list_summaries,
@@ -106,6 +107,39 @@ def test_v2_is_a_separate_rule_with_longest_price_ranking():
         'policy-q75-nodc-v2', opportunity('policy-q75-nodc-v2', market='over_1.5', odds=1.19, q_score=80))
     assert v2['required_settled'] == 300 and v2['required_matchdays'] == 30
     assert v2['requires_positive_clv'] is True
+
+
+def test_v3_moves_the_q_filter_into_the_lateral():
+    v1 = RULES['policy-q75-nodc-v1']
+    v2 = RULES['policy-q75-nodc-v2']
+    v3 = RULES['policy-q75-nodc-v3']
+
+    assert v3 is not v1 and v3 is not v2
+    assert v3['q_in_lateral'] is True
+    assert 'q_in_lateral' not in v1 and 'q_in_lateral' not in v2
+
+    # v3 holds v1's universe and v2's price floor/ranking, which is what makes
+    # the two pairwise contrasts clean.
+    assert v3['markets'] == v1['markets'] == v2['markets']
+    assert v3['q_min'] == v1['q_min'] == 75
+    assert v3['odds_min_inclusive'] == v2['odds_min_inclusive'] == 1.2
+    assert v3['selection_rank_direction'] == 'longest_price'
+    assert v3['required_settled'] == 300 and v3['required_matchdays'] == 30
+    assert v3['multiple_testing']
+
+    v2_sql, v2_params = _basket_lateral(v2)
+    v3_sql, v3_params = _basket_lateral(v3)
+    # v2 still ranks every allowed market, then rejects on Q afterwards.
+    assert 'q_score' not in v2_sql
+    assert 'q_min' not in v2_params
+    # v3 filters before the ORDER BY, so ranking only sees qualifying rows.
+    assert 'q_score >= :q_min' in v3_sql
+    assert v3_params['q_min'] == 75
+    assert v3_sql.index('q_score >= :q_min') < v3_sql.index('ORDER BY')
+    assert 'source_decimal_odds DESC' in v3_sql
+    # v1 keeps its implied-probability ranking.
+    v1_sql, _ = _basket_lateral(v1)
+    assert 'source_implied_probability DESC' in v1_sql
 
 
 def test_basket_rule_predicates_and_protocol():
