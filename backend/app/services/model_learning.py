@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import numpy as np
 from scipy.optimize import minimize
@@ -638,6 +638,57 @@ def fit_shared_goals_calibration(
         "promotion_checks": checks,
         "shadow_ready": all(checks.get(key) is True for key in REQUIRED_SHARED_CHECKS),
     }
+
+
+@dataclass(frozen=True)
+class LearningWindow:
+    """A resolved, non-overlapping train/validation window."""
+
+    requested_start: date
+    start: date
+    end: date
+    train_start: date
+    train_end: date
+
+    @property
+    def clamped(self) -> bool:
+        return self.start != self.requested_start
+
+
+def resolve_learning_window(
+    *,
+    validation_end: date,
+    validation_not_before: date,
+    validation_days: int,
+    train_days: int,
+) -> LearningWindow | None:
+    """Resolve the weekly learning window, or ``None`` before the holdout starts.
+
+    The prospective holdout begins at ``validation_not_before``. A requested
+    window that reaches earlier is **clamped**, not skipped: the usable range is
+    ``[validation_not_before, validation_end]``. Skipping on a short window
+    would idle the loop for weeks after the holdout begins.
+
+    Training always ends the day before validation and never reaches into the
+    holdout, so the challenger's
+    ``train_start <= train_end < validation_start <= validation_end`` invariant
+    holds by construction.
+    """
+    if validation_days < 1 or train_days < 1:
+        raise ValueError("Learning windows need at least one day each")
+    if validation_end < validation_not_before:
+        return None
+    requested_start = validation_end - timedelta(days=validation_days - 1)
+    start = max(requested_start, validation_not_before)
+    train_end = start - timedelta(days=1)
+    train_start = train_end - timedelta(days=train_days - 1)
+    return LearningWindow(
+        requested_start=requested_start,
+        start=start,
+        end=validation_end,
+        train_start=train_start,
+        train_end=train_end,
+    )
 
 
 async def train_learning_challenger(

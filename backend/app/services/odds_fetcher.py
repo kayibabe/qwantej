@@ -87,34 +87,7 @@ class LiveOddsFetcher:
         if call_limit <= 0:
             return {"status": "skipped", "reason": "provider_quota_guard", "fixtures": 0}
 
-        candidate_result = await self.db.execute(
-            select(Match.id, Match.kickoff_at)
-            .join(TicketSelection, TicketSelection.match_id == Match.id)
-            .join(AccumulatorTicket, AccumulatorTicket.id == TicketSelection.ticket_id)
-            .where(AccumulatorTicket.status == TicketStatus.PUBLISHED,
-                   AccumulatorTicket.pricing == "market",
-                   Match.status == MatchStatus.SCHEDULED,
-                   Match.kickoff_at > now,
-                   Match.kickoff_at <= now + CLOSING_REFRESH_HORIZON)
-            .distinct()
-            .order_by(Match.kickoff_at, Match.id)
-        )
-        candidate_ids = list(candidate_result.scalars().all())
-        paper_result = await self.db.execute(
-            select(PaperRuleEvent.payload.op("->>")("match_id"))
-            .where(
-                PaperRuleEvent.event_key.like("decision:policy%"),
-                PaperRuleEvent.payload.op("->>")("qualified") == "true",
-            )
-        )
-        for raw in paper_result.scalars().all():
-            try:
-                candidate_ids.append(int(raw))
-            except (TypeError, ValueError):
-                continue
-        # De-duplicate while preserving the published-first order; the match
-        # query below re-sorts by kickoff anyway.
-        candidate_ids = list(dict.fromkeys(candidate_ids))
+        candidate_ids = await self._closing_candidate_ids(now)
         if not candidate_ids:
             return {"status": "ok", "candidates": 0, "attempted": 0, "snapshots": 0,
                     "errors": []}
@@ -166,6 +139,46 @@ class LiveOddsFetcher:
         await self.db.commit()
         return {"status": "partial" if errors else "ok", "candidates": len(matches),
                 "attempted": attempted, "snapshots": snapshots, "errors": errors}
+
+    async def _closing_candidate_ids(self, now: datetime) -> list[int]:
+        """Match ids that need a near-kickoff closing quote.
+
+        Union of published market-priced ticket legs and qualified paper-rule
+        picks. Paper picks have no ticket row, so without this second source the
+        experiments would only ever get the last scheduled odds refresh, which
+        can be many hours before kickoff and is not a closing line.
+
+        The horizon and status filters are applied by the caller's match query,
+        so this only has to produce the union in a stable order.
+        """
+        candidate_result = await self.db.execute(
+            select(Match.id, Match.kickoff_at)
+            .join(TicketSelection, TicketSelection.match_id == Match.id)
+            .join(AccumulatorTicket, AccumulatorTicket.id == TicketSelection.ticket_id)
+            .where(AccumulatorTicket.status == TicketStatus.PUBLISHED,
+                   AccumulatorTicket.pricing == "market",
+                   Match.status == MatchStatus.SCHEDULED,
+                   Match.kickoff_at > now,
+                   Match.kickoff_at <= now + CLOSING_REFRESH_HORIZON)
+            .distinct()
+            .order_by(Match.kickoff_at, Match.id)
+        )
+        candidate_ids = list(candidate_result.scalars().all())
+        paper_result = await self.db.execute(
+            select(PaperRuleEvent.payload.op("->>")("match_id"))
+            .where(
+                PaperRuleEvent.event_key.like("decision:policy%"),
+                PaperRuleEvent.payload.op("->>")("qualified") == "true",
+            )
+        )
+        for raw in paper_result.scalars().all():
+            try:
+                candidate_ids.append(int(raw))
+            except (TypeError, ValueError):
+                continue
+        # De-duplicate while preserving the published-first order; the match
+        # query re-sorts by kickoff anyway.
+        return list(dict.fromkeys(candidate_ids))
 
     async def _fetch_fixture(self, client, match: Match, *, force_refresh: bool = False,
                              snapshot_unchanged: bool = False) -> int:

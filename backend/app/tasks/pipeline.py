@@ -705,12 +705,18 @@ def train_shadow_challenger(self):
     from app.database import AsyncSessionLocal
     from app.services.model_learning import (
         resolve_active_learning_config,
+        resolve_learning_window,
         train_learning_challenger,
     )
 
     validation_end = cat_today() - timedelta(days=1)
-    validation_start = validation_end - timedelta(days=settings.learning_validation_days - 1)
-    if validation_end < settings.learning_validation_not_before:
+    window = resolve_learning_window(
+        validation_end=validation_end,
+        validation_not_before=settings.learning_validation_not_before,
+        validation_days=settings.learning_validation_days,
+        train_days=settings.learning_train_days,
+    )
+    if window is None:
         result = {
             "status": "skipped",
             "reason": "prospective holdout has not started yet",
@@ -719,15 +725,6 @@ def train_shadow_challenger(self):
         }
         logger.info("Weekly shadow learning skipped: %s", result)
         return result
-
-    # Clamp rather than skip: once the holdout has started, the usable window
-    # is [not_before, validation_end], not a full lookback that reaches into
-    # the pre-holdout period. Skipping on a short window would idle the loop
-    # for weeks after the holdout begins.
-    requested_start = validation_start
-    validation_start = max(validation_start, settings.learning_validation_not_before)
-    train_end = validation_start - timedelta(days=1)
-    train_start = train_end - timedelta(days=settings.learning_train_days - 1)
 
     async def _run():
         async with AsyncSessionLocal() as db:
@@ -741,20 +738,20 @@ def train_shadow_challenger(self):
                 run = await train_learning_challenger(
                     db,
                     base_model_version=training_version,
-                    train_start=train_start,
-                    train_end=train_end,
-                    validation_start=validation_start,
-                    validation_end=validation_end,
+                    train_start=window.train_start,
+                    train_end=window.train_end,
+                    validation_start=window.start,
+                    validation_end=window.end,
                 )
                 await db.commit()
                 return {
                     "learning_run_id": run.id,
                     "challenger_version": run.challenger_version,
                     "validation_window": {
-                        "requested_start": requested_start.isoformat(),
-                        "start": validation_start.isoformat(),
-                        "end": validation_end.isoformat(),
-                        "clamped": validation_start != requested_start,
+                        "requested_start": window.requested_start.isoformat(),
+                        "start": window.start.isoformat(),
+                        "end": window.end.isoformat(),
+                        "clamped": window.clamped,
                     },
                     "summary": run.summary,
                     "promotion_required": True,

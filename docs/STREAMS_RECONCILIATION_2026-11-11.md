@@ -323,18 +323,20 @@ the entry decision is already frozen, and P1 found no market that beats the
 price, so re-predicting would add cost without a measurable decision to
 improve.
 
-Two-day health check (2026-11-13):
+Two-day health check (2026-11-14):
 
-- Valid CLV rows: **12,753**; mean CLV **-0.030%**; beat-close **36.57%**.
-- `source_fair_probability` populated for **592** new predictions since the
-  migration; historical rows remain NULL by design (no lookahead backfill).
-- v1: 8 qualified, 4 settled (2W 2L). v2: 1 qualified, 1 settled (1W).
+- Valid CLV rows: **13,438**; mean CLV **-0.039%**; beat-close **36.59%**.
+- `source_fair_probability` populated for **192 of 216** new predictions since
+  the migration; the rest have no odds at all. Historical rows remain NULL by
+  design (no lookahead backfill).
+- v1: 8 qualified, 6 settled (4W 2L). v2: 1 qualified, 1 settled (1W).
 - Learning run 3: 18 of 19 profiles carry a market baseline, **0 ready**.
 
 ### Forward health check
 
-`backend/scripts/forward_health.py` is read-only (no provider calls, no writes)
-and is the standing check for this phase:
+The checks live in `backend/app/services/forward_health.py` (read-only: no
+provider calls, no writes). The CLI is a thin wrapper, and the scheduled
+operational monitor calls the same function, so the two cannot drift apart:
 
 ```bash
 # inside the backend container
@@ -345,13 +347,31 @@ python scripts/forward_health.py --json
 It reports paper-tick age, qualified and settled counts, upcoming picks and
 whether closing capture is due, valid/invalid CLV, fair-probability coverage,
 the last learning run, and the next scheduled run. It exits non-zero on invalid
-CLV, a stale tick, or a post-fix settled pick without valid CLV.
+CLV, a stale tick, an imminent pick with no quote after entry, or a post-fix
+settled pick without valid CLV.
 
-Next operational checkpoints:
+The operational monitor (every 15 minutes, leader-locked) turns those problems
+into deduplicated `forward:*` automation alerts and resolves them when the
+condition clears, so a broken closing feed is visible in the app without
+anyone running the CLI. Disabling paper tracking silences the paper-specific
+alerts; the global strict-CLV alert still fires.
 
-1. v1 picks **32916 / 32918** kick off in ~15h; when they enter the 3h horizon,
-   `closing_capture_due` should flip and a closing quote should be stored.
-2. The weekly learning run fires **2026-11-15 04:30 UTC**; verify it no longer
-   skips and still rejects on the market gate.
+Regression tests:
+
+- `backend/tests/test_closing_capture.py` — paper picks enter the closing
+  candidate union, dedupe, qualified-only filter, and the no-candidate
+  short-circuit.
+- `backend/tests/test_learning_window.py` — the clamp preserves
+  `train_start <= train_end < validation_start <= validation_end`.
+- `backend/tests/test_forward_health.py` — problems raise rule-scoped alerts
+  and clear when healthy.
+
+Verified in production on 2026-11-14: v1 picks **32916 / 32918** both received
+a Pinnacle quote at 17:50 UTC on 2026-11-13, inside the 3h horizon, with
+`clv_valid = true` (+0.59% and -1.32%). The paper closing-capture path is
+confirmed, not merely deployed.
+
+Next operational checkpoint: the weekly learning run fires **2026-11-15
+04:30 UTC**; verify it no longer skips and still rejects on the market gate.
 
 

@@ -196,6 +196,45 @@ async def monitor_operational_health(db: AsyncSession, now: datetime | None = No
             )
         else:
             await resolve_automation_alert_by_dedupe_key(db, key)
+    snapshot["forward_experiment"] = await monitor_forward_experiment(db, now)
+    return snapshot
+
+
+async def monitor_forward_experiment(db: AsyncSession, now: datetime | None = None) -> dict:
+    """Turn forward-experiment problems into deduplicated, self-resolving alerts.
+
+    This runs inside the existing operational monitor, so a broken closing
+    capture or a dead paper tick is visible without anyone remembering to run
+    the CLI. Alert keys are rule-specific so one rule cannot mask another.
+    """
+    from app.services.forward_health import forward_experiment_snapshot
+
+    snapshot = await forward_experiment_snapshot(db, now)
+    problems = snapshot["problems"]
+    if not snapshot["paper_rules_enabled"]:
+        # A deliberately disabled experiment must not page anyone. The strict
+        # CLV rule is global, so it still alerts.
+        problems = [problem for problem in problems if problem["key"] == "clv_invalid_rows"]
+    active = {f"forward:{problem['key']}": problem for problem in problems}
+    candidate_keys = {"forward:clv_invalid_rows"}
+    for rule in snapshot["paper_rules"]:
+        candidate_keys.add(f"forward:tick_stale:{rule['rule']}")
+        candidate_keys.add(f"forward:missing_clv:{rule['rule']}")
+        candidate_keys.add(f"forward:capture_missing:{rule['rule']}")
+    for key in sorted(candidate_keys):
+        problem = active.get(key)
+        if problem is None:
+            await resolve_automation_alert_by_dedupe_key(db, key)
+            continue
+        await record_automation_alert(
+            db,
+            dedupe_key=key,
+            task_name="forward_experiment",
+            title=problem["title"],
+            detail=f"{problem['detail']}. The frozen paper policy and the forward sample are at risk; fix the feed, not the rule.",
+            context=problem["context"],
+            severity="warning",
+        )
     return snapshot
 
 
