@@ -7,6 +7,9 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Port chosen by scripts/dev.mjs for the current dev server run
+.dev-port
+
 node_modules
 dist
 dist-ssr

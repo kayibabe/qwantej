@@ -8,8 +8,13 @@ echo  ============================
 echo.
 
 cd /d "%~dp0"
-set "FRONTEND_PORT=5173"
-set "FRONTEND_URL=http://localhost:%FRONTEND_PORT%"
+rem The frontend picks a free port at startup (Windows can reserve 5173) and
+rem writes it to .dev-port; reuse it when the server is already running.
+set "PORT_FILE=%~dp0frontend\.dev-port"
+set "FRONTEND_PORT="
+if exist "%PORT_FILE%" set /p FRONTEND_PORT=<"%PORT_FILE%"
+set "FRONTEND_URL="
+if defined FRONTEND_PORT set "FRONTEND_URL=http://localhost:%FRONTEND_PORT%"
 
 echo [1/4] Checking Docker Desktop...
 docker info >nul 2>&1
@@ -75,11 +80,13 @@ if "%API_READY%" neq "1" (
 
 echo.
 echo [3/4] Starting frontend dev server...
-powershell -NoProfile -Command "try { $r = Invoke-WebRequest -UseBasicParsing http://localhost:%FRONTEND_PORT% -TimeoutSec 2; if ($r.StatusCode -eq 200 -and $r.Content -match 'QwanEj') { exit 0 } } catch {} ; exit 1" >nul 2>&1
-if not errorlevel 1 (
-    echo QwanEj frontend is already running on port %FRONTEND_PORT%.
-    set "FRONTEND_READY=1"
-    goto :frontend_ready
+if defined FRONTEND_PORT (
+    powershell -NoProfile -Command "try { $r = Invoke-WebRequest -UseBasicParsing http://localhost:%FRONTEND_PORT% -TimeoutSec 2; if ($r.StatusCode -eq 200 -and $r.Content -match 'QwanEj') { exit 0 } } catch {} ; exit 1" >nul 2>&1
+    if not errorlevel 1 (
+        echo QwanEj frontend is already running on port %FRONTEND_PORT%.
+        set "FRONTEND_READY=1"
+        goto :frontend_ready
+    )
 )
 if not exist "frontend\node_modules\.bin\vite.cmd" (
     echo ERROR: Frontend dependencies are missing.
@@ -89,11 +96,30 @@ if not exist "frontend\node_modules\.bin\vite.cmd" (
 )
 
 set "VITE_API_PROXY_TARGET=http://127.0.0.1:%API_PORT%"
-start "QwanEj Frontend" cmd /k "cd /d "%~dp0frontend" && call node_modules\.bin\vite.cmd --port %FRONTEND_PORT% --strictPort"
+if exist "%PORT_FILE%" del "%PORT_FILE%" >nul 2>&1
+start "QwanEj Frontend" cmd /k "cd /d "%~dp0frontend" && npm run dev"
 
 echo.
 echo [4/4] Waiting for Vite to compile, then opening browser...
 set "FRONTEND_READY=0"
+for /l %%i in (1,1,30) do (
+    if exist "%PORT_FILE%" goto :frontend_port_ready
+    call :wait_2s
+)
+echo ERROR: The frontend dev server did not report a port within 60 seconds.
+echo Check the "QwanEj Frontend" console window for the Vite error.
+pause
+exit /b 1
+
+:frontend_port_ready
+set "FRONTEND_PORT="
+set /p FRONTEND_PORT=<"%PORT_FILE%"
+if not defined FRONTEND_PORT (
+    echo ERROR: Could not read the frontend port from "%PORT_FILE%".
+    pause
+    exit /b 1
+)
+set "FRONTEND_URL=http://localhost:%FRONTEND_PORT%"
 for /l %%i in (1,1,30) do (
     powershell -NoProfile -Command "try { if ((Invoke-WebRequest -UseBasicParsing http://localhost:%FRONTEND_PORT%).StatusCode -eq 200) { exit 0 } } catch {} ; exit 1" >nul 2>&1
     if not errorlevel 1 (
