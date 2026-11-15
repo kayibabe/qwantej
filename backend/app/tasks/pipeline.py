@@ -5,7 +5,7 @@ import logging
 from datetime import date, timedelta
 
 from celery import Celery
-from celery.signals import task_failure, worker_ready
+from celery.signals import task_failure, task_success, worker_ready
 
 from app.config import CURRENT_MODEL_VERSION, cat_today, settings
 
@@ -19,6 +19,17 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
 )
+
+
+def _task_alert_key(task_name: str, args, kwargs) -> str:
+    """The dedupe key a task-level alert uses, from the same arguments both
+    the failure and success signals receive."""
+    values = list(args or [])
+    target_date = (kwargs or {}).get("target_date") or (
+        values[0] if values and isinstance(values[0], str) else None
+    )
+    trigger_source = (kwargs or {}).get("trigger_source")
+    return f"{task_name}:{target_date or 'global'}:{trigger_source or 'automatic'}"
 
 
 @task_failure.connect
@@ -35,7 +46,7 @@ def _record_final_retry_alert(sender=None, task_id=None, exception=None, args=No
     values = list(args or [])
     target_date = (kwargs or {}).get("target_date") or (values[0] if values and isinstance(values[0], str) else None)
     trigger_source = (kwargs or {}).get("trigger_source")
-    dedupe_key = f"{task_name}:{target_date or 'global'}:{trigger_source or 'automatic'}"
+    dedupe_key = _task_alert_key(task_name, args, kwargs)
 
     async def _save():
         from app.database import AsyncSessionLocal
@@ -57,6 +68,35 @@ def _record_final_retry_alert(sender=None, task_id=None, exception=None, args=No
         _run_async(_save())
     except Exception:
         logger.exception("Could not persist final retry alert for %s", task_name)
+
+
+@task_success.connect
+def _clear_task_alert_on_success(sender=None, args=None, kwargs=None, **_):
+    """Clear a task-level alert once that task succeeds again.
+
+    Without this, an outage that ended weeks ago stays on the alert board as an
+    open error forever. The forward work depends on that board being a list of
+    problems that are happening now: a stale red alert is how a real capture
+    outage gets ignored.
+    """
+    task_name = getattr(sender, "name", "") or ""
+    if not task_name.startswith("pipeline."):
+        return
+    dedupe_key = _task_alert_key(task_name, args, kwargs)
+
+    async def _clear():
+        from app.database import AsyncSessionLocal
+        from app.services.automation_alerts import resolve_automation_alert_by_dedupe_key
+
+        async with AsyncSessionLocal() as db:
+            # Resolves at most one indexed row, and is a no-op when nothing is open.
+            if await resolve_automation_alert_by_dedupe_key(db, dedupe_key):
+                await db.commit()
+
+    try:
+        _run_async(_clear())
+    except Exception:
+        logger.exception("Could not clear task alert for %s", task_name)
 
 
 def _run_async(coro):
@@ -767,6 +807,36 @@ def train_shadow_challenger(self):
     except Exception as exc:
         logger.exception("Weekly shadow learning failed")
         raise self.retry(exc=exc, countdown=300)
+
+
+@celery_app.task(name="pipeline.backup_database", bind=True, max_retries=1)
+def backup_database(self):
+    """Nightly validated logical backup of the forward-experiment ledger."""
+    if not settings.database_backup_enabled:
+        return {"status": "disabled"}
+    from app.database import AsyncSessionLocal
+    from app.services.database_backup import run_scheduled_backup
+
+    async def _run():
+        async with AsyncSessionLocal() as db:
+            result = await run_scheduled_backup(db)
+            # Commit either way: a failure record and its alert must survive a
+            # retry, or the backup can fail silently.
+            await db.commit()
+            return result
+
+    try:
+        result = _run_async(_run())
+    except Exception as exc:
+        logger.exception("Scheduled database backup crashed")
+        raise self.retry(exc=exc, countdown=900)
+    if result.get("status") != "ok":
+        logger.error("Scheduled database backup failed: %s", result.get("error"))
+        raise self.retry(
+            exc=RuntimeError(result.get("error") or "backup failed"), countdown=900
+        )
+    logger.info("Scheduled database backup complete: %s", result)
+    return result
 
 
 @celery_app.task(name="pipeline.track_sweet_spot", bind=True, max_retries=2)

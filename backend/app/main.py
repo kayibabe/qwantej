@@ -93,6 +93,19 @@ async def lifespan(app: FastAPI):
             coalesce=True,
             max_instances=1,
         )
+    if settings.database_backup_enabled:
+        scheduler.add_job(
+            _trigger_database_backup,
+            CronTrigger(
+                hour=settings.database_backup_cron_hour,
+                minute=settings.database_backup_cron_minute,
+            ),
+            id="daily_database_backup",
+            replace_existing=True,
+            coalesce=True,
+            max_instances=1,
+            misfire_grace_time=3600,
+        )
     if settings.learning_shadow_schedule_enabled:
         scheduler.add_job(
             _trigger_shadow_learning,
@@ -282,6 +295,19 @@ async def _run_automation_watchdog(trigger_source: str):
         window.target_date,
         decision.reason,
     )
+
+
+async def _trigger_database_backup():
+    """Queue the nightly logical backup; the worker owns the backups volume."""
+    if not settings.database_backup_enabled:
+        return
+    async with _scheduler_leadership("database_backup") as leader:
+        if not leader:
+            return
+        from app.tasks.pipeline import backup_database
+
+        backup_database.delay()
+        logger.info("Daily database backup task queued")
 
 
 async def _trigger_operational_monitor():

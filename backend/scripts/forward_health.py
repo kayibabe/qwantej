@@ -39,6 +39,25 @@ def _print(payload: dict) -> None:
             )
         if rule["settled_without_valid_clv_since_fix"]:
             print(f"  missing valid CLV: {rule['settled_without_valid_clv_since_fix']}")
+            causes = rule.get("missing_clv_causes") or {}
+            print(
+                f"    never quoted after entry (capture gap): "
+                f"{len(causes.get('no_post_entry_quote') or [])} "
+                f"{causes.get('no_post_entry_quote') or ''}".rstrip()
+            )
+            print(
+                f"    quoted but no derived close (CLV defect): "
+                f"{len(causes.get('quote_without_derived_close') or [])} "
+                f"{causes.get('quote_without_derived_close') or ''}".rstrip()
+            )
+            if causes.get("unclassified"):
+                print(f"    unclassified: {causes['unclassified']}")
+        counts = rule.get("rejection_reasons") or {}
+        if counts:
+            compact = ", ".join(
+                f"{reason} {count}" for reason, count in list(counts.items())[:4]
+            )
+            print(f"  rejected: {compact}")
     clv = payload["clv"]
     print(
         f"CLV: {clv['valid_rows']} valid / {clv['invalid_rows']} invalid, "
@@ -59,6 +78,11 @@ def _print(payload: dict) -> None:
     else:
         print("learning: no runs")
     print(f"next learning run (UTC): {payload['next_learning_run_utc']}")
+    learning = payload["learning"]
+    print(
+        f"last weekly slot (UTC): {learning.get('last_weekly_slot')} "
+        f"started: {learning.get('run_started_since_last_slot')}"
+    )
     if payload["problems"]:
         print("PROBLEMS:")
         for problem in payload["problems"]:

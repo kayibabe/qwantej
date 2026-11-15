@@ -245,6 +245,16 @@ class Settings(BaseSettings):
     pro_subscription_grace_days: int = 3
     operational_monitor_enabled: bool = True
     operational_monitor_interval_minutes: int = 15
+    # Nightly logical backup. The stack has lost its containers before, and the
+    # forward ledger is the only record of months of experiments, so it must
+    # not live in exactly one place.
+    database_backup_enabled: bool = True
+    database_backup_cron_hour: int = 2
+    database_backup_cron_minute: int = 15
+    database_backup_dir: str = "/data/backups"
+    database_backup_retention_days: int = 30
+    database_backup_minimum_keep: int = 7
+    database_backup_stale_after_hours: int = 36
     api_football_quota_warning_fraction: float = 0.10
     research_target_hit_rate: float = 0.80
     research_minimum_market_sample: int = 100

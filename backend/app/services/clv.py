@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Match, OddsSnapshot, Prediction
@@ -31,14 +31,95 @@ CLOSING_FIELDS = (
 )
 
 
-def clv_is_valid(prediction: Prediction) -> bool:
-    """True only for a genuine post-entry, pre-kickoff closing quote."""
-    return bool(
+def clv_is_valid(prediction: Prediction, *, kickoff_at: datetime | None = None) -> bool:
+    """True only for a genuine post-entry, pre-kickoff closing quote.
+
+    This is the single row-level definition of valid CLV. Pass ``kickoff_at``
+    when the fixture is available so a post-kickoff close cannot count; the
+    capture path already guarantees that ordering, but consumers should not
+    have to trust it.
+    """
+    if not (
         prediction.closing_decimal_odds
+        and prediction.clv_percentage is not None
         and prediction.closing_odds_at
         and prediction.source_odds_at
         and prediction.closing_odds_at > prediction.source_odds_at
+    ):
+        return False
+    if kickoff_at is not None and prediction.closing_odds_at > kickoff_at:
+        return False
+    return True
+
+
+def clv_is_invalid(prediction: Prediction, *, kickoff_at: datetime | None = None) -> bool:
+    """The exact row-level complement of :func:`clv_is_valid`."""
+    return not clv_is_valid(prediction, kickoff_at=kickoff_at)
+
+
+# Three outcomes, not two. "unmeasured" is not a CLV value: it means the capture
+# path never observed a second price before kickoff, so the pick carries no
+# closing-line information at all. Recording that as "invalid" lets a host
+# outage read later as the market disagreeing with the pick.
+CLV_VALID = "valid"
+CLV_INVALID = "invalid"
+CLV_UNMEASURED = "unmeasured"
+
+
+def clv_measurement(
+    prediction: Prediction,
+    *,
+    has_post_entry_quote: bool,
+    kickoff_at: datetime | None = None,
+) -> str:
+    """Classify one stored prediction: valid, invalid, or unmeasured."""
+    if clv_is_valid(prediction, kickoff_at=kickoff_at):
+        return CLV_VALID
+    return CLV_INVALID if has_post_entry_quote else CLV_UNMEASURED
+
+
+def post_entry_quote_condition(prediction: Prediction, match: Match):
+    """A stored quote strictly after entry and no later than kickoff."""
+    return and_(
+        OddsSnapshot.match_id == match.id,
+        OddsSnapshot.market == prediction.market,
+        OddsSnapshot.selection == prediction.selection,
+        OddsSnapshot.captured_at > prediction.source_odds_at,
+        OddsSnapshot.captured_at <= match.kickoff_at,
     )
+
+
+async def has_post_entry_quote(
+    db: AsyncSession, prediction: Prediction | None, match: Match | None
+) -> bool:
+    """Whether any usable quote was captured after entry and before kickoff."""
+    if prediction is None or match is None or prediction.source_odds_at is None:
+        return False
+    found = await db.scalar(
+        select(OddsSnapshot.id)
+        .where(post_entry_quote_condition(prediction, match))
+        .limit(1)
+    )
+    return found is not None
+
+
+def valid_clv_condition(match=None):
+    """SQL counterpart of :func:`clv_is_valid`.
+
+    ``match`` is the ``Match`` entity when the caller's query already joins
+    fixtures; it adds the kickoff bound. Callers should join ``Match`` (an outer
+    join is fine) so the two definitions agree.
+    """
+    condition = and_(
+        Prediction.closing_decimal_odds.is_not(None),
+        Prediction.clv_percentage.is_not(None),
+        Prediction.source_odds_at.is_not(None),
+        Prediction.closing_odds_at.is_not(None),
+        Prediction.closing_odds_at > Prediction.source_odds_at,
+    )
+    if match is not None:
+        condition = and_(condition, Prediction.closing_odds_at <= match.kickoff_at)
+    return condition
 
 
 async def capture_closing_odds(db: AsyncSession, *, limit: int = 500) -> dict:
@@ -118,10 +199,17 @@ async def capture_closing_odds(db: AsyncSession, *, limit: int = 500) -> dict:
     }
 
 
-def _invalid_clv_filter():
+def invalid_clv_condition():
+    """Rows that cannot be a genuine close. Complement of ``valid_clv_condition``.
+
+    Kept as an explicit OR rather than ``NOT valid`` because SQL three-valued
+    logic would turn a NULL comparison into NULL, not TRUE, and these rows must
+    be cleared.
+    """
     return or_(
         Prediction.source_odds_at.is_(None),
         Prediction.closing_odds_at.is_(None),
+        Prediction.clv_percentage.is_(None),
         Prediction.closing_odds_at <= Prediction.source_odds_at,
     )
 
@@ -137,7 +225,7 @@ async def invalidate_stale_clv(db: AsyncSession, *, apply: bool = False) -> dict
     ``apply=False`` is a dry run: it only counts. ``apply=True`` nulls the
     closing fields so no consumer can read a fabricated zero CLV.
     """
-    condition = Prediction.closing_decimal_odds.is_not(None) & _invalid_clv_filter()
+    condition = Prediction.closing_decimal_odds.is_not(None) & invalid_clv_condition()
     total = await db.scalar(
         select(func.count()).select_from(Prediction).where(condition)
     )
@@ -147,6 +235,10 @@ async def invalidate_stale_clv(db: AsyncSession, *, apply: bool = False) -> dict
     cleared = 0
     rows = (await db.execute(select(Prediction).where(condition))).scalars().all()
     for prediction in rows:
+        if not clv_is_invalid(prediction):
+            # The SQL filter and the row predicate disagree; never clear a
+            # row that the canonical definition still calls valid.
+            continue
         prediction.closing_decimal_odds = None
         prediction.closing_implied_probability = None
         prediction.closing_odds_at = None

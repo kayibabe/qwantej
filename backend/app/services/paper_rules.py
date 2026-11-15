@@ -21,7 +21,13 @@ from sqlalchemy import select, text
 from app.config import PAPER_POLICY_EXCLUDED_MARKETS
 from app.models.paper_rule import PaperRuleEvent
 from app.models import Match, Prediction
-from app.services.clv import clv_is_valid
+from app.services.clv import (
+    CLV_UNMEASURED,
+    CLV_VALID,
+    clv_is_valid,
+    clv_measurement,
+    has_post_entry_quote,
+)
 from app.services.sweet_spot import digest, metrics as cohort_metrics, parse
 
 CAT = timezone(timedelta(hours=2))
@@ -364,13 +370,26 @@ async def _tick_rule(db, rule_key: str, now: datetime) -> dict:
                     outcome = SelectionResult.VOID
             result = {SelectionResult.WON: 'won', SelectionResult.LOST: 'lost'}.get(outcome, 'pending')
         pred = predictions.get(p.get('prediction_id'))
-        valid_clv = bool(pred is not None and clv_is_valid(pred))
+        valid_clv = bool(pred is not None and clv_is_valid(pred, kickoff_at=m.kickoff_at))
+        if valid_clv:
+            measurement = CLV_VALID
+        elif pred is None:
+            measurement = CLV_UNMEASURED
+        else:
+            # Distinguish a broken derivation from lost capture uptime in the
+            # ledger itself; the ledger outlives this monitor's output.
+            measurement = clv_measurement(
+                pred,
+                has_post_entry_quote=await has_post_entry_quote(db, pred, m),
+                kickoff_at=m.kickoff_at,
+            )
         closing_odds = float(pred.closing_decimal_odds) if valid_clv else None
         clv = float(pred.clv_percentage) if valid_clv and pred.clv_percentage is not None else None
         body = dict(rule=rule_key, match_id=m.id, status=m.status.value,
                     home_goals=m.home_goals, away_goals=m.away_goals,
                     result=result, profit=(p['odds'] - 1 if result == 'won' else -1 if result == 'lost' else None),
                     closing_odds=closing_odds, clv_percentage=clv, clv_valid=valid_clv,
+                    clv_measurement=measurement,
                     closing_odds_at=(pred.closing_odds_at.isoformat()
                                      if valid_clv and pred.closing_odds_at else None),
                     entry_odds_at=(pred.source_odds_at.isoformat()

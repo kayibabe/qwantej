@@ -64,21 +64,27 @@ def test_bookmakers_are_not_mixed():
 
 
 def test_clv_requires_a_strictly_later_quote():
+    # Valid CLV means a genuine close *and* the derived value, so every fixture
+    # here carries clv_percentage; a close without it is not usable evidence.
     good = SimpleNamespace(
         source_odds_at=T0,
         closing_odds_at=T0 + timedelta(hours=2),
         closing_decimal_odds=2.1,
+        clv_percentage=0.05,
     )
     same_time = SimpleNamespace(
-        source_odds_at=T0, closing_odds_at=T0, closing_decimal_odds=2.1
+        source_odds_at=T0, closing_odds_at=T0, closing_decimal_odds=2.1,
+        clv_percentage=0.05,
     )
     earlier = SimpleNamespace(
         source_odds_at=T0,
         closing_odds_at=T0 - timedelta(minutes=1),
         closing_decimal_odds=2.1,
+        clv_percentage=0.05,
     )
     missing = SimpleNamespace(
-        source_odds_at=None, closing_odds_at=T0, closing_decimal_odds=2.1
+        source_odds_at=None, closing_odds_at=T0, closing_decimal_odds=2.1,
+        clv_percentage=0.05,
     )
     assert clv_is_valid(good) is True
     assert clv_is_valid(same_time) is False

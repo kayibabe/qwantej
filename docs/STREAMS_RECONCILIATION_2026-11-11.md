@@ -433,4 +433,86 @@ these stay in the append-only ledger; the rule has no replacements. Future
 decisions are captured on the next 5-minute tick after prediction creation, so
 this burn is not structural.
 
+## 9. Closing-capture audit — 2026-11-15
+
+The strict CLV gate began firing for 24 of 33 settled v3 picks. It was **not** a
+CLV regression, and the distinction matters more than the count.
+
+**Evidence.**
+
+- 25 of 28 unmeasured picks never received a single post-entry quote. The
+  snapshot table holds one batch per fixture, captured at the same instant as
+  `source_odds_at`, so there was no second price to derive a close from.
+- The stack was not running. All four containers report
+  `.Created = 2026-11-14T18:39Z`; nothing was written between roughly 06:00 and
+  18:39 that day (no odds snapshots, no `paper_rule_events`, no
+  `matches.updated_at`). Fixtures kicking off 12:00–17:45 UTC could not have
+  been captured.
+- The first tick after recreation captured 12 fixtures at 18:40, each 0.33–2.81h
+  before kickoff. The capture path works; it was simply not alive.
+- The provider quota guard was not involved: 7,256 of 7,500 daily calls remained.
+- A separate long-running defect was visible at the same time:
+  `pipeline.refresh_live_status:global:automatic` had been open since
+  2026-09-14 with 1,207 DNS failures (`Name or service not known`) and could
+  never clear, so the alert board could not distinguish a current outage from a
+  historical one.
+
+**What was deliberately not changed.** The 3h capture horizon, the CLV
+definition, and the alert threshold. Widening the horizon would have made a
+stale quote look like a close and hidden an outage behind a metric change.
+
+**What changed instead.**
+
+1. The settlement ledger now records `clv_measurement` ∈
+   `{valid, invalid, unmeasured}`. `unmeasured` means no post-entry,
+   pre-kickoff quote existed at all; it carries no closing-line information and
+   must not be read as the market disagreeing with the pick.
+2. `clv_measurement()` and `has_post_entry_quote()` live in
+   `backend/app/services/clv.py` and are shared by the ledger and the health
+   check, alongside the single `clv_is_valid` definition.
+3. `forward_health.py` reports the split, so a missing close is never attributed
+   to the model by default. Alerting is unchanged: unmeasured picks still fail
+   the check.
+4. `pipeline.*` task alerts clear on the next success, so a resolved outage
+   stops masquerading as a live failure.
+5. A missed weekly learning slot is now detected. The 2026-11-15 04:30 run never
+   started (the stack came up at 04:35); `next_learning_run` always returns a
+   future date and hid it, so `last_learning_slot` exposes the slot that should
+   already have fired.
+
+**Ledger state at 2026-11-15 (latest revision per pick).**
+
+| rule | settled | valid CLV | unmeasured | invalid |
+|---|---|---|---|---|
+| `policy-q75-nodc-v1` | 22 | 10 | 12 | 0 |
+| `policy-q75-nodc-v2` | 14 | 5 | 9 | 0 |
+| `policy-q75-nodc-v3` | 33 | 9 | 24 | 0 |
+
+**Consequence for the experiment.** CLV coverage is roughly 40%, and the missing
+60% is *unmeasured*, not negative. While the host stops between roughly 19:00 and
+04:30 UTC, no CLV-based promotion gate can be evaluated: the afternoon kickoff
+window is lost almost every day. No arm should be judged on this window, and the
+next action is uptime, not a rule change.
+
+## 10. Backups — 2026-11-15
+
+The forward ledger is append-only and exists in exactly one place, so it now gets
+a nightly validated logical dump:
+
+- `app/services/database_backup.py` writes a custom-format `pg_dump` with the
+  client matching the server major, validates it with `pg_restore --list`, and
+  deletes the file if validation fails. A failed backup never looks like a good
+  one.
+- Retention is time-based: keep dumps ≤ 30 days, never fewer than the newest 7.
+  A burst of manual dumps cannot evict the nightly history.
+- The `pipeline.backup_database` task records `backup_completed` /
+  `backup_failed` in `audit_events` and raises or clears
+  `pipeline:database_backup`.
+- The operational monitor separately alerts when the newest successful backup is
+  older than 36h, so a job that never runs is not silent.
+- Manual runs: `python scripts/backup_db.py --output-dir /data/backups`.
+
+First verified dumps on 2026-11-15 were 63,918,097 bytes with 47 tables carrying
+data.
+
 

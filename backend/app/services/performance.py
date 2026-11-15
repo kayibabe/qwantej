@@ -20,6 +20,7 @@ from app.models import (
     Match,
     Prediction,
 )
+from app.services.clv import clv_is_valid
 from app.services.settlement import evaluate_selection
 from app.config import CURRENT_MODEL_VERSION
 
@@ -565,18 +566,12 @@ async def clv_summary(db: AsyncSession, date_from: date | None = None, date_to: 
 
     def valid_close(prediction: Prediction) -> bool:
         match = prediction.match
-        if (
-            prediction.clv_percentage is None
-            or not _has_pre_kickoff_information(prediction)
-            or prediction.source_odds_at is None
-            or prediction.closing_odds_at is None
-            or match is None
-        ):
+        if match is None or not _has_pre_kickoff_information(prediction):
             return False
-        entry_at = _as_utc(prediction.source_odds_at)
-        close_at = _as_utc(prediction.closing_odds_at)
-        kickoff_at = _as_utc(match.kickoff_at)
-        return entry_at < close_at <= kickoff_at
+        # One definition of valid CLV, shared with the paper rules and the
+        # health check. The kickoff bound is passed explicitly so a close can
+        # never be read from after the match started.
+        return clv_is_valid(prediction, kickoff_at=_as_utc(match.kickoff_at))
 
     rows = [prediction for prediction in candidates if valid_close(prediction)]
 

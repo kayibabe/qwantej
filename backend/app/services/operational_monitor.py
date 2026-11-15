@@ -196,6 +196,33 @@ async def monitor_operational_health(db: AsyncSession, now: datetime | None = No
             )
         else:
             await resolve_automation_alert_by_dedupe_key(db, key)
+
+    # A backup that never runs is invisible to a task-level alert, so the
+    # monitor checks the recorded age of the last successful dump.
+    from app.services.database_backup import BACKUP_STALE_ALERT_KEY, backup_age_hours
+
+    backup_age = await backup_age_hours(db, now)
+    stale_after = settings.database_backup_stale_after_hours
+    if settings.database_backup_enabled and (backup_age is None or backup_age > stale_after):
+        age_text = "no successful backup has ever been recorded" if backup_age is None else (
+            f"the last successful backup was {backup_age:.1f} hours ago"
+        )
+        await record_automation_alert(
+            db,
+            dedupe_key=BACKUP_STALE_ALERT_KEY,
+            task_name="database_backup",
+            title="No recent validated database backup",
+            detail=(
+                f"{age_text} (threshold {stale_after}h). The forward ledger is the "
+                "only record of months of experiments; run scripts/backup_db.py."
+            ),
+            context={"age_hours": backup_age, "stale_after_hours": stale_after},
+            severity="error",
+        )
+    else:
+        await resolve_automation_alert_by_dedupe_key(db, BACKUP_STALE_ALERT_KEY)
+    snapshot["database_backup_age_hours"] = backup_age
+
     snapshot["forward_experiment"] = await monitor_forward_experiment(db, now)
     return snapshot
 
@@ -213,10 +240,13 @@ async def monitor_forward_experiment(db: AsyncSession, now: datetime | None = No
     problems = snapshot["problems"]
     if not snapshot["paper_rules_enabled"]:
         # A deliberately disabled experiment must not page anyone. The strict
-        # CLV rule is global, so it still alerts.
-        problems = [problem for problem in problems if problem["key"] == "clv_invalid_rows"]
+        # CLV rule and the learning schedule are global, so they still alert.
+        problems = [
+            problem for problem in problems
+            if problem["key"] in {"clv_invalid_rows", "learning_slot_missed"}
+        ]
     active = {f"forward:{problem['key']}": problem for problem in problems}
-    candidate_keys = {"forward:clv_invalid_rows"}
+    candidate_keys = {"forward:clv_invalid_rows", "forward:learning_slot_missed"}
     for rule in snapshot["paper_rules"]:
         candidate_keys.add(f"forward:tick_stale:{rule['rule']}")
         candidate_keys.add(f"forward:missing_clv:{rule['rule']}")
