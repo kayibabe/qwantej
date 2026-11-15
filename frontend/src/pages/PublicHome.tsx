@@ -116,7 +116,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
         </a>
         <nav className="public-top-actions" aria-label="Account">
           <button className="public-link-button" onClick={onSignIn}>Sign in</button>
-          <button className="public-cta" onClick={onCreateAccount}>Create free account <span aria-hidden="true">\u2192</span></button>
+          <button className="public-cta" onClick={onCreateAccount}>Create free account <span aria-hidden="true">→</span></button>
         </nav>
       </header>
 
@@ -126,7 +126,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
           <h1 id="public-hero-title">The markets the model rates, <em>with the evidence attached.</em></h1>
           <p>QwanEj scores the football markets it can settle, publishes only the selections that clear its gates, and keeps the price, the reasoning and the result with every pick. When nothing qualifies, nothing goes out.</p>
           <div className="public-hero-actions">
-            <button className="public-cta public-cta-large" onClick={onCreateAccount}>Start free <span aria-hidden="true">\u2192</span></button>
+            <button className="public-cta public-cta-large" onClick={onCreateAccount}>Start free <span aria-hidden="true">→</span></button>
             <a className="public-quiet-button" href="#public-coverage">See what it covers</a>
           </div>
           <div className="public-hero-promises">
@@ -245,28 +245,28 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
                 })}
               </div>
               <div className="public-status-filters" role="group" aria-label="Filter matches by status">
-                {([['all', 'All matches', matches.length], ['scheduled', 'Upcoming', counts.upcoming], ['finished', 'Finished', counts.finished]] as const).map(([status, label, count]) => <button key={status} className={`public-filter-chip ${activeStatus === status ? 'is-active' : ''}`} onClick={() => setActiveStatus(status)} aria-pressed={activeStatus === status}>{label}<span>{loading ? '\u2014' : count}</span></button>)}
+                {([['all', 'All matches', matches.length], ['scheduled', 'Upcoming', counts.upcoming], ['finished', 'Finished', counts.finished]] as const).map(([status, label, count]) => <button key={status} className={`public-filter-chip ${activeStatus === status ? 'is-active' : ''}`} onClick={() => setActiveStatus(status)} aria-pressed={activeStatus === status}>{label}<span>{loading ? '\u00b7' : count}</span></button>)}
               </div>
             </div>
             <aside className="public-league-overview" aria-label="Filter fixtures by league">
-              <div className="public-league-overview-heading"><strong>{date === today ? 'Leagues today' : 'Leagues on this date'}</strong><span>{loading ? '\u2014' : `${matches.length} matches`}</span></div>
+              <div className="public-league-overview-heading"><strong>{date === today ? 'Leagues today' : 'Leagues on this date'}</strong><span>{loading ? '\u00b7' : `${matches.length} matches`}</span></div>
               <div className="public-league-overview-list">
-                <button className={`public-league-overview-row${selectedLeague === '' ? ' is-selected' : ''}`} onClick={() => setSelectedLeague('')} aria-pressed={selectedLeague === ''}><span>All leagues</span><b>{loading ? '\u2014' : matches.length}</b></button>
-                {leagueMatchCounts.map(([league, count]) => <button key={league} className={`public-league-overview-row${selectedLeague === league ? ' is-selected' : ''}`} onClick={() => setSelectedLeague(current => current === league ? '' : league)} aria-pressed={selectedLeague === league}><span title={league}>{league}</span><b>{loading ? '\u2014' : count}</b></button>)}
+                <button className={`public-league-overview-row${selectedLeague === '' ? ' is-selected' : ''}`} onClick={() => setSelectedLeague('')} aria-pressed={selectedLeague === ''}><span>All leagues</span><b>{loading ? '\u00b7' : matches.length}</b></button>
+                {leagueMatchCounts.map(([league, count]) => <button key={league} className={`public-league-overview-row${selectedLeague === league ? ' is-selected' : ''}`} onClick={() => setSelectedLeague(current => current === league ? '' : league)} aria-pressed={selectedLeague === league}><span title={league}>{league}</span><b>{loading ? '\u00b7' : count}</b></button>)}
                 {!loading && leagueMatchCounts.length === 0 && <span className="public-league-overview-empty">No league fixtures for this date</span>}
               </div>
             </aside>
           </div>
 
           <div className="public-fixture-toolbar">
-            <label className="public-search-box"><span aria-hidden="true">\u2315</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Team, league or country" aria-label="Search teams and leagues" /></label>
-            <label className="public-league-select"><span className="public-select-icon" aria-hidden="true">\u2637</span><select value={selectedLeague} onChange={(event) => setSelectedLeague(event.target.value)} aria-label="Filter by league"><option value="">All leagues</option>{availableLeagues.map((league) => <option key={league} value={league}>{league}</option>)}</select></label>
+            <label className="public-search-box"><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Team, league or country" aria-label="Search teams and leagues" /></label>
+            <label className="public-league-select"><select value={selectedLeague} onChange={(event) => setSelectedLeague(event.target.value)} aria-label="Filter by league"><option value="">All leagues</option>{availableLeagues.map((league) => <option key={league} value={league}>{league}</option>)}</select></label>
             <span className="public-fixture-count">{loading ? 'Updating\u2026' : `${visibleMatches.length} matches`}</span>
           </div>
 
           <div className="public-match-panel">
             {error ? <div className="public-empty"><strong>Fixture data is temporarily unavailable</strong><span>Please try again shortly.</span></div>
-              : loading ? <div className="public-empty"><span>Loading fixtures\u2026</span></div>
+              : loading ? <div className="public-empty"><span>Loading fixtures…</span></div>
                 : visibleMatches.length === 0 ? <div className="public-empty"><strong>No matches match these filters</strong><span>Try another date, league or search.</span></div>
                   : <div className="public-fixture-table-wrap"><table className="public-fixture-table">
                     <thead><tr>{sortHeader('kickoff', 'Kickoff Time')}{sortHeader('league', 'League')}{sortHeader('match', 'Match')}{sortHeader('statusScore', 'Status/Score')}</tr></thead>
