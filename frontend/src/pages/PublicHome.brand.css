@@ -1,0 +1,138 @@
+/*
+  Landing page brand layer.
+
+  Palette taken from QwanEj's first post graphic: forest green #144A33, chartreuse #A4D12C
+  and a warm off-white #FDFCF5, set in a clean geometric sans.
+
+  Everything here is scoped to .public-home, so the signed-in workspace keeps the app's
+  own theme tokens untouched. The palette is applied by redefining the shared tokens the
+  page already uses, then overriding only the places that need a brand pair (buttons,
+  hero card, footer) plus the landing sections added in PublicHome.tsx.
+*/
+
+.public-home {
+  color-scheme: light;
+
+  --brand-forest: #144a33;
+  --brand-forest-deep: #0e3423;
+  --brand-chartreuse: #a4d12c;
+  --brand-paper: #fdfcf5;
+  --brand-ink-soft: #2f5c46;
+  --brand-paper-soft: rgba(253, 252, 245, .74);
+
+  --bg: var(--brand-paper);
+  --surface: #ffffff;
+  --surface2: #f3f1e4;
+  --text: var(--brand-forest);
+  --text2: var(--brand-ink-soft);
+  --muted: #63796d;
+  --border: color-mix(in srgb, var(--brand-forest) 16%, transparent);
+  --accent: var(--brand-forest);
+  --accent-foreground: #ffffff;
+  --accent-bg: color-mix(in srgb, var(--brand-chartreuse) 24%, var(--brand-paper));
+  --accent-mid: var(--brand-chartreuse);
+  --shadow: 0 1px 2px rgba(20, 74, 51, .08);
+  --shadow-md: 0 26px 50px -30px rgba(20, 74, 51, .55);
+
+  --public-ink: var(--brand-forest);
+  --public-muted: var(--brand-ink-soft);
+  --public-accent: var(--brand-forest);
+  --public-pale: var(--accent-bg);
+
+  background: var(--brand-paper);
+  font-family: 'Poppins', 'Futura PT', 'Century Gothic', 'Avenir Next', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+}
+
+/* Brand lockup and buttons */
+.public-home .public-topbar { background: var(--brand-paper); }
+.public-home .public-brand strong { letter-spacing: .16em; }
+.public-home .public-brand small { color: var(--brand-forest); letter-spacing: .18em; opacity: .68; }
+.public-home .public-link-button,
+.public-home .public-quiet-button { color: var(--brand-forest); }
+.public-home .public-quiet-button { text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--brand-chartreuse) 75%, transparent); text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.public-home .public-quiet-button:hover { color: var(--brand-forest-deep); }
+.public-home .public-cta { background: var(--brand-chartreuse); color: var(--brand-forest-deep); box-shadow: 0 14px 26px -16px rgba(20, 74, 51, .7); }
+.public-home .public-cta:hover { background: color-mix(in srgb, var(--brand-chartreuse) 82%, var(--brand-forest)); color: var(--brand-forest-deep); }
+.public-home .public-cta:focus-visible { outline: 2px solid var(--brand-forest); outline-offset: 2px; }
+
+/* Hero */
+.public-home .public-hero { background: radial-gradient(130% 140% at 88% -20%, color-mix(in srgb, var(--brand-chartreuse) 32%, var(--brand-paper)) 0%, var(--brand-paper) 62%); }
+.public-home .public-hero h1 { color: var(--brand-forest); letter-spacing: -.045em; }
+.public-home .public-hero h1 em { color: var(--brand-forest); background: linear-gradient(transparent 66%, color-mix(in srgb, var(--brand-chartreuse) 68%, transparent) 66%); }
+.public-home .public-hero-copy > p { color: var(--brand-ink-soft); }
+.public-home .public-eyebrow { color: var(--brand-forest); }
+.public-home .public-eyebrow::before { content: ''; display: inline-block; width: 20px; height: 2px; background: var(--brand-chartreuse); }
+.public-home .public-hero-promises { color: var(--brand-ink-soft); }
+.public-home .public-hero-promises span::before { color: var(--brand-forest); }
+.public-home .public-hero-card { border-color: transparent; background: var(--brand-forest); color: var(--brand-paper); box-shadow: var(--shadow-md); }
+.public-home .public-hero-card-head,
+.public-home .public-hero-card-foot { color: var(--brand-paper-soft); }
+.public-home .public-hero-card-head span:first-child { color: var(--brand-chartreuse); }
+.public-home .public-evidence-flow li { border-top-color: rgba(253, 252, 245, .18); }
+.public-home .public-evidence-flow li > span { background: var(--brand-chartreuse); color: var(--brand-forest-deep); }
+.public-home .public-evidence-flow strong { color: #ffffff; }
+.public-home .public-evidence-flow small { color: var(--brand-paper-soft); }
+
+/* Footer band */
+.public-home .public-footer { border-top: 0; background: var(--brand-forest); color: var(--brand-paper-soft); }
+.public-home .public-footer span:first-child { color: var(--brand-chartreuse); }
+
+/* Section one: what the analysis covers */
+.public-coverage { max-width: 1240px; margin: 0 auto; padding: 46px 28px 6px; }
+.public-coverage-heading { max-width: 720px; margin-bottom: 22px; }
+.public-coverage-heading h2,
+.public-gates-heading h2 { margin: 8px 0; color: var(--brand-forest); font-size: clamp(27px, 3vw, 34px); font-weight: 650; letter-spacing: -.04em; }
+.public-coverage-heading p,
+.public-gates-heading p { margin: 0; color: var(--brand-ink-soft); font-size: var(--type-body); line-height: 1.7; }
+.public-coverage-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(212px, 1fr)); gap: 14px; margin: 0; padding: 0; list-style: none; }
+.public-coverage-card { display: flex; flex-direction: column; gap: 7px; padding: 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); }
+.public-coverage-tag { display: inline-flex; width: fit-content; padding: 3px 10px; border-radius: 999px; background: var(--accent-bg); color: var(--brand-forest); font-size: var(--type-small); font-weight: 700; letter-spacing: .07em; }
+.public-coverage-card h3 { margin: 2px 0 0; color: var(--brand-forest); font-size: 17px; font-weight: 650; letter-spacing: -.02em; }
+.public-coverage-card p { margin: 0; color: var(--brand-ink-soft); font-size: var(--type-body); line-height: 1.65; }
+.public-coverage-scope { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+.public-coverage-scope > div { display: grid; gap: 5px; padding: 18px 20px; border-radius: 12px; background: var(--brand-forest); }
+.public-coverage-scope strong { color: #ffffff; font-size: 18px; font-weight: 650; letter-spacing: -.02em; }
+.public-coverage-scope span { color: var(--brand-paper-soft); font-size: var(--type-small); line-height: 1.6; }
+.public-coverage-limit { margin-top: 14px; padding: 20px; border: 1px dashed color-mix(in srgb, var(--brand-forest) 38%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--brand-chartreuse) 14%, var(--brand-paper)); }
+.public-coverage-limit h3 { margin: 0 0 6px; color: var(--brand-forest); font-size: 16px; font-weight: 650; }
+.public-coverage-limit p { margin: 0; color: var(--brand-ink-soft); font-size: var(--type-body); line-height: 1.7; }
+
+/* Section two: how a selection is published */
+.public-gates { max-width: 1240px; margin: 0 auto; padding: 40px 28px 20px; }
+.public-gates-heading { max-width: 720px; }
+.public-gates-rail { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 22px 0 0; padding: 0; list-style: none; }
+.public-gates-rail li { display: grid; align-content: start; gap: 5px; padding: 16px 14px; border-top: 3px solid var(--brand-chartreuse); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow); }
+.public-gates-rail li > span { color: var(--brand-forest); font-size: var(--type-small); font-weight: 700; letter-spacing: .1em; opacity: .5; }
+.public-gates-rail strong { color: var(--brand-forest); font-size: var(--type-body); font-weight: 650; }
+.public-gates-rail small { color: var(--brand-ink-soft); font-size: var(--type-small); line-height: 1.55; }
+.public-gates-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+.public-gates-cards article { padding: 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface2); }
+.public-gates-cards h3 { margin: 0 0 6px; color: var(--brand-forest); font-size: 16px; font-weight: 650; letter-spacing: -.02em; }
+.public-gates-cards p { margin: 0; color: var(--brand-ink-soft); font-size: var(--type-body); line-height: 1.7; }
+
+@media (max-width: 980px) {
+  .public-gates-rail { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .public-gates-cards { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  .public-coverage { padding: 32px 18px 4px; }
+  .public-gates { padding: 30px 18px 16px; }
+  .public-coverage-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .public-gates-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .public-coverage-card { padding: 16px; }
+  .public-hero-card { display: block; }
+}
+
+@media (max-width: 520px) {
+  .public-coverage { padding: 28px 16px 2px; }
+  .public-gates { padding: 26px 16px 12px; }
+  .public-coverage-grid,
+  .public-gates-rail,
+  .public-coverage-scope { grid-template-columns: 1fr; }
+  .public-coverage-scope > div { padding: 16px; }
+  .public-coverage-limit { padding: 16px; }
+}
+
+/* Promise bullets are drawn in CSS, not a glyph, so they render on every system font. */
+.public-home .public-hero-promises span::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: var(--brand-chartreuse); }

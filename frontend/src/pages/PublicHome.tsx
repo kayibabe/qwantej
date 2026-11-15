@@ -3,6 +3,7 @@ import type { MatchFixture } from '../lib/api'
 import { fetchPublicMatchFixtures } from '../lib/api'
 import { TODAY } from './dailyTickets/helpers'
 import './PublicHome.css'
+import './PublicHome.brand.css'
 
 interface PublicHomeProps {
   date: string
@@ -30,8 +31,8 @@ function matchStatus(match: MatchFixture) {
   if (status === 'finished') return 'FT'
   if (status === 'postponed') return 'Postponed'
   if (status === 'cancelled') return 'Cancelled'
-  if (status === 'abandoned') return 'Abandoned · review'
-  if (status === 'awarded') return 'Awarded · review'
+  if (status === 'abandoned') return 'Abandoned \u00b7 review'
+  if (status === 'awarded') return 'Awarded \u00b7 review'
   return 'Upcoming'
 }
 
@@ -100,7 +101,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
     return <th scope="col" aria-sort={ariaSort}><button className="public-fixture-sort-button" onClick={() => {
       if (active) setSortDirection(current => current === 'asc' ? 'desc' : 'asc')
       else { setSortKey(key); setSortDirection('asc') }
-    }}>{label}<span aria-hidden="true">{active ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}</span></button></th>
+    }}>{label}<span aria-hidden="true">{active ? (sortDirection === 'asc' ? '\u2191' : '\u2193') : '\u2195'}</span></button></th>
   }
 
   return (
@@ -122,34 +123,113 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
       <section className="public-hero" aria-labelledby="public-hero-title">
         <div className="public-hero-copy">
           <span className="public-eyebrow">EVIDENCE-LED FOOTBALL RESEARCH</span>
-          <h1 id="public-hero-title">Football picks, <em>with a record.</em></h1>
-          <p>See what was published, the price context when captured, and the settled result when available. Research candidates stay separate from published selections.</p>
+          <h1 id="public-hero-title">The markets the model rates, <em>with the evidence attached.</em></h1>
+          <p>QwanEj scores the football markets it can settle, publishes only the selections that clear its gates, and keeps the price, the reasoning and the result with every pick. When nothing qualifies, nothing goes out.</p>
           <div className="public-hero-actions">
-            <button className="public-cta public-cta-large" onClick={onCreateAccount}>Follow the daily slate</button>
-            <a className="public-quiet-button" href="#public-matches">Browse fixtures</a>
+            <button className="public-cta public-cta-large" onClick={onCreateAccount}>Start free <span aria-hidden="true">→</span></button>
+            <a className="public-quiet-button" href="#public-coverage">See what it covers</a>
           </div>
           <div className="public-hero-promises">
-            <span>Dated published records</span>
-            <span>Price evidence when available</span>
-            <span>Results kept in context</span>
+            <span>Dated published selections</span>
+            <span>Price and reasoning kept with each pick</span>
+            <span>Results settled from the scoreline</span>
           </div>
         </div>
         <aside className="public-hero-card" aria-label="How a published selection is reviewed">
-          <div className="public-hero-card-head"><span>FOLLOW THE RECORD</span><span>From pick to result</span></div>
+          <div className="public-hero-card-head"><span>THE RECORD</span><span>From pick to result</span></div>
           <ol className="public-evidence-flow">
             <li><span>01</span><div><strong>Published selection</strong><small>What was selected, and when</small></div></li>
-            <li><span>02</span><div><strong>Price context</strong><small>Captured odds when available</small></div></li>
+            <li><span>02</span><div><strong>Price context</strong><small>Bookmaker, odds and quote time</small></div></li>
             <li><span>03</span><div><strong>Settled outcome</strong><small>Final score and pick result</small></div></li>
           </ol>
-          <div className="public-hero-card-foot">Past outcomes describe their sample; they do not predict the next match.</div>
+          <div className="public-hero-card-foot">Past outcomes describe their sample. They do not predict the next match.</div>
         </aside>
       </section>
 
       <nav className="public-section-nav" aria-label="Page sections">
+        <a href="#public-coverage">What it covers</a>
+        <a href="#public-gates">How it works</a>
         <a className="is-active" href="#public-matches" aria-current="page">Matches</a>
-        <a href="#public-product">How QwanEj works</a>
         <a href="#public-faq">FAQs</a>
       </nav>
+
+      <section className="public-coverage" id="public-coverage" aria-labelledby="public-coverage-title">
+        <div className="public-coverage-heading">
+          <span className="public-section-kicker">WHAT THE ANALYSIS COVERS</span>
+          <h2 id="public-coverage-title">Five market families, scored from the scoreline.</h2>
+          <p>Every selection QwanEj scores settles from regulation-time match scores. Inside that boundary the work is deliberate: one contract per market, one gate per market, and no family added until its evidence is there.</p>
+        </div>
+        <ul className="public-coverage-grid">
+          <li className="public-coverage-card">
+            <span className="public-coverage-tag">1X2</span>
+            <h3>Match result</h3>
+            <p>Home win, away win or draw, read from a joint home and away score distribution built for the fixture.</p>
+          </li>
+          <li className="public-coverage-card">
+            <span className="public-coverage-tag">1X / X2</span>
+            <h3>Double chance</h3>
+            <p>Two outcomes covered in one selection, scored and settled from the same score distribution.</p>
+          </li>
+          <li className="public-coverage-card">
+            <span className="public-coverage-tag">DNB</span>
+            <h3>Draw no bet</h3>
+            <p>Your side to win, with a draw pushing the selection instead of losing it.</p>
+          </li>
+          <li className="public-coverage-card">
+            <span className="public-coverage-tag">TOTALS</span>
+            <h3>Total goals</h3>
+            <p>Selected half-goal lines on the totals path, each with its own qualification policy and blockers.</p>
+          </li>
+          <li className="public-coverage-card">
+            <span className="public-coverage-tag">BTTS</span>
+            <h3>Both teams to score</h3>
+            <p>Full-match yes and no, settled on the final score at the end of regulation time.</p>
+          </li>
+        </ul>
+        <div className="public-coverage-scope">
+          <div>
+            <strong>18 scored selections</strong>
+            <span>in the market catalogue, kept separate from settlement-only lines that are registered but never scored.</span>
+          </div>
+          <div>
+            <strong>Regulation time only</strong>
+            <span>settlement reads the 90-minute score. Extra time, shootouts and season outrights sit outside the surface.</span>
+          </div>
+        </div>
+        <aside className="public-coverage-limit" aria-label="What the analysis does not cover">
+          <h3>What it does not cover yet</h3>
+          <p>Corners, cards, shots, player markets, goal timing, in-play, and combined bet-builder markets are not scored. Each one is logged in the market register as research, blocked on data or blocked on a dependency, and none of them can produce a published selection. A market label in a sportsbook does not mean QwanEj has the data behind it.</p>
+        </aside>
+      </section>
+
+      <section className="public-gates" id="public-gates" aria-labelledby="public-gates-title">
+        <div className="public-gates-heading">
+          <span className="public-section-kicker">HOW A SELECTION IS PUBLISHED</span>
+          <h2 id="public-gates-title">Nothing goes out until it clears its gates.</h2>
+          <p>A market earns the right to publish. The path is the same for every family, and it can stop at any step.</p>
+        </div>
+        <ol className="public-gates-rail">
+          <li><span>01</span><strong>Contract registered</strong><small>Settlement rule written down before a probability is attached to it.</small></li>
+          <li><span>02</span><strong>Data ready</strong><small>Point-in-time inputs and outcome labels measured for coverage and provenance.</small></li>
+          <li><span>03</span><strong>Shadow scored</strong><small>Forecasts captured without being used for a decision.</small></li>
+          <li><span>04</span><strong>Validated</strong><small>Frozen chronological evaluation against gates set in advance.</small></li>
+          <li><span>05</span><strong>Promoted</strong><small>A versioned profile switches on, with an effective date on the record.</small></li>
+        </ol>
+        <div className="public-gates-cards">
+          <article>
+            <h3>No edge, no pick</h3>
+            <p>Qualification fails closed. A missing quote, bookmaker, feature snapshot or pre-kickoff odds timestamp blocks the selection, and a day with zero qualifiers is a normal result rather than a reason to lower the bar.</p>
+          </article>
+          <article>
+            <h3>Every pick keeps its evidence</h3>
+            <p>A published selection stores its model version, probability, bookmaker, odds and quote timestamp, the reasons behind the decision, and a hash of the snapshot, so an earlier call can be read back exactly as it was made.</p>
+          </article>
+          <article>
+            <h3>Promotion, never drift</h3>
+            <p>A profile that misses its coverage, calibration or settlement checks is suspended. No new selection qualifies from it until it has been validated again.</p>
+          </article>
+        </div>
+      </section>
 
       <div className="public-dashboard" id="public-matches">
         <section className="public-content" aria-labelledby="public-matches-title">
@@ -165,23 +245,23 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
                 })}
               </div>
               <div className="public-status-filters" role="group" aria-label="Filter matches by status">
-                {([['all', 'All matches', matches.length], ['scheduled', 'Upcoming', counts.upcoming], ['finished', 'Finished', counts.finished]] as const).map(([status, label, count]) => <button key={status} className={`public-filter-chip ${activeStatus === status ? 'is-active' : ''}`} onClick={() => setActiveStatus(status)} aria-pressed={activeStatus === status}>{label}<span>{loading ? '—' : count}</span></button>)}
+                {([['all', 'All matches', matches.length], ['scheduled', 'Upcoming', counts.upcoming], ['finished', 'Finished', counts.finished]] as const).map(([status, label, count]) => <button key={status} className={`public-filter-chip ${activeStatus === status ? 'is-active' : ''}`} onClick={() => setActiveStatus(status)} aria-pressed={activeStatus === status}>{label}<span>{loading ? '\u00b7' : count}</span></button>)}
               </div>
             </div>
             <aside className="public-league-overview" aria-label="Filter fixtures by league">
-              <div className="public-league-overview-heading"><strong>{date === today ? 'Leagues today' : 'Leagues on this date'}</strong><span>{loading ? '—' : `${matches.length} matches`}</span></div>
+              <div className="public-league-overview-heading"><strong>{date === today ? 'Leagues today' : 'Leagues on this date'}</strong><span>{loading ? '\u00b7' : `${matches.length} matches`}</span></div>
               <div className="public-league-overview-list">
-                <button className={`public-league-overview-row${selectedLeague === '' ? ' is-selected' : ''}`} onClick={() => setSelectedLeague('')} aria-pressed={selectedLeague === ''}><span>All leagues</span><b>{loading ? '—' : matches.length}</b></button>
-                {leagueMatchCounts.map(([league, count]) => <button key={league} className={`public-league-overview-row${selectedLeague === league ? ' is-selected' : ''}`} onClick={() => setSelectedLeague(current => current === league ? '' : league)} aria-pressed={selectedLeague === league}><span title={league}>{league}</span><b>{loading ? '—' : count}</b></button>)}
+                <button className={`public-league-overview-row${selectedLeague === '' ? ' is-selected' : ''}`} onClick={() => setSelectedLeague('')} aria-pressed={selectedLeague === ''}><span>All leagues</span><b>{loading ? '\u00b7' : matches.length}</b></button>
+                {leagueMatchCounts.map(([league, count]) => <button key={league} className={`public-league-overview-row${selectedLeague === league ? ' is-selected' : ''}`} onClick={() => setSelectedLeague(current => current === league ? '' : league)} aria-pressed={selectedLeague === league}><span title={league}>{league}</span><b>{loading ? '\u00b7' : count}</b></button>)}
                 {!loading && leagueMatchCounts.length === 0 && <span className="public-league-overview-empty">No league fixtures for this date</span>}
               </div>
             </aside>
           </div>
 
           <div className="public-fixture-toolbar">
-            <label className="public-search-box"><span aria-hidden="true">⌕</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Team, league or country" aria-label="Search teams and leagues" /></label>
-            <label className="public-league-select"><span className="public-select-icon" aria-hidden="true">☷</span><select value={selectedLeague} onChange={(event) => setSelectedLeague(event.target.value)} aria-label="Filter by league"><option value="">All leagues</option>{availableLeagues.map((league) => <option key={league} value={league}>{league}</option>)}</select></label>
-            <span className="public-fixture-count">{loading ? 'Updating…' : `${visibleMatches.length} matches`}</span>
+            <label className="public-search-box"><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Team, league or country" aria-label="Search teams and leagues" /></label>
+            <label className="public-league-select"><select value={selectedLeague} onChange={(event) => setSelectedLeague(event.target.value)} aria-label="Filter by league"><option value="">All leagues</option>{availableLeagues.map((league) => <option key={league} value={league}>{league}</option>)}</select></label>
+            <span className="public-fixture-count">{loading ? 'Updating\u2026' : `${visibleMatches.length} matches`}</span>
           </div>
 
           <div className="public-match-panel">
@@ -206,36 +286,36 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
           {!loading && !error && visibleMatches.length > 10 && (
             <button className="public-show-matches" onClick={() => setShowAllMatches(current => !current)} aria-expanded={showAllMatches}>
               {showAllMatches ? 'Show fewer fixtures' : `Show all ${visibleMatches.length} fixtures`}
-              <span aria-hidden="true">{showAllMatches ? '−' : '+'}</span>
+              <span aria-hidden="true">{showAllMatches ? '\u2212' : '+'}</span>
             </button>
           )}
         </section>
       </div>
 
-      <section className="public-product" id="public-product" aria-labelledby="public-product-title">
+      <section className="public-product" id="public-workspace" aria-labelledby="public-product-title">
         <div className="public-product-heading">
-          <span className="public-section-kicker">THE QwanEj APPROACH</span>
-          <h2 id="public-product-title">From fixture list to final result.</h2>
-          <p>Useful football research should show its work—and leave room for uncertainty.</p>
+          <span className="public-section-kicker">INSIDE THE WORKSPACE</span>
+          <h2 id="public-product-title">A record you can read back, match by match.</h2>
+          <p>The public page shows the matchday. An account opens the part that keeps score.</p>
         </div>
         <div className="public-product-grid">
           <article className="public-product-card">
             <span className="public-product-number">01</span>
-            <h3>Start with the match</h3>
-            <p>Browse fixtures by date, competition, kickoff, live status and score. Sort the slate to find the games you want to follow.</p>
+            <h3>Start on the published slate</h3>
+            <p>Your workspace opens on the day’s published selections, each with its price context and, once the match is done, its settled result.</p>
             <a href="#public-matches">Browse fixtures <span aria-hidden="true">→</span></a>
           </article>
           <article className="public-product-card">
             <span className="public-product-number">02</span>
-            <h3>Read the recommendation in context</h3>
-            <p>QwanEj keeps published selections distinct from research candidates. Where price evidence is available, the workspace shows the captured odds and timing.</p>
-            <span className="public-product-note">Recommendations are opinions, not guarantees.</span>
+            <h3>Follow the whole matchday</h3>
+            <p>Fixtures by date, league, kickoff, live phase and score, for today, tomorrow and the days either side of them.</p>
+            <span className="public-product-note">Live status and phase are read from the fixture feed as the match runs.</span>
           </article>
           <article className="public-product-card">
             <span className="public-product-number">03</span>
-            <h3>Review the result honestly</h3>
-            <p>When a match is complete, its score and settled selection outcome can be reviewed against the original published record.</p>
-            <span className="public-product-note">Historical results describe the sample shown; they do not predict future results.</span>
+            <h3>Check the work</h3>
+            <p>Track your own journal against the published record, and read league results and team trends from completed matches in Stats and trends.</p>
+            <span className="public-product-note">A recommendation is an opinion with evidence attached, never a promise.</span>
           </article>
         </div>
       </section>
@@ -249,17 +329,17 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
         <div className="public-access-grid">
           <article className="public-access-card">
             <div><span className="public-access-label">PUBLIC</span><h3>Take a look around</h3></div>
-            <p>Explore public fixtures, competition names, live status and completed scores—without signing in.</p>
+            <p>Explore public fixtures, competition names, live status and completed scores, without signing in.</p>
             <a href="#public-matches">Open the match centre <span aria-hidden="true">→</span></a>
           </article>
           <article className="public-access-card is-featured">
             <div><span className="public-access-label">FREE ACCOUNT</span><h3>Follow the daily slate</h3></div>
-            <p>Open your QwanEj workspace for daily published recommendations, match browsing and live scores.</p>
+            <p>Open your QwanEj workspace for daily published selections, match browsing and live scores.</p>
             <button onClick={onCreateAccount}>Create a free account <span aria-hidden="true">→</span></button>
           </article>
           <article className="public-access-card">
             <div><span className="public-access-label">PRO</span><h3>Explore more detail</h3></div>
-            <p>Pro adds detailed odds and expanded ticket history. Stats &amp; Trends gives league context from completed matches.</p>
+            <p>Pro adds detailed odds and expanded ticket history. Stats and trends gives league context from completed matches.</p>
             <button onClick={onCreateAccount}>See what’s inside <span aria-hidden="true">→</span></button>
           </article>
         </div>
@@ -269,13 +349,15 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
         <div className="public-faq-heading"><span className="public-section-kicker">GOOD TO KNOW</span><h2 id="public-faq-title">A few quick answers.</h2></div>
         <div className="public-faq-list">
           <details><summary>What can I see without an account?</summary><p>Public fixtures include the competition, teams, kickoff or live status, and scores when available. Personal account information and workspace tools stay behind sign-in.</p></details>
-          <details><summary>What does QwanEj do with recommendations?</summary><p>QwanEj presents dated published selections separately from research. Where captured price evidence exists, it can be reviewed alongside the selection. A recommendation is never a promise of a result.</p></details>
-          <details><summary>Does QwanEj guarantee wins or profit?</summary><p>No. Football outcomes are uncertain. Any historical result is a record of completed matches, not a guarantee or forecast of future performance.</p></details>
+          <details><summary>Which markets does QwanEj score?</summary><p>Match result, double chance, draw no bet, selected total-goals lines and both teams to score. Each one has its own registered contract, its own qualification gate and settlement from regulation-time scores. The market catalogue holds 18 scored selections.</p></details>
+          <details><summary>Does it cover corners, cards or player markets?</summary><p>Not yet. Corners, cards, shots, player markets, goal timing, in-play and combined markets are logged in the market register as research or blocked on data. Nothing is published from a market until the data behind it and its validation are in place.</p></details>
+          <details><summary>What does QwanEj do with a recommendation?</summary><p>It publishes the selection with the price context it captured and keeps that record separate from research candidates. Where a quote exists, it can be read back alongside the selection. A recommendation is never a promise of a result.</p></details>
+          <details><summary>Does QwanEj guarantee wins or profit?</summary><p>No. Football outcomes are uncertain. Any historical result is a record of completed matches, not a guarantee or a forecast of future performance, and QwanEj does not publish a hit rate, a return or a profit claim.</p></details>
         </div>
-        <div className="public-faq-cta"><div><strong>Ready to follow the next matchday?</strong><span>Create a free account to open your QwanEj workspace.</span></div><button className="public-cta" onClick={onCreateAccount}>Get started for free <span aria-hidden="true">→</span></button></div>
+        <div className="public-faq-cta"><div><strong>Ready to follow the next matchday?</strong><span>Create a free account to open your QwanEj workspace.</span></div><button className="public-cta" onClick={onCreateAccount}>Get started free <span aria-hidden="true">→</span></button></div>
       </section>
 
-      <footer className="public-footer"><span>QwanEj · Intelligence beyond numbers</span><span>Information only. Football outcomes are uncertain; no result is guaranteed.</span></footer>
+      <footer className="public-footer"><span>QwanEj · Intelligence beyond numbers</span><span>Information only. Football outcomes are uncertain. No result is guaranteed.</span></footer>
     </main>
   )
 }
