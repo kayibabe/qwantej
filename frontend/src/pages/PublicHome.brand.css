@@ -133,3 +133,6 @@
   .public-coverage-scope > div { padding: 16px; }
   .public-coverage-limit { padding: 16px; }
 }
+
+/* Promise bullets are drawn in CSS, not a glyph, so they render on every system font. */
+.public-home .public-hero-promises span::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: var(--brand-chartreuse); }
