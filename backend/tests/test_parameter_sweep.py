@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from app.services.parameter_sweep import _choose_policy, _score
+from app.services.parameter_sweep import _choose_policy, _policy_from_payload, _score
 from app.services.singles_research import Candidate, Policy
 
 
@@ -31,6 +31,25 @@ def test_policy_gate_requires_validation_sample_and_roi():
     assert _choose_policy([base]) == base
     assert _choose_policy([{**base, "validation": {"resolved": 19, "roi": 0.50}}]) is None
     assert _choose_policy([{**base, "validation": {"resolved": 20, "roi": 0.19}}]) is None
+
+
+def test_a_serialised_chosen_policy_can_be_rebuilt():
+    # `chosen_policy` is stored as the flattened policy kwargs, so unwrapping
+    # it as if it were a scored result row raised KeyError('policy') and killed
+    # the daily scan.
+    chosen = {
+        "version": "dynamic-parameter-sweep-v1",
+        "min_probability": 0.65,
+        "min_odds": 1.7,
+        "price_haircut": 0.08,
+        "min_ev": 0.0,
+        "max_quote_age_hours": 0.5,
+    }
+
+    policy = _policy_from_payload(chosen)
+
+    assert policy.min_probability == 0.65
+    assert policy.max_quote_age_hours == 0.5
 
 
 def test_score_uses_flat_stake_and_excludes_pending():

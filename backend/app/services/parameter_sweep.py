@@ -110,6 +110,16 @@ def _policy_from_row(row: dict) -> Policy:
     return Policy(**row["policy"])
 
 
+def _policy_from_payload(chosen: dict) -> Policy:
+    """Rebuild the frozen policy from a serialised payload.
+
+    ``chosen_policy`` is stored as the flattened policy kwargs (see
+    ``_compute_payload``), not as a scored result row, so unwrapping it again
+    raised KeyError('policy') on every daily scan.
+    """
+    return Policy(**chosen)
+
+
 def _candidate_output(candidate, prediction, match, outcome, policy_metrics) -> dict:
     return {
         "prediction_id": int(candidate.id),
@@ -204,7 +214,7 @@ async def _candidate_manifest(db: AsyncSession, target_date: date, payload: dict
         return []
     rows = await _load_target_rows(db, target_date)
     candidates, outcomes, _ = adapt_rows(rows)
-    policy = _policy_from_row(payload["chosen_policy"])
+    policy = _policy_from_payload(payload["chosen_policy"])
     selection = select_candidates(candidates, as_of=datetime.now(timezone.utc), policy=policy)
     by_id = {str(prediction.id): (prediction, match) for prediction, match in rows}
     metrics = {"train": payload["chosen_train"], "validation": payload["chosen_validation"]}
