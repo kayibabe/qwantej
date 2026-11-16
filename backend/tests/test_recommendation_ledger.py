@@ -5,8 +5,12 @@ from types import SimpleNamespace
 
 from app.models import MatchStatus
 from app.services.recommendation_ledger import (
+    MARKET_BELOW_THRESHOLD,
+    MARKET_DECAYED,
+    MARKET_QUALIFYING,
     _authoritative_result,
     _canonical_pick_key,
+    _market_gate,
     recommendation_metrics,
     walk_forward_accumulator_selections,
 )
@@ -237,3 +241,37 @@ def test_walk_forward_ignores_input_order_and_strongest_only_rows_for_published(
 
     assert _selected_dates(selection, "all_unique") == ["2026-10-06"]
     assert _selected_dates(selection, "published") == []
+
+
+def _gate_row(result: str, odds: float = 3.0) -> dict:
+    return {"result": result, "odds": odds}
+
+
+def test_market_gate_rejects_markets_below_the_pick_minimum_whatever_their_roi():
+    gate = _market_gate([_gate_row("won") for _ in range(2)], stake=1.0)
+
+    assert gate["status"] == MARKET_BELOW_THRESHOLD
+    assert gate["metrics"]["unique_picks"] == 2
+    assert gate["metrics"]["roi"] > 0.10
+
+
+def test_market_gate_qualifies_a_market_above_both_thresholds():
+    gate = _market_gate([_gate_row("won") for _ in range(5)], stake=1.0)
+
+    assert gate["status"] == MARKET_QUALIFYING
+    assert gate["metrics"]["unique_picks"] == 5
+    assert gate["metrics"]["roi"] == 2.0
+
+
+def test_market_gate_labels_a_decaying_market_as_decayed_not_qualified():
+    # Eight early wins still clear +10% across the market's history, but the
+    # most recent ten settled picks are all losses, so the market is suspended.
+    rows = [_gate_row("won") for _ in range(8)]
+    rows += [_gate_row("lost", odds=2.0) for _ in range(10)]
+
+    gate = _market_gate(rows, stake=1.0)
+
+    assert gate["status"] == MARKET_DECAYED
+    assert gate["metrics"]["roi"] is not None and gate["metrics"]["roi"] > 0.10
+    assert gate["recent_picks"] == 10
+    assert gate["recent_roi"] == -1.0

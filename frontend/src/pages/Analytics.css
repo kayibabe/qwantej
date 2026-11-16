@@ -260,6 +260,12 @@
 .daily-qualifying-table { min-width: 900px; }
 .daily-qualifying-table td > strong, .daily-qualifying-table td > small { display: block; }
 .daily-qualifying-table td > small { margin-top: 3px; color: var(--muted); font-size: var(--type-small); }
+.daily-gate-badge { display: inline-block; padding: 2px 8px; border-radius: var(--r-sm); border: 1px solid var(--border); color: var(--muted); font-size: var(--type-xs); font-weight: 600; white-space: nowrap; }
+.daily-gate-badge.qualifying { border-color: color-mix(in srgb, var(--positive) 34%, var(--border)); background: color-mix(in srgb, var(--positive) 10%, var(--surface)); color: var(--positive); }
+.daily-gate-badge.decayed { border-color: color-mix(in srgb, var(--warning) 34%, var(--border)); background: color-mix(in srgb, var(--warning) 10%, var(--surface)); color: var(--warning); }
+.daily-gate-badge.below_threshold { border-color: var(--border); background: color-mix(in srgb, var(--muted) 8%, var(--surface)); color: var(--muted); }
+.ungated-picks-card .daily-qualifying-status { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+.ungated-picks-card .daily-qualifying-status strong { color: var(--accent); }
 .pick-roi-combinations { margin-top: 14px; }
 .pick-roi-summary { cursor: pointer; list-style: none; }
 .pick-roi-summary::-webkit-details-marker { display: none; }

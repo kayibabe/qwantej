@@ -34,19 +34,29 @@ interface WalkForwardAccumulators {
   published: WalkForwardAccumulatorSet
 }
 interface DailyLedgerSnapshot { rows: RecommendationPick[]; roi_combinations: PickRoiCombination[]; walk_forward?: WalkForwardAccumulators | null }
-interface DailyUniquePicks {
+interface MarketGateStatus {
+  market: string
+  status: 'qualifying' | 'decayed' | 'below_threshold'
+  unique_picks: number
+  priced_settled: number
+  roi: number | null
+  recent_picks: number | null
+  recent_roi: number | null
+}
+export interface DailyUniquePicks {
   date: string
   metrics: PickMetric
   qualifies: boolean
   qualifying_markets: Array<{ market: string; metrics: PickMetric }>
   rows: RecommendationPick[]
+  ungated?: { rows: RecommendationPick[]; market_status: MarketGateStatus[] }
   published_simulation: {
     qualifies: boolean
     qualifying_combinations: Array<{ market: string; model_version: string; metrics: PickMetric }>
     rows: RecommendationPick[]
   }
 }
-interface RecommendationPick {
+export interface RecommendationPick {
   pick_id: string; target_date: string; match_id: number; home_team: string; away_team: string; competition: string; kickoff_at: string
   market: string; selection: string; sources: Array<'published' | 'strongest'>; published_tiers: string[]; published_ticket_count: number
   strongest_rank: number | null; strongest_capture_sources: string[]; prediction_ids: number[]; model_run_ids: number[]; model_version: string; model_versions: string[]
@@ -474,6 +484,18 @@ function dateAtBlantyreNoon(value: string) {
   return new Date(`${value}T12:00:00+02:00`)
 }
 
+export function emptyDayCopy(ungatedCount: number) {
+  return ungatedCount > 0
+    ? {
+        title: `${ungatedCount} picks on this date, none in qualifying markets`,
+        body: 'Today’s picks are in markets that have not cleared the 10% ROI rule. They are listed under today’s system picks below; the accumulator simulation keeps using only qualifying markets.',
+      }
+    : {
+        title: 'No matches from qualifying markets on this date',
+        body: 'The ledger markets meet the all-time thresholds, but none have a pick on the selected date.',
+      }
+}
+
 function DailyQualifyingMatches() {
   const [date, setDate] = useState(todayInBlantyre)
   const [daily, setDaily] = useState<DailyUniquePicks | null>(null)
@@ -485,6 +507,7 @@ function DailyQualifyingMatches() {
   const dateLabel = new Intl.DateTimeFormat(undefined, {
     dateStyle: 'full', timeZone: 'Africa/Blantyre',
   }).format(dateAtBlantyreNoon(date))
+  const ungatedCount = daily?.ungated?.rows.length ?? 0
 
   useEffect(() => {
     let active = true
@@ -556,10 +579,11 @@ function DailyQualifyingMatches() {
           {daily.qualifies
             ? daily.rows.length > 0
               ? <><DailyQualifyingMatchTable rows={daily.rows} /><DailyAccumulatorPreview title="Ledger picks" rows={daily.rows} stake={flatStake} /></>
-              : <AnalyticsEmpty title="No matches from qualifying markets on this date" body="The ledger markets meet the all-time thresholds, but none have a pick on the selected date." compact />
+              : <AnalyticsEmpty {...emptyDayCopy(ungatedCount)} compact />
             : <p className="matrix-note">Matches appear when a market meets both thresholds in the all-time All Unique Recommended Ledger.</p>}
         </>}
   </section>
+  {daily && <UngatedDailyPicks daily={daily} />}
   <section className="analytics-card daily-qualifying-card published-simulation-card" aria-labelledby="published-simulation-title">
     <div className="section-header daily-qualifying-header"><div><span className="eyebrow">Published · Market × Model · 5% simulation</span><h2 className="section-title" id="published-simulation-title">Published simulation picks</h2></div></div>
     <span className="daily-selected-date">For {dateLabel}</span>
@@ -589,6 +613,54 @@ function DailyQualifyingMatchTable({ rows }: { rows: RecommendationPick[] }) {
   const sorted = [...rows].sort((a, b) => a.kickoff_at.localeCompare(b.kickoff_at))
   if (sorted.length === 0) return <AnalyticsEmpty title="No qualifying matches" body="The daily pick and ROI criteria are met, but there are no match rows to display." compact />
   return <div className="analytics-table-wrap"><table className="analytics-table daily-qualifying-table"><thead><tr><th>Kickoff</th><th>Match</th><th>Market / pick</th><th>Sources</th><th>Odds</th><th>Result</th><th>P&amp;L</th></tr></thead><tbody>{sorted.map(row => <tr key={row.pick_id}><td>{new Date(row.kickoff_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Blantyre' })}</td><td><strong>{row.home_team} vs {row.away_team}</strong><small>{row.competition}</small></td><td><strong>{formatMarket(row.market)}</strong><small>{formatSelection(row.selection)}</small></td><td>{row.sources.map(item => item === 'published' ? 'Published' : 'Strongest').join(' + ')}</td><td>{row.odds == null ? '—' : row.odds.toFixed(2)}</td><td><strong>{row.home_goals != null && row.away_goals != null ? `${row.home_goals}–${row.away_goals}` : '—'}</strong><small className={`selection-outcome ${row.result}`}>{row.result}</small></td><td className={row.profit_loss == null ? '' : row.profit_loss >= 0 ? 'positive' : 'negative'}>{row.profit_loss == null ? '—' : fmtPnl(row.profit_loss)}</td></tr>)}</tbody></table></div>
+}
+
+const GATE_LABELS: Record<MarketGateStatus['status'], string> = {
+  qualifying: 'Qualifies',
+  decayed: 'Decayed',
+  below_threshold: 'Below threshold',
+}
+
+function gateDetail(entry: MarketGateStatus | undefined): string {
+  if (!entry) return 'No all-time record'
+  const roi = entry.roi == null ? 'no priced picks' : `${pct(entry.roi)} ROI`
+  const recent = entry.recent_roi == null ? '' : ` · recent ${entry.recent_picks}: ${pct(entry.recent_roi)}`
+  return `${entry.unique_picks} picks · ${roi}${recent}`
+}
+
+export function UngatedDailyPicks({ daily }: { daily: DailyUniquePicks }) {
+  const ungated = daily.ungated
+  if (!ungated) return null
+  const rows = [...ungated.rows].sort((a, b) => a.kickoff_at.localeCompare(b.kickoff_at))
+  const statusByMarket = new Map(ungated.market_status.map(item => [item.market, item]))
+  const dateLabel = new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'full', timeZone: 'Africa/Blantyre',
+  }).format(dateAtBlantyreNoon(daily.date))
+  return <section className="analytics-card daily-qualifying-card ungated-picks-card" aria-labelledby="ungated-picks-title">
+    <div className="section-header daily-qualifying-header">
+      <div><span className="eyebrow">Ungated · context only</span><h2 className="section-title" id="ungated-picks-title">Today’s system picks · all markets</h2></div>
+    </div>
+    <span className="daily-selected-date">{dateLabel}</span>
+    <div className="daily-qualifying-status">
+      <strong>{rows.length} {rows.length === 1 ? 'pick' : 'picks'} recorded for this date</strong>
+      <span>Every pick the pipeline recorded, whatever its market. The badge shows whether that market clears the 5-pick / 10% rule behind the accumulator simulation above. This list never feeds that simulation, so showing it cannot change the simulation’s results.</span>
+    </div>
+    {rows.length === 0
+      ? <AnalyticsEmpty title="No system picks for this date" body="Fixtures exist for this date, but the pipeline recorded no Published or Strongest pick yet." compact />
+      : <div className="analytics-table-wrap"><table className="analytics-table daily-qualifying-table"><thead><tr><th>Kickoff</th><th>Match</th><th>Market / pick</th><th>Sources</th><th>Odds</th><th>Result</th><th>All-time gate</th></tr></thead><tbody>{rows.map(row => {
+        const entry = statusByMarket.get(row.market)
+        const status = entry?.status ?? 'below_threshold'
+        return <tr key={row.pick_id}>
+          <td>{new Date(row.kickoff_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Blantyre' })}</td>
+          <td><strong>{row.home_team} vs {row.away_team}</strong><small>{row.competition}</small></td>
+          <td><strong>{formatMarket(row.market)}</strong><small>{formatSelection(row.selection)}</small></td>
+          <td>{row.sources.map(item => item === 'published' ? 'Published' : 'Strongest').join(' + ')}</td>
+          <td>{row.odds == null ? '—' : row.odds.toFixed(2)}</td>
+          <td><strong>{row.home_goals != null && row.away_goals != null ? `${row.home_goals}–${row.away_goals}` : '—'}</strong><small className={`selection-outcome ${row.result}`}>{row.result}</small></td>
+          <td><span className={`daily-gate-badge ${status}`}>{GATE_LABELS[status]}</span><small>{gateDetail(entry)}</small></td>
+        </tr>
+      })}</tbody></table></div>}
+  </section>
 }
 
 interface AccumulatorTotals { tickets: number; settled: number; won: number; lost: number; pending: number; hitRate: number | null; profitLoss: number; roi: number | null }

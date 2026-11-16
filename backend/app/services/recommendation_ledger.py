@@ -70,6 +70,41 @@ def _decay_guard(
     return (roi is not None and roi >= min_roi), len(recent), roi
 
 
+MARKET_QUALIFYING = "qualifying"
+MARKET_DECAYED = "decayed"
+MARKET_BELOW_THRESHOLD = "below_threshold"
+
+
+def _market_gate(market_rows: list[dict], stake: float) -> dict:
+    """Classify one market against the all-time All Unique qualification rule.
+
+    The daily view only shows picks whose market already cleared this gate, so
+    every pick carries a status describing why it is or is not eligible. Keeping
+    the classification in one place stops the display and the gate from drifting
+    apart, and lets an ungated view label picks without inventing a new rule.
+    """
+    metrics = recommendation_metrics(market_rows, stake)
+    roi = metrics["roi"]
+    qualifies = (
+        metrics["unique_picks"] >= ACCUMULATOR_MIN_PICKS
+        and roi is not None
+        and roi >= ACCUMULATOR_ALL_UNIQUE_ROI
+    )
+    decay_ok, recent_n, recent_roi = _decay_guard(market_rows, stake)
+    if not qualifies:
+        status = MARKET_BELOW_THRESHOLD
+    elif decay_ok:
+        status = MARKET_QUALIFYING
+    else:
+        status = MARKET_DECAYED
+    return {
+        "status": status,
+        "metrics": metrics,
+        "recent_picks": recent_n,
+        "recent_roi": recent_roi,
+    }
+
+
 async def capture_strongest_snapshots(
     db: AsyncSession,
     model_run_id: int,
@@ -719,25 +754,31 @@ async def recommendation_pick_ledger(
         qualifying_markets = []
         decayed_markets = []
         qualifying_market_names: set[str] = set()
+        market_status = []
         for market_name, market_rows in sorted(market_groups.items()):
-            market_metrics = recommendation_metrics(market_rows, stake)
-            if (
-                market_metrics["unique_picks"] >= 5
-                and market_metrics["roi"] is not None
-                and market_metrics["roi"] >= 0.10
-            ):
-                decay_ok, recent_n, recent_roi = _decay_guard(market_rows, stake)
-                entry = {
+            gate = _market_gate(market_rows, stake)
+            entry = {
+                "market": market_name,
+                "metrics": gate["metrics"],
+                "recent_picks": gate["recent_picks"],
+                "recent_roi": gate["recent_roi"],
+            }
+            if gate["status"] == MARKET_QUALIFYING:
+                qualifying_market_names.add(market_name)
+                qualifying_markets.append(entry)
+            elif gate["status"] == MARKET_DECAYED:
+                decayed_markets.append(entry)
+            market_status.append(
+                {
                     "market": market_name,
-                    "metrics": market_metrics,
-                    "recent_picks": recent_n,
-                    "recent_roi": recent_roi,
+                    "status": gate["status"],
+                    "unique_picks": gate["metrics"]["unique_picks"],
+                    "priced_settled": gate["metrics"]["priced_settled"],
+                    "roi": gate["metrics"]["roi"],
+                    "recent_picks": gate["recent_picks"],
+                    "recent_roi": gate["recent_roi"],
                 }
-                if decay_ok:
-                    qualifying_market_names.add(market_name)
-                    qualifying_markets.append(entry)
-                else:
-                    decayed_markets.append(entry)
+            )
         daily_qualifies = bool(qualifying_market_names)
         # The second daily view reproduces the Published-only simulation using
         # all-time Source × Market × Model combinations at the 5% threshold.
@@ -801,6 +842,14 @@ async def recommendation_pick_ledger(
                 "qualifying_combinations": published_qualifying_combinations,
                 "decayed_combinations": published_decayed_combinations,
                 "rows": published_simulation_rows,
+            },
+            # Every ledger pick for the date, regardless of whether its market
+            # currently clears the 10% rule. This is context only: the gated
+            # `rows` above remain the only set that feeds the accumulator
+            # simulation, so showing all picks cannot affect its results.
+            "ungated": {
+                "rows": [_serialize_pick(row) for row in daily_rows],
+                "market_status": market_status,
             },
         }
         # Same thresholds, but each date may only use evidence from strictly
