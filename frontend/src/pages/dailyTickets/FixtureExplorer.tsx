@@ -5,6 +5,12 @@ import { useFavoriteMatches } from './useFavoriteMatches'
 type FixtureStatus = MatchFixture['status'] | 'all'
 type FixtureSort = 'kickoff' | 'match' | 'league'
 
+export function fixtureScore(fixture: MatchFixture): string | null {
+  return fixture.home_goals != null && fixture.away_goals != null
+    ? `${fixture.home_goals}–${fixture.away_goals}`
+    : null
+}
+
 export function FixtureExplorer({ fixtures }: { fixtures: MatchFixture[] }) {
   const [query, setQuery] = useState('')
   const [league, setLeague] = useState('all')
@@ -100,7 +106,9 @@ export function FixtureExplorer({ fixtures }: { fixtures: MatchFixture[] }) {
                   <span>{competition}</span><b>{groupFixtures.length} {groupFixtures.length === 1 ? 'match' : 'matches'}</b>
                   <span className="fixture-group-chevron" aria-hidden="true">{collapsed ? '›' : '⌄'}</span>
                 </button></h3>
-              {!collapsed && <div className="fixture-league-rows">{groupFixtures.map(fixture => (
+              {!collapsed && <div className="fixture-league-rows">{groupFixtures.map(fixture => {
+                const score = fixtureScore(fixture)
+                return (
                 <div className="fixture-row-wrap" key={fixture.match_id}>
                   <button
                     className={`fixture-favorite${favoriteIds.has(fixture.match_id) ? ' active' : ''}`}
@@ -113,18 +121,23 @@ export function FixtureExplorer({ fixtures }: { fixtures: MatchFixture[] }) {
                     <summary>
                       <strong>{fixture.home_team} <span className="leg-match-vs">vs</span> {fixture.away_team}</strong>
                       <span className={`summary-match-status ${fixture.status}`}>{fixture.status === 'scheduled' ? 'Upcoming' : fixture.status === 'live' ? 'In play' : fixture.status[0].toUpperCase() + fixture.status.slice(1)}</span>
+                      <span
+                        className={`fixture-score${score ? '' : ' empty'}`}
+                        aria-label={score ? `Result ${score}` : 'Result not available'}
+                      >{score ?? '—'}</span>
                       <span className="fixture-kickoff kickoff-time">{formatKickoff(fixture.kickoff_at)}</span>
                     </summary>
                     <div className="fixture-drilldown">
                       <span><small>Competition</small><b>{fixture.competition}</b></span>
                       <span><small>Kickoff</small><b><span className="event-date">{formatDate(fixture.kickoff_at)}</span> <span className="kickoff-time">{formatKickoff(fixture.kickoff_at)}</span></b></span>
                       <span><small>Status</small><b>{fixture.status === 'live' && fixture.elapsed_minutes != null ? `In play · ${fixture.elapsed_minutes}'` : fixture.status === 'live' && fixture.live_phase ? `In play · ${fixture.live_phase}` : fixture.status}</b></span>
-                      {fixture.home_goals != null && fixture.away_goals != null && <span><small>Score</small><b>{fixture.home_goals} – {fixture.away_goals}</b></span>}
+                      {score && <span><small>Result</small><b>{score}</b></span>}
                       <span className="fixture-pro-note">Market selections and model analysis are available with Pro.</span>
                     </div>
                   </details>
                 </div>
-              ))}</div>}
+                )
+              })}</div>}
             </section>
           })}
         </div>
