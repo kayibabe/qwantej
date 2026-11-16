@@ -193,6 +193,9 @@ export function AllMatches({
   loadingMore = false,
   onLoadMore,
   onSelect,
+  focusMatchId = null,
+  focusLabel = null,
+  onClearFocus,
 }: {
   rows: [number, SelectionSummary[]][];
   totalSelections?: number;
@@ -200,6 +203,11 @@ export function AllMatches({
   loadingMore?: boolean;
   onLoadMore?: () => void;
   onSelect: (row: SelectionSummary) => void;
+  /** Set from a fixture badge; narrows the list to that one fixture. */
+  focusMatchId?: number | null;
+  /** Team names for the focused fixture, so the chip shows even before its picks load. */
+  focusLabel?: string | null;
+  onClearFocus?: () => void;
 }) {
   const [statusFilter, setStatusFilter] = useState<"all" | MatchDisplayState>(() => {
     const value = matchUrlParam("status");
@@ -338,6 +346,7 @@ export function AllMatches({
     ...CHANCE_BLOCKS.map((block) => ({ value: String(block), text: `≥ ${block}%`, count: impliedCounts[block] ?? 0, disabled: !impliedCounts[block] })),
   ];
   const discoveredRows = rows.flatMap(([id, selections]) => {
+    if (focusMatchId != null && id !== focusMatchId) return [];
     const first = selections[0];
     const matchesText = !queryText || `${first.home_team} ${first.away_team} ${first.competition}`.toLocaleLowerCase().includes(queryText);
     const marketRows = selections.filter((row) => rowMeetsFilters(row) && outcomeMatchesFilter(row));
@@ -347,7 +356,8 @@ export function AllMatches({
   const filteredRows = statusFilter === "all"
     ? discoveredRows
     : discoveredRows.filter(([, selections]) => matchDisplayState(selections[0]) === statusFilter);
-  const activeFilterCount = Number(Boolean(query.trim()))
+  const activeFilterCount = Number(focusMatchId != null)
+    + Number(Boolean(query.trim()))
     + Number(leagueFilter !== "all")
     + Number(marketFilter !== "all")
     + Number(chanceMin !== "")
@@ -417,6 +427,7 @@ export function AllMatches({
         : { key, direction: key === "kickoff" ? "asc" : "desc" },
     );
   const clearFilters = () => {
+    onClearFocus?.();
     setStatusFilter("all");
     setQuery("");
     setLeagueFilter("all");
@@ -520,6 +531,12 @@ export function AllMatches({
         </p>
       ) : (
         <>
+          {focusMatchId != null && focusLabel && (
+            <div className="picks-focus-chip" role="status">
+              <span>Showing picks for <b>{focusLabel}</b></span>
+              <button type="button" onClick={() => onClearFocus?.()} aria-label="Clear the fixture focus">✕ Clear</button>
+            </div>
+          )}
           <div className="picks-controls">
             <div className="picks-controls-row picks-controls-search">
               <label className="picks-field picks-search">
@@ -736,7 +753,11 @@ export function AllMatches({
             <span />
           </div>
           {sortedRows.length === 0 ? (
-            <p className="panel-empty">No qualified matches match these filters.</p>
+            <p className="panel-empty">
+              {focusMatchId != null
+                ? `No loaded picks for ${focusLabel ?? "this fixture"}. Load the next 100 candidates, or clear the focus.`
+                : "No qualified matches match these filters."}
+            </p>
           ) : (
             <div className="match-card-grid">
               {sortedRows.map(([matchId, selections]) => (

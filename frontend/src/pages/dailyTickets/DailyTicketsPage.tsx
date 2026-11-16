@@ -4,6 +4,7 @@ import type { DailyTickets, Leg, MatchFixture, SelectionSummary, Ticket } from "
 import {
   fetchDailyTickets,
   fetchMatchFixtures,
+  fetchQualifiedPickCounts,
   fetchQualifiedSelections,
   fetchRejectedSelections,
   formatDate,
@@ -48,6 +49,10 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
   const [marketRoi, setMarketRoi] = useState<MarketRoiDailyData | null>(null);
   const [marketRoiError, setMarketRoiError] = useState<string | null>(null);
   const [fixtures, setFixtures] = useState<MatchFixture[]>([]);
+  // null means the counts are unknown (request failed); {} means "loaded, no
+  // fixture has a pick", which the list renders as a muted dash.
+  const [pickCounts, setPickCounts] = useState<Record<number, number> | null>(null);
+  const [focusMatchId, setFocusMatchId] = useState<number | null>(null);
   const [candidatesLoaded, setCandidatesLoaded] = useState(false);
   const [rejectedLoaded, setRejectedLoaded] = useState(false);
   const [tab, setTab] = useState<DailyTab>(initialTab);
@@ -77,6 +82,21 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
       onTabChange?.("fixtures");
     }
   }, [authLoading, isAdmin, mode, onTabChange, tab]);
+
+  // Fixture focus is slate-specific: drop it when the date changes, and when
+  // the user leaves System picks, so a stale filter never hides a new slate.
+  useEffect(() => {
+    setFocusMatchId(null);
+  }, [date]);
+  useEffect(() => {
+    if (tab !== "picks") setFocusMatchId(null);
+  }, [tab]);
+
+  const openFixturePicks = (matchId: number) => {
+    setFocusMatchId(matchId);
+    setTab("picks");
+    onTabChange?.("picks");
+  };
 
   const flatStakeForTicket = (ticket: Ticket | null) => {
     const stake = Number(stakePerTicket);
@@ -110,9 +130,16 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
           return null;
         })
         : Promise.resolve(null);
-      const [tickets, fixtureRows, allRows, rejectedRows, marketRoiRows] = await Promise.all([
+      // Coverage counts are public to signed-in accounts, so every role gets
+      // them alongside the fixture list. A failure must not hide fixtures: a
+      // null result leaves the badge out rather than claiming "no picks".
+      const pickCountsPromise = wantsFixtures
+        ? fetchQualifiedPickCounts(targetDate).catch(() => null)
+        : Promise.resolve(null);
+      const [tickets, fixtureRows, countRows, allRows, rejectedRows, marketRoiRows] = await Promise.all([
         wantsTickets ? fetchDailyTickets(targetDate) : Promise.resolve(null),
         wantsFixtures ? fetchMatchFixtures(targetDate) : Promise.resolve(null),
+        pickCountsPromise,
         wantsCandidates ? fetchQualifiedSelections(targetDate) : Promise.resolve(null),
         wantsRejected ? fetchRejectedSelections(targetDate) : Promise.resolve(null),
         marketRoiPromise,
@@ -121,6 +148,11 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
       setError(null);
       if (tickets) setData(tickets);
       if (fixtureRows) setFixtures(fixtureRows);
+      if (wantsFixtures) {
+        setPickCounts(countRows
+          ? Object.fromEntries(countRows.map((row) => [row.match_id, row.picks]))
+          : null);
+      }
       if (allRows) {
         setMatches(withRejectionEvidence(allRows.rows, rejectedRows ?? []));
         setMatchesTotal(allRows.total);
@@ -350,6 +382,7 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
     (groups[row.match_id] ??= []).push(row);
     return groups;
   }, {})).map(([id, rows]) => [Number(id), rows] as [number, SelectionSummary[]]);
+  const focusFixture = focusMatchId == null ? null : fixtures.find((fixture) => fixture.match_id === focusMatchId) ?? null;
 
   return (
     <>
@@ -470,8 +503,8 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
           {tab === "fixtures" && <div className="view-intro"><span className="eyebrow">Fixtures</span><h2 className="section-title">All fixtures for this date</h2><p>Every fixture scheduled for this date, with competition, kickoff time, and current status.</p></div>}
           {tab === "picks" && canExploreMarkets && <div className="view-intro"><span className="eyebrow">System picks</span><h2 className="section-title">System picks for this date</h2><p>Every Q ≥75 selection the model qualified for this date, grouped by match. A pick appearing here does not mean it made a published accumulator.</p></div>}
           {tab === "tickets" && <div className="view-intro"><span className="eyebrow">Accumulator tickets</span><h2 className="section-title">Tickets assembled from this date&rsquo;s picks</h2><p>{canExploreMarkets ? "Each published tier is a fixed combination of the system’s qualified picks. Expand a leg to inspect its evidence; the stake field is a what-if calculation only." : "Each published tier is a fixed combination of the system’s qualified picks. On Free you can review every match leg and its settlement status; Pro opens the selections and their evidence."}</p></div>}
-          {tab === "fixtures" && <Suspense fallback={<div className="route-loading">Loading fixtures…</div>}><FixtureExplorer fixtures={fixtures} /></Suspense>}
-          {tab === "picks" && canExploreMarkets && <Suspense fallback={<div className="route-loading">Loading system picks…</div>}><AllMatches rows={matchGroups} totalSelections={matchesTotal} loadedSelections={matches.length} loadingMore={loadingMoreMatches} onLoadMore={loadMoreMatches} onSelect={openSelection} /></Suspense>}
+          {tab === "fixtures" && <Suspense fallback={<div className="route-loading">Loading fixtures…</div>}><FixtureExplorer fixtures={fixtures} pickCounts={pickCounts ?? undefined} onOpenPicks={canExploreMarkets ? openFixturePicks : undefined} /></Suspense>}
+          {tab === "picks" && canExploreMarkets && <Suspense fallback={<div className="route-loading">Loading system picks…</div>}><AllMatches rows={matchGroups} totalSelections={matchesTotal} loadedSelections={matches.length} loadingMore={loadingMoreMatches} onLoadMore={loadMoreMatches} onSelect={openSelection} focusMatchId={focusMatchId} focusLabel={focusFixture ? `${focusFixture.home_team} vs ${focusFixture.away_team}` : null} onClearFocus={() => setFocusMatchId(null)} /></Suspense>}
           {tab === "picks" && !canExploreMarkets && (
             <section className="plan-locked-panel" aria-labelledby="plan-locked-picks-title">
               <div className="plan-locked-copy">

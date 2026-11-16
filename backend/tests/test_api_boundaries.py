@@ -1,8 +1,12 @@
 from fastapi.routing import APIRoute
 import inspect
+from datetime import date
+from typing import get_args
+
+import pytest
 
 from app.api.security import require_admin_access, require_authenticated_user, require_pro_access
-from app.api.v1 import admin, backtests, custom_accumulators, tickets
+from app.api.v1 import admin, backtests, custom_accumulators, selections, tickets
 
 
 def _route(path: str, method: str, router):
@@ -78,3 +82,35 @@ def test_custom_accumulator_mutations_require_authenticated_pro_access():
                 dependency.call for dependency in route.dependant.dependencies
             }
             assert require_pro_access in dependency_callables, route.path
+
+
+def test_fixture_pick_counts_require_a_session_but_not_pro_access():
+    route = _route("/selections/qualified/counts", "GET", selections.router)
+    dependency_callables = {
+        dependency.call for dependency in route.dependant.dependencies
+    }
+    assert require_authenticated_user in dependency_callables
+    assert require_pro_access not in dependency_callables
+
+
+def test_fixture_pick_counts_expose_counts_only():
+    route = _route("/selections/qualified/counts", "GET", selections.router)
+    (response_model,) = get_args(route.response_model)
+    assert set(response_model.model_fields) == {"match_id", "picks"}
+
+
+@pytest.mark.asyncio
+async def test_fixture_pick_counts_group_picks_by_fixture():
+    class _Result:
+        def all(self):
+            return [(7, 3), (9, 1)]
+
+    class _Db:
+        async def execute(self, *_args, **_kwargs):
+            return _Result()
+
+    rows = await selections.get_qualified_pick_counts(
+        date=date(2026, 11, 15), min_qscore=75, db=_Db(), _user=object()
+    )
+
+    assert [(row.match_id, row.picks) for row in rows] == [(7, 3), (9, 1)]

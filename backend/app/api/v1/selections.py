@@ -315,6 +315,48 @@ class MatchIntelligenceOut(BaseModel):
     evidence_note: str
 
 
+def _qualified_candidates_query(target: date, min_qscore: float, market: str | None):
+    """Latest completed pre-kickoff predictions above a Q threshold for one date.
+
+    Shared by the Pro-gated selection list and the public per-fixture counts so
+    a coverage badge can never disagree with the picks it points at.
+
+    A live refresh can make a fixture ineligible for a new model run after
+    kickoff. Keep its latest completed pre-kickoff prediction visible rather
+    than making it disappear from All Qualifying Matches.
+    """
+    latest_prediction_run = (
+        select(
+            Prediction.match_id,
+            Prediction.market,
+            func.max(Prediction.model_run_id).label("latest_run_id"),
+        )
+        .join(ModelRun, Prediction.model_run_id == ModelRun.id)
+        .where(ModelRun.target_date == target, ModelRun.status == RunStatus.COMPLETED)
+        .group_by(Prediction.match_id, Prediction.market)
+        .subquery()
+    )
+    query = (
+        select(Prediction)
+        .join(Match, Prediction.match_id == Match.id)
+        .join(
+            latest_prediction_run,
+            (latest_prediction_run.c.match_id == Prediction.match_id)
+            & (latest_prediction_run.c.market == Prediction.market)
+            & (latest_prediction_run.c.latest_run_id == Prediction.model_run_id),
+        )
+        .where(
+            Prediction.q_score >= min_qscore,
+            Match.kickoff_at >= cat_day_bounds_utc(target)[0],
+            Match.kickoff_at < cat_day_bounds_utc(target)[1],
+            Match.excluded_from_models == False,
+        )
+    )
+    if market:
+        query = query.where(Prediction.market == market)
+    return query
+
+
 @router.get("/qualified", response_model=list[SelectionOut], dependencies=[Depends(require_pro_access)])
 async def get_qualified_selections(
     response: Response,
@@ -345,35 +387,8 @@ async def get_qualified_selections(
     if model_run is None:
         return []
 
-    # A live refresh can make a fixture ineligible for a new model run after
-    # kickoff. Keep its latest completed pre-kickoff prediction visible rather
-    # than making it disappear from All Qualifying Matches.
-    latest_prediction_run = (
-        select(
-            Prediction.match_id,
-            Prediction.market,
-            func.max(Prediction.model_run_id).label("latest_run_id"),
-        )
-        .join(ModelRun, Prediction.model_run_id == ModelRun.id)
-        .where(ModelRun.target_date == target, ModelRun.status == RunStatus.COMPLETED)
-        .group_by(Prediction.match_id, Prediction.market)
-        .subquery()
-    )
     candidate_query = (
-        select(Prediction)
-        .join(Match, Prediction.match_id == Match.id)
-        .join(
-            latest_prediction_run,
-            (latest_prediction_run.c.match_id == Prediction.match_id)
-            & (latest_prediction_run.c.market == Prediction.market)
-            & (latest_prediction_run.c.latest_run_id == Prediction.model_run_id),
-        )
-        .where(
-            Prediction.q_score >= min_qscore,
-            Match.kickoff_at >= cat_day_bounds_utc(target)[0],
-            Match.kickoff_at < cat_day_bounds_utc(target)[1],
-            Match.excluded_from_models == False,
-        )
+        _qualified_candidates_query(target, min_qscore, market)
         .options(
             selectinload(Prediction.match).selectinload(Match.home_team),
             selectinload(Prediction.match).selectinload(Match.away_team),
@@ -381,8 +396,6 @@ async def get_qualified_selections(
         )
         .order_by(Prediction.q_score.desc(), Prediction.id.asc())
     )
-    if market:
-        candidate_query = candidate_query.where(Prediction.market == market)
     filtered = candidate_query.order_by(None).subquery()
     total_result = await db.execute(select(func.count()).select_from(filtered))
     match_total_result = await db.execute(
@@ -478,6 +491,39 @@ async def get_qualified_selections(
         ))
 
     return output
+
+
+class QualifiedPickCountOut(BaseModel):
+    """Coverage only: how many picks a fixture has, never which markets."""
+
+    match_id: int
+    picks: int
+
+
+@router.get("/qualified/counts", response_model=list[QualifiedPickCountOut])
+async def get_qualified_pick_counts(
+    date: Optional[date] = Query(default=None, description="Target date (default: today)"),
+    min_qscore: float = Query(default=75.0, ge=0, le=100),
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_authenticated_user),
+):
+    """Count qualified picks per fixture so the fixture list can show coverage.
+
+    Returns no market, price, or probability: the fixture list is visible to
+    every signed-in account, while the selections themselves stay behind the
+    Pro gate on /qualified.
+    """
+    target = date or cat_today()
+    candidates = _qualified_candidates_query(target, min_qscore, None).subquery()
+    rows = await db.execute(
+        select(candidates.c.match_id, func.count().label("picks"))
+        .group_by(candidates.c.match_id)
+        .order_by(candidates.c.match_id)
+    )
+    return [
+        QualifiedPickCountOut(match_id=match_id, picks=int(picks))
+        for match_id, picks in rows.all()
+    ]
 
 
 CHANCE_STEPS = [20, 30, 40, 50, 60, 70, 80, 90]

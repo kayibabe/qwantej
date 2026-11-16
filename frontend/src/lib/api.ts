@@ -666,6 +666,22 @@ export async function fetchQualifiedSelections(date: string, minQScore = 75, off
   }
 }
 
+export interface QualifiedPickCount {
+  match_id: number
+  picks: number
+}
+
+/**
+ * Q≥75 pick count per fixture. Counts only, so the fixture list can show
+ * coverage without exposing Pro-gated market selections.
+ */
+export async function fetchQualifiedPickCounts(date: string, minQScore = 75): Promise<QualifiedPickCount[]> {
+  const params = new URLSearchParams({ date, min_qscore: String(minQScore) })
+  const res = await fetch(`/api/v1/selections/qualified/counts?${params}`)
+  if (!res.ok) throw new Error(`API error ${res.status}`)
+  return res.json()
+}
+
 export interface BlockPerformanceCell {
   market: string
   kind: 'chance' | 'implied'

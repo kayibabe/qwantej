@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type MouseEvent } from 'react'
 import { formatDate, formatKickoff, type MatchFixture } from '../../lib/api'
 import { useFavoriteMatches } from './useFavoriteMatches'
 
@@ -11,7 +11,17 @@ export function fixtureScore(fixture: MatchFixture): string | null {
     : null
 }
 
-export function FixtureExplorer({ fixtures }: { fixtures: MatchFixture[] }) {
+export function fixturePickLabel(picks: number): string {
+  return picks === 1 ? '1 pick' : `${picks} picks`
+}
+
+export function FixtureExplorer({ fixtures, pickCounts = {}, onOpenPicks }: {
+  fixtures: MatchFixture[]
+  /** Q≥75 pick count per match. A count only: the fixture list never shows a market. */
+  pickCounts?: Record<number, number>
+  /** Pro/admin only. Free accounts still see the count, but not the picks. */
+  onOpenPicks?: (matchId: number) => void
+}) {
   const [query, setQuery] = useState('')
   const [league, setLeague] = useState('all')
   const [status, setStatus] = useState<FixtureStatus>('all')
@@ -108,6 +118,13 @@ export function FixtureExplorer({ fixtures }: { fixtures: MatchFixture[] }) {
                 </button></h3>
               {!collapsed && <div className="fixture-league-rows">{groupFixtures.map(fixture => {
                 const score = fixtureScore(fixture)
+                const picks = pickCounts[fixture.match_id] ?? 0
+                const picksLabel = fixturePickLabel(picks)
+                const openPicks = (event: MouseEvent<HTMLButtonElement>) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  onOpenPicks?.(fixture.match_id)
+                }
                 return (
                 <div className="fixture-row-wrap" key={fixture.match_id}>
                   <button
@@ -121,6 +138,18 @@ export function FixtureExplorer({ fixtures }: { fixtures: MatchFixture[] }) {
                     <summary>
                       <strong>{fixture.home_team} <span className="leg-match-vs">vs</span> {fixture.away_team}</strong>
                       <span className={`summary-match-status ${fixture.status}`}>{fixture.status === 'scheduled' ? 'Upcoming' : fixture.status === 'live' ? 'In play' : fixture.status[0].toUpperCase() + fixture.status.slice(1)}</span>
+                      {picks > 0 && onOpenPicks
+                        ? <button
+                            type="button"
+                            className="fixture-picks has-picks"
+                            onClick={openPicks}
+                            title={`Open the ${picksLabel} Q≥75 system picks for this fixture`}
+                            aria-label={`Open ${picksLabel} for ${fixture.home_team} vs ${fixture.away_team}`}
+                          >{picksLabel}</button>
+                        : <span
+                            className={`fixture-picks${picks > 0 ? ' has-picks' : ' empty'}`}
+                            title={picks > 0 ? `${picksLabel} · open with Pro` : 'No Q≥75 system picks'}
+                          >{picks > 0 ? picksLabel : '—'}</span>}
                       <span
                         className={`fixture-score${score ? '' : ' empty'}`}
                         aria-label={score ? `Result ${score}` : 'Result not available'}
