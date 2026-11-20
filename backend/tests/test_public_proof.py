@@ -108,15 +108,15 @@ async def test_public_proof_returns_latest_decided_ticket_and_tier_metrics():
     proof = await tickets_api.get_public_proof(db)
 
     assert proof.days is None
-    assert proof.sample_size == 3
+    # Balanced is an administrator-only observation cohort, so the public
+    # record neither counts nor lists it.
+    assert proof.sample_size == 2
     assert proof.first_settled_date == "2026-11-06"
     assert proof.last_settled_date == "2026-11-07"
     safe = next(tier for tier in proof.tiers if tier.ticket_type == "safe")
-    balanced = next(tier for tier in proof.tiers if tier.ticket_type == "balanced")
+    assert [tier.ticket_type for tier in proof.tiers] == ["safe"]
     assert (safe.settled, safe.won, safe.lost, safe.void) == (2, 1, 0, 1)
     assert safe.win_rate == 1.0
-    assert (balanced.settled, balanced.won, balanced.lost, balanced.void) == (1, 0, 1, 0)
-    assert balanced.win_rate == 0.0
 
     # Void tickets return the stake, so they add a flat equity point and do
     # not count as turnover.
@@ -127,9 +127,6 @@ async def test_public_proof_returns_latest_decided_ticket_and_tier_metrics():
     assert safe.equity[0].cumulative_units == 0.0
     assert safe.equity[1].cumulative_units == pytest.approx(1.03)
     assert [ticket.ticket_id for ticket in safe.recent_tickets] == [174, 173]
-    assert balanced.profit_units == -1.0
-    assert balanced.roi == -1.0
-    assert [ticket.ticket_id for ticket in balanced.recent_tickets] == [175]
 
     assert proof.latest_ticket is not None
     assert proof.latest_ticket.ticket_id == 174

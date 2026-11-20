@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import AsyncSessionLocal
 from app.models.bet import Bet, BetStatus
 from app.api.security import require_research_access
+from app.services.ticket_visibility import admin_only_ticket_types
 
 router = APIRouter(
     prefix="/analytics",
@@ -20,10 +21,18 @@ async def get_db():
         yield db
 
 
+def _portfolio_bets(rows):
+    """Exclude observation-only tiers from every bet-ledger aggregate."""
+    hidden = {ticket_type.value for ticket_type in admin_only_ticket_types()}
+    if not hidden:
+        return list(rows)
+    return [row for row in rows if (row.ticket_type or "") not in hidden]
+
+
 @router.get("/summary")
 async def summary(db: AsyncSession = Depends(get_db)):
     """Overall P&L, ROI, and hit rate across all settled bets."""
-    rows = (await db.execute(select(Bet))).scalars().all()
+    rows = _portfolio_bets((await db.execute(select(Bet))).scalars().all())
 
     total = len(rows)
     settled = [b for b in rows if b.status != BetStatus.PENDING]
@@ -55,7 +64,7 @@ async def summary(db: AsyncSession = Depends(get_db)):
 @router.get("/by-ticket-type")
 async def by_ticket_type(db: AsyncSession = Depends(get_db)):
     """P&L breakdown by ticket type (safe, balanced, best_value, custom)."""
-    rows = (await db.execute(select(Bet))).scalars().all()
+    rows = _portfolio_bets((await db.execute(select(Bet))).scalars().all())
     settled = [b for b in rows if b.status != BetStatus.PENDING]
 
     buckets: dict[str, dict] = {}
@@ -88,7 +97,7 @@ async def by_ticket_type(db: AsyncSession = Depends(get_db)):
 @router.get("/by-month")
 async def by_month(db: AsyncSession = Depends(get_db)):
     """Monthly P&L summary."""
-    rows = (await db.execute(select(Bet))).scalars().all()
+    rows = _portfolio_bets((await db.execute(select(Bet))).scalars().all())
     settled = [b for b in rows if b.status != BetStatus.PENDING and b.created_at]
 
     months: dict[str, dict] = {}
@@ -122,9 +131,9 @@ async def by_month(db: AsyncSession = Depends(get_db)):
 async def recent(limit: int = Query(10, le=50), db: AsyncSession = Depends(get_db)):
     """Most recent bets with their P&L for the dashboard feed."""
     from sqlalchemy import desc
-    rows = (await db.execute(
+    rows = _portfolio_bets((await db.execute(
         select(Bet).order_by(desc(Bet.created_at)).limit(limit)
-    )).scalars().all()
+    )).scalars().all())
     return [
         {
             "id": b.id,

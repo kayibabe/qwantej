@@ -39,8 +39,7 @@ def test_backtest_run_accepts_authenticated_admin_or_research_key():
 def test_daily_tickets_do_not_publish_internal_best_value():
     source = inspect.getsource(tickets.get_daily_tickets)
     assert "include_internal=include_internal" in source
-    assert "if include_internal else list(PUBLIC_TICKET_TYPES)" in source
-    assert "TicketType.HIGH_ODDS" in source
+    assert "reader_ticket_types(include_internal, admin=admin)" in source
     assert "AccumulatorTicket.ticket_type.in_(visible_ticket_types)" in source
     route = _route("/tickets/daily", "GET", tickets.router)
     include_internal = next(

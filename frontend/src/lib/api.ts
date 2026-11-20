@@ -150,6 +150,7 @@ export interface DailyTickets {
   generation_status: string | null
   generated_ticket_count: number
   missing_public_ticket_types: string[]
+  observation_only_ticket_types?: string[]
   pricing?: 'market' | 'model'
   pipeline_run_id: number | null
   pipeline_status: string | null

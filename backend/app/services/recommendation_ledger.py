@@ -23,6 +23,7 @@ from app.models import (
 )
 from app.config import CAT
 from app.services.settlement import evaluate_selection
+from app.services.ticket_visibility import admin_only_ticket_types
 
 
 def _cat_date(value: datetime | None) -> date | None:
@@ -528,10 +529,12 @@ async def recommendation_pick_ledger(
     """Merge Published and Strongest picks into one deduplicated evidence ledger."""
     rows_by_key: dict[tuple, dict] = {}
 
+    hidden_types = admin_only_ticket_types()
     published_result = await db.execute(
         select(AccumulatorTicket)
         .where(
             AccumulatorTicket.ticket_type != TicketType.HIGH_ODDS,
+            AccumulatorTicket.ticket_type.notin_(hidden_types),
             AccumulatorTicket.status.in_(
                 [TicketStatus.PUBLISHED, TicketStatus.SETTLED, TicketStatus.VOID]
             )

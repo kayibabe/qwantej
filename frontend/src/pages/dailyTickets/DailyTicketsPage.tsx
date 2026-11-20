@@ -361,8 +361,13 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
     ...(isAdmin && rejectedLoaded ? { passed: rejected.length } : {}),
   };
 
-  // Describe each tier by the rules its generation actually applied.
+  // Describe each tier by the rules its generation actually applied. The
+  // backend omits observation-only tickets from non-admin payloads, so card
+  // visibility follows the returned data rather than a hardcoded role check.
   const fairPriced = data?.pricing === "market";
+  const balancedIsObservation = (data?.observation_only_ticket_types ?? []).includes("balanced");
+  const showBalanced = isAdmin || (data ? data.balanced != null : false);
+  const balancedRules = fairPriced ? "3 legs · 3.00–4.00×" : "Q ≥80 · 60% Grade A/A+";
   const publicTiers = [
     {
       key: "conservative" as const,
@@ -370,12 +375,12 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
       desc: fairPriced ? "3 legs · 2.00–2.60× · review first" : "Q ≥85 · 3–6 legs · 3–5×",
       color: "var(--conservative)",
     },
-    {
+    ...(showBalanced ? [{
       key: "balanced" as const,
       name: "Balanced",
-      desc: fairPriced ? "3 legs · 3.00–4.00× · secondary option" : "Q ≥80 · 60% Grade A/A+",
+      desc: `${balancedRules}${balancedIsObservation ? " · observation only, not counted" : ""}`,
       color: "var(--balanced)",
-    },
+    }] : []),
   ];
 
   const matchGroups = Object.entries(matches.reduce<Record<number, SelectionSummary[]>>((groups, row) => {

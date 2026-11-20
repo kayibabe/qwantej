@@ -6,7 +6,7 @@ import GradeBadge from '../components/GradeBadge'
 import { SortableTh, bandSortValue, useSortableRows } from '../components/SortableTable'
 import './Analytics.css'
 
-interface ResearchBreakdown { ticket_type: string; tickets: number; wins: number; hit_rate: number; roi: number; profit_loss: number }
+interface ResearchBreakdown { ticket_type: string; tickets: number; wins: number; hit_rate: number; roi: number; profit_loss: number; counted_in_portfolio?: boolean; observation_only?: boolean }
 interface ResearchSummary {
   current_model_version: string
   published_tickets: number; settled_tickets: number; wins: number; losses: number
@@ -981,7 +981,8 @@ function ResearchPerformance({ data }: { data: ResearchSummary | null }) {
     <div className="analytics-insight-grid">
       <section className="analytics-card">
         <div className="section-header"><div><span className="eyebrow">Portfolio lens</span><h2 className="section-title">By ticket type</h2></div><span className="section-subtitle">Published ticket tiers only</span></div>
-        {portfolioRows.length === 0 ? <AnalyticsEmpty title="No settled ticket cohorts yet" body="Breakdowns appear after result ingestion." compact /> : <div className="cohort-list">{portfolioRows.map(row => <div className="cohort-row" key={row.ticket_type}><div><span className={ticketTierBadgeClass(row.ticket_type)}>{row.ticket_type === 'my_accumulators' ? 'My Accumulators' : formatTicketType(row.ticket_type)}</span><small>{row.wins}/{row.tickets} won</small></div><div><span>Hit rate</span><strong>{pct(row.hit_rate)}</strong></div><div><span>ROI</span><strong className={row.roi >= 0 ? 'positive' : 'negative'}>{pct(row.roi)}</strong></div><div><span>P&amp;L</span><strong className={row.profit_loss >= 0 ? 'positive' : 'negative'}>{fmtPnl(row.profit_loss)}</strong></div></div>)}</div>}
+        {portfolioRows.length === 0 ? <AnalyticsEmpty title="No settled ticket cohorts yet" body="Breakdowns appear after result ingestion." compact /> : <div className="cohort-list">{portfolioRows.map(row => <div className={`cohort-row${row.observation_only ? ' observation-only' : ''}`} key={row.ticket_type}><div><span className={ticketTierBadgeClass(row.ticket_type)}>{row.ticket_type === 'my_accumulators' ? 'My Accumulators' : formatTicketType(row.ticket_type)}</span><small>{row.wins}/{row.tickets} won{row.observation_only ? ' · observation only' : ''}</small></div><div><span>Hit rate</span><strong>{pct(row.hit_rate)}</strong></div><div><span>ROI</span><strong className={row.roi >= 0 ? 'positive' : 'negative'}>{pct(row.roi)}</strong></div><div><span>P&amp;L</span><strong className={row.profit_loss >= 0 ? 'positive' : 'negative'}>{fmtPnl(row.profit_loss)}</strong></div></div>)}</div>}
+        {portfolioRows.some(row => row.observation_only) && <p className="matrix-note">Balanced is an administrator-only observation cohort. It is generated and settled for monitoring, but its rows are excluded from the headline P&amp;L, ROI, hit rate, drawdown and calibration totals above until it is restored.</p>}
         <p className="matrix-note">Personal accumulator performance is tracked separately in Track → My accumulators.</p>
       </section>
       <section className="analytics-card methodology-card">

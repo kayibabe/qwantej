@@ -120,9 +120,9 @@ async def test_paper_ticket_generation_to_settlement():
             await db.flush()
 
             generation = await TicketPublisher(db).generate_and_publish(target, model_run.id)
-            assert generation.output_count == 4
+            assert generation.output_count == 3
             tickets = await get_latest_published_tickets(db, target)
-            assert len(tickets) == 4
+            assert len(tickets) == 3
             assert all(len(ticket.publication_hash) == 64 for ticket in tickets)
 
             payloads = [
@@ -130,10 +130,14 @@ async def test_paper_ticket_generation_to_settlement():
                 for match_id in match_ids
             ]
             settlement = await SettlementService(db).ingest_results(payloads, "integration_test")
-            assert settlement["tickets_settled"] == 4
+            assert settlement["tickets_settled"] == 3
             summary = await performance_summary(db)
-            assert summary["settled_tickets"] == 4
-            assert summary["wins"] == 4
+            # High Odds and the admin-only Balanced cohort are settled but
+            # excluded from the production portfolio totals.
+            assert summary["settled_tickets"] == 1
+            assert summary["wins"] == 1
+            assert summary["observation_only"]["ticket_types"] == ["balanced"]
+            assert summary["observation_only"]["totals"]["settled_tickets"] == 1
             calibration = await aggregate_calibration_snapshots(db, target)
             assert calibration["prediction_sample_size"] == 10
             assert calibration["model_performance_rows"] > 0

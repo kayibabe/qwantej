@@ -22,6 +22,7 @@ from app.models import (
 )
 from app.services.clv import clv_is_valid
 from app.services.settlement import evaluate_selection
+from app.services.ticket_visibility import admin_only_ticket_types, is_admin_only
 from app.config import CURRENT_MODEL_VERSION
 
 
@@ -101,17 +102,32 @@ async def performance_summary(db: AsyncSession, date_from: date | None = None, d
             latest_by_day_and_type[key] = ticket
     # Internal research tiers do not contribute to production portfolio
     # calculations. Their immutable background records remain stored.
-    tickets = [
+    active_cohorts = [
         ticket
         for ticket in latest_by_day_and_type.values()
         if ticket.ticket_type not in {TicketType.BEST_VALUE, TicketType.HIGH_ODDS}
         and (model_version is None or ticket.model_version == model_version)
     ]
-    settled: list[tuple[AccumulatorTicket, object]] = []
-    for ticket in tickets:
-        latest = max(ticket.results, key=lambda item: item.version, default=None)
-        if latest:
-            settled.append((ticket, latest))
+    # Observation-only tiers (Balanced while the admin-only flag is on) are
+    # settled and reported separately so administrators can monitor them, but
+    # they never enter headline stakes, returns, P&L, ROI, drawdown or
+    # calibration metrics.
+    hidden_types = admin_only_ticket_types()
+    tickets = [ticket for ticket in active_cohorts if ticket.ticket_type not in hidden_types]
+    observation_tickets = [
+        ticket for ticket in active_cohorts if ticket.ticket_type in hidden_types
+    ]
+
+    def _settled_pairs(rows: list[AccumulatorTicket]) -> list[tuple[AccumulatorTicket, object]]:
+        pairs: list[tuple[AccumulatorTicket, object]] = []
+        for ticket in rows:
+            latest = max(ticket.results, key=lambda item: item.version, default=None)
+            if latest:
+                pairs.append((ticket, latest))
+        return pairs
+
+    settled = _settled_pairs(tickets)
+    observed = _settled_pairs(observation_tickets)
     stakes = sum(item.stake for _, item in settled)
     returns = sum(item.return_amount for _, item in settled)
     pnl = returns - stakes
@@ -150,7 +166,7 @@ async def performance_summary(db: AsyncSession, date_from: date | None = None, d
     }
 
     by_type: dict[str, dict] = {}
-    for ticket, item in settled:
+    for ticket, item in [*settled, *observed]:
         bucket = by_type.setdefault(ticket.ticket_type.value, {"tickets": 0, "wins": 0, "stake": 0.0, "return": 0.0})
         bucket["tickets"] += 1
         bucket["wins"] += int(item.result == SelectionResult.WON)
@@ -163,6 +179,7 @@ async def performance_summary(db: AsyncSession, date_from: date | None = None, d
         by_type.setdefault(ticket_type, {"tickets": 0, "wins": 0, "stake": 0.0, "return": 0.0})
     for ticket_type, bucket in by_type.items():
         type_pnl = bucket["return"] - bucket["stake"]
+        observation_only = ticket_type in {item.value for item in hidden_types}
         breakdown.append({
             "ticket_type": ticket_type,
             "tickets": bucket["tickets"],
@@ -172,7 +189,27 @@ async def performance_summary(db: AsyncSession, date_from: date | None = None, d
             "hit_rate": bucket["wins"] / bucket["tickets"] if bucket["tickets"] else 0.0,
             "roi": type_pnl / bucket["stake"] if bucket["stake"] else 0.0,
             "profit_loss": type_pnl,
+            "counted_in_portfolio": not observation_only,
+            "observation_only": observation_only,
         })
+
+    observation_totals = {
+        "published_tickets": len(observation_tickets),
+        "settled_tickets": len(observed),
+        "wins": sum(item.result == SelectionResult.WON for _, item in observed),
+        "losses": sum(item.result == SelectionResult.LOST for _, item in observed),
+    }
+    observation_totals["hit_rate"] = (
+        observation_totals["wins"] / observation_totals["settled_tickets"]
+        if observation_totals["settled_tickets"] else 0.0
+    )
+    observation_totals["stake"] = sum(item.stake for _, item in observed)
+    observation_totals["return"] = sum(item.return_amount for _, item in observed)
+    observation_totals["profit_loss"] = observation_totals["return"] - observation_totals["stake"]
+    observation_totals["roi"] = (
+        observation_totals["profit_loss"] / observation_totals["stake"]
+        if observation_totals["stake"] else 0.0
+    )
 
     # Personal/daily accumulators are a separate ledger from published ticket
     # cohorts, but belong in the same portfolio lens. Count only terminal
@@ -193,6 +230,20 @@ async def performance_summary(db: AsyncSession, date_from: date | None = None, d
         accumulators = [row for row in accumulators if row.target_date >= date_from]
     if date_to:
         accumulators = [row for row in accumulators if row.target_date <= date_to]
+    # The automatic daily merge is built from Conservative + Balanced legs.
+    # While Balanced is observation-only, that merged accumulator must not
+    # carry its result into portfolio ROI/P&L either. Inline the source check
+    # to avoid a circular import through daily_accumulator -> ticket_publisher.
+    excluded_merges = 0
+    if hidden_types:
+        portfolio_accumulators = []
+        for row in accumulators:
+            source = (getattr(row, "settlement_details", None) or {}).get("source")
+            if source == "daily_ticket_merge":
+                excluded_merges += 1
+                continue
+            portfolio_accumulators.append(row)
+        accumulators = portfolio_accumulators
     accumulator_stake = sum(row.stake or 0.0 for row in accumulators)
     accumulator_return = sum(
         (row.actual_return if row.actual_return is not None else (row.stake or 0.0) * row.combined_odds)
@@ -254,6 +305,12 @@ async def performance_summary(db: AsyncSession, date_from: date | None = None, d
         "calibration_by_pricing": calibration_by_pricing,
         "selection_sample_size": len(outcomes),
         "by_ticket_type": breakdown,
+        "observation_only": {
+            "counted_in_portfolio": False,
+            "ticket_types": sorted(item.value for item in hidden_types),
+            "totals": observation_totals,
+            "excluded_daily_merges": excluded_merges,
+        },
         "my_accumulators": my_accumulators,
         "evidence_gate": {
             "official_latest_cohorts": len(tickets),
@@ -281,7 +338,7 @@ async def individual_selection_summary(db: AsyncSession, stake: float = 1.0, dat
     )
     unique: dict[tuple, TicketSelection] = {}
     for ticket in result.scalars().all():
-        if ticket.ticket_type == TicketType.HIGH_ODDS:
+        if ticket.ticket_type == TicketType.HIGH_ODDS or is_admin_only(ticket.ticket_type):
             continue
         if model_version and ticket.model_version != model_version:
             continue
@@ -436,7 +493,7 @@ async def totals_calibration_review(
     )
     unique: dict[tuple[date, int, str, str], TicketSelection] = {}
     for ticket in result.scalars().all():
-        if ticket.ticket_type == TicketType.HIGH_ODDS:
+        if ticket.ticket_type == TicketType.HIGH_ODDS or is_admin_only(ticket.ticket_type):
             continue
         if model_version and ticket.model_version != model_version:
             continue
@@ -511,6 +568,8 @@ async def market_reliability_matrix(db: AsyncSession, date_from: date | None = N
     result = await db.execute(select(AccumulatorTicket).where(AccumulatorTicket.ticket_type != TicketType.HIGH_ODDS, AccumulatorTicket.status.in_([TicketStatus.PUBLISHED, TicketStatus.SETTLED, TicketStatus.VOID])).options(selectinload(AccumulatorTicket.selections).selectinload(TicketSelection.prediction), selectinload(AccumulatorTicket.selections).selectinload(TicketSelection.match)))
     unique: dict[tuple, TicketSelection] = {}
     for ticket in result.scalars().all():
+        if is_admin_only(ticket.ticket_type):
+            continue
         if model_version and ticket.model_version != model_version:
             continue
         # Buckets are Q-score/model-spread bands: model concepts. Market-priced

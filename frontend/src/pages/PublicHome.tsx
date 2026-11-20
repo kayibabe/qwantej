@@ -609,7 +609,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
           <article className="public-access-card is-featured">
             <div><span className="public-access-label">FREE ACCOUNT</span><h3>Follow the daily slate</h3></div>
             <ul className="public-access-list">
-              <li>Published Conservative and Balanced tickets</li>
+              <li>Published Conservative tickets</li>
               <li>Match legs, kickoff and settlement</li>
               <li>One workspace for each matchday</li>
             </ul>

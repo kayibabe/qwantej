@@ -152,6 +152,7 @@
 .cohort-row span:not(.badge), .cohort-row small { color: var(--muted); font-size: var(--type-small); }
 .cohort-row strong { font-size: var(--type-body); font-variant-numeric: tabular-nums; text-transform: capitalize; }
 .cohort-row.market { grid-template-columns: minmax(160px, 1.7fr) repeat(2, minmax(90px, .6fr)); }
+.cohort-row.observation-only { opacity: .82; }
 .methodology-card .section-header { margin-bottom: 4px; }
 .evidence-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--border); }
 .evidence-row > div { display: flex; flex-direction: column; gap: 2px; }

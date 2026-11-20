@@ -284,6 +284,12 @@ class Settings(BaseSettings):
     # Odds is generated as an internal paper-tracking cohort and never counts
     # toward the active slate or its release floor.
     min_daily_public_tickets: int = 2
+    # Balanced is generated, published and settled exactly as before so its
+    # forward record stays auditable, but while this flag is on it is an
+    # observation-only cohort: hidden from every non-admin surface and excluded
+    # from portfolio ROI/P&L, drawdown and calibration totals. Set to false to
+    # restore Balanced as a normal public tier without a code change.
+    balanced_tier_admin_only: bool = True
     # How ticket legs are priced. "market" (default since 2026-09-23): the
     # bookmaker's de-vigged probability — on both the frozen production
     # archive and the local DB it beat the ensemble, and the model's ">=3%

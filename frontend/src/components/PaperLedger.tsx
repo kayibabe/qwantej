@@ -4,7 +4,10 @@ import GradeBadge from './GradeBadge'
 import { fmtPnl } from '../utils/currency'
 import { localDateString } from '../pages/dailyTickets/helpers'
 
-interface PerformanceSummary { current_model_version: string }
+interface PerformanceSummary {
+  current_model_version: string
+  observation_only?: { ticket_types?: string[] }
+}
 
 const pct = (value: number) => `${(value * 100).toFixed(1)}%`
 const cohortKey = (row: TicketHistoryItem) => `${row.target_date}:${row.ticket_type}`
@@ -22,6 +25,9 @@ export function latestTicketCohorts(rows: TicketHistoryItem[]) {
 export default function PaperLedger({ onOpenValidation }: { onOpenValidation?: () => void }) {
   const [allVersions, setAllVersions] = useState<TicketHistoryItem[]>([])
   const [performance, setPerformance] = useState<PerformanceSummary | null>(null)
+  // Observation-only tiers come from the backend policy flag, so restoring a
+  // tier needs no frontend change here.
+  const [observationTiers, setObservationTiers] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
@@ -45,6 +51,7 @@ export default function PaperLedger({ onOpenValidation }: { onOpenValidation?: (
     ]).then(([history, summary]) => {
       setAllVersions(history.filter(row => row.ticket_type !== 'high_odds'))
       setPerformance(summary)
+      setObservationTiers(new Set(summary.observation_only?.ticket_types ?? []))
     })
       .catch((reason: Error) => setError(reason.message || 'Paper portfolio unavailable'))
       .finally(() => setLoading(false))
@@ -61,7 +68,13 @@ export default function PaperLedger({ onOpenValidation }: { onOpenValidation?: (
     (typeFilter === 'all' || row.ticket_type === typeFilter)
     && (resultFilter === 'all' || (row.result ?? 'pending') === resultFilter)
   ), [scopeRows, typeFilter, resultFilter])
-  const settledRows = filtered.filter(row => row.result === 'won' || row.result === 'lost' || row.result === 'void')
+  // "All tiers" is the production portfolio: observation-only tiers are shown
+  // in the list but excluded from P&L/ROI unless selected explicitly.
+  const summaryRows = useMemo(
+    () => typeFilter === 'all' ? filtered.filter(row => !observationTiers.has(row.ticket_type)) : filtered,
+    [filtered, typeFilter, observationTiers],
+  )
+  const settledRows = summaryRows.filter(row => row.result === 'won' || row.result === 'lost' || row.result === 'void')
   const settledPnl = settledRows.reduce((total, row) => total + (row.profit_loss ?? 0), 0)
   const wonCount = settledRows.filter(row => row.result === 'won').length
   const lostCount = settledRows.filter(row => row.result === 'lost').length
@@ -71,7 +84,8 @@ export default function PaperLedger({ onOpenValidation }: { onOpenValidation?: (
   const roi = settledRows.length > 0 && settledRows.every(row => row.stake != null) && settledStake > 0
     ? settledPnl / settledStake
     : null
-  const publishedBeforeKickoff = filtered.filter(row => row.publication_timing === 'pre_kickoff').length
+  const publishedBeforeKickoff = summaryRows.filter(row => row.publication_timing === 'pre_kickoff').length
+  const hasObservationRows = scopeRows.some(row => observationTiers.has(row.ticket_type))
 
   const groupedRows = useMemo(() => {
     const years = new Map<string, Map<string, Map<string, TicketHistoryItem[]>>>()
@@ -123,13 +137,14 @@ export default function PaperLedger({ onOpenValidation }: { onOpenValidation?: (
       {onOpenValidation && <button className="btn-ghost btn-sm" onClick={onOpenValidation}>Open validation</button>}
     </div>
     <div className="paper-ledger-filters" aria-label="Ledger filters">
-      <label>Tier<select aria-label="Ticket type filter" value={typeFilter} onChange={event => setTypeFilter(event.target.value)}><option value="all">All tiers</option>{['safe', 'balanced'].map(value => <option key={value} value={value}>{formatTicketType(value)}</option>)}</select></label>
+      <label>Tier<select aria-label="Ticket type filter" value={typeFilter} onChange={event => setTypeFilter(event.target.value)}><option value="all">Portfolio tiers</option>{['safe', 'balanced'].map(value => <option key={value} value={value}>{observationTiers.has(value) ? `${formatTicketType(value)} (observation only)` : formatTicketType(value)}</option>)}</select></label>
       <label>Outcome<select aria-label="Settlement filter" value={resultFilter} onChange={event => setResultFilter(event.target.value)}><option value="all">All outcomes</option><option value="pending">Pending</option><option value="won">Won</option><option value="lost">Lost</option><option value="void">Void</option></select></label>
       <label>Model<select aria-label="Model version filter" value={modelFilter} onChange={event => setModelFilter(event.target.value)}><option value="current">Current · {currentModel ?? 'loading'}</option><option value="all">All model versions</option>{modelVersions.filter(version => version !== currentModel).map(version => <option key={version} value={version}>{version}</option>)}</select></label>
       <label>From<input aria-label="Tickets from date" type="date" value={dateFrom} onChange={event => setDateFrom(event.target.value)} /></label>
       <label>To<input aria-label="Tickets to date" type="date" value={dateTo} onChange={event => setDateTo(event.target.value)} /></label>
     </div>
 
+    {hasObservationRows && typeFilter === 'all' && <div className="sample-warning" role="note">Balanced is an administrator-only observation cohort: its rows remain visible below, but are excluded from the portfolio P&amp;L, ROI, hit rate and stake summary until it is restored. Select the Balanced tier to inspect its standalone record.</div>}
     <div className="paper-ledger-summary published-history-kpis" aria-label="Current ledger summary">
       <div><span>Latest ticket cohorts (after current filters)</span><strong>{filtered.length}</strong></div>
       <div><span>Settled (win, lost, or void)</span><strong>{settledRows.length}</strong></div>

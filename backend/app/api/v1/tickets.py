@@ -27,6 +27,12 @@ from app.models import (
 from app.services.accumulator_builder import PUBLIC_TICKET_TYPES as BUILDER_PUBLIC_TICKET_TYPES
 from app.services.ticket_publisher import get_latest_published_tickets, get_ticket_by_id
 from app.services.pipeline_tracker import infer_pipeline_run_type
+from app.services.ticket_visibility import (
+    admin_only_ticket_types,
+    is_admin_only,
+    public_ticket_types,
+    reader_ticket_types,
+)
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
 
@@ -46,6 +52,17 @@ def _can_reveal(user) -> bool:
     if hasattr(user, "dependency"):
         return True
     return bool(user and (getattr(user, "role", None) == "admin" or getattr(user, "plan", None) == "pro"))
+
+
+def _is_admin(user) -> bool:
+    """Administrator gate for observation-only tiers.
+
+    Direct service-level calls keep the trusted behaviour used by the test
+    suite; resolved HTTP users must carry the admin role.
+    """
+    if hasattr(user, "dependency"):
+        return True
+    return bool(user and getattr(user, "role", None) == "admin")
 
 
 async def require_internal_ticket_access(
@@ -203,6 +220,9 @@ class DailyTicketsOut(BaseModel):
     generation_status: Optional[str] = None
     generated_ticket_count: int = 0
     missing_public_ticket_types: list[str] = Field(default_factory=list)
+    # Tiers reserved for administrator monitoring in the current policy. Empty
+    # for non-admins, who must not even learn which tier was withheld.
+    observation_only_ticket_types: list[str] = Field(default_factory=list)
     # How this day's generation priced legs ("market"/"model"); lets the UI
     # describe an empty tier by the rules actually applied.
     pricing: str = "model"
@@ -278,7 +298,13 @@ async def get_daily_tickets(
     target = date or cat_today()
     rows = await get_latest_published_tickets(db, target, include_internal=include_internal)
     reveal = _can_reveal(user)
-    mapped = {ticket.ticket_type: _ticket(ticket, reveal=reveal) for ticket in rows}
+    admin = _is_admin(user)
+    hidden_types = admin_only_ticket_types()
+    mapped = {
+        ticket.ticket_type: _ticket(ticket, reveal=reveal)
+        for ticket in rows
+        if admin or ticket.ticket_type not in hidden_types
+    }
     generation_result = await db.execute(
         select(TicketGeneration)
         .where(TicketGeneration.target_date == target)
@@ -343,11 +369,29 @@ async def get_daily_tickets(
         # below the configured publication minimum or failed. Historical rows
         # remain available through the history endpoint for audit.
         mapped = {}
+    # Generation metadata describes every published tier. Strip observation-only
+    # tiers for non-admins so a hidden cohort cannot be inferred from counts or
+    # diagnostic keys.
+    missing_types = list(publication_summary.get("missing_public_ticket_types", []))
+    relaxed_types = dict(publication_summary.get("relaxed_ticket_types", {}) or {})
+    horizon_types = dict(publication_summary.get("horizon_ticket_types", {}) or {})
+    if admin:
+        generated_count = (
+            (0 if publication_blocked else latest_generation.output_count)
+            if latest_generation
+            else (0 if publication_blocked else len(rows))
+        )
+    else:
+        generated_count = len(mapped)
+        hidden_values = {item.value for item in hidden_types}
+        missing_types = [item for item in missing_types if item not in hidden_values]
+        relaxed_types = {key: value for key, value in relaxed_types.items() if key not in hidden_values}
+        horizon_types = {key: value for key, value in horizon_types.items() if key not in hidden_values}
     # This supplemental history is returned alongside the public daily cards.
     # It must observe the same entitlement boundary as ``rows`` above: an
     # internal-only ticket is not harmless merely because its legs are redacted.
     # Its existence, tier, hash and settlement state are research information.
-    visible_ticket_types = [ticket_type for ticket_type in TicketType if ticket_type != TicketType.HIGH_ODDS] if include_internal else list(PUBLIC_TICKET_TYPES)
+    visible_ticket_types = reader_ticket_types(include_internal, admin=admin)
     history_result = await db.execute(
         select(AccumulatorTicket)
         .where(
@@ -371,11 +415,10 @@ async def get_daily_tickets(
         generation_status=(
             latest_generation.status.value if latest_generation else None
         ),
-        generated_ticket_count=(0 if publication_blocked else latest_generation.output_count)
-        if latest_generation
-        else (0 if publication_blocked else len(rows)),
-        missing_public_ticket_types=list(
-            publication_summary.get("missing_public_ticket_types", [])
+        generated_ticket_count=generated_count,
+        missing_public_ticket_types=missing_types,
+        observation_only_ticket_types=(
+            sorted(item.value for item in hidden_types) if admin else []
         ),
         pricing=(
             (latest_generation.config_snapshot or {}).get("pricing") or "model"
@@ -385,8 +428,8 @@ async def get_daily_tickets(
         horizon_pool=horizon_pool,
         effective_candidate_pool=qualified_pool + horizon_pool,
         horizon_dates=list(horizon_diagnostics.get("horizon_dates", []) or []),
-        relaxed_ticket_types=dict(publication_summary.get("relaxed_ticket_types", {}) or {}),
-        horizon_ticket_types=dict(publication_summary.get("horizon_ticket_types", {}) or {}),
+        relaxed_ticket_types=relaxed_types,
+        horizon_ticket_types=horizon_types,
         selection_diagnostics={
             key: value
             for key, value in (
@@ -439,7 +482,8 @@ async def get_ticket_history(
     user=Depends(require_authenticated_user),
 ):
     """Return immutable ticket history, latest cohorts by default."""
-    ticket_types = [ticket_type for ticket_type in TicketType if ticket_type != TicketType.HIGH_ODDS] if include_internal else PUBLIC_TICKET_TYPES
+    admin = _is_admin(user)
+    ticket_types = reader_ticket_types(include_internal, admin=admin)
     if include_superseded:
         result = await db.execute(
             select(AccumulatorTicket)
@@ -507,13 +551,14 @@ async def get_ticket_history(
 async def get_match_history(
     limit: int = Query(default=500, ge=1, le=2000),
     db: AsyncSession = Depends(get_db),
-    _: object = Depends(require_pro_access),
+    user=Depends(require_pro_access),
 ):
     """Return one match record per published match, with its latest outcomes."""
+    match_ticket_types = reader_ticket_types(False, admin=_is_admin(user))
     latest_versions = (
         select(AccumulatorTicket.target_date, AccumulatorTicket.ticket_type, func.max(AccumulatorTicket.version).label("version"))
         .where(
-            AccumulatorTicket.ticket_type.in_(PUBLIC_TICKET_TYPES),
+            AccumulatorTicket.ticket_type.in_(match_ticket_types),
             AccumulatorTicket.status.in_([TicketStatus.PUBLISHED, TicketStatus.SETTLED, TicketStatus.VOID]),
         )
         .group_by(AccumulatorTicket.target_date, AccumulatorTicket.ticket_type).subquery()
@@ -600,8 +645,11 @@ async def get_public_proof(
 
     ``days`` limits the window to the most recent calendar days. Only public
     ticket tiers are counted. Per-leg odds, model probability, Q score and
-    decision evidence stay behind the paid workspace boundary.
+    decision evidence stay behind the paid workspace boundary. Observation-only
+    tiers (Balanced while ``balanced_tier_admin_only`` is on) never appear on
+    this unauthenticated surface.
     """
+    proof_ticket_types = public_ticket_types()
     latest_versions = (
         select(
             AccumulatorTicket.target_date.label("target_date"),
@@ -609,7 +657,7 @@ async def get_public_proof(
             func.max(AccumulatorTicket.version).label("version"),
         )
         .where(
-            AccumulatorTicket.ticket_type.in_(PUBLIC_TICKET_TYPES),
+            AccumulatorTicket.ticket_type.in_(proof_ticket_types),
             AccumulatorTicket.status == TicketStatus.SETTLED,
         )
         .group_by(AccumulatorTicket.target_date, AccumulatorTicket.ticket_type)
@@ -650,9 +698,12 @@ async def get_public_proof(
 
     settled_rows = (await db.execute(settled_query)).scalars().all()
 
+    visible_proof_types = set(proof_ticket_types)
     tier_totals: dict[str, dict] = {}
     settled_dates: list[date] = []
     for ticket in settled_rows:
+        if ticket.ticket_type not in visible_proof_types:
+            continue
         latest_result = max(ticket.results, key=lambda item: item.version, default=None)
         if latest_result is None:
             continue
@@ -680,7 +731,7 @@ async def get_public_proof(
         settled_dates.append(ticket.target_date)
 
     tiers: list[PublicProofTierOut] = []
-    for ticket_type in PUBLIC_TICKET_TYPES:
+    for ticket_type in proof_ticket_types:
         counts = tier_totals.get(ticket_type.value)
         if not counts:
             continue
@@ -715,14 +766,17 @@ async def get_public_proof(
             )
         )
 
+    visible_settled_rows = [
+        ticket for ticket in settled_rows if ticket.ticket_type in visible_proof_types
+    ]
     sample_ticket = None
-    for ticket in settled_rows:
+    for ticket in visible_settled_rows:
         latest_result = max(ticket.results, key=lambda item: item.version, default=None)
         if latest_result is not None and latest_result.result.value in {"won", "lost"}:
             sample_ticket = ticket
             break
-    if sample_ticket is None and settled_rows:
-        sample_ticket = settled_rows[0]
+    if sample_ticket is None and visible_settled_rows:
+        sample_ticket = visible_settled_rows[0]
 
     return PublicProofOut(
         days=days,
@@ -745,6 +799,10 @@ async def get_ticket(
 ):
     ticket = await get_ticket_by_id(db, ticket_id)
     if ticket is None:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if is_admin_only(ticket.ticket_type) and not _is_admin(user):
+        # Observation-only tiers are indistinguishable from missing to every
+        # non-admin reader, including a direct ticket-ID request.
         raise HTTPException(status_code=404, detail="Ticket not found")
     if ticket.ticket_type in {TicketType.BEST_VALUE, TicketType.HIGH_ODDS} and not _can_reveal(user):
         await require_research_access(request, x_research_key, user)
@@ -779,7 +837,10 @@ def _ticket(ticket: AccumulatorTicket, *, reveal: bool = True) -> TicketOut:
         relaxation_level=ticket.relaxation_level,
         horizon_days=ticket.horizon_days or 0,
         pricing=_ticket_pricing(ticket),
-        internal_only=ticket.ticket_type in {TicketType.BEST_VALUE, TicketType.HIGH_ODDS},
+        internal_only=(
+            ticket.ticket_type in {TicketType.BEST_VALUE, TicketType.HIGH_ODDS}
+            or is_admin_only(ticket.ticket_type)
+        ),
         result=latest_result.result.value if latest_result else None,
         profit_loss=latest_result.profit_loss if latest_result else None,
         settled_at=latest_result.settled_at.isoformat() if latest_result else None,
@@ -835,7 +896,10 @@ def _history_ticket(ticket: AccumulatorTicket, *, reveal: bool = True) -> Ticket
         publication_hash=ticket.publication_hash,
         relaxed_tier=ticket.relaxed_tier,
         pricing=_ticket_pricing(ticket),
-        internal_only=ticket.ticket_type in {TicketType.BEST_VALUE, TicketType.HIGH_ODDS},
+        internal_only=(
+            ticket.ticket_type in {TicketType.BEST_VALUE, TicketType.HIGH_ODDS}
+            or is_admin_only(ticket.ticket_type)
+        ),
         result=latest_result.result.value if latest_result else None,
         stake=latest_result.stake if latest_result else None,
         return_amount=latest_result.return_amount if latest_result else None,
