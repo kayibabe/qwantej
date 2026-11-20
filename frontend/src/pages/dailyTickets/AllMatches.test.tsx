@@ -1,7 +1,11 @@
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { SelectionSummary } from '../../lib/api'
-import { AllMatches } from './AllMatches'
+import { AllMatches, encodeBandMixPairs, matchesBandMix, parseBandMixPairs } from './AllMatches'
+
+;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const selection = (overrides: Partial<SelectionSummary> = {}): SelectionSummary => ({
   prediction_id: 1,
@@ -88,5 +92,70 @@ describe('one-click band mix filter', () => {
     expect(html).not.toContain('BandMixOutside')
     expect(html).toContain('Band mix on:')
     expect(html).toContain('95-100% × 70-75%')
+  })
+
+  it('keeps only matches for the pairs selected in the URL', () => {
+    window.history.replaceState({}, '', '/?match_band_mix=p0,p4')
+    const html = renderToStaticMarkup(<AllMatches rows={bandMixRows} onSelect={() => {}} />)
+
+    expect(html).toContain('BandMixLow')
+    expect(html).toContain('BandMixTop')
+    expect(html).not.toContain('BandMixEdge')
+    expect(html).not.toContain('BandMixOutside')
+    expect(html).toContain('showing matches with <b>any</b> of &lt;50% × 85-90% · 95-100% × 70-75%')
+  })
+})
+
+describe('band mix pair selection', () => {
+  it('toggles each pair independently and ORs the checked ones', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    try {
+      await act(async () => { root.render(<AllMatches rows={bandMixRows} onSelect={() => {}} />) })
+      const caret = container.querySelector<HTMLButtonElement>('[aria-label="Choose band mix pairs"]')!
+      await act(async () => { caret.click() })
+      const boxes = [...container.querySelectorAll<HTMLInputElement>('.picks-band-mix-option input')]
+      expect(boxes).toHaveLength(5)
+      expect(boxes.every((box) => !box.checked)).toBe(true)
+
+      await act(async () => { boxes[0].click() })
+      expect(container.textContent).toContain('BandMixLow')
+      expect(container.textContent).not.toContain('BandMixEdge')
+      expect(container.textContent).not.toContain('BandMixTop')
+
+      await act(async () => { boxes[3].click() })
+      expect(container.textContent).toContain('BandMixLow')
+      expect(container.textContent).toContain('BandMixEdge')
+      expect(container.textContent).not.toContain('BandMixTop')
+
+      await act(async () => { boxes[0].click() })
+      expect(container.textContent).not.toContain('BandMixLow')
+      expect(container.textContent).toContain('BandMixEdge')
+    } finally {
+      await act(async () => { root.unmount() })
+      container.remove()
+    }
+  })
+
+  it('reads legacy and per-pair URL encodings', () => {
+    expect(parseBandMixPairs(null)).toEqual([])
+    expect(parseBandMixPairs('1')).toEqual([0, 1, 2, 3, 4])
+    expect(parseBandMixPairs('p4,p0,p0,bogus,p9')).toEqual([0, 4])
+    expect(encodeBandMixPairs([0, 4])).toBe('p0,p4')
+  })
+
+  it('accepts a match for any selected pair and ignores unselected pairs', () => {
+    const low = bandMixRows[0][1][0]
+    const edge = bandMixRows[1][1][0]
+    const top = bandMixRows[2][1][0]
+
+    expect(matchesBandMix(low, [0])).toBe(true)
+    expect(matchesBandMix(low, [1])).toBe(false)
+    expect(matchesBandMix(edge, [1, 4])).toBe(false)
+    expect(matchesBandMix(edge, [3])).toBe(true)
+    expect(matchesBandMix(top, [0, 4])).toBe(true)
+    expect(matchesBandMix(top, [0])).toBe(false)
+    expect(matchesBandMix(top, [])).toBe(false)
   })
 })
