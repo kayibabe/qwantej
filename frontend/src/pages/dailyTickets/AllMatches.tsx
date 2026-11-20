@@ -51,9 +51,43 @@ const MATCH_STATUSES: MatchDisplayState[] = ["finished", "live", "scheduled", "p
 const MATCH_SORT_KEYS: MatchSortKey[] = ["match", "kickoff", "league", "q", "fair", "markets", "spread", "edge"];
 const CHANCE_BLOCKS = [20, 30, 40, 50, 60, 70, 80, 90];
 
+/**
+ * One-click band mix: the five exact model-probability × market-implied pairs
+ * captured from the saved filter. Bands match the backend's 5pp buckets in
+ * app/services/performance.py, so this view agrees with Validate's combined
+ * matrix. QwanEj band here means the model's predicted probability, not the
+ * Q-score quality gate.
+ */
+const BAND_MIX_PAIRS: [string, string][] = [
+  ["<50", "85-90"],
+  ["50-55", "90-95"],
+  ["55-60", "95-100"],
+  ["60-65", "90-95"],
+  ["95-100", "70-75"],
+];
+const BAND_MIX_LABEL = BAND_MIX_PAIRS
+  .map(([model, market]) => `${model}% × ${market}%`)
+  .join(" · ");
+
 /** Bookmaker implied probability (margin included), as displayed per pick. */
 function impliedProbability(row: SelectionSummary) {
   return row.source_implied_probability ?? row.avg_implied ?? Number.NaN;
+}
+
+/** Same 5pp buckets as performance._probability_band(), including the 95+ top band. */
+function probabilityBand(value: number | null | undefined): string | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  const percent = value * 100;
+  if (percent < 50) return "<50";
+  const lower = Math.min(95, Math.floor(percent / 5) * 5);
+  return `${lower}-${lower + 5}`;
+}
+
+function matchesBandMix(row: SelectionSummary) {
+  const modelBand = probabilityBand(row.model_probability);
+  const marketBand = probabilityBand(impliedProbability(row));
+  return modelBand != null && marketBand != null
+    && BAND_MIX_PAIRS.some(([model, market]) => model === modelBand && market === marketBand);
 }
 
 function matchUrlParam(name: string) {
@@ -218,6 +252,7 @@ export function AllMatches({
   const [marketFilter, setMarketFilter] = useState(() => matchUrlParam("market") ?? "all");
   const [chanceMin, setChanceMin] = useState(() => matchUrlParam("chance") ?? "");
   const [impliedMin, setImpliedMin] = useState(() => matchUrlParam("implied") ?? "");
+  const [bandMixOnly, setBandMixOnly] = useState(() => matchUrlParam("band_mix") === "1");
   const [edgeOnly, setEdgeOnly] = useState(() => matchUrlParam("sig_edge") === "1");
   const [freshOnly, setFreshOnly] = useState(() => matchUrlParam("sig_fresh") === "1");
   const [tightSpread, setTightSpread] = useState(() => matchUrlParam("sig_tight") === "1");
@@ -245,6 +280,7 @@ export function AllMatches({
       match_market: marketFilter === "all" ? null : marketFilter,
       match_chance: chanceMin || null,
       match_implied: impliedMin || null,
+      match_band_mix: bandMixOnly ? "1" : null,
       match_sig_edge: edgeOnly ? "1" : null,
       match_sig_fresh: freshOnly ? "1" : null,
       match_sig_tight: tightSpread ? "1" : null,
@@ -260,7 +296,7 @@ export function AllMatches({
       else url.searchParams.delete(key);
     }
     window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
-  }, [query, leagueFilter, marketFilter, chanceMin, impliedMin, edgeOnly, freshOnly, tightSpread, clvOnly, recFilter, outcomeFilter, statusFilter, sort]);
+  }, [query, leagueFilter, marketFilter, chanceMin, impliedMin, bandMixOnly, edgeOnly, freshOnly, tightSpread, clvOnly, recFilter, outcomeFilter, statusFilter, sort]);
   const leagues = [...new Set(rows.map(([, selections]) => selections[0]?.competition).filter(Boolean))].sort();
   const markets = [...new Set(rows.flatMap(([, selections]) => selections.map((row) => formatMarket(row.market))))].sort();
   const marketCounts = rows.reduce<Record<string, number>>((counts, [, selections]) => {
@@ -287,6 +323,7 @@ export function AllMatches({
   };
   const rowMeetsFilters = (row: SelectionSummary) => {
     if (marketFilter !== "all" && formatMarket(row.market) !== marketFilter) return false;
+    if (bandMixOnly && !matchesBandMix(row)) return false;
     if (chanceMinValue != null && !(row.model_probability != null && Number.isFinite(row.model_probability) && row.model_probability >= chanceMinValue / 100)) return false;
     if (impliedMinValue != null) {
       const implied = impliedProbability(row);
@@ -356,12 +393,14 @@ export function AllMatches({
   const filteredRows = statusFilter === "all"
     ? discoveredRows
     : discoveredRows.filter(([, selections]) => matchDisplayState(selections[0]) === statusFilter);
+  const bandMixMatchCount = rows.filter(([, selections]) => selections.some(matchesBandMix)).length;
   const activeFilterCount = Number(focusMatchId != null)
     + Number(Boolean(query.trim()))
     + Number(leagueFilter !== "all")
     + Number(marketFilter !== "all")
     + Number(chanceMin !== "")
     + Number(impliedMin !== "")
+    + Number(bandMixOnly)
     + Number(edgeOnly)
     + Number(freshOnly)
     + Number(tightSpread)
@@ -434,6 +473,7 @@ export function AllMatches({
     setMarketFilter("all");
     setChanceMin("");
     setImpliedMin("");
+    setBandMixOnly(false);
     setEdgeOnly(false);
     setFreshOnly(false);
     setTightSpread(false);
@@ -445,8 +485,9 @@ export function AllMatches({
     setQuery(filters.q ?? "");
     setLeagueFilter(filters.league ?? "all");
     setMarketFilter(filters.market ?? "all");
-    setChanceMin(filters.chance ?? "");
-    setImpliedMin(filters.implied ?? "");
+    setChanceMin(filters.band_mix === "1" ? "" : (filters.chance ?? ""));
+    setImpliedMin(filters.band_mix === "1" ? "" : (filters.implied ?? ""));
+    setBandMixOnly(filters.band_mix === "1");
     setEdgeOnly(filters.sig_edge === "1");
     setFreshOnly(filters.sig_fresh === "1");
     setTightSpread(filters.sig_tight === "1");
@@ -466,6 +507,7 @@ export function AllMatches({
         market: marketFilter,
         chance: chanceMin,
         implied: impliedMin,
+        band_mix: bandMixOnly ? "1" : "",
         status: statusFilter,
         sig_edge: edgeOnly ? "1" : "",
         sig_fresh: freshOnly ? "1" : "",
@@ -580,6 +622,24 @@ export function AllMatches({
                 {statusCounts.awarded > 0 && filterButton("awarded", "Awarded · review", statusCounts.awarded)}
               </div>
               <div className="picks-controls-actions">
+                <button
+                  type="button"
+                  className={`picks-band-mix${bandMixOnly ? " active" : ""}`}
+                  aria-pressed={bandMixOnly}
+                  title={`One-click daily filter — exact model × market pairs: ${BAND_MIX_LABEL}`}
+                  onClick={() => {
+                    if (bandMixOnly) {
+                      setBandMixOnly(false);
+                      return;
+                    }
+                    // Thresholds would silently exclude the low-probability pairs.
+                    setChanceMin("");
+                    setImpliedMin("");
+                    setBandMixOnly(true);
+                  }}
+                >
+                  ⚡ Band mix <b>{bandMixMatchCount}</b>
+                </button>
                 <details className="picks-presets">
                   <summary className="picks-presets-toggle">
                     Presets{presets.length > 0 ? ` · ${presets.length}` : ""}
@@ -639,14 +699,14 @@ export function AllMatches({
                 <FilterDropdown
                   value={chanceMin}
                   options={chanceOptions}
-                  onChange={setChanceMin}
+                  onChange={(value) => { setChanceMin(value); if (value) setBandMixOnly(false); }}
                   ariaLabel="Minimum model chance for picks"
                 />
                 <span className="picks-block-caption" aria-hidden="true">Bookmaker implied</span>
                 <FilterDropdown
                   value={impliedMin}
                   options={impliedOptions}
-                  onChange={setImpliedMin}
+                  onChange={(value) => { setImpliedMin(value); if (value) setBandMixOnly(false); }}
                   ariaLabel="Minimum bookmaker implied probability for picks"
                 />
               </div>
@@ -696,6 +756,12 @@ export function AllMatches({
               </div>
             </div>
           </div>
+
+          {bandMixOnly && (
+            <p className="picks-band-mix-note" role="status">
+              <b>Band mix on:</b> {BAND_MIX_LABEL} · exact model × market pairs only. Stays on as you change date — bookmark the link to reuse it daily.
+            </p>
+          )}
 
           <div className="picks-query-results" aria-live="polite">
             <div className="picks-overview-counts">

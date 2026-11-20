@@ -41,6 +41,7 @@ export default function PaperLedger({ isInternal, onOpenValidation }: { isIntern
   const [selectedVersion, setSelectedVersion] = useState<TicketHistoryItem | null>(null)
   const [ticketLoading, setTicketLoading] = useState(false)
   const today = localDateString()
+  const hasDateFilter = Boolean(dateFrom || dateTo)
   useEffect(() => {
     Promise.all([
       fetchTicketHistory(true),
@@ -138,13 +139,15 @@ export default function PaperLedger({ isInternal, onOpenValidation }: { isIntern
       <div><span className="eyebrow">Track · paper history</span><strong>Published ticket history</strong><p>Expand a cohort to inspect its saved versions, outcomes and publication provenance.</p></div>
       {isInternal && onOpenValidation && <button className="btn-ghost btn-sm" onClick={onOpenValidation}>Open validation</button>}
     </div>
-    {isInternal && <div className="paper-ledger-filters" aria-label="Ledger filters">
-      <label>Tier<select aria-label="Ticket type filter" value={typeFilter} onChange={event => setTypeFilter(event.target.value)}><option value="all">Portfolio tiers</option>{['safe', 'balanced'].map(value => <option key={value} value={value}>{observationTiers.has(value) ? `${formatTicketType(value)} (observation only)` : formatTicketType(value)}</option>)}</select></label>
-      <label>Outcome<select aria-label="Settlement filter" value={resultFilter} onChange={event => setResultFilter(event.target.value)}><option value="all">All outcomes</option><option value="pending">Pending</option><option value="won">Won</option><option value="lost">Lost</option><option value="void">Void</option></select></label>
-      <label>Model<select aria-label="Model version filter" value={modelFilter} onChange={event => setModelFilter(event.target.value)}><option value="current">Current · {currentModel ?? 'loading'}</option><option value="all">All model versions</option>{modelVersions.filter(version => version !== currentModel).map(version => <option key={version} value={version}>{version}</option>)}</select></label>
+    <div className={`paper-ledger-filters${isInternal ? '' : ' date-only'}`} aria-label="Ledger filters">
+      {isInternal && <>
+        <label>Tier<select aria-label="Ticket type filter" value={typeFilter} onChange={event => setTypeFilter(event.target.value)}><option value="all">Portfolio tiers</option>{['safe', 'balanced'].map(value => <option key={value} value={value}>{observationTiers.has(value) ? `${formatTicketType(value)} (observation only)` : formatTicketType(value)}</option>)}</select></label>
+        <label>Outcome<select aria-label="Settlement filter" value={resultFilter} onChange={event => setResultFilter(event.target.value)}><option value="all">All outcomes</option><option value="pending">Pending</option><option value="won">Won</option><option value="lost">Lost</option><option value="void">Void</option></select></label>
+        <label>Model<select aria-label="Model version filter" value={modelFilter} onChange={event => setModelFilter(event.target.value)}><option value="current">Current · {currentModel ?? 'loading'}</option><option value="all">All model versions</option>{modelVersions.filter(version => version !== currentModel).map(version => <option key={version} value={version}>{version}</option>)}</select></label>
+      </>}
       <label>From<input aria-label="Tickets from date" type="date" value={dateFrom} onChange={event => setDateFrom(event.target.value)} /></label>
       <label>To<input aria-label="Tickets to date" type="date" value={dateTo} onChange={event => setDateTo(event.target.value)} /></label>
-    </div>}
+    </div>
 
     {isInternal && hasObservationRows && typeFilter === 'all' && <div className="sample-warning" role="note">Balanced is an administrator-only observation cohort: its rows remain visible below, but are excluded from the portfolio P&amp;L, ROI, hit rate and stake summary until it is restored. Select the Balanced tier to inspect its standalone record.</div>}
     <div className="paper-ledger-summary published-history-kpis" aria-label="Current ledger summary">
@@ -156,7 +159,7 @@ export default function PaperLedger({ isInternal, onOpenValidation }: { isIntern
       <div><span>Published before kickoff (unknown timing is not counted)</span><strong>{publishedBeforeKickoff}</strong></div>
     </div>
 
-    {filtered.length === 0 ? <div className="analytics-empty"><strong>{isInternal ? 'No tickets match these filters' : 'No published ticket history'}</strong><span>{isInternal ? 'Try another tier, outcome, model version or date range.' : 'Published paper tickets will appear here once available.'}</span></div> : <div className="paper-ledger-list">{groupedRows.map(yearGroup => <details className="paper-year-group" key={yearGroup.year} open={yearGroup.year === today.slice(0, 4) && filtered.some(row => row.target_date === today)}>
+    {filtered.length === 0 ? <div className="analytics-empty"><strong>{isInternal ? 'No tickets match these filters' : hasDateFilter ? 'No tickets in this date range' : 'No published ticket history'}</strong><span>{isInternal ? 'Try another tier, outcome, model version or date range.' : hasDateFilter ? 'Try a different from/to date range.' : 'Published paper tickets will appear here once available.'}</span></div> : <div className="paper-ledger-list">{groupedRows.map(yearGroup => <details className="paper-year-group" key={yearGroup.year} open={yearGroup.year === today.slice(0, 4) && filtered.some(row => row.target_date === today)}>
       <summary className="paper-year-heading">{yearGroup.year}</summary>
       <div className="paper-year-body">{yearGroup.months.map(monthGroup => <details className="paper-month-group" key={`${yearGroup.year}-${monthGroup.month}`} open={monthGroup.month === today.slice(5, 7) && filtered.some(row => row.target_date === today)}>
         <summary className="paper-month-heading">{monthGroup.monthLabel}</summary>

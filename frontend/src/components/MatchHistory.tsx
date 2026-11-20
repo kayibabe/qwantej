@@ -33,6 +33,7 @@ export default function MatchHistory({ isInternal }: { isInternal: boolean }) {
     && (!dateTo || row.target_date <= dateTo)
   ), [rows, outcome, market, selection, dateFrom, dateTo])
   const groups = useMemo(() => groupMatchHistory(visible), [visible])
+  const hasDateFilter = Boolean(dateFrom || dateTo)
 
   if (loading) return <div className="paper-ledger-skeleton" aria-busy="true">Loading published match evidence…</div>
   if (error) return <div className="analytics-empty"><strong>Match history unavailable</strong><span>{error}</span></div>
@@ -40,15 +41,17 @@ export default function MatchHistory({ isInternal }: { isInternal: boolean }) {
 
   return <>
     <div className="match-history-intro"><div><span className="eyebrow">Selection-level audit</span><strong>Published match evidence</strong><p>Market describes the model category; pick describes the exact selection that was published.</p></div><span>{visible.length} of {rows.length} matches</span></div>
-    {isInternal && <div className="match-history-toolbar tracker-filter-panel">
-      <label>Outcome<select value={outcome} onChange={event => setOutcome(event.target.value)}><option value="all">All outcomes</option><option value="won">Won</option><option value="lost">Lost</option><option value="void">Void</option><option value="pending">Pending</option><option value="mixed">Mixed</option></select></label>
-      <label>Market<select value={market} onChange={event => setMarket(event.target.value)}><option value="all">All markets</option>{markets.map(value => <option key={value} value={value}>{formatMarket(value)}</option>)}</select></label>
-      <label>Pick<select value={selection} onChange={event => setSelection(event.target.value)}><option value="all">All picks</option>{selections.map(value => <option key={value} value={value}>{formatSelection(value)}</option>)}</select></label>
+    <div className="match-history-toolbar tracker-filter-panel">
+      {isInternal && <>
+        <label>Outcome<select value={outcome} onChange={event => setOutcome(event.target.value)}><option value="all">All outcomes</option><option value="won">Won</option><option value="lost">Lost</option><option value="void">Void</option><option value="pending">Pending</option><option value="mixed">Mixed</option></select></label>
+        <label>Market<select value={market} onChange={event => setMarket(event.target.value)}><option value="all">All markets</option>{markets.map(value => <option key={value} value={value}>{formatMarket(value)}</option>)}</select></label>
+        <label>Pick<select value={selection} onChange={event => setSelection(event.target.value)}><option value="all">All picks</option>{selections.map(value => <option key={value} value={value}>{formatSelection(value)}</option>)}</select></label>
+      </>}
       <label>From<input type="date" value={dateFrom} onChange={event => setDateFrom(event.target.value)} /></label>
       <label>To<input type="date" value={dateTo} onChange={event => setDateTo(event.target.value)} /></label>
-    </div>}
+    </div>
 
-    {!visible.length ? <div className="analytics-empty"><strong>{isInternal ? 'No matches meet these filters' : 'No published match history'}</strong><span>{isInternal ? 'Try another outcome, market, pick or date range.' : 'Published match evidence will appear here once available.'}</span></div> : groups.map(year => <section className="match-history-year" key={year.year}>
+    {!visible.length ? <div className="analytics-empty"><strong>{isInternal ? 'No matches meet these filters' : hasDateFilter ? 'No matches in this date range' : 'No published match history'}</strong><span>{isInternal ? 'Try another outcome, market, pick or date range.' : hasDateFilter ? 'Try a different from/to date range.' : 'Published match evidence will appear here once available.'}</span></div> : groups.map(year => <section className="match-history-year" key={year.year}>
       <h2 className="paper-year-heading">{year.year}</h2>
       {year.months.map(month => <section className="match-history-month" key={`${year.year}-${month.label}`}>
         <h3 className="paper-month-heading">{month.label}</h3>

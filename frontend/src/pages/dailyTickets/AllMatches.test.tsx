@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { SelectionSummary } from '../../lib/api'
 import { AllMatches } from './AllMatches'
 
@@ -57,5 +57,36 @@ describe('system picks fixture focus', () => {
 
     expect(html).toContain('No loaded picks for Santa Fe vs Junior')
     expect(html).not.toContain('No qualified matches match these filters')
+  })
+})
+
+afterEach(() => window.history.replaceState({}, '', '/'))
+
+const bandMixRows: [number, SelectionSummary[]][] = [
+  [1, [selection({ prediction_id: 11, home_team: 'BandMixLow', model_probability: 0.49, source_implied_probability: 0.87 })]],
+  [2, [selection({ prediction_id: 12, home_team: 'BandMixEdge', model_probability: 0.60, source_implied_probability: 0.90, away_team: 'At boundary' })]],
+  [3, [selection({ prediction_id: 13, home_team: 'BandMixTop', model_probability: 0.97, source_implied_probability: 0.72 })]],
+  [4, [selection({ prediction_id: 14, home_team: 'BandMixOutside', model_probability: 0.62, source_implied_probability: 0.62 })]],
+]
+
+describe('one-click band mix filter', () => {
+  it('offers the quick button with the count of matching fixtures', () => {
+    const html = renderToStaticMarkup(<AllMatches rows={bandMixRows} onSelect={() => {}} />)
+
+    expect(html).toContain('picks-band-mix')
+    expect(html).toContain('Band mix')
+    expect(html).toContain('>⚡ Band mix <b>3</b>')
+  })
+
+  it('keeps only the exact model × market pairs when enabled by URL state', () => {
+    window.history.replaceState({}, '', '/?match_band_mix=1')
+    const html = renderToStaticMarkup(<AllMatches rows={bandMixRows} onSelect={() => {}} />)
+
+    expect(html).toContain('BandMixLow')
+    expect(html).toContain('BandMixEdge')
+    expect(html).toContain('BandMixTop')
+    expect(html).not.toContain('BandMixOutside')
+    expect(html).toContain('Band mix on:')
+    expect(html).toContain('95-100% × 70-75%')
   })
 })
