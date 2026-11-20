@@ -11,8 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import selectinload
 
-from app.config import cat_today, settings
-from app.api.security import get_optional_current_user, require_authenticated_user, require_pro_access, require_research_access
+from app.config import CURRENT_MODEL_VERSION, cat_today, settings
+from app.api.security import get_optional_current_user, require_authenticated_user, require_research_access
 from app.database import get_db
 from app.models import (
     AccumulatorTicket,
@@ -547,11 +547,27 @@ async def get_ticket_history(
     ]
 
 
+@router.get("/tracker-meta")
+async def get_tracker_meta(_: None = Depends(require_authenticated_user)):
+    """Read-only Tracker defaults, without opening the research analytics API.
+
+    Observation-only tiers are policy, not user data, so every signed-in reader
+    may know which tiers are excluded from the portfolio summary. Actual tier
+    rows remain filtered by ``reader_ticket_types`` in the history endpoints.
+    """
+    return {
+        "current_model_version": CURRENT_MODEL_VERSION,
+        "observation_only": {
+            "ticket_types": [tier.value for tier in admin_only_ticket_types()],
+        },
+    }
+
+
 @router.get("/matches/history", response_model=list[MatchHistoryOut])
 async def get_match_history(
     limit: int = Query(default=500, ge=1, le=2000),
     db: AsyncSession = Depends(get_db),
-    user=Depends(require_pro_access),
+    user=Depends(require_authenticated_user),
 ):
     """Return one match record per published match, with its latest outcomes."""
     match_ticket_types = reader_ticket_types(False, admin=_is_admin(user))

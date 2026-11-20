@@ -8,6 +8,7 @@ import { useAuth } from './auth'
 import { fetchMarketCatalog, installMarketCatalog } from './lib/api'
 import AccountMenu, { type ThemePreference } from './components/AccountMenu'
 import CommandPalette, { type CommandAction } from './components/CommandPalette'
+import { NAV_META, bottomNavItems, groupedNavItems, navGroupForPage, visibleNavItems, type ModulePage, type ShellNavGroup } from './shellNav'
 
 const DailyTicketsPage = lazy(() => import('./pages/DailyTickets'))
 const TrackerPage = lazy(() => import('./pages/Tracker'))
@@ -25,7 +26,6 @@ function PageLoading() {
   return <div className="route-loading" role="status" aria-live="polite">Loading page…</div>
 }
 
-type ModulePage = 'tickets' | 'live' | 'insights' | 'research' | 'tracker' | 'analytics' | 'admin'
 type Page = ModulePage | 'home' | 'match' | 'upgrade' | 'login' | 'reset-password' | 'verify-email'
 type Workspace = 'football' | 'research'
 type ResearchTab = 'picks' | 'odds-policy' | 'market-roi' | 'passed'
@@ -34,24 +34,6 @@ type OverviewTab = 'fixtures' | 'picks' | 'tickets' | 'passed'
 const OVERVIEW_TABS: OverviewTab[] = ['fixtures', 'picks', 'tickets', 'passed']
 const MATCH_RETURN_ROUTES = new Set(['/tickets', '/matches', '/research', '/live', '/insights'])
 const THEME_KEY = 'qwantej-theme'
-
-interface ShellNavItem {
-  id: ModulePage
-  label: string
-  group: 'Decide' | 'Research' | 'System'
-  adminOnly?: boolean
-}
-
-const SHELL_NAV: ShellNavItem[] = [
-  { id: 'tickets', label: 'Today', group: 'Decide' },
-  { id: 'live', label: 'Live', group: 'Decide' },
-  { id: 'insights', label: 'Stats & trends', group: 'Decide' },
-  { id: 'research', label: 'Research', group: 'Research', adminOnly: true },
-  { id: 'tracker', label: 'Track', group: 'Research', adminOnly: true },
-  { id: 'analytics', label: 'Validate', group: 'Research', adminOnly: true },
-  { id: 'admin', label: 'Admin', group: 'System', adminOnly: true },
-]
-const NAV_GROUP_ORDER: ShellNavItem['group'][] = ['Decide', 'Research', 'System']
 
 class RouteErrorBoundary extends Component<{ children: ReactNode; onRetry: () => void }, { failed: boolean }> {
   state = { failed: false }
@@ -119,16 +101,6 @@ function pageTitle(page: Page): string {
 
 function displayDate(value: string): string {
   return new Date(`${value}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
-}
-
-const NAV_META: Record<ModulePage, { icon: string; hint: string }> = {
-  tickets: { icon: 'sparkles', hint: 'Today’s fixtures, system picks, and accumulator tickets' },
-  live: { icon: 'activity', hint: 'Live scores and match phases' },
-  insights: { icon: 'chart', hint: 'League results and team trends' },
-  research: { icon: 'flask', hint: 'Research models and selection policies' },
-  tracker: { icon: 'list', hint: 'Evidence and personal journal' },
-  analytics: { icon: 'chart', hint: 'Performance and model validation' },
-  admin: { icon: 'shield', hint: 'System administration' },
 }
 
 function NavIcon({ name }: { name: string }) {
@@ -323,12 +295,12 @@ export default function App() {
   }
 
   const navPage = page === 'match' ? routePage(new URL(matchReturnTo || '/tickets', window.location.origin).pathname) : page
-  const [openNavGroup, setOpenNavGroup] = useState<ShellNavItem['group'] | null>(
-    () => SHELL_NAV.find(item => item.id === navPage)?.group ?? null
+  const [openNavGroup, setOpenNavGroup] = useState<ShellNavGroup | null>(
+    () => navGroupForPage(navPage)
   )
 
   useEffect(() => {
-    const activeGroup = SHELL_NAV.find(item => item.id === navPage)?.group
+    const activeGroup = navGroupForPage(navPage)
     if (activeGroup) setOpenNavGroup(activeGroup)
   }, [navPage])
   const workspace: Workspace = page === 'match'
@@ -371,10 +343,8 @@ export default function App() {
     return <div className="auth-standalone" role="status" aria-live="polite">Opening your workspace...</div>
   }
 
-  const visibleNav = SHELL_NAV.filter(item => !item.adminOnly || isInternal)
-  const navGroups = NAV_GROUP_ORDER
-    .map(label => ({ label, items: visibleNav.filter(item => item.group === label) }))
-    .filter(group => group.items.length > 0)
+  const visibleNav = visibleNavItems(isInternal)
+  const navGroups = groupedNavItems(isInternal)
 
   function moduleHref(id: ModulePage): string {
     return id === 'research'
@@ -428,15 +398,7 @@ export default function App() {
     </div>
   ) : null
 
-  const bottomBase: ModulePage[] = isInternal ? ['tickets', 'research', 'tracker'] : ['tickets', 'live', 'insights']
-  const activeNavItem = visibleNav.find(item => item.id === navPage)
-  const bottomItems = bottomBase
-    .map(id => visibleNav.find(item => item.id === id))
-    .filter((item): item is ShellNavItem => Boolean(item))
-    .slice(0, 3)
-  if (activeNavItem && !bottomItems.some(item => item.id === activeNavItem.id)) {
-    bottomItems[bottomItems.length - 1] = activeNavItem
-  }
+  const bottomItems = bottomNavItems(isInternal, navPage)
 
   const commandActions: CommandAction[] = [
     ...visibleNav.map(item => ({
@@ -596,7 +558,7 @@ export default function App() {
             </div>
           </section>
         )}
-        {isInternal && page === 'tracker' && <TrackerPage onOpenValidation={() => goTo('analytics')} />}
+        {page === 'tracker' && <TrackerPage isInternal={isInternal} onOpenValidation={isInternal ? () => goTo('analytics') : undefined} />}
         {isInternal && page === 'analytics' && <AnalyticsPage />}
         {isInternal && page === 'admin' && <AdminPage />}
         </Suspense>
@@ -644,11 +606,12 @@ function routePage(pathname: string): Page {
 }
 
 function isInternalPage(page: Page): boolean {
-  return page === 'research' || page === 'tracker' || page === 'analytics' || page === 'admin' || page === 'match'
+  return page === 'research' || page === 'analytics' || page === 'admin' || page === 'match'
 }
 
 function workspaceForPage(page: Page): Workspace | null {
-  if (isInternalPage(page)) return 'research'
+  // Tracker is readable by everyone but keeps the research workspace styling.
+  if (isInternalPage(page) || page === 'tracker') return 'research'
   if (page === 'tickets' || page === 'live' || page === 'insights') return 'football'
   return null
 }

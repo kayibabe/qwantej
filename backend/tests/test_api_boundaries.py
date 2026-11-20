@@ -7,6 +7,7 @@ import pytest
 
 from app.api.security import require_admin_access, require_authenticated_user, require_pro_access
 from app.api.v1 import admin, backtests, custom_accumulators, selections, tickets
+from app.services.ticket_visibility import admin_only_ticket_types
 
 
 def _route(path: str, method: str, router):
@@ -63,6 +64,25 @@ def test_customer_ticket_reads_require_an_authenticated_session():
             dependency.call for dependency in route.dependant.dependencies
         }
         assert require_authenticated_user in dependency_callables, route.path
+
+
+def test_tracker_reads_require_a_session_but_not_pro_access():
+    for path in ("/tickets/tracker-meta", "/tickets/matches/history"):
+        route = _route(path, "GET", tickets.router)
+        dependency_callables = {
+            dependency.call for dependency in route.dependant.dependencies
+        }
+        assert require_authenticated_user in dependency_callables, route.path
+        assert require_pro_access not in dependency_callables, route.path
+
+
+@pytest.mark.asyncio
+async def test_tracker_meta_exposes_policy_defaults_only():
+    meta = await tickets.get_tracker_meta(_=object())
+    assert meta["current_model_version"]
+    assert set(meta["observation_only"]["ticket_types"]) == {
+        tier.value for tier in admin_only_ticket_types()
+    }
 
 
 def test_public_proof_is_readable_without_an_account():

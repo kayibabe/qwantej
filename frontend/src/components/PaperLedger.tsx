@@ -4,7 +4,7 @@ import GradeBadge from './GradeBadge'
 import { fmtPnl } from '../utils/currency'
 import { localDateString } from '../pages/dailyTickets/helpers'
 
-interface PerformanceSummary {
+interface TrackerMeta {
   current_model_version: string
   observation_only?: { ticket_types?: string[] }
 }
@@ -22,9 +22,9 @@ export function latestTicketCohorts(rows: TicketHistoryItem[]) {
   return [...latest.values()].sort((a, b) => b.target_date.localeCompare(a.target_date) || a.ticket_type.localeCompare(b.ticket_type))
 }
 
-export default function PaperLedger({ onOpenValidation }: { onOpenValidation?: () => void }) {
+export default function PaperLedger({ isInternal, onOpenValidation }: { isInternal: boolean; onOpenValidation?: () => void }) {
   const [allVersions, setAllVersions] = useState<TicketHistoryItem[]>([])
-  const [performance, setPerformance] = useState<PerformanceSummary | null>(null)
+  const [trackerMeta, setTrackerMeta] = useState<TrackerMeta | null>(null)
   // Observation-only tiers come from the backend policy flag, so restoring a
   // tier needs no frontend change here.
   const [observationTiers, setObservationTiers] = useState<Set<string>>(new Set())
@@ -44,14 +44,14 @@ export default function PaperLedger({ onOpenValidation }: { onOpenValidation?: (
   useEffect(() => {
     Promise.all([
       fetchTicketHistory(true),
-      fetch('/api/v1/performance/summary').then(async response => {
-        if (!response.ok) throw new Error(`Performance summary failed (${response.status})`)
-        return response.json()
-      }),
-    ]).then(([history, summary]) => {
+      fetch('/api/v1/tickets/tracker-meta').then(async response => {
+        if (!response.ok) throw new Error(`Tracker settings failed (${response.status})`)
+        return response.json() as Promise<TrackerMeta>
+      }).catch(() => null),
+    ]).then(([history, meta]) => {
       setAllVersions(history.filter(row => row.ticket_type !== 'high_odds'))
-      setPerformance(summary)
-      setObservationTiers(new Set(summary.observation_only?.ticket_types ?? []))
+      setTrackerMeta(meta)
+      setObservationTiers(new Set(meta?.observation_only?.ticket_types ?? []))
     })
       .catch((reason: Error) => setError(reason.message || 'Paper portfolio unavailable'))
       .finally(() => setLoading(false))
@@ -59,7 +59,9 @@ export default function PaperLedger({ onOpenValidation }: { onOpenValidation?: (
 
   const latestRows = useMemo(() => latestTicketCohorts(allVersions), [allVersions])
   const modelVersions = useMemo(() => [...new Set(latestRows.map(row => row.model_version))].sort().reverse(), [latestRows])
-  const currentModel = performance?.current_model_version
+  // Metadata is best-effort; fall back to the newest model present in history
+  // so the default "Current" scope never renders an empty ledger.
+  const currentModel = trackerMeta?.current_model_version ?? modelVersions[0]
   const scopeRows = useMemo(() => latestRows.filter(row =>
     (modelFilter === 'all' || row.model_version === (modelFilter === 'current' ? currentModel : modelFilter))
     && (!dateFrom || row.target_date >= dateFrom) && (!dateTo || row.target_date <= dateTo)
@@ -134,17 +136,17 @@ export default function PaperLedger({ onOpenValidation }: { onOpenValidation?: (
     {error && <div className="tracker-message error" role="alert">{error}</div>}
     <div className="paper-scope-heading paper-ledger-heading">
       <div><span className="eyebrow">Track · paper history</span><strong>Published ticket history</strong><p>Expand a cohort to inspect its saved versions, outcomes and publication provenance.</p></div>
-      {onOpenValidation && <button className="btn-ghost btn-sm" onClick={onOpenValidation}>Open validation</button>}
+      {isInternal && onOpenValidation && <button className="btn-ghost btn-sm" onClick={onOpenValidation}>Open validation</button>}
     </div>
-    <div className="paper-ledger-filters" aria-label="Ledger filters">
+    {isInternal && <div className="paper-ledger-filters" aria-label="Ledger filters">
       <label>Tier<select aria-label="Ticket type filter" value={typeFilter} onChange={event => setTypeFilter(event.target.value)}><option value="all">Portfolio tiers</option>{['safe', 'balanced'].map(value => <option key={value} value={value}>{observationTiers.has(value) ? `${formatTicketType(value)} (observation only)` : formatTicketType(value)}</option>)}</select></label>
       <label>Outcome<select aria-label="Settlement filter" value={resultFilter} onChange={event => setResultFilter(event.target.value)}><option value="all">All outcomes</option><option value="pending">Pending</option><option value="won">Won</option><option value="lost">Lost</option><option value="void">Void</option></select></label>
       <label>Model<select aria-label="Model version filter" value={modelFilter} onChange={event => setModelFilter(event.target.value)}><option value="current">Current · {currentModel ?? 'loading'}</option><option value="all">All model versions</option>{modelVersions.filter(version => version !== currentModel).map(version => <option key={version} value={version}>{version}</option>)}</select></label>
       <label>From<input aria-label="Tickets from date" type="date" value={dateFrom} onChange={event => setDateFrom(event.target.value)} /></label>
       <label>To<input aria-label="Tickets to date" type="date" value={dateTo} onChange={event => setDateTo(event.target.value)} /></label>
-    </div>
+    </div>}
 
-    {hasObservationRows && typeFilter === 'all' && <div className="sample-warning" role="note">Balanced is an administrator-only observation cohort: its rows remain visible below, but are excluded from the portfolio P&amp;L, ROI, hit rate and stake summary until it is restored. Select the Balanced tier to inspect its standalone record.</div>}
+    {isInternal && hasObservationRows && typeFilter === 'all' && <div className="sample-warning" role="note">Balanced is an administrator-only observation cohort: its rows remain visible below, but are excluded from the portfolio P&amp;L, ROI, hit rate and stake summary until it is restored. Select the Balanced tier to inspect its standalone record.</div>}
     <div className="paper-ledger-summary published-history-kpis" aria-label="Current ledger summary">
       <div><span>Latest ticket cohorts (after current filters)</span><strong>{filtered.length}</strong></div>
       <div><span>Settled (win, lost, or void)</span><strong>{settledRows.length}</strong></div>
@@ -154,7 +156,7 @@ export default function PaperLedger({ onOpenValidation }: { onOpenValidation?: (
       <div><span>Published before kickoff (unknown timing is not counted)</span><strong>{publishedBeforeKickoff}</strong></div>
     </div>
 
-    {filtered.length === 0 ? <div className="analytics-empty"><strong>No tickets match these filters</strong><span>Try another tier, outcome, model version or date range.</span></div> : <div className="paper-ledger-list">{groupedRows.map(yearGroup => <details className="paper-year-group" key={yearGroup.year} open={yearGroup.year === today.slice(0, 4) && filtered.some(row => row.target_date === today)}>
+    {filtered.length === 0 ? <div className="analytics-empty"><strong>{isInternal ? 'No tickets match these filters' : 'No published ticket history'}</strong><span>{isInternal ? 'Try another tier, outcome, model version or date range.' : 'Published paper tickets will appear here once available.'}</span></div> : <div className="paper-ledger-list">{groupedRows.map(yearGroup => <details className="paper-year-group" key={yearGroup.year} open={yearGroup.year === today.slice(0, 4) && filtered.some(row => row.target_date === today)}>
       <summary className="paper-year-heading">{yearGroup.year}</summary>
       <div className="paper-year-body">{yearGroup.months.map(monthGroup => <details className="paper-month-group" key={`${yearGroup.year}-${monthGroup.month}`} open={monthGroup.month === today.slice(5, 7) && filtered.some(row => row.target_date === today)}>
         <summary className="paper-month-heading">{monthGroup.monthLabel}</summary>

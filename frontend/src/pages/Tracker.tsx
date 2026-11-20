@@ -14,7 +14,7 @@ function evidenceFromLocation(): EvidenceView {
   return view === 'matches' || view === 'sweet' ? view : 'tickets'
 }
 
-export default function TrackerPage({ onOpenValidation }: { onOpenValidation?: () => void }) {
+export default function TrackerPage({ isInternal, onOpenValidation }: { isInternal: boolean; onOpenValidation?: () => void }) {
   const [evidence, setEvidence] = useState<EvidenceView>(evidenceFromLocation)
   const selectEvidence = (next: EvidenceView) => {
     setEvidence(next)
@@ -33,7 +33,7 @@ export default function TrackerPage({ onOpenValidation }: { onOpenValidation?: (
       {([['tickets', 'Ticket history'], ['matches', 'Match outcomes'], ['sweet', 'Sweet-spot test']] as [EvidenceView, string][]).map(([id, label]) => <button key={id} id={`tracker-evidence-tab-${id}`} aria-controls="tracker-evidence-panel" tabIndex={evidence === id ? 0 : -1} role="tab" aria-selected={evidence === id} className={evidence === id ? 'active' : ''} onKeyDown={event => handleArrowTab(event, EVIDENCE_VIEWS, evidence, selectEvidence, 'tracker-evidence-tab-')} onClick={() => selectEvidence(id)}>{label}</button>)}
     </div>
     <div id="tracker-evidence-panel" role="tabpanel" aria-labelledby={`tracker-evidence-tab-${evidence}`} tabIndex={0}>
-      {evidence === 'tickets' ? <PaperLedger onOpenValidation={onOpenValidation} /> : evidence === 'matches' ? <MatchHistory /> : <SweetSpotTracker />}
+      {evidence === 'tickets' ? <PaperLedger isInternal={isInternal} onOpenValidation={onOpenValidation} /> : evidence === 'matches' ? <MatchHistory isInternal={isInternal} /> : <SweetSpotTracker />}
     </div>
   </div>
 }
