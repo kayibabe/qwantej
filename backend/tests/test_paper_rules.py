@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 import pytest
+from app.services.band_mix import BAND_MIX_PAIRS, band_mix_lateral
 from app.services.paper_rules import (
     RULES,
     _base_reasons,
@@ -41,6 +42,11 @@ def test_protocols_are_json_frozen():
                 assert rule['markets'], 'basket rule needs at least one market'
                 assert len(set(rule['markets'])) == len(rule['markets'])
                 assert not set(rule['markets']) & set(rule.get('excluded_markets', []))
+        elif 'pairs' in rule:
+            assert rule['pairs'] == [list(pair) for pair in BAND_MIX_PAIRS]
+            assert 'q_min' not in rule
+            assert rule['implied_source'] == 'source_implied_probability'
+            assert all(len(pair) == 4 and all(isinstance(v, float) for v in pair) for pair in rule['pairs'])
         else:
             # JSON round-trip safety: bands must be lists, not tuples.
             assert isinstance(rule['model_band'], list)
@@ -73,6 +79,28 @@ def test_mix_rule_predicates():
     assert _predicate_reasons(rule2, opportunity(rule2, model_probability=0.72, odds=2.1)) == []
     assert 'market_implied_outside_band' in _predicate_reasons(rule2, opportunity(rule2, model_probability=0.72, odds=1.9))
     assert 'odds_outside_range' not in _predicate_reasons(rule2, opportunity(rule2, model_probability=0.72, odds=2.1))
+
+
+def test_five_pairs_rule_has_no_q_gate_and_uses_stored_implied_probability():
+    rule = 'mix-five-noq-v1'
+    base = dict(model_probability=0.49, source_implied_probability=0.87, odds=1.15, q_score=20)
+    assert _predicate_reasons(rule, opportunity(rule, **base)) == []
+    # Q is not a universe filter here, so even an invalid/missing Q must pass.
+    assert _predicate_reasons(rule, opportunity(rule, **{**base, 'q_score': None})) == []
+    assert 'band_probability_unavailable' in _predicate_reasons(
+        rule, opportunity(rule, **{**base, 'source_implied_probability': None}))
+    assert 'model_implied_outside_pairs' in _predicate_reasons(
+        rule, opportunity(rule, **{**base, 'source_implied_probability': 0.62}))
+    assert 'model_implied_outside_pairs' in _predicate_reasons(
+        rule, opportunity(rule, **{**base, 'model_probability': 0.62}))
+    # The 95-100% band includes exactly 1.0, matching the UI bucket.
+    assert _predicate_reasons(rule, opportunity(
+        rule, model_probability=1.0, source_implied_probability=0.72, odds=1.39)) == []
+
+    sql, params = band_mix_lateral()
+    assert 'q_score' not in sql
+    assert 'source_implied_probability' in sql
+    assert len(params) == len(BAND_MIX_PAIRS) * 4
 
 
 def test_base_reasons_still_apply_to_rules():

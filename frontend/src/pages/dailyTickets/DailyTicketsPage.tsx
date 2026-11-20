@@ -29,6 +29,7 @@ import {
   TODAY,
   withRejectionEvidence,
 } from "./helpers";
+import { parseBandMixPairs } from "./bandMix";
 import type { DailyTab, DailyTicketsPageProps } from "./types";
 
 const ParameterSweepPicks = lazy(() => import("./ParameterSweepPicks").then((module) => ({ default: module.ParameterSweepPicks })));
@@ -43,6 +44,13 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
   const [data, setData] = useState<DailyTickets | null>(null);
   const [rejected, setRejected] = useState<SelectionSummary[]>([]);
   const [matches, setMatches] = useState<SelectionSummary[]>([]);
+  // Band mix deliberately searches every stored prediction; without it the
+  // System picks list stays on the existing Q >=75 universe.
+  const [bandMixPairs, setBandMixPairs] = useState<number[]>(() => parseBandMixPairs(
+    typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("match_band_mix"),
+  ));
+  const minQScore = bandMixPairs.length > 0 ? 0 : 75;
+  const lastMinQScore = useRef(minQScore);
   const [matchesTotal, setMatchesTotal] = useState(0);
   const [pickedMatchTotal, setPickedMatchTotal] = useState(0);
   const [loadingMoreMatches, setLoadingMoreMatches] = useState(false);
@@ -109,10 +117,18 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
     // The overview already preloads every headline tab, so switching tabs must
     // not re-issue the same requests. The research workspace loads per tab.
     const requestedKey = mode === "overview"
-      ? `${mode}:${targetDate}:${roleKey}`
-      : `${mode}:${targetDate}:${tab}:${roleKey}`;
+      ? `${mode}:${targetDate}:${roleKey}:q${minQScore}`
+      : `${mode}:${targetDate}:${tab}:${roleKey}:q${minQScore}`;
     if (!force && loadedKey.current === requestedKey) return;
     const request = ++requestVersion.current;
+    if (lastMinQScore.current !== minQScore) {
+      // Never mix Q>=75 rows with the un-gated band-mix universe.
+      lastMinQScore.current = minQScore;
+      setMatches([]);
+      setMatchesTotal(0);
+      setPickedMatchTotal(0);
+      setCandidatesLoaded(false);
+    }
     if (firstLoad.current) setLoading(true);
     try {
       const overview = mode === "overview";
@@ -134,13 +150,13 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
       // them alongside the fixture list. A failure must not hide fixtures: a
       // null result leaves the badge out rather than claiming "no picks".
       const pickCountsPromise = wantsFixtures
-        ? fetchQualifiedPickCounts(targetDate).catch(() => null)
+        ? fetchQualifiedPickCounts(targetDate, minQScore).catch(() => null)
         : Promise.resolve(null);
       const [tickets, fixtureRows, countRows, allRows, rejectedRows, marketRoiRows] = await Promise.all([
         wantsTickets ? fetchDailyTickets(targetDate) : Promise.resolve(null),
         wantsFixtures ? fetchMatchFixtures(targetDate) : Promise.resolve(null),
         pickCountsPromise,
-        wantsCandidates ? fetchQualifiedSelections(targetDate) : Promise.resolve(null),
+        wantsCandidates ? fetchQualifiedSelections(targetDate, minQScore) : Promise.resolve(null),
         wantsRejected ? fetchRejectedSelections(targetDate) : Promise.resolve(null),
         marketRoiPromise,
       ]);
@@ -180,13 +196,13 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
         firstLoad.current = false;
       }
     }
-  }, [canExploreMarkets, isAdmin, mode, tab]);
+  }, [canExploreMarkets, isAdmin, minQScore, mode, tab]);
 
   const loadMoreMatches = async () => {
     if (loadingMoreMatches || matches.length >= matchesTotal) return;
     setLoadingMoreMatches(true);
     try {
-      const page = await fetchQualifiedSelections(date, 75, matches.length);
+      const page = await fetchQualifiedSelections(date, minQScore, matches.length);
       setMatches((current) => withRejectionEvidence(
         [...current, ...page.rows.filter((row) => !current.some((existing) => existing.prediction_id === row.prediction_id))],
         rejected,
@@ -506,10 +522,12 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
             ))}
           </nav>}
           {tab === "fixtures" && <div className="view-intro"><span className="eyebrow">Fixtures</span><h2 className="section-title">All fixtures for this date</h2><p>Every fixture scheduled for this date, with competition, kickoff time, and current status.</p></div>}
-          {tab === "picks" && canExploreMarkets && <div className="view-intro"><span className="eyebrow">System picks</span><h2 className="section-title">System picks for this date</h2><p>Every Q ≥75 selection the model qualified for this date, grouped by match. A pick appearing here does not mean it made a published accumulator.</p></div>}
+          {tab === "picks" && canExploreMarkets && <div className="view-intro"><span className="eyebrow">System picks</span><h2 className="section-title">System picks for this date</h2><p>{minQScore === 0
+            ? "Every stored selection is searched while Band mix is on — the Q ≥75 gate is off. Band mix keeps only the exact model × market pairs. A pick appearing here does not mean it made a published accumulator."
+            : "Every Q ≥75 selection the model qualified for this date, grouped by match. A pick appearing here does not mean it made a published accumulator."}</p></div>}
           {tab === "tickets" && <div className="view-intro"><span className="eyebrow">Accumulator tickets</span><h2 className="section-title">Tickets assembled from this date&rsquo;s picks</h2><p>{canExploreMarkets ? "Each published tier is a fixed combination of the system’s qualified picks. Expand a leg to inspect its evidence; the stake field is a what-if calculation only." : "Each published tier is a fixed combination of the system’s qualified picks. On Free you can review every match leg and its settlement status; Pro opens the selections and their evidence."}</p></div>}
           {tab === "fixtures" && <Suspense fallback={<div className="route-loading">Loading fixtures…</div>}><FixtureExplorer fixtures={fixtures} pickCounts={pickCounts ?? undefined} onOpenPicks={canExploreMarkets ? openFixturePicks : undefined} /></Suspense>}
-          {tab === "picks" && canExploreMarkets && <Suspense fallback={<div className="route-loading">Loading system picks…</div>}><AllMatches rows={matchGroups} totalSelections={matchesTotal} loadedSelections={matches.length} loadingMore={loadingMoreMatches} onLoadMore={loadMoreMatches} onSelect={openSelection} focusMatchId={focusMatchId} focusLabel={focusFixture ? `${focusFixture.home_team} vs ${focusFixture.away_team}` : null} onClearFocus={() => setFocusMatchId(null)} /></Suspense>}
+          {tab === "picks" && canExploreMarkets && <Suspense fallback={<div className="route-loading">Loading system picks…</div>}><AllMatches rows={matchGroups} totalSelections={matchesTotal} loadedSelections={matches.length} loadingMore={loadingMoreMatches} onLoadMore={loadMoreMatches} onSelect={openSelection} focusMatchId={focusMatchId} focusLabel={focusFixture ? `${focusFixture.home_team} vs ${focusFixture.away_team}` : null} onClearFocus={() => setFocusMatchId(null)} onBandMixChange={setBandMixPairs} /></Suspense>}
           {tab === "picks" && !canExploreMarkets && (
             <section className="plan-locked-panel" aria-labelledby="plan-locked-picks-title">
               <div className="plan-locked-copy">

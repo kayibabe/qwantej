@@ -1,7 +1,7 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SelectionSummary } from '../../lib/api'
 import { AllMatches, encodeBandMixPairs, matchesBandMix, parseBandMixPairs } from './AllMatches'
 
@@ -91,6 +91,7 @@ describe('one-click band mix filter', () => {
     expect(html).toContain('BandMixTop')
     expect(html).not.toContain('BandMixOutside')
     expect(html).toContain('Band mix on:')
+    expect(html).toContain('The Q ≥75 gate is off')
     expect(html).toContain('95-100% × 70-75%')
   })
 
@@ -132,6 +133,28 @@ describe('band mix pair selection', () => {
       await act(async () => { boxes[0].click() })
       expect(container.textContent).not.toContain('BandMixLow')
       expect(container.textContent).toContain('BandMixEdge')
+    } finally {
+      await act(async () => { root.unmount() })
+      container.remove()
+    }
+  })
+
+  it('notifies the page when band mix changes so it can reload without the Q gate', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    const onBandMixChange = vi.fn()
+    try {
+      await act(async () => { root.render(<AllMatches rows={bandMixRows} onSelect={() => {}} onBandMixChange={onBandMixChange} />) })
+      const caret = container.querySelector<HTMLButtonElement>('[aria-label="Choose band mix pairs"]')!
+      await act(async () => { caret.click() })
+      const boxes = [...container.querySelectorAll<HTMLInputElement>('.picks-band-mix-option input')]
+      await act(async () => { boxes[0].click() })
+      expect(onBandMixChange).toHaveBeenLastCalledWith([0])
+      await act(async () => { boxes[4].click() })
+      expect(onBandMixChange).toHaveBeenLastCalledWith([0, 4])
+      await act(async () => { boxes[0].click(); boxes[4].click() })
+      expect(onBandMixChange).toHaveBeenLastCalledWith([])
     } finally {
       await act(async () => { root.unmount() })
       container.remove()

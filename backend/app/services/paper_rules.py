@@ -29,6 +29,7 @@ from app.services.clv import (
     has_post_entry_quote,
 )
 from app.services.sweet_spot import digest, metrics as cohort_metrics, parse
+from app.services.band_mix import BAND_MIX_PAIRS, band_mix_lateral, in_band_mix
 
 CAT = timezone(timedelta(hours=2))
 MAX_QUOTE_AGE = timedelta(hours=3)
@@ -168,6 +169,28 @@ RULES: dict[str, dict] = {
                       'universe definition, so applying it after selection admitted '
                       'non-qualifying picks and discarded qualifying ones.'),
     },
+    'mix-five-noq-v1': dict(
+        # No Q-score gate: these five exact band pairs define the whole universe.
+        # Stored implied probability is used because it is the bookmaker-price
+        # field captured with the prediction, not a reconstructed 1/odds value.
+        pairs=[list(pair) for pair in BAND_MIX_PAIRS],
+        implied_source='source_implied_probability',
+        q_role='Not used. No Q-score gate in this rule.',
+        earliest_kickoff_date='2026-11-22', minimum_review_date='2027-03-01',
+        required_settled=150, required_matchdays=30,
+        rationale=(
+            'No-Q validation: 61 picks, 26 matchdays, 91.8% hit, +8.11% ROI, '
+            'day-cluster 95% CI [0.98%, 15.27%] from 2026-09-27 to 2026-11-20. '
+            'The five band-mix pairs draw from all predictions because this rule '
+            'intentionally has no Q-score gate. Bands are: QwanEj <50% x market implied '
+            '85-90%; QwanEj 50-55% x market implied 90-95%; QwanEj 55-60% x market implied '
+            '95-100%; QwanEj 60-65% x market implied 90-95%; QwanEj 95-100% x market implied '
+            '70-75%. Use source implied probability, one selection per fixture, and the '
+            'first stored qualifying prediction for the fixture. Review prospectively from '
+            '2026-11-22 with at least 150 settled picks across 30 matchdays from 2027-03-01.'
+        ),
+        **_COMMON,
+    ),
 }
 
 
@@ -218,6 +241,15 @@ def _predicate_reasons(rule_key: str, row) -> list:
             result.append(f'q_below_{q_min}_or_invalid')
         if (not _is_number(odds) or not (rule['odds_min_inclusive'] <= odds < rule['odds_max_exclusive'])):
             result.append('odds_outside_range')
+    elif 'pairs' in rule:
+        model_p = row.get('model_probability')
+        implied = row.get('source_implied_probability')
+        if not _is_number(odds) or odds <= 1:
+            result.append('invalid_entry_odds')
+        if not _is_number(model_p) or not _is_number(implied):
+            result.append('band_probability_unavailable')
+        elif not in_band_mix(model_p, implied):
+            result.append('model_implied_outside_pairs')
     else:
         model_p = row.get('model_probability')
         m_lo, m_hi = rule['model_band']
@@ -290,6 +322,11 @@ async def _tick_rule(db, rule_key: str, now: datetime) -> dict:
         # Basket rules take one pick per fixture.
         lateral, basket_params = _basket_lateral(rule)
         params.update(basket_params)
+    elif 'pairs' in rule:
+        # No Q predicate: the five exact model x stored-implied bands define
+        # the whole universe. One pick per fixture, earliest stored match wins.
+        lateral, pair_params = band_mix_lateral()
+        params.update(pair_params)
     else:
         m_lo, m_hi = rule['model_band']
         k_lo, k_hi = rule['market_band']

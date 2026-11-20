@@ -17,6 +17,19 @@ import {
 } from "./helpers";
 import { BlockHeatmap } from "./BlockHeatmap";
 import type { MatchDisplayState } from "./types";
+import {
+  ALL_BAND_MIX_PAIRS,
+  BAND_MIX_LABEL,
+  BAND_MIX_PAIRS,
+  bandMixPairLabel,
+  encodeBandMixPairs,
+  impliedProbability,
+  matchesBandMix,
+  parseBandMixPairs,
+} from "./bandMix";
+
+// Re-exported so existing filter links/tests keep importing from this module.
+export { encodeBandMixPairs, matchesBandMix, parseBandMixPairs } from "./bandMix";
 
 type MatchSortKey = "match" | "kickoff" | "league" | "q" | "fair" | "markets" | "spread" | "edge";
 type OutcomeFilter = "" | "won" | "lost" | "void" | "pending";
@@ -50,70 +63,6 @@ function saveSavedPresets(presets: SavedPreset[]) {
 const MATCH_STATUSES: MatchDisplayState[] = ["finished", "live", "scheduled", "postponed", "cancelled", "abandoned", "awarded"];
 const MATCH_SORT_KEYS: MatchSortKey[] = ["match", "kickoff", "league", "q", "fair", "markets", "spread", "edge"];
 const CHANCE_BLOCKS = [20, 30, 40, 50, 60, 70, 80, 90];
-
-/**
- * Band mix: the five exact model-probability × market-implied pairs captured
- * from the saved filter. Each pair can be selected independently; selected
- * pairs combine with OR (any pair qualifies a match). Bands match the backend's
- * 5pp buckets in app/services/performance.py, so this view agrees with
- * Validate's combined matrix. QwanEj band here means the model's predicted
- * probability, not the Q-score quality gate.
- */
-const BAND_MIX_PAIRS: [string, string][] = [
-  ["<50", "85-90"],
-  ["50-55", "90-95"],
-  ["55-60", "95-100"],
-  ["60-65", "90-95"],
-  ["95-100", "70-75"],
-];
-function bandMixPairLabel(index: number) {
-  const [model, market] = BAND_MIX_PAIRS[index];
-  return `${model}% × ${market}%`;
-}
-const BAND_MIX_LABEL = BAND_MIX_PAIRS.map((_, index) => bandMixPairLabel(index)).join(" · ");
-const ALL_BAND_MIX_PAIRS = BAND_MIX_PAIRS.map((_, index) => index);
-
-/** New links use "p<index>" tokens; the legacy "1" still means every pair. */
-export function encodeBandMixPairs(pairs: number[]): string {
-  return pairs.map((index) => `p${index}`).join(",");
-}
-
-export function parseBandMixPairs(value: string | null): number[] {
-  if (!value) return [];
-  if (value === "1") return [...ALL_BAND_MIX_PAIRS];
-  const pairs = value
-    .split(",")
-    .map((token) => token.trim().replace(/^p/i, ""))
-    .filter((token) => token !== "")
-    .map(Number)
-    .filter((index) => Number.isInteger(index) && index >= 0 && index < BAND_MIX_PAIRS.length);
-  return [...new Set(pairs)].sort((left, right) => left - right);
-}
-
-/** Bookmaker implied probability (margin included), as displayed per pick. */
-function impliedProbability(row: SelectionSummary) {
-  return row.source_implied_probability ?? row.avg_implied ?? Number.NaN;
-}
-
-/** Same 5pp buckets as performance._probability_band(), including the 95+ top band. */
-function probabilityBand(value: number | null | undefined): string | null {
-  if (value == null || !Number.isFinite(value)) return null;
-  const percent = value * 100;
-  if (percent < 50) return "<50";
-  const lower = Math.min(95, Math.floor(percent / 5) * 5);
-  return `${lower}-${lower + 5}`;
-}
-
-/** A row qualifies when it fits ANY selected pair (default: all five). */
-export function matchesBandMix(row: SelectionSummary, selectedPairs: readonly number[] = ALL_BAND_MIX_PAIRS) {
-  const modelBand = probabilityBand(row.model_probability);
-  const marketBand = probabilityBand(impliedProbability(row));
-  return modelBand != null && marketBand != null
-    && selectedPairs.some((index) => {
-      const pair = BAND_MIX_PAIRS[index];
-      return pair != null && pair[0] === modelBand && pair[1] === marketBand;
-    });
-}
 
 function matchUrlParam(name: string) {
   return new URLSearchParams(window.location.search).get(`match_${name}`);
@@ -335,6 +284,7 @@ export function AllMatches({
   focusMatchId = null,
   focusLabel = null,
   onClearFocus,
+  onBandMixChange,
 }: {
   rows: [number, SelectionSummary[]][];
   totalSelections?: number;
@@ -347,6 +297,8 @@ export function AllMatches({
   /** Team names for the focused fixture, so the chip shows even before its picks load. */
   focusLabel?: string | null;
   onClearFocus?: () => void;
+  /** Notifies the page so it can reload picks without the Q>=75 gate while band mix is on. */
+  onBandMixChange?: (pairs: number[]) => void;
 }) {
   const [statusFilter, setStatusFilter] = useState<"all" | MatchDisplayState>(() => {
     const value = matchUrlParam("status");
@@ -386,6 +338,7 @@ export function AllMatches({
       setImpliedMin("");
     }
     setBandMixPairs(pairs);
+    onBandMixChange?.(pairs);
   };
   const toggleBandMixPair = (index: number) => {
     const next = bandMixPairs.includes(index)
@@ -594,7 +547,7 @@ export function AllMatches({
     setMarketFilter("all");
     setChanceMin("");
     setImpliedMin("");
-    setBandMixPairs([]);
+    setBandMixSelection([]);
     setEdgeOnly(false);
     setFreshOnly(false);
     setTightSpread(false);
@@ -609,7 +562,7 @@ export function AllMatches({
     setMarketFilter(filters.market ?? "all");
     setChanceMin(presetPairs.length > 0 ? "" : (filters.chance ?? ""));
     setImpliedMin(presetPairs.length > 0 ? "" : (filters.implied ?? ""));
-    setBandMixPairs(presetPairs);
+    setBandMixSelection(presetPairs);
     setEdgeOnly(filters.sig_edge === "1");
     setFreshOnly(filters.sig_fresh === "1");
     setTightSpread(filters.sig_tight === "1");
@@ -692,7 +645,9 @@ export function AllMatches({
     <section className="selection-panel all-matches-panel system-picks-panel">
       {rows.length === 0 ? (
         <p className="panel-empty">
-          No Q ≥75 system picks are available for this date.
+          {bandMixOn
+            ? "No band-mix selections are available for this date (Q gate off)."
+            : "No Q ≥75 system picks are available for this date."}
         </p>
       ) : (
         <>
@@ -873,7 +828,7 @@ export function AllMatches({
 
           {bandMixOn && (
             <p className="picks-band-mix-note" role="status">
-              <b>Band mix on:</b> showing matches with <b>any</b> of {selectedBandMixLabel} · exact model × market pairs only. Stays on as you change date — bookmark the link to reuse it daily.
+              <b>Band mix on:</b> showing matches with <b>any</b> of {selectedBandMixLabel} · exact model × market pairs only. <b>The Q ≥75 gate is off</b> while band mix is on, so lower-Q predictions can match. Stays on as you change date — bookmark the link to reuse it daily.
             </p>
           )}
 
