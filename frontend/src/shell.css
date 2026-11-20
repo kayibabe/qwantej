@@ -40,7 +40,7 @@
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 10px;
+  gap: 3px;
   min-height: 0;
   padding: 18px 4px 12px 0;
   overflow-x: hidden;
@@ -63,38 +63,6 @@
   }
 }
 
-.app-v2 .shell-nav-group { display: flex; flex-direction: column; gap: 3px; }
-.app-v2 .shell-nav-items { display: flex; flex-direction: column; gap: 3px; }
-.app-v2 .shell-nav-items[hidden] { display: none; }
-.app-v2 .shell-nav-label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-  min-height: 30px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 6px;
-  background: none;
-  color: var(--muted);
-  font: inherit;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: .09em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-.app-v2 .shell-nav-label:hover { background: var(--surface2); color: var(--text2); }
-.app-v2 .shell-nav-label.has-active { color: var(--text2); }
-.app-v2 .shell-nav-label:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.app-v2 .shell-nav-chevron {
-  flex: 0 0 auto;
-  width: 14px;
-  height: 14px;
-  transition: transform .16s ease;
-}
-.app-v2 .shell-nav-label[aria-expanded="false"] .shell-nav-chevron { transform: rotate(-90deg); }
 .app-v2 .shell-nav-link {
   display: flex;
   align-items: center;

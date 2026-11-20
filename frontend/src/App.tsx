@@ -8,7 +8,7 @@ import { useAuth } from './auth'
 import { fetchMarketCatalog, installMarketCatalog } from './lib/api'
 import AccountMenu, { type ThemePreference } from './components/AccountMenu'
 import CommandPalette, { type CommandAction } from './components/CommandPalette'
-import { NAV_META, bottomNavItems, groupedNavItems, navGroupForPage, visibleNavItems, type ModulePage, type ShellNavGroup } from './shellNav'
+import { NAV_META, bottomNavItems, visibleNavItems, type ModulePage } from './shellNav'
 
 const DailyTicketsPage = lazy(() => import('./pages/DailyTickets'))
 const TrackerPage = lazy(() => import('./pages/Tracker'))
@@ -295,14 +295,6 @@ export default function App() {
   }
 
   const navPage = page === 'match' ? routePage(new URL(matchReturnTo || '/tickets', window.location.origin).pathname) : page
-  const [openNavGroup, setOpenNavGroup] = useState<ShellNavGroup | null>(
-    () => navGroupForPage(navPage)
-  )
-
-  useEffect(() => {
-    const activeGroup = navGroupForPage(navPage)
-    if (activeGroup) setOpenNavGroup(activeGroup)
-  }, [navPage])
   const workspace: Workspace = page === 'match'
     ? workspaceForPage(routePage(new URL(matchReturnTo || '/tickets', window.location.origin).pathname)) ?? 'football'
     : workspaceForPage(page) ?? 'football'
@@ -344,7 +336,6 @@ export default function App() {
   }
 
   const visibleNav = visibleNavItems(isInternal)
-  const navGroups = groupedNavItems(isInternal)
 
   function moduleHref(id: ModulePage): string {
     return id === 'research'
@@ -433,42 +424,19 @@ export default function App() {
         </a>
 
         <nav className="shell-nav" aria-label="Primary navigation">
-          {navGroups.map(group => {
-            const expanded = openNavGroup === group.label
-            const panelId = `shell-nav-${group.label.toLowerCase()}`
-            const hasActive = group.items.some(item => item.id === navPage)
-            return (
-              <div className={`shell-nav-group${expanded ? ' expanded' : ''}`} key={group.label}>
-                <button
-                  type="button"
-                  className={`shell-nav-label${hasActive ? ' has-active' : ''}`}
-                  aria-expanded={expanded}
-                  aria-controls={panelId}
-                  onClick={() => setOpenNavGroup(current => current === group.label ? null : group.label)}
-                >
-                  <span>{group.label}</span>
-                  <svg className="shell-nav-chevron" viewBox="0 0 16 16" aria-hidden="true">
-                    <path d="M3.5 6 8 10.5 12.5 6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-                <div className="shell-nav-items" id={panelId} hidden={!expanded}>
-                  {group.items.map(item => (
-                    <a
-                      key={item.id}
-                      className={`shell-nav-link${navPage === item.id ? ' active' : ''}`}
-                      href={moduleHref(item.id)}
-                      title={NAV_META[item.id].hint}
-                      aria-current={navPage === item.id ? 'page' : undefined}
-                      onClick={navClick(item.id)}
-                    >
-                      <span className="shell-nav-icon"><NavIcon name={NAV_META[item.id].icon} /></span>
-                      <span>{item.label}</span>
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
+          {visibleNav.map(item => (
+            <a
+              key={item.id}
+              className={`shell-nav-link${navPage === item.id ? ' active' : ''}`}
+              href={moduleHref(item.id)}
+              title={NAV_META[item.id].hint}
+              aria-current={navPage === item.id ? 'page' : undefined}
+              onClick={navClick(item.id)}
+            >
+              <span className="shell-nav-icon"><NavIcon name={NAV_META[item.id].icon} /></span>
+              <span>{item.label}</span>
+            </a>
+          ))}
         </nav>
 
         <div className="shell-sidebar-footer">

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SHELL_NAV, bottomNavItems, groupedNavItems, visibleNavItems } from './shellNav'
+import { SHELL_NAV, bottomNavItems, visibleNavItems } from './shellNav'
 
 const ids = (items: { id: string }[]) => items.map(item => item.id)
 
@@ -27,11 +27,14 @@ describe('shell navigation', () => {
     expect(ids(visibleNavItems(true))).toEqual(ids(SHELL_NAV))
   })
 
-  it('groups visible links without rendering empty groups', () => {
-    const free = groupedNavItems(false)
-    expect(free.map(group => group.label)).toEqual(['Decide', 'Research'])
-    expect(ids(free.find(group => group.label === 'Research')!.items)).toEqual(['tracker'])
-    expect(groupedNavItems(true).map(group => group.label)).toEqual(['Decide', 'Research', 'System'])
+  it('renders every visible link as a standalone item without section headings', () => {
+    expect(ids(visibleNavItems(false))).toEqual(['tickets', 'live', 'insights', 'tracker'])
+    expect(visibleNavItems(false).map(item => item.label)).toEqual(['Today', 'Live', 'Stats & trends', 'Track'])
+    expect(visibleNavItems(false).map(item => item.label)).not.toContain('Decide')
+    expect(visibleNavItems(false).map(item => item.label)).not.toContain('Research')
+    expect(ids(visibleNavItems(true))).toEqual(ids(SHELL_NAV))
+    expect(visibleNavItems(true).map(item => item.label)).not.toContain('Decide')
+    expect(visibleNavItems(true).map(item => item.label)).not.toContain('System')
   })
 
   it('keeps the public bottom links and swaps in the active section', () => {
