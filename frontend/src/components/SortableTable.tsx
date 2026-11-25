@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 
 export type SortDirection = 'asc' | 'desc'
 export type SortValue = string | number | null | undefined
@@ -61,10 +62,17 @@ export function useSortableRows<T, K extends string>(
 }
 
 export function SortableTh({ label, direction, onSort, className }: { label: ReactNode; direction: SortDirection | null; onSort: () => void; className?: string }) {
+  const Icon = direction === 'asc' ? ArrowUp : direction === 'desc' ? ArrowDown : ArrowUpDown
   return (
-    <th className={className} aria-sort={direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none'}>
-      <button type="button" className="table-sort" onClick={onSort}>
-        {label} <span aria-hidden="true">{direction === 'asc' ? '▲' : direction === 'desc' ? '▼' : '↕'}</span>
+    <th className={`text-left text-sm ${className ?? ''}`} aria-sort={direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none'}>
+      <button
+        type="button"
+        className={`group inline-flex min-h-11 min-w-11 items-center justify-start gap-1 text-left leading-relaxed text-slate-600 transition-colors hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${direction ? 'font-semibold text-slate-900' : ''}`}
+        aria-label={`Sort by ${typeof label === 'string' ? label : 'column'}${direction === 'asc' ? ', currently ascending' : direction === 'desc' ? ', currently descending' : ''}`}
+        onClick={onSort}
+      >
+        <span>{label}</span>
+        <Icon className={`h-3 w-3 shrink-0 transition-colors ${direction ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600'}`} aria-hidden="true" />
       </button>
     </th>
   )

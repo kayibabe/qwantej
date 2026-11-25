@@ -122,4 +122,12 @@ describe('daily ledger picks panel', () => {
 
     expect(renderToStaticMarkup(<UngatedDailyPicks daily={day} />)).toBe('')
   })
+
+  it('labels the ungated table columns for screen readers', () => {
+    const html = renderToStaticMarkup(<UngatedDailyPicks daily={emptyGatedDay()} />)
+
+    expect(html).toContain('<th scope="col">Kickoff</th>')
+    expect(html).toContain('<th scope="col">All-time gate</th>')
+    expect(html).toContain('102 picks')
+  })
 })

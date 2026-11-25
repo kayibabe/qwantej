@@ -95,8 +95,8 @@ describe('audited ticket surfaces', () => {
     const html = renderToStaticMarkup(
       <TicketCard ticket={horizonTicket} tierName="Balanced" tierDesc="Q ≥80" color="blue" />,
     )
-    expect(html).toContain('class="event-date">Mon 31 Aug</span>')
-    expect(html).toContain('Fri 28 Aug')
+    expect(html).toContain('aria-label="Match date Mon 31 Aug"')
+    expect(html).toContain('aria-label="Match date Fri 28 Aug"')
     expect(html).toContain('up to 3 day(s) later')
   })
 
@@ -151,8 +151,8 @@ describe('audited ticket surfaces', () => {
     const html = renderToStaticMarkup(
       <TicketCard ticket={{ ...ticket, legs: [finished] }} tierName="Balanced" tierDesc="" color="blue" />,
     )
-    expect(html).toContain('match-state-badge finished">Finished')
-    expect(html).toContain('Score 0 to 0')
+    expect(html).toContain('aria-label="Match state Finished"')
+    expect(html).toContain('aria-label="Score 0 to 0"')
     expect(html).toContain('Settlement pending')
   })
 
@@ -161,9 +161,8 @@ describe('audited ticket surfaces', () => {
       <TicketCard ticket={ticket} tierName="Balanced" tierDesc="Q ≥80" color="blue" />,
     )
     expect(html).not.toContain('Includes games to')
-    expect(html).toContain('Fri 28 Aug')
-    expect(html).toContain('class="leg-time kickoff-date"')
-    expect(html).toContain('class="leg-time kickoff-time"')
+    expect(html).toContain('aria-label="Match date Fri 28 Aug"')
+    expect(html).toMatch(/aria-label="Kickoff time [^"]+"/)
   })
 
   it('renders a clear empty persisted-ticket state', () => {
@@ -213,7 +212,7 @@ describe('audited ticket surfaces', () => {
       <SelectionDetail selection={ticket.legs[0]} modelVersion="0.2.1" publishedAt={ticket.published_at} onClose={() => undefined} />,
     )
     expect(html).toContain('Probability evidence')
-    expect(html).toContain('QwanEj model')
+    expect(html).toContain('MatchSlip model')
     expect(html).toContain('Market implied')
     expect(html).toContain('Probabilities are estimates, not guarantees')
     expect(html).toContain('0.2.1')
@@ -231,7 +230,7 @@ describe('audited ticket surfaces', () => {
     expect(html).toContain('Fair chance (margin removed)')
     expect(html).toContain('Quoted price implies')
     expect(html).toContain('Price vs fair')
-    expect(html).not.toContain('QwanEj model')
+    expect(html).not.toContain('MatchSlip model')
     expect(html).not.toContain('No positive edge')
     expect(html).not.toContain('Model spread')
   })

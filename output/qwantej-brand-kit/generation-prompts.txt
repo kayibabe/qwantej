@@ -1,3 +1,11 @@
+MatchSlip brand migration note (2026-11-25)
+========================================
+
+This file was updated during the QwanEj -> MatchSlip theme/brand migration. The prompts below are retained as historical generation prompts for the legacy QwanEj raster assets currently stored in this folder. Do not treat them as current MatchSlip production prompts. When regenerating assets, use MatchSlip branding: emerald #047857 primary, slate neutrals, DM Sans / Plus Jakarta Sans / JetBrains Mono typography, and tagline "Built on evidence, not hunches.".
+
+Historical prompts (legacy QwanEj assets)
+-----------------------------------------
+
 Built-in image generation. Final logos refined with solid theme backgrounds and no glow or shadow.
 
 Use case: logo-brand. Recreate the supplied QwanEj stacked logo reference as a polished high resolution production asset, closely preserving the exact identity, geometry and composition. Keep exact brand text "QwanEj" and exact tagline "Intelligence Beyond Numbers." with thin rules. Dark navy wordmark, royal blue tagline, blue gradient Q for light surfaces. Remove background to actual transparency. Crisp vector-like edges, tasteful consistent spacing, preserve the diagonal Q tail. One asset only, no presentation board.

@@ -1,19 +1,19 @@
 @echo off
 setlocal EnableExtensions
-title QwanEj - Stopping
+title MatchSlip - Stopping
 echo.
 echo  ============================
-echo   QwanEj - Shutting down...
+echo   MatchSlip - Shutting down...
 echo  ============================
 echo.
 
 cd /d "%~dp0"
 
-echo [1/3] Closing the QwanEj frontend console...
+echo [1/3] Closing the MatchSlip frontend console...
 set "QWANTEJ_FRONTEND=%~dp0frontend"
 powershell -NoProfile -Command "$frontend = $env:QWANTEJ_FRONTEND; $targets = Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'cmd.exe' -and $_.CommandLine -like ('*' + $frontend + '*') -and ($_.CommandLine -like '*vite*' -or $_.CommandLine -like '*npm run dev*')) -or ($_.Name -eq 'node.exe' -and $_.CommandLine -like ('*' + $frontend + '*vite*')) }; if (-not $targets) { exit 1 }; foreach ($target in $targets) { taskkill /PID $target.ProcessId /T /F 2>$null | Out-Null }; exit 0"
 if errorlevel 1 (
-    echo No QwanEj frontend process was found.
+    echo No MatchSlip frontend process was found.
 ) else (
     echo Frontend stopped.
 )

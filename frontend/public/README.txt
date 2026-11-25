@@ -1,10 +1,12 @@
-QwanEj BRAND KIT
+MatchSlip BRAND KIT (migrated 2026-11-25)
 
-Light and dark folders each contain:
-- logo.png: full stacked logo with tagline, on a solid theme background.
-- icon-master.png: high resolution rounded app icon.
-- icon PNGs: 128, 180 (Apple touch), 192, 256 and 512 pixels.
-- favicon PNGs: 16, 32, 48 and 64 pixels.
-- favicon.ico: embedded 16, 32, 48 and 64 pixel versions.
+The active web app now uses the MatchSlip visual identity:
+- Primary: emerald #047857
+- Neutrals: slate palette (bg #f8fafc, text #0f172a, borders #e2e8f0)
+- Fonts: DM Sans, Plus Jakarta Sans, JetBrains Mono
+- Tagline: Built on evidence, not hunches.
+- Favicon/app icon: /favicon.svg
 
-Created using the built-in image generation tool from supplied references. Raster PNG/ICO assets; no vector master. Favicons are downscaled app marks and retain the reference detail. Generated geometry may vary slightly across variants.
+Legacy QwanEj raster assets in light/ and dark/ are retained as historical files
+and are no longer referenced by the frontend. Replace them when MatchSlip-native
+raster artwork is produced.

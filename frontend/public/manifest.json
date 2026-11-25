@@ -1,22 +1,16 @@
 {
-  "name": "QwanEj — Football Intelligence",
-  "short_name": "QwanEj",
-  "description": "Auditable football research and paper-trading intelligence",
+  "name": "MatchSlip — Built on evidence, not hunches.",
+  "short_name": "MatchSlip",
+  "description": "Built on evidence, not hunches. Football fixtures at a glance and a sign-in workbench for evidence-led research and tracked results.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#07132f",
-  "theme_color": "#07132f",
+  "background_color": "#f8fafc",
+  "theme_color": "#047857",
   "icons": [
     {
-      "src": "/light/icon-192.png?v=qwanej-1",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/light/icon-512.png?v=qwanej-1",
-      "sizes": "512x512",
-      "type": "image/png",
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     }
   ]

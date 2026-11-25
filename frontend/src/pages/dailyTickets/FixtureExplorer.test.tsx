@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthProvider } from '../../auth'
 import type { MatchFixture } from '../../lib/api'
-import { FixtureExplorer, fixturePickLabel, fixtureScore } from './FixtureExplorer'
+import { FixtureExplorer, fixturePickLabel, fixtureScore, fixtureStatusLabel } from './FixtureExplorer'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -21,7 +21,7 @@ const fixture = (overrides: Partial<MatchFixture> = {}): MatchFixture => ({
   ...overrides,
 })
 
-const render = (fixtures: MatchFixture[], props: { pickCounts?: Record<number, number>; onOpenPicks?: (matchId: number) => void } = {}) => renderToStaticMarkup(
+const render = (fixtures: MatchFixture[], props: { pickCounts?: Record<number, number> | null; countsStale?: boolean; onOpenPicks?: (matchId: number) => void } = {}) => renderToStaticMarkup(
   <AuthProvider><FixtureExplorer fixtures={fixtures} {...props} /></AuthProvider>,
 )
 
@@ -55,7 +55,7 @@ describe('fixture result column', () => {
   it('shows the score in every row of the list', () => {
     const html = render([fixture(), fixture({ match_id: 2, status: 'scheduled', home_goals: null, away_goals: null })])
 
-    expect(html).toContain('class="fixture-score"')
+    expect(html).toContain('fixture-score')
     expect(html).toContain('2–1')
     expect(html).toContain('Result 2–1')
   })
@@ -63,7 +63,8 @@ describe('fixture result column', () => {
   it('keeps an empty placeholder so upcoming fixtures stay column-aligned', () => {
     const html = render([fixture({ status: 'scheduled', home_goals: null, away_goals: null })])
 
-    expect(html).toContain('class="fixture-score empty"')
+    expect(html).toContain('fixture-score')
+    expect(html).toContain('empty')
     expect(html).toContain('Result not available')
   })
 })
@@ -78,7 +79,8 @@ describe('fixture pick count badge', () => {
   it('renders a muted dash when the count is known to be zero', () => {
     const html = render([fixture()], { pickCounts: {} })
 
-    expect(html).toContain('class="fixture-picks empty"')
+    expect(html).toContain('fixture-picks')
+    expect(html).toContain('empty')
     expect(html).toContain('No Q≥75 system picks')
   })
 
@@ -112,5 +114,53 @@ describe('fixture pick count badge', () => {
     const badge = rendered.querySelector('span.fixture-picks') as HTMLSpanElement
     expect(badge.textContent).toBe('3 picks')
     expect(badge.title).toContain('open with Pro')
+  })
+
+  it('does not claim zero picks when the count request has not succeeded', () => {
+    const html = render([fixture()], { pickCounts: null })
+
+    expect(html).toContain('Pick counts unavailable for this refresh')
+    expect(html).toContain('Pick count unavailable')
+    expect(html).not.toContain('No Q≥75 system picks')
+  })
+
+  it('labels stale counts without presenting them as fresh', () => {
+    const html = render([fixture()], { pickCounts: { 1: 3 }, countsStale: true })
+
+    expect(html).toContain('Pick counts may be stale; refreshing')
+    expect(html).toContain('3 picks')
+  })
+})
+
+describe('fixture status scope', () => {
+  it('offers review states as filterable statuses', () => {
+    expect(fixtureStatusLabel('abandoned')).toBe('Abandoned · review')
+    expect(fixtureStatusLabel('awarded')).toBe('Awarded · review')
+
+    const html = render([
+      fixture(),
+      fixture({ match_id: 2, status: 'abandoned', home_team: 'Junior' }),
+    ])
+
+    expect(html).toContain('Abandoned · review')
+    expect(html).toMatch(/Abandoned · review <b[^>]*>1<\/b>/)
+  })
+
+  it('counts status chips from the same scope as the visible rows', () => {
+    const rendered = mount(<FixtureExplorer fixtures={[
+      fixture(),
+      fixture({ match_id: 2, status: 'scheduled', home_team: 'Atletico Nacional', away_team: 'Once Caldas', home_goals: null, away_goals: null }),
+    ]} pickCounts={{}} />)
+
+    const search = rendered.querySelector<HTMLInputElement>('input[type="search"]')!
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+      setter.call(search, 'Atletico')
+      search.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+
+    expect(rendered.textContent).toContain('Active filters (1)')
+    expect(rendered.textContent).toContain('Upcoming 1')
+    expect(rendered.textContent).not.toContain('Finished 1')
   })
 })

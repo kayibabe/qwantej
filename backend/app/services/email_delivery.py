@@ -64,9 +64,9 @@ async def send_email(to_email: str, subject: str, body: str) -> bool:
 async def send_password_reset_email(to_email: str, link: str) -> bool:
     return await send_email(
         to_email,
-        "Reset your QwanEj password",
+        "Reset your MatchSlip password",
         (
-            "Use this link to choose a new QwanEj password. It expires in "
+            "Use this link to choose a new MatchSlip password. It expires in "
             f"{settings.password_reset_token_minutes} minutes.\n\n{link}\n\n"
             "If you did not request this, you can ignore this message."
         ),
@@ -76,9 +76,9 @@ async def send_password_reset_email(to_email: str, link: str) -> bool:
 async def send_verification_email(to_email: str, link: str) -> bool:
     return await send_email(
         to_email,
-        "Verify your QwanEj email address",
+        "Verify your MatchSlip email address",
         (
-            "Confirm your email address for QwanEj. It expires in "
+            "Confirm your email address for MatchSlip. It expires in "
             f"{settings.email_verification_token_hours} hours.\n\n{link}\n\n"
             "If you did not create this account, you can ignore this message."
         ),

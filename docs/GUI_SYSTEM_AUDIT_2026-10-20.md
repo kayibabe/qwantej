@@ -1,5 +1,7 @@
 # Qwantej GUI, UX, and information-flow audit
 
+> **2026-11-25 MatchSlip theme migration:** The product UI/report branding migrated from QwanEj (blue/dark, light-only standalone reports) to MatchSlip (emerald primary #047857, slate neutrals, DM Sans / Plus Jakarta Sans / JetBrains Mono, light theme). This historical audit/report preserves its original findings and evidence; references to pre-migration styling or QwanEj naming are retained where they describe the audited state.
+
 **Date:** 2026-10-20  
 **Workspace:** `D:\WebApps\qwantej`  
 **Type:** Audit with local implementation follow-up; no production behavior or stored records changed.

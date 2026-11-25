@@ -1,4 +1,4 @@
-"""Out-of-sample calibration audit for the QwanEj prediction model.
+"""Out-of-sample calibration audit for the MatchSlip prediction model.
 
 The Q>=75 backtest found that the model is badly overconfident at the top of
 the Q distribution.  Before spending effort on a model overhaul we need to

@@ -4,7 +4,7 @@ import { handleArrowTab } from '../utils/tabs'
 import { formatMarket, formatSelection, formatTicketType, selectionRepeatsMarket, ticketTierBadgeClass } from '../lib/api'
 import GradeBadge from '../components/GradeBadge'
 import { SortableTh, bandSortValue, useSortableRows } from '../components/SortableTable'
-import './Analytics.css'
+
 
 interface ResearchBreakdown { ticket_type: string; tickets: number; wins: number; hit_rate: number; roi: number; profit_loss: number; counted_in_portfolio?: boolean; observation_only?: boolean }
 interface ResearchSummary {
@@ -104,6 +104,10 @@ const score = (value: number | null | undefined) => value == null ? '—' : valu
 const isoDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 function initialBacktestDates(modelVersion: string) { const end = new Date(); const start = new Date(end); start.setFullYear(start.getFullYear() - 1); return { period_start: isoDate(start), period_end: isoDate(end), model_version: modelVersion, simulations: '10000' } }
 
+/** Shared 44px control and focus treatment for every analytics action. */
+const analyticsButtonClass = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700'
+const analyticsInputClass = 'min-h-11 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 normal-case tracking-normal focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700'
+
 export default function AnalyticsPage() {
   const [view, setView] = useState<View>('daily')
   const [researchView, setResearchView] = useState<ResearchView>('calibration')
@@ -115,15 +119,21 @@ export default function AnalyticsPage() {
   const [dateTo, setDateTo] = useState('')
   const [modelVersion, setModelVersion] = useState('')
   const firstLoad = useRef(true)
+  const requestSeq = useRef(0)
 
   useEffect(() => {
     let active = true
+    const requestId = ++requestSeq.current
     const params = new URLSearchParams({ ...(dateFrom ? { date_from: dateFrom } : {}), ...(dateTo ? { date_to: dateTo } : {}), ...(modelVersion ? { model_version: modelVersion } : {}) })
     const timer = window.setTimeout(() => {
       fetch(`/api/v1/performance/summary?${params}`).then(async response => response.ok ? response.json() : null)
-        .then(paper => { if (active) { if (paper) setResearch(paper); setError(!paper) } })
-        .catch(() => { if (active) setError(true) })
-        .finally(() => { if (active) { setLoading(false); firstLoad.current = false } })
+        .then(paper => {
+          if (!active || requestId !== requestSeq.current) return
+          if (paper) { setResearch(paper); setError(false) }
+          else setError(true)
+        })
+        .catch(() => { if (active && requestId === requestSeq.current) setError(true) })
+        .finally(() => { if (active && requestId === requestSeq.current) { setLoading(false); firstLoad.current = false } })
     }, firstLoad.current ? 0 : 250)
     return () => { active = false; window.clearTimeout(timer) }
   }, [dateFrom, dateTo, modelVersion])
@@ -136,27 +146,41 @@ export default function AnalyticsPage() {
     return () => { active = false }
   }, [])
 
+  const tabClass = (active: boolean) => `inline-flex min-h-11 items-center justify-center rounded-md px-3 py-2 text-sm font-semibold transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${active ? 'bg-white text-emerald-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`
+  const filterLabelClass = 'flex flex-col gap-1 text-sm font-semibold uppercase tracking-wide text-slate-600'
+  const filterInputClass = analyticsInputClass
+  const scopeLabel = [
+    dateFrom ? `from ${dateFrom}` : null,
+    dateTo ? `to ${dateTo}` : null,
+    modelVersion ? `model ${modelVersion === 'all' ? 'all versions' : modelVersion}` : 'current model',
+  ].filter(Boolean).join(' · ')
+  const researchStatus = error
+    ? research ? 'Performance refresh failed. Showing the last successful snapshot for this scope.' : 'Performance data is unavailable for this scope.'
+    : loading ? 'Loading performance evidence for this scope…'
+      : `Performance evidence loaded · ${scopeLabel}.`
+
   return (
-    <div className="page-content analytics-page">
-      <div className="analytics-hero">
-        <div><span className="eyebrow">Evidence, not promises</span><h1>Model validation</h1><p>Paper-trading performance, calibration, drawdown, and strict closing-odds backtests.</p></div>
-        <span className="ledger-chip"><span /> Immutable research ledger</span>
+    <div className="page-content space-y-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div><span className="text-sm font-semibold uppercase tracking-wide text-slate-600">Evidence, not promises</span><h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Model validation</h1><p className="mt-1 max-w-3xl text-base leading-relaxed text-slate-600">Paper-trading performance, calibration, drawdown, and strict closing-odds backtests. Published-ticket performance uses the selected scope below; other research views use their own filters.</p></div>
+        <span className="inline-flex items-center gap-2 self-start rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold uppercase tracking-wide text-slate-600 shadow-sm"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" /> Immutable research ledger</span>
       </div>
       <DataFreshness run={latestRun} />
-      <div className="analytics-tabs" role="tablist" aria-label="Analytics views">
-        {([['daily', 'Ledger picks'], ['performance', 'Performance'], ['ledger', 'Recommendation ledger'], ['methods', 'Research methods']] as [View, string][]).map(([id, label]) => <button key={id} id={`analytics-tab-${id}`} aria-controls="analytics-panel" tabIndex={view === id ? 0 : -1} role="tab" aria-selected={view === id} className={view === id ? 'active' : ''} onKeyDown={event => handleArrowTab(event, ['daily', 'performance', 'ledger', 'methods'] as const, view, setView, 'analytics-tab-')} onClick={() => setView(id)}>{label}</button>)}
+      {view === 'performance' && <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-base leading-relaxed text-slate-600" aria-live="polite" role={error ? 'status' : undefined}>{researchStatus}</p>}
+      <div className="inline-flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1" role="tablist" aria-label="Analytics views">
+        {([['daily', 'Ledger picks'], ['performance', 'Performance'], ['ledger', 'Recommendation ledger'], ['methods', 'Research methods']] as [View, string][]).map(([id, label]) => <button type="button" key={id} id={`analytics-tab-${id}`} aria-controls="analytics-panel" tabIndex={view === id ? 0 : -1} role="tab" aria-selected={view === id} className={tabClass(view === id)} onKeyDown={event => handleArrowTab(event, ['daily', 'performance', 'ledger', 'methods'] as const, view, setView, 'analytics-tab-')} onClick={() => setView(id)}>{label}</button>)}
       </div>
-      <section id="analytics-panel" role="tabpanel" aria-labelledby={`analytics-tab-${view}`} tabIndex={0}>
+      <section id="analytics-panel" role="tabpanel" aria-labelledby={`analytics-tab-${view}`} tabIndex={0} className="space-y-4">
       {view === 'daily' && <DailyQualifyingMatches />}
-      {view === 'methods' && <div className="analytics-tabs analytics-subtabs" role="tablist" aria-label="Research methods">
-        {([['calibration', 'Probability calibration'], ['market', 'Market research'], ['backtest', 'Backtest lab']] as [ResearchView, string][]).map(([id, label]) => <button key={id} id={`analytics-method-tab-${id}`} aria-controls="analytics-method-panel" tabIndex={researchView === id ? 0 : -1} role="tab" aria-selected={researchView === id} className={researchView === id ? 'active' : ''} onKeyDown={event => handleArrowTab(event, ['calibration', 'market', 'backtest'] as const, researchView, setResearchView, 'analytics-method-tab-')} onClick={() => setResearchView(id)}>{label}</button>)}
+      {view === 'methods' && <div className="inline-flex flex-wrap gap-1 rounded-lg border border-dashed border-slate-200 bg-white p-1" role="tablist" aria-label="Research methods">
+        {([['calibration', 'Probability calibration'], ['market', 'Market research'], ['backtest', 'Backtest lab']] as [ResearchView, string][]).map(([id, label]) => <button type="button" key={id} id={`analytics-method-tab-${id}`} aria-controls="analytics-method-panel" tabIndex={researchView === id ? 0 : -1} role="tab" aria-selected={researchView === id} className={tabClass(researchView === id)} onKeyDown={event => handleArrowTab(event, ['calibration', 'market', 'backtest'] as const, researchView, setResearchView, 'analytics-method-tab-')} onClick={() => setResearchView(id)}>{label}</button>)}
       </div>}
-      {view === 'performance' && <div className="analytics-filters shared-analytics-filters" aria-label="Analytics scope filters"><span className="filter-scope-label">Scope</span><label>From<input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></label><label>To<input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} /></label><label>Model version<input aria-describedby="analytics-model-scope" placeholder={`Current model${research?.current_model_version ? ` · ${research.current_model_version}` : ''}`} value={modelVersion} onChange={e => setModelVersion(e.target.value)} /></label>{(dateFrom || dateTo || modelVersion) && <button className="btn-ghost btn-sm" onClick={() => { setDateFrom(''); setDateTo(''); setModelVersion('') }}>Reset scope</button>}<span id="analytics-model-scope" className="filter-summary">Blank uses the current model. Enter “all” for every version. Scope applies to immutable published-ticket performance.</span></div>}
+      {view === 'performance' && <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-3" role="group" aria-label="Analytics scope filters"><span className="text-sm font-semibold uppercase tracking-wide text-slate-600">Scope</span><label className={filterLabelClass}>From<input className={filterInputClass} type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></label><label className={filterLabelClass}>To<input className={filterInputClass} type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} /></label><label className={filterLabelClass}>Model version<input className={`${filterInputClass} min-w-[220px]`} aria-describedby="analytics-model-scope" placeholder={`Current model${research?.current_model_version ? ` · ${research.current_model_version}` : ''}`} value={modelVersion} onChange={e => setModelVersion(e.target.value)} /></label>{(dateFrom || dateTo || modelVersion) && <button type="button" className={analyticsButtonClass} onClick={() => { setDateFrom(''); setDateTo(''); setModelVersion('') }}>Reset scope</button>}<span id="analytics-model-scope" className="basis-full text-base leading-relaxed text-slate-600">Applied scope: {scopeLabel}. Blank model uses the current model; enter “all” for every version. Scope applies to immutable published-ticket performance.</span></div>}
       {loading && !research && <AnalyticsSkeleton />}
       {!loading && error && view === 'performance' && <AnalyticsEmpty title={research ? 'Performance refresh failed' : 'Performance data is unavailable'} body={research ? 'Showing the last successful snapshot. Check the connection and adjust the scope to retry.' : 'Check the API connection. Other research views may still be available.'} />}
       {!loading && view === 'performance' && <ResearchPerformance data={research} />}
       {!loading && view === 'ledger' && <PickLedger />}
-      {view === 'methods' && <section id="analytics-method-panel" role="tabpanel" aria-labelledby={`analytics-method-tab-${researchView}`} tabIndex={0}>
+      {view === 'methods' && <section id="analytics-method-panel" role="tabpanel" aria-labelledby={`analytics-method-tab-${researchView}`} tabIndex={0} className="space-y-4">
         {!loading && researchView === 'market' && <AutoMarketResearch />}
         {!loading && researchView === 'calibration' && <ProbabilityCalibration />}
         {!loading && researchView === 'backtest' && <BacktestPanel currentModelVersion={research?.current_model_version ?? ''} />}
@@ -182,44 +206,59 @@ function AutoMarketResearch() {
     if (dateTo) params.set('date_to', dateTo)
     fetch(`/api/v1/performance/all-markets?${params}`, { signal: controller.signal })
       .then(response => response.ok ? response.json() : Promise.reject(new Error(`API ${response.status}`)))
-      .then(value => { setData(value); setFailed(false) })
-      .catch(error => { if (error.name !== 'AbortError') { setData(null); setFailed(true) } })
+      .then(value => { if (!controller.signal.aborted) { setData(value); setFailed(false) } })
+      .catch(error => { if (error.name !== 'AbortError') setFailed(true) })
       .finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
   }, [dateFrom, dateTo, retry])
-  if (loading) return <AnalyticsSkeleton />
-  if (failed && !data) return <div><AnalyticsEmpty title="Market research unavailable" body="The all-market research request failed. Check the API connection and retry." /><button className="btn-ghost btn-sm" onClick={() => setRetry(value => value + 1)}>Retry market research</button></div>
+  const stale = failed && data != null
+  const status = stale
+    ? 'Market research refresh failed. Showing the last successful snapshot; retry to update.'
+    : failed ? 'Market research is unavailable. No snapshot has loaded yet.'
+      : loading ? 'Loading all-market research…'
+        : `All-market research loaded · ${dateFrom ? `from ${dateFrom}` : 'all dates'}${dateTo ? ` to ${dateTo}` : ''}.`
+  if (loading && !data) return <AnalyticsSkeleton />
+  if (failed && !data) return <div aria-live="polite"><AnalyticsEmpty title="Market research unavailable" body="The all-market research request failed. No snapshot is available. Check the API connection and retry." /><button type="button" className={analyticsButtonClass} onClick={() => setRetry(value => value + 1)}>Retry market research</button></div>
   if (!data) return <AnalyticsEmpty title="No automatic research data" body="Eligible predictions with frozen odds will appear after model and result ingestion." />
   const excluded = (data.excluded_missing_odds ?? 0) + (data.excluded_post_kickoff_information ?? 0) + (data.excluded_post_kickoff_odds ?? 0)
-  return <><div className="journal-note"><strong>Automatic all-market research</strong><span>Every latest prediction with a valid pre-kickoff information timestamp and odds snapshot is evaluated. This does not create bets or alter the paper ledger.</span></div><div className="analytics-filters shared-analytics-filters" aria-label="Automatic research date scope"><span className="filter-scope-label">Scope</span><label>From<input type="date" value={dateFrom} onChange={event => setDateFrom(event.target.value)} /></label><label>To<input type="date" value={dateTo} onChange={event => setDateTo(event.target.value)} /></label>{(dateFrom || dateTo) && <button className="btn-ghost btn-sm" onClick={() => { setDateFrom(''); setDateTo('') }}>Reset scope</button>}<span className="filter-summary">Only predictions and prices available before kickoff are eligible.</span></div><div className="research-kpis"><MetricCard label="Eligible predictions" value={data.eligible_predictions?.toString() ?? '—'} /><MetricCard label="Settled" value={data.settled_predictions?.toString() ?? '—'} /><MetricCard label="Net P&amp;L" value={fmtPnl(data.overall.pnl)} tone={data.overall.pnl >= 0 ? 'positive' : 'negative'} /><MetricCard label="ROI" value={pct(data.overall.roi)} tone={data.overall.roi >= 0 ? 'positive' : 'negative'} /></div>{excluded > 0 && <div className="sample-warning">Evidence exclusions: {excluded} rows omitted ({data.excluded_post_kickoff_information ?? 0} post-kickoff predictions, {data.excluded_post_kickoff_odds ?? 0} post-kickoff quotes, {data.excluded_missing_odds ?? 0} missing/invalid odds).</div>}<SortableIndividualTable title="By day" rows={data.by_date} /><SortableIndividualTable title="By month" rows={data.by_month} /><SortableIndividualTable title="By year" rows={data.by_year} /><SortableIndividualTable title="By market" rows={data.by_market} market /><SortableIndividualTable title="By league" rows={data.by_competition} /><SortableIndividualTable title="By odds band" rows={data.by_odds_band ?? []} /><SortableIndividualTable title="By probability band" rows={data.by_probability_band ?? []} /><SortableIndividualTable title="By grade" rows={data.by_grade ?? []} /><ClvPanel /></>
+  return <><p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-base leading-relaxed text-slate-600" aria-live="polite">{status}</p><div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-base leading-relaxed text-sky-900"><strong>Automatic all-market research</strong><span>Every latest prediction with a valid pre-kickoff information timestamp and odds snapshot is evaluated. This does not create bets or alter the paper ledger.</span></div><div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-3" role="group" aria-label="Automatic research date scope"><span className="text-sm font-semibold uppercase tracking-wide text-slate-600">Scope</span><label className="flex flex-col gap-1 text-sm font-semibold text-slate-600">From<input className={analyticsInputClass} type="date" value={dateFrom} onChange={event => setDateFrom(event.target.value)} /></label><label className="flex flex-col gap-1 text-sm font-semibold text-slate-600">To<input className={analyticsInputClass} type="date" value={dateTo} onChange={event => setDateTo(event.target.value)} /></label>{(dateFrom || dateTo) && <button type="button" className={analyticsButtonClass} onClick={() => { setDateFrom(''); setDateTo('') }}>Reset scope</button>}<span className="basis-full text-base leading-relaxed text-slate-600">Only predictions and prices available before kickoff are eligible.</span>{stale && <button type="button" className={analyticsButtonClass} onClick={() => setRetry(value => value + 1)}>Retry market research</button>}</div><div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6"><MetricCard label="Eligible predictions" value={data.eligible_predictions?.toString() ?? '—'} /><MetricCard label="Settled" value={data.settled_predictions?.toString() ?? '—'} /><MetricCard label="Net P&amp;L" value={fmtPnl(data.overall.pnl)} tone={data.overall.pnl >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'} /><MetricCard label="ROI" value={pct(data.overall.roi)} tone={data.overall.roi >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'} /></div>{excluded > 0 && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-base leading-relaxed text-amber-800">Evidence exclusions: {excluded} rows omitted ({data.excluded_post_kickoff_information ?? 0} post-kickoff predictions, {data.excluded_post_kickoff_odds ?? 0} post-kickoff quotes, {data.excluded_missing_odds ?? 0} missing/invalid odds).</div>}<SortableIndividualTable title="By day" rows={data.by_date} /><SortableIndividualTable title="By month" rows={data.by_month} /><SortableIndividualTable title="By year" rows={data.by_year} /><SortableIndividualTable title="By market" rows={data.by_market} market /><SortableIndividualTable title="By league" rows={data.by_competition} /><SortableIndividualTable title="By odds band" rows={data.by_odds_band ?? []} /><SortableIndividualTable title="By probability band" rows={data.by_probability_band ?? []} /><SortableIndividualTable title="By grade" rows={data.by_grade ?? []} /><ClvPanel /></>
 }
 
 function ClvPanel() {
   const [data, setData] = useState<ClvSummaryData | null>(null)
   const [loading, setLoading] = useState(true)
-  useEffect(() => { fetch('/api/v1/performance/clv').then(r => r.ok ? r.json() : null).then(setData).catch(() => setData(null)).finally(() => setLoading(false)) }, [])
-  if (loading) return null
-  if (!data || data.overall.legs === 0) return <section className="analytics-card"><div className="section-header"><div><span className="eyebrow">Beating the market, not just the scoreboard</span><h2 className="section-title">Closing-line value</h2></div></div><AnalyticsEmpty title="No CLV data yet" body="Closing prices are captured automatically once a match's kickoff passes. Check back after today's fixtures kick off." compact /></section>
-  const beatTone = (data.overall.beat_close_rate ?? 0) >= 0.5 ? 'positive' : 'negative'
-  return <section className="analytics-card">
-    <div className="section-header"><div><span className="eyebrow">Beating the market, not just the scoreboard</span><h2 className="section-title">Closing-line value</h2></div><span className="section-subtitle">Entry price vs. the market's price at kickoff — the standard signal of real model edge</span></div>
-    <div className="research-kpis">
+  const [failed, setFailed] = useState(false)
+  useEffect(() => {
+    let active = true
+    fetch('/api/v1/performance/clv')
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`API ${r.status}`)))
+      .then(value => { if (active) { setData(value); setFailed(false) } })
+      .catch(() => { if (active) setFailed(true) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [])
+  if (loading) return <section className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-600" aria-busy="true" aria-live="polite">Loading closing-line value evidence…</section>
+  if (failed || !data || data.overall.legs === 0) return <section className="rounded-xl border border-slate-200 bg-white overflow-hidden" aria-live="polite"><div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3"><div><span className="eyebrow">Beating the market, not just the scoreboard</span><h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">Closing-line value</h2></div></div><AnalyticsEmpty title={failed ? 'Closing-line value unavailable' : 'No CLV data yet'} body={failed ? 'The closing-price request did not return data. This is a loading failure, not an empty record.' : 'Closing prices are captured automatically once a match’s kickoff passes. Check back after today’s fixtures kick off.'} compact /></section>
+  const beatTone = (data.overall.beat_close_rate ?? 0) >= 0.5 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'
+  return <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3"><div><span className="eyebrow">Beating the market, not just the scoreboard</span><h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">Closing-line value</h2></div><span className="text-sm text-slate-600">Entry price vs. the market's price at kickoff — the standard signal of real model edge</span></div>
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
       <MetricCard label="Legs with known CLV" value={data.overall.legs.toString()} />
-      <MetricCard label="Avg CLV" value={data.overall.avg_clv_pct == null ? '—' : pct(data.overall.avg_clv_pct)} note="Entry odds vs. closing odds" tone={data.overall.avg_clv_pct != null && data.overall.avg_clv_pct >= 0 ? 'positive' : 'negative'} />
+      <MetricCard label="Avg CLV" value={data.overall.avg_clv_pct == null ? '—' : pct(data.overall.avg_clv_pct)} note="Entry odds vs. closing odds" tone={data.overall.avg_clv_pct != null && data.overall.avg_clv_pct >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'} />
       <MetricCard label="Beat the close" value={pct(data.overall.beat_close_rate)} note="Share of legs priced better than closing" tone={beatTone} />
       <MetricCard label="Avg edge (vig-inclusive)" value={data.overall.avg_edge == null ? '—' : pct(data.overall.avg_edge)} />
     </div>
     <ClvTable title="By Q-grade" rows={data.by_q_grade} labelKey="q_grade" />
     <ClvTable title="By market" rows={data.by_market} labelKey="market" />
     <ClvTable title="By month" rows={data.by_month} labelKey="month" />
-    <p className="matrix-note">Positive CLV means our entry price was consistently better than where the market closed — the clearest sign the model is finding real value, independent of short-run win/loss variance.</p>
+    <p className="px-4 py-3 text-base leading-relaxed text-slate-600">Positive CLV means our entry price was consistently better than where the market closed — the clearest sign the model is finding real value, independent of short-run win/loss variance.</p>
   </section>
 }
 
 function ClvTable({ title, rows, labelKey }: { title: string; rows: ClvBreakdown[]; labelKey: 'q_grade' | 'market' | 'month' }) {
   const { sorted, header } = useSortableRows(rows, { label: row => String(row[labelKey] ?? ''), legs: row => row.legs, clv: row => row.avg_clv_pct, beat: row => row.beat_close_rate })
   if (rows.length === 0) return null
-  return <div className="analytics-table-wrap"><table className="analytics-table"><thead><tr>{header('label', title)}{header('legs', 'Legs')}{header('clv', 'Avg CLV')}{header('beat', 'Beat close')}</tr></thead><tbody>{sorted.map(row => <tr key={String(row[labelKey])}><td><strong>{labelKey === 'market' ? formatMarket(String(row[labelKey])) : row[labelKey]}</strong></td><td>{row.legs}</td><td className={row.avg_clv_pct != null && row.avg_clv_pct >= 0 ? 'positive' : 'negative'}>{row.avg_clv_pct == null ? '—' : pct(row.avg_clv_pct)}</td><td>{pct(row.beat_close_rate)}</td></tr>)}</tbody></table></div>
+  return <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full min-w-[640px] border-collapse text-left text-sm [&_thead]:border-b [&_thead]:border-slate-200 [&_thead]:bg-slate-50 [&_thead]:text-sm [&_thead]:uppercase [&_thead]:tracking-wide [&_thead]:text-slate-600 [&_th]:px-3 [&_th]:py-3 [&_th]:font-semibold [&_tbody]:divide-y [&_tbody]:divide-slate-100 [&_td]:px-3 [&_td]:py-3 [&_tbody_tr:hover]:bg-slate-50/70"><thead><tr>{header('label', title)}{header('legs', 'Legs')}{header('clv', 'Avg CLV')}{header('beat', 'Beat close')}</tr></thead><tbody>{sorted.map(row => <tr key={String(row[labelKey])}><td><strong>{labelKey === 'market' ? formatMarket(String(row[labelKey])) : row[labelKey]}</strong></td><td>{row.legs}</td><td className={row.avg_clv_pct != null && row.avg_clv_pct >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'}>{row.avg_clv_pct == null ? '—' : pct(row.avg_clv_pct)}</td><td>{pct(row.beat_close_rate)}</td></tr>)}</tbody></table></div>
 }
 
 function ProbabilityCalibration() {
@@ -231,6 +270,7 @@ function ProbabilityCalibration() {
   const [modelVersion, setModelVersion] = useState('')
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState(false)
+  const requestSeq = useRef(0)
 
   const exportToExcel = () => {
     setExporting(true)
@@ -257,6 +297,7 @@ function ProbabilityCalibration() {
 
   useEffect(() => {
     let active = true
+    const requestId = ++requestSeq.current
     setLoading(true)
     const params = new URLSearchParams()
     if (from) params.set('date_from', from)
@@ -264,81 +305,88 @@ function ProbabilityCalibration() {
     if (modelVersion) params.set('model_version', modelVersion)
     fetch(`/api/v1/performance/probability-calibration?${params}`)
       .then(response => response.ok ? response.json() : Promise.reject(new Error(`API ${response.status}`)))
-      .then(value => { if (active) { setData(value); setFailed(false) } })
-      .catch(() => { if (active) setFailed(true) })
-      .finally(() => { if (active) setLoading(false) })
+      .then(value => { if (active && requestId === requestSeq.current) { setData(value); setFailed(false) } })
+      .catch(() => { if (active && requestId === requestSeq.current) setFailed(true) })
+      .finally(() => { if (active && requestId === requestSeq.current) setLoading(false) })
     return () => { active = false }
   }, [from, to, modelVersion])
 
   if (loading && !data) return <AnalyticsSkeleton />
-  if (failed && !data) return <AnalyticsEmpty title="Probability calibration unavailable" body="The probability-calibration endpoint did not return data." />
+  if (failed && !data) return <div aria-live="polite"><AnalyticsEmpty title="Probability calibration unavailable" body="The probability-calibration endpoint did not return data. No snapshot is available." /></div>
   if (!data) return <AnalyticsEmpty title="No calibration data" body="Calibration bands appear once predictions have pre-kickoff prices and settled outcomes." />
 
   const s = data.summary
-  const betterModel = (s.qwantej_brier_score ?? 1) <= (s.market_brier_score ?? 1) ? 'QwanEj' : 'Market'
+  const betterModel = (s.qwantej_brier_score ?? 1) <= (s.market_brier_score ?? 1) ? 'MatchSlip' : 'Market'
+  const stale = failed && data != null
+  const scopeText = `${from ? `from ${from}` : 'all dates'} · ${to ? `to ${to}` : 'no end date'} · ${modelVersion || 'all models'}`
+  const status = stale
+    ? 'Calibration refresh failed. Showing the last successful snapshot.'
+    : loading ? 'Loading probability calibration…'
+      : `Calibration evidence loaded · ${scopeText}.`
 
   return <>
-    <div className="journal-note"><strong>Whole-system probability calibration</strong><span>Every latest prediction — accepted or rejected — with a pre-kickoff price and a settled outcome. Voids are excluded from hit rate and ROI.</span></div>
-    <div className="analytics-filters shared-analytics-filters" aria-label="Calibration scope filters">
-      <span className="filter-scope-label">Scope</span>
-      <label>From<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
-      <label>To<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
-      <label>Model<input placeholder="All models" value={modelVersion} onChange={e => setModelVersion(e.target.value)} /></label>
-      {(from || to || modelVersion) && <button className="btn-ghost btn-sm" onClick={() => { setFrom(''); setTo(''); setModelVersion('') }}>Reset scope</button>}
-      <button className="btn-ghost btn-sm" onClick={exportToExcel} disabled={exporting}>{exporting ? 'Exporting…' : 'Export to Excel'}</button>
+    <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-base leading-relaxed text-slate-600" aria-live="polite">{status}</p>
+    <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-base leading-relaxed text-sky-900"><strong>Whole-system probability calibration</strong><span>Every latest prediction — accepted or rejected — with a pre-kickoff price and a settled outcome. Voids are excluded from hit rate and ROI.</span></div>
+    <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-3" aria-label="Calibration scope filters">
+      <span className="text-sm font-semibold uppercase tracking-wide text-slate-600">Scope</span>
+      <label className="flex flex-col gap-1 text-sm font-semibold text-slate-600">From<input className={analyticsInputClass} type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
+      <label className="flex flex-col gap-1 text-sm font-semibold text-slate-600">To<input className={analyticsInputClass} type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
+      <label className="flex flex-col gap-1 text-sm font-semibold text-slate-600">Model<input className={analyticsInputClass} placeholder="All models" value={modelVersion} onChange={e => setModelVersion(e.target.value)} /></label>
+      {(from || to || modelVersion) && <button type="button" className={analyticsButtonClass} onClick={() => { setFrom(''); setTo(''); setModelVersion('') }}>Reset scope</button>}
+      <button type="button" className={analyticsButtonClass} onClick={exportToExcel} disabled={exporting}>{exporting ? 'Exporting…' : 'Export to Excel'}</button>
     </div>
-    {exportError && <div className="sample-warning">Export failed. Check the API connection and try again.</div>}
-    <div className="research-kpis">
+    {exportError && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-base leading-relaxed text-amber-800" role="alert">Export failed. Check the API connection and try again. The on-screen analysis is unchanged.</div>}
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
       <MetricCard label="Sample size" value={s.sample_size.toString()} note={`${s.voids_excluded} void · ${s.unsupported_markets_excluded} unsupported excluded`} />
-      <MetricCard label="QwanEj Brier score" value={score(s.qwantej_brier_score)} note="Lower is better" />
+      <MetricCard label="MatchSlip Brier score" value={score(s.qwantej_brier_score)} note="Lower is better" />
       <MetricCard label="Market Brier score" value={score(s.market_brier_score)} note="Lower is better" />
-      <MetricCard label="Better calibrated" value={betterModel} note={`QwanEj ${score(s.qwantej_calibration_error)} vs Market ${score(s.market_calibration_error)} calibration error`} tone={betterModel === 'QwanEj' ? 'positive' : 'warning'} />
+      <MetricCard label="Better calibrated" value={betterModel} note={`MatchSlip ${score(s.qwantej_calibration_error)} vs Market ${score(s.market_calibration_error)} calibration error`} tone={betterModel === 'MatchSlip' ? 'text-emerald-700 font-mono tabular-nums' : 'warning'} />
     </div>
-    {s.sample_size < 30 && <div className="sample-warning">Small sample: only {s.sample_size} settled predictions in this scope. Treat bucket results as directional.</div>}
-    <div className="analytics-insight-grid analytics-insight-grid--stacked">
-      <ProbabilityBucketTable title="QwanEj model probability" subtitle="Bucketed by predicted win probability, 5pp bands" rows={data.qwantej_buckets} />
+    {s.sample_size < 30 && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-base leading-relaxed text-amber-800">Small sample: only {s.sample_size} settled predictions in this scope. Treat bucket results as directional.</div>}
+    <div className="grid gap-4">
+      <ProbabilityBucketTable title="MatchSlip model probability" subtitle="Bucketed by predicted win probability, 5pp bands" rows={data.qwantej_buckets} />
       <ProbabilityBucketTable title="Market implied probability" subtitle="Bucketed by 1/odds at pick time, 5pp bands" rows={data.market_buckets} />
     </div>
-    <section className="analytics-card">
-      <div className="section-header"><div><span className="eyebrow">Where the two views agree or diverge</span><h2 className="section-title">QwanEj × Market combined matrix</h2></div><span className="section-subtitle">Every observed band pairing, sorted by probability band</span></div>
+    <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3"><div><span className="eyebrow">Where the two views agree or diverge</span><h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">MatchSlip × Market combined matrix</h2></div><span className="text-sm text-slate-600">Every observed band pairing, sorted by probability band</span></div>
       <CombinedMatrixTable rows={data.combined_matrix} />
     </section>
-    <section className="analytics-card">
-      <div className="section-header"><div><span className="eyebrow">Best-performing mixes</span><h2 className="section-title">Top combined bands by ROI</h2></div><span className="section-subtitle">Sample size ≥ 8, sorted by ROI</span></div>
+    <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3"><div><span className="eyebrow">Best-performing mixes</span><h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">Top combined bands by ROI</h2></div><span className="text-sm text-slate-600">Sample size ≥ 8, sorted by ROI</span></div>
       {data.best_combinations.length === 0 ? <AnalyticsEmpty title="No qualifying combinations yet" body="Combinations need at least 8 settled predictions to appear here." compact /> : <CombinedMatrixTable rows={data.best_combinations} />}
     </section>
-    <section className="analytics-card">
-      <div className="section-header"><div><span className="eyebrow">Value-betting signal</span><h2 className="section-title">Performance by edge (QwanEj minus market)</h2></div><span className="section-subtitle">Positive edge should correlate with positive ROI if the model has real edge</span></div>
+    <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3"><div><span className="eyebrow">Value-betting signal</span><h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">Performance by edge (MatchSlip minus market)</h2></div><span className="text-sm text-slate-600">Positive edge should correlate with positive ROI if the model has real edge</span></div>
       <EdgeBucketTable rows={data.edge_buckets} />
     </section>
-    <section className="analytics-card">
-      <div className="section-header"><div><span className="eyebrow">Is the pattern uniform or concentrated?</span><h2 className="section-title">By market type</h2></div><span className="section-subtitle">Same calibration and edge signal, split by market family</span></div>
+    <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3"><div><span className="eyebrow">Is the pattern uniform or concentrated?</span><h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">By market type</h2></div><span className="text-sm text-slate-600">Same calibration and edge signal, split by market family</span></div>
       <MarketBreakdownTable rows={data.by_market} />
     </section>
-    <p className="matrix-note">{data.note}</p>
+    <p className="px-4 py-3 text-base leading-relaxed text-slate-600">{data.note}</p>
   </>
 }
 
 function ProbabilityBucketTable({ title, subtitle, rows }: { title: string; subtitle: string; rows: ProbabilityBucketRow[] }) {
   const { sorted, header } = useSortableRows(rows, { band: row => bandSortValue(row.band), n: row => row.sample_size, wins: row => row.wins, hit: row => row.hit_rate, avg: row => row.avg_probability, gap: row => row.calibration_gap, roi: row => row.roi })
-  return <section className="analytics-card">
-    <div className="section-header"><h2 className="section-title">{title}</h2><span className="section-subtitle">{subtitle}</span></div>
-    {rows.length === 0 ? <AnalyticsEmpty title="No settled bands" body="No settled predictions fall into a probability band yet." compact /> : <div className="analytics-table-wrap"><table className="analytics-table"><thead><tr>{header('band', 'Band')}{header('n', 'N')}{header('wins', 'Won / lost')}{header('hit', 'Hit rate')}{header('avg', 'Avg probability')}{header('gap', 'Calibration gap')}{header('roi', 'ROI')}</tr></thead><tbody>{sorted.map(row => <tr key={row.band}><td><strong>{row.band}%</strong></td><td>{row.sample_size}</td><td>{row.wins} / {row.losses}</td><td>{pct(row.hit_rate)}</td><td>{pct(row.avg_probability)}</td><td className={Math.abs(row.calibration_gap) <= 0.03 ? 'positive' : 'negative'}>{row.calibration_gap >= 0 ? '+' : ''}{(row.calibration_gap * 100).toFixed(1)}pp</td><td className={row.roi != null && row.roi >= 0 ? 'positive' : 'negative'}>{row.roi == null ? '—' : pct(row.roi)}</td></tr>)}</tbody></table></div>}
+  return <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3"><h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">{title}</h2><span className="text-sm text-slate-600">{subtitle}</span></div>
+    {rows.length === 0 ? <AnalyticsEmpty title="No settled bands" body="No settled predictions fall into a probability band yet." compact /> : <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full min-w-[640px] border-collapse text-left text-sm [&_thead]:border-b [&_thead]:border-slate-200 [&_thead]:bg-slate-50 [&_thead]:text-sm [&_thead]:uppercase [&_thead]:tracking-wide [&_thead]:text-slate-600 [&_th]:px-3 [&_th]:py-3 [&_th]:font-semibold [&_tbody]:divide-y [&_tbody]:divide-slate-100 [&_td]:px-3 [&_td]:py-3 [&_tbody_tr:hover]:bg-slate-50/70"><thead><tr>{header('band', 'Band')}{header('n', 'N')}{header('wins', 'Won / lost')}{header('hit', 'Hit rate')}{header('avg', 'Avg probability')}{header('gap', 'Calibration gap')}{header('roi', 'ROI')}</tr></thead><tbody>{sorted.map(row => <tr key={row.band}><td><strong>{row.band}%</strong></td><td>{row.sample_size}</td><td>{row.wins} / {row.losses}</td><td>{pct(row.hit_rate)}</td><td>{pct(row.avg_probability)}</td><td className={Math.abs(row.calibration_gap) <= 0.03 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'}>{row.calibration_gap >= 0 ? '+' : ''}{(row.calibration_gap * 100).toFixed(1)}pp</td><td className={row.roi != null && row.roi >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'}>{row.roi == null ? '—' : pct(row.roi)}</td></tr>)}</tbody></table></div>}
   </section>
 }
 
 function CombinedMatrixTable({ rows }: { rows: CombinedMatrixRow[] }) {
   const { sorted, header } = useSortableRows(rows, { qwantej: row => bandSortValue(row.qwantej_band), market: row => bandSortValue(row.market_band), n: row => row.sample_size, wins: row => row.wins, hit: row => row.hit_rate, roi: row => row.roi })
   if (rows.length === 0) return <AnalyticsEmpty title="No combined bands yet" body="Combinations appear once both probability sources have settled outcomes." compact />
-  return <div className="analytics-table-wrap"><table className="analytics-table"><thead><tr>{header('qwantej', 'QwanEj band')}{header('market', 'Market band')}{header('n', 'N')}{header('wins', 'Won / lost')}{header('hit', 'Hit rate')}{header('roi', 'ROI')}</tr></thead><tbody>{sorted.map((row, index) => <tr key={`${row.qwantej_band}-${row.market_band}-${index}`}><td><strong>{row.qwantej_band}%</strong></td><td>{row.market_band}%</td><td>{row.sample_size}</td><td>{row.wins} / {row.losses}</td><td>{pct(row.hit_rate)}</td><td className={row.roi != null && row.roi >= 0 ? 'positive' : 'negative'}>{row.roi == null ? '—' : pct(row.roi)}</td></tr>)}</tbody></table></div>
+  return <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full min-w-[640px] border-collapse text-left text-sm [&_thead]:border-b [&_thead]:border-slate-200 [&_thead]:bg-slate-50 [&_thead]:text-sm [&_thead]:uppercase [&_thead]:tracking-wide [&_thead]:text-slate-600 [&_th]:px-3 [&_th]:py-3 [&_th]:font-semibold [&_tbody]:divide-y [&_tbody]:divide-slate-100 [&_td]:px-3 [&_td]:py-3 [&_tbody_tr:hover]:bg-slate-50/70"><thead><tr>{header('qwantej', 'MatchSlip band')}{header('market', 'Market band')}{header('n', 'N')}{header('wins', 'Won / lost')}{header('hit', 'Hit rate')}{header('roi', 'ROI')}</tr></thead><tbody>{sorted.map((row, index) => <tr key={`${row.qwantej_band}-${row.market_band}-${index}`}><td><strong>{row.qwantej_band}%</strong></td><td>{row.market_band}%</td><td>{row.sample_size}</td><td>{row.wins} / {row.losses}</td><td>{pct(row.hit_rate)}</td><td className={row.roi != null && row.roi >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'}>{row.roi == null ? '—' : pct(row.roi)}</td></tr>)}</tbody></table></div>
 }
 
 function MarketBreakdownTable({ rows }: { rows: MarketBreakdownRow[] }) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const { sorted, header } = useSortableRows(rows, { family: row => formatMarket(row.market_family), n: row => row.sample_size, wins: row => row.wins, hit: row => row.hit_rate, roi: row => row.roi, qwantejBrier: row => row.qwantej_brier_score, marketBrier: row => row.market_brier_score, qwantejError: row => row.qwantej_calibration_error, marketError: row => row.market_calibration_error })
   if (rows.length === 0) return <AnalyticsEmpty title="No market breakdown yet" body="Market families appear once predictions have settled outcomes." compact />
-  return <div className="analytics-table-wrap"><table className="analytics-table"><thead><tr>{header('family', 'Market family')}{header('n', 'N')}{header('wins', 'Won / lost')}{header('hit', 'Hit rate')}{header('roi', 'ROI')}{header('qwantejBrier', 'QwanEj Brier')}{header('marketBrier', 'Market Brier')}{header('qwantejError', 'QwanEj calib. error')}{header('marketError', 'Market calib. error')}<th><span className="sr-only">Actions</span></th></tr></thead><tbody>{sorted.map(row => <Fragment key={row.market_family}>
-    <tr><td><strong>{formatMarket(row.market_family)}</strong></td><td>{row.sample_size}</td><td>{row.wins} / {row.losses}</td><td>{pct(row.hit_rate)}</td><td className={row.roi != null && row.roi >= 0 ? 'positive' : 'negative'}>{row.roi == null ? '—' : pct(row.roi)}</td><td>{score(row.qwantej_brier_score)}</td><td>{score(row.market_brier_score)}</td><td>{score(row.qwantej_calibration_error)}</td><td>{score(row.market_calibration_error)}</td><td><button type="button" className="btn-ghost btn-sm" onClick={() => setExpanded(current => current === row.market_family ? null : row.market_family)}>{expanded === row.market_family ? 'Hide edge' : 'Edge bands'}</button></td></tr>
+  return <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full min-w-[640px] border-collapse text-left text-sm [&_thead]:border-b [&_thead]:border-slate-200 [&_thead]:bg-slate-50 [&_thead]:text-sm [&_thead]:uppercase [&_thead]:tracking-wide [&_thead]:text-slate-600 [&_th]:px-3 [&_th]:py-3 [&_th]:font-semibold [&_tbody]:divide-y [&_tbody]:divide-slate-100 [&_td]:px-3 [&_td]:py-3 [&_tbody_tr:hover]:bg-slate-50/70"><thead><tr>{header('family', 'Market family')}{header('n', 'N')}{header('wins', 'Won / lost')}{header('hit', 'Hit rate')}{header('roi', 'ROI')}{header('qwantejBrier', 'MatchSlip Brier')}{header('marketBrier', 'Market Brier')}{header('qwantejError', 'MatchSlip calib. error')}{header('marketError', 'Market calib. error')}<th scope="col"><span className="sr-only">Actions</span></th></tr></thead><tbody>{sorted.map(row => <Fragment key={row.market_family}>
+    <tr><td><strong>{formatMarket(row.market_family)}</strong></td><td>{row.sample_size}</td><td>{row.wins} / {row.losses}</td><td>{pct(row.hit_rate)}</td><td className={row.roi != null && row.roi >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'}>{row.roi == null ? '—' : pct(row.roi)}</td><td>{score(row.qwantej_brier_score)}</td><td>{score(row.market_brier_score)}</td><td>{score(row.qwantej_calibration_error)}</td><td>{score(row.market_calibration_error)}</td><td><button type="button" className={analyticsButtonClass} onClick={() => setExpanded(current => current === row.market_family ? null : row.market_family)}>{expanded === row.market_family ? 'Hide edge' : 'Edge bands'}</button></td></tr>
     {expanded === row.market_family && <tr><td colSpan={10}><EdgeBucketTable rows={row.edge_buckets} /></td></tr>}
   </Fragment>)}</tbody></table></div>
 }
@@ -346,14 +394,14 @@ function MarketBreakdownTable({ rows }: { rows: MarketBreakdownRow[] }) {
 function EdgeBucketTable({ rows }: { rows: EdgeBucketRow[] }) {
   const { sorted, header } = useSortableRows(rows, { band: row => bandSortValue(row.edge_band), n: row => row.sample_size, wins: row => row.wins, hit: row => row.hit_rate, roi: row => row.roi })
   if (rows.length === 0) return <AnalyticsEmpty title="No edge data yet" body="Edge bands appear once predictions have both a model and market probability." compact />
-  return <div className="analytics-table-wrap"><table className="analytics-table"><thead><tr>{header('band', 'Edge band')}{header('n', 'N')}{header('wins', 'Won / lost')}{header('hit', 'Hit rate')}{header('roi', 'ROI')}</tr></thead><tbody>{sorted.map(row => <tr key={row.edge_band}><td><strong>{row.edge_band}</strong></td><td>{row.sample_size}</td><td>{row.wins} / {row.losses}</td><td>{pct(row.hit_rate)}</td><td className={row.roi != null && row.roi >= 0 ? 'positive' : 'negative'}>{row.roi == null ? '—' : pct(row.roi)}</td></tr>)}</tbody></table></div>
+  return <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full min-w-[640px] border-collapse text-left text-sm [&_thead]:border-b [&_thead]:border-slate-200 [&_thead]:bg-slate-50 [&_thead]:text-sm [&_thead]:uppercase [&_thead]:tracking-wide [&_thead]:text-slate-600 [&_th]:px-3 [&_th]:py-3 [&_th]:font-semibold [&_tbody]:divide-y [&_tbody]:divide-slate-100 [&_td]:px-3 [&_td]:py-3 [&_tbody_tr:hover]:bg-slate-50/70"><thead><tr>{header('band', 'Edge band')}{header('n', 'N')}{header('wins', 'Won / lost')}{header('hit', 'Hit rate')}{header('roi', 'ROI')}</tr></thead><tbody>{sorted.map(row => <tr key={row.edge_band}><td><strong>{row.edge_band}</strong></td><td>{row.sample_size}</td><td>{row.wins} / {row.losses}</td><td>{pct(row.hit_rate)}</td><td className={row.roi != null && row.roi >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'}>{row.roi == null ? '—' : pct(row.roi)}</td></tr>)}</tbody></table></div>
 }
 
 function DataFreshness({ run }: { run: PipelineRun | null }) {
-  if (!run) return <div className="data-freshness unknown"><span className="status-dot" /><span>Pipeline freshness unavailable</span><small>Results may not reflect the latest completed run.</small></div>
+  if (!run) return <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600"><span className="h-2 w-2 rounded-full bg-slate-300" /><span>Pipeline freshness unavailable</span><small className="text-slate-600">Results may not reflect the latest completed run.</small></div>
   const complete = ['completed', 'success', 'succeeded'].includes(run.status.toLowerCase())
   const when = run.completed_at ?? run.started_at
-  return <div className={`data-freshness ${complete ? 'ready' : 'pending'}`}><span className="status-dot" /><strong>{complete ? 'Data current through completed pipeline' : 'Pipeline not yet complete'}</strong><span>Target date <span className="event-date">{run.target_date}</span></span>{when && <small>{complete ? 'Completed' : 'Started'} {new Date(when).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</small>}{run.current_stage && !complete && <small>Stage: {run.current_stage}</small>}</div>
+  return <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-4 py-3 text-sm ${complete ? 'border-emerald-200 bg-emerald-50/50 text-emerald-900' : 'border-amber-200 bg-amber-50/50 text-amber-900'}`}><span className={`h-2 w-2 rounded-full ${complete ? 'bg-emerald-500' : 'bg-amber-500'}`} /><strong className="font-semibold">{complete ? 'Data current through completed pipeline' : 'Pipeline not yet complete'}</strong><span className="text-slate-600">Target date <span className="font-mono tabular-nums">{run.target_date}</span></span>{when && <small className="text-slate-600">{complete ? 'Completed' : 'Started'} {new Date(when).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</small>}{run.current_stage && !complete && <small className="text-slate-600">Stage: {run.current_stage}</small>}</div>
 }
 
 function PickLedger() {
@@ -370,11 +418,16 @@ function PickLedger() {
   const [stake, setStake] = useState('1')
   const [search, setSearch] = useState('')
   const [reliability, setReliability] = useState<ReliabilityRow[]>([])
+  const requestSeq = useRef(0)
+  // The reliability matrix has its own sequence so its request cannot cancel
+  // an in-flight recommendation-picks response.
+  const reliabilityRequestSeq = useRef(0)
 
   useEffect(() => {
     let active = true
     let lastRefreshAt = 0
     const refresh = () => {
+      const requestId = ++requestSeq.current
       lastRefreshAt = Date.now()
       const params = new URLSearchParams({ stake: stake || '1', source, limit: '2000' })
       if (from) params.set('date_from', from)
@@ -385,9 +438,9 @@ function PickLedger() {
       if (modelVersion !== 'all') params.set('model_version', modelVersion)
       fetch(`/api/v1/performance/recommendation-picks?${params}`)
         .then(response => response.ok ? response.json() : Promise.reject(new Error(`API ${response.status}`)))
-        .then(value => { if (active) { setData(value); setFailed(false) } })
-        .catch(() => { if (active) setFailed(true) })
-        .finally(() => { if (active) setLoading(false) })
+        .then(value => { if (active && requestId === requestSeq.current) { setData(value); setFailed(false) } })
+        .catch(() => { if (active && requestId === requestSeq.current) setFailed(true) })
+        .finally(() => { if (active && requestId === requestSeq.current) setLoading(false) })
     }
     const refreshWhenVisible = () => {
       if (document.visibilityState === 'visible' && Date.now() - lastRefreshAt > 30_000) refresh()
@@ -407,19 +460,20 @@ function PickLedger() {
 
   useEffect(() => {
     let active = true
+    const requestId = ++reliabilityRequestSeq.current
     const params = new URLSearchParams()
     if (from) params.set('date_from', from)
     if (to) params.set('date_to', to)
     params.set('model_version', modelVersion)
     fetch(`/api/v1/performance/market-reliability?${params}`)
       .then(response => response.ok ? response.json() : [])
-      .then(rows => { if (active) setReliability(rows) })
-      .catch(() => { if (active) setReliability([]) })
+      .then(rows => { if (active && requestId === reliabilityRequestSeq.current) setReliability(rows) })
+      .catch(() => { if (active && requestId === reliabilityRequestSeq.current) setReliability([]) })
     return () => { active = false }
   }, [from, to, modelVersion])
 
   if (loading && !data) return <AnalyticsSkeleton />
-  if (failed && !data) return <AnalyticsEmpty title="Pick ledger unavailable" body="The recommendation ledger endpoint did not return data." />
+  if (failed && !data) return <div aria-live="polite"><AnalyticsEmpty title="Pick ledger unavailable" body="The recommendation ledger endpoint did not return data. No ledger snapshot is available." /></div>
   if (!data) return <AnalyticsEmpty title="No recommendation picks" body="Published and Strongest picks will appear after a completed model run." />
 
   const focused = data.metrics[source]
@@ -428,38 +482,43 @@ function PickLedger() {
   const reconstructed = data.rows.filter(row => row.reconstructed).length
   const hasFilters = source !== 'all' || result !== 'all' || market !== 'all' || competition !== 'all' || modelVersion !== 'all' || from || to || search
   const reset = () => { setSource('all'); setResult('all'); setMarket('all'); setCompetition('all'); setModelVersion('all'); setFrom(''); setTo(''); setSearch('') }
+  const stale = failed && data != null
+  const status = stale
+    ? 'Recommendation ledger refresh failed. Showing the last successful snapshot; settled results may be stale.'
+    : loading ? 'Loading recommendation ledger…'
+      : `Showing ${visibleRows.length} of ${data.total_rows} deduplicated picks · ${source === 'all' ? 'all sources' : source === 'overlap' ? 'Published + Strongest overlap' : source} · ${fmt(data.stake)} flat stake.`
 
   return <>
-    <div className="journal-note pick-ledger-note"><strong>Deduplicated system picks</strong><span>Published recommendations and Strongest selections are merged once per date, match, market, and selected outcome. Flat-stake simulations never alter the immutable ticket ledger.</span><label>Stake per pick <input type="number" min="0.01" step="0.01" value={stake} onChange={event => setStake(event.target.value)} /></label></div>
+    <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-base leading-relaxed text-slate-600" aria-live="polite">{status}</p>
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-base leading-relaxed text-sky-900"><strong>Deduplicated system picks</strong><span>Published recommendations and Strongest selections are merged once per date, match, market, and selected outcome. Flat-stake simulations never alter the immutable ticket ledger.</span><label className="flex items-center gap-2 text-sm font-semibold text-sky-900">Stake per pick <input className={`${analyticsInputClass} w-24`} type="number" min="0.01" step="0.01" value={stake} onChange={event => setStake(event.target.value)} /></label></div>
     <div className="pick-source-grid" aria-label="Recommendation source comparison">
-      {([['all', 'All unique'], ['published', 'Published'], ['strongest', 'Strongest'], ['overlap', 'Published + Strongest']] as Array<[typeof source, string]>).map(([id, label]) => <button type="button" key={id} className={`pick-source-card${source === id ? ' active' : ''}`} aria-pressed={source === id} onClick={() => setSource(id)}><span>{label}</span><strong>{data.metrics[id].unique_picks}</strong><small>{data.metrics[id].settled} settled · {pct(data.metrics[id].hit_rate)} hit · {pct(data.metrics[id].roi)} ROI</small></button>)}
+      {([['all', 'All unique'], ['published', 'Published'], ['strongest', 'Strongest'], ['overlap', 'Published + Strongest']] as Array<[typeof source, string]>).map(([id, label]) => <button type="button" key={id} className={`pick-source-card min-h-11 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700${source === id ? ' active' : ''}`} aria-pressed={source === id} onClick={() => setSource(id)}><span>{label}</span><strong>{data.metrics[id].unique_picks}</strong><small>{data.metrics[id].settled} settled · {pct(data.metrics[id].hit_rate)} hit · {pct(data.metrics[id].roi)} ROI</small></button>)}
     </div>
-    <div className="analytics-filters pick-ledger-filters" aria-label="Pick ledger filters">
-      <label>Source<select value={source} onChange={event => setSource(event.target.value as typeof source)}><option value="all">All sources</option><option value="published">Published</option><option value="strongest">Strongest</option><option value="overlap">Published + Strongest</option></select></label>
-      <label>Result<select value={result} onChange={event => setResult(event.target.value)}><option value="all">All results</option><option value="pending">Pending</option><option value="won">Won</option><option value="lost">Lost</option><option value="void">Void</option></select></label>
-      <label>From<input type="date" value={from} onChange={event => setFrom(event.target.value)} /></label>
-      <label>To<input type="date" value={to} onChange={event => setTo(event.target.value)} /></label>
-      <label>Market<select value={market} onChange={event => setMarket(event.target.value)}><option value="all">All markets</option>{data.filters.markets.map(value => <option key={value} value={value}>{formatMarket(value)}</option>)}</select></label>
-      <label>League<select value={competition} onChange={event => setCompetition(event.target.value)}><option value="all">All leagues</option>{data.filters.competitions.map(value => <option key={value} value={value}>{value}</option>)}</select></label>
-      <label>Model<select value={modelVersion} onChange={event => setModelVersion(event.target.value)}><option value="all">All models</option>{data.filters.model_versions.map(value => <option key={value} value={value}>{value}</option>)}</select></label>
-      <label>Find match<input type="search" placeholder="Team or league" value={search} onChange={event => setSearch(event.target.value)} /></label>
-      {hasFilters && <button className="btn-ghost btn-sm" onClick={reset}>Reset filters</button>}
+    <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-3" role="group" aria-label="Pick ledger filters">
+      <label className="flex flex-col gap-1 text-sm font-semibold text-slate-600">Source<select className={analyticsInputClass} value={source} onChange={event => setSource(event.target.value as typeof source)}><option value="all">All sources</option><option value="published">Published</option><option value="strongest">Strongest</option><option value="overlap">Published + Strongest</option></select></label>
+      <label className="flex flex-col gap-1 text-sm font-semibold text-slate-600">Result<select className={analyticsInputClass} value={result} onChange={event => setResult(event.target.value)}><option value="all">All results</option><option value="pending">Pending</option><option value="won">Won</option><option value="lost">Lost</option><option value="void">Void</option></select></label>
+      <label className="flex flex-col gap-1 text-sm font-semibold text-slate-600">From<input className={analyticsInputClass} type="date" value={from} onChange={event => setFrom(event.target.value)} /></label>
+      <label className="flex flex-col gap-1 text-sm font-semibold text-slate-600">To<input className={analyticsInputClass} type="date" value={to} onChange={event => setTo(event.target.value)} /></label>
+      <label className="flex flex-col gap-1 text-sm font-semibold text-slate-600">Market<select className={analyticsInputClass} value={market} onChange={event => setMarket(event.target.value)}><option value="all">All markets</option>{data.filters.markets.map(value => <option key={value} value={value}>{formatMarket(value)}</option>)}</select></label>
+      <label className="flex flex-col gap-1 text-sm font-semibold text-slate-600">League<select className={analyticsInputClass} value={competition} onChange={event => setCompetition(event.target.value)}><option value="all">All leagues</option>{data.filters.competitions.map(value => <option key={value} value={value}>{value}</option>)}</select></label>
+      <label className="flex flex-col gap-1 text-sm font-semibold text-slate-600">Model<select className={analyticsInputClass} value={modelVersion} onChange={event => setModelVersion(event.target.value)}><option value="all">All models</option>{data.filters.model_versions.map(value => <option key={value} value={value}>{value}</option>)}</select></label>
+      <label className="flex flex-col gap-1 text-sm font-semibold text-slate-600">Find match<input className={analyticsInputClass} type="search" placeholder="Team or league" value={search} onChange={event => setSearch(event.target.value)} /></label>
+      {hasFilters && <button type="button" className={analyticsButtonClass} onClick={reset}>Reset filters</button>}
     </div>
-    <div className="filter-summary">Showing {visibleRows.length} of {data.total_rows} deduplicated picks · {source === 'all' ? 'all sources' : source === 'overlap' ? 'Published + Strongest overlap' : source} · {fmt(data.stake)} flat stake</div>
-    <details className="analytics-card pick-roi-combinations">
-      <summary className="section-header pick-roi-summary"><div><span className="eyebrow">Same date range</span><h2 className="section-title">ROI by combination</h2></div><span className="section-subtitle pick-roi-toggle-label"><span className="pick-roi-label-closed">Updates every minute · click to view all combinations</span><span className="pick-roi-label-open">Updates every minute · click to collapse</span></span></summary>
-      <p className="matrix-note">Uses the selected dates and compares all source and result groups. Refreshes every minute and when you return to this tab; newly settled matches are included. ROI includes settled picks with frozen odds, and small samples are directional.</p>
+    <details className="rounded-xl border border-slate-200 bg-white overflow-hidden pick-roi-combinations">
+      <summary className="section-header pick-roi-summary min-h-11 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"><div><span className="eyebrow">Same date range</span><h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">ROI by combination</h2></div><span className="section-subtitle pick-roi-toggle-label text-sm text-slate-600"><span className="pick-roi-label-closed">Updates every minute · click to view all combinations</span><span className="pick-roi-label-open">Updates every minute · click to collapse</span></span></summary>
+      <p className="px-4 py-3 text-base leading-relaxed text-slate-600">Uses the selected dates and compares all source and result groups. Refreshes every minute and when you return to this tab; newly settled matches are included. ROI includes settled picks with frozen odds, and small samples are directional.</p>
       <PickRoiCombinationTable rows={data.roi_combinations ?? []} />
     </details>
-    <div className="research-kpis pick-ledger-kpis">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
       <MetricCard label="Unique picks" value={focused.unique_picks.toString()} note={`${focused.settled} settled · ${focused.pending} pending`} />
       <MetricCard label="Settlement coverage" value={pct(focused.settlement_coverage)} note="Final results attached" />
       <MetricCard label="Won / lost / void" value={`${focused.wins} / ${focused.losses} / ${focused.voids}`} note={`${focused.priced_settled} priced outcomes`} />
       <MetricCard label="Hit rate" value={pct(focused.hit_rate)} note="Voids excluded" />
-      <MetricCard label="Net P&L" value={fmtPnl(focused.profit_loss)} note={`${fmt(focused.staked)} simulated stake`} tone={focused.profit_loss >= 0 ? 'positive' : 'negative'} />
-      <MetricCard label="ROI" value={pct(focused.roi)} note={focused.missing_odds ? `${focused.missing_odds} outcomes excluded: no frozen odds` : 'Frozen pick-time odds'} tone={(focused.roi ?? 0) >= 0 ? 'positive' : 'negative'} />
+      <MetricCard label="Net P&L" value={fmtPnl(focused.profit_loss)} note={`${fmt(focused.staked)} simulated stake`} tone={focused.profit_loss >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'} />
+      <MetricCard label="ROI" value={pct(focused.roi)} note={focused.missing_odds ? `${focused.missing_odds} outcomes excluded: no frozen odds` : 'Frozen pick-time odds'} tone={(focused.roi ?? 0) >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'} />
     </div>
-    {focused.priced_settled < 30 && <div className="sample-warning">Small sample: only {focused.priced_settled} priced settled picks in this scope. Treat hit rate and ROI as directional evidence.</div>}
+    {focused.priced_settled < 30 && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-base leading-relaxed text-amber-800">Small sample: only {focused.priced_settled} priced settled picks in this scope. Treat hit rate and ROI as directional evidence.</div>}
     {reconstructed > 0 && <div className="pick-backfill-note"><strong>{reconstructed} historical Strongest picks reconstructed</strong><span>Future lists are snapshotted immutably at model-run completion; reconstructed rows remain labelled in the table.</span></div>}
     <RecommendationPickTable rows={visibleRows} stake={data.stake} />
     <ReliabilityMatrix rows={reliability} />
@@ -500,9 +559,11 @@ function DailyQualifyingMatches() {
   const [date, setDate] = useState(todayInBlantyre)
   const [daily, setDaily] = useState<DailyUniquePicks | null>(null)
   const [ledgerSnapshot, setLedgerSnapshot] = useState<DailyLedgerSnapshot | null>(null)
+  const [loadedDate, setLoadedDate] = useState<string | null>(null)
   const [flatStake, setFlatStake] = useState(1)
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
+  const requestSeq = useRef(0)
   const today = todayInBlantyre()
   const dateLabel = new Intl.DateTimeFormat(undefined, {
     dateStyle: 'full', timeZone: 'Africa/Blantyre',
@@ -513,23 +574,24 @@ function DailyQualifyingMatches() {
     let active = true
     let lastRefreshAt = 0
     const refresh = () => {
+      const requestId = ++requestSeq.current
       lastRefreshAt = Date.now()
       const params = new URLSearchParams({ daily_date: date, source: 'all', limit: '2000' })
       fetch(`/api/v1/performance/recommendation-picks?${params}`)
         .then(response => response.ok ? response.json() : Promise.reject(new Error(`API ${response.status}`)))
-        .then(value => { if (active) {
+        .then(value => { if (active && requestId === requestSeq.current) {
           setDaily(value.daily_unique ?? null)
           setLedgerSnapshot({ rows: value.rows ?? [], roi_combinations: value.roi_combinations ?? [], walk_forward: value.walk_forward ?? null })
+          setLoadedDate(value.daily_unique?.date ?? date)
           setFailed(false)
         } })
-        .catch(() => { if (active) setFailed(true) })
-        .finally(() => { if (active) setLoading(false) })
+        .catch(() => { if (active && requestId === requestSeq.current) setFailed(true) })
+        .finally(() => { if (active && requestId === requestSeq.current) setLoading(false) })
     }
     const refreshWhenVisible = () => {
       if (document.visibilityState === 'visible' && Date.now() - lastRefreshAt > 30_000) refresh()
     }
-    setDaily(null)
-    setLedgerSnapshot(null)
+    // Keep the last successful snapshot visible while a new date or refresh loads.
     setLoading(true)
     refresh()
     const timer = window.setInterval(refreshWhenVisible, 60_000)
@@ -545,28 +607,40 @@ function DailyQualifyingMatches() {
 
   const selectedDate = date
   const dateOptions = [-2, -1, 0, 1, 2].map(offset => shiftIsoDate(date, offset))
+  const stale = failed && (daily != null || ledgerSnapshot != null)
+  const snapshotIsOtherDate = daily != null && loadedDate != null && loadedDate !== date
+  const status = stale && snapshotIsOtherDate
+    ? `Ledger picks could not be refreshed. Showing the saved snapshot for ${loadedDate}, not ${date}.`
+    : stale ? `Ledger picks could not be refreshed. Showing the last successful snapshot for ${dateLabel}.`
+      : loading && snapshotIsOtherDate ? `Loading ledger picks for ${dateLabel}… The visible rows are the saved snapshot for ${loadedDate}.`
+        : loading ? `Loading ledger picks and results for ${dateLabel}…`
+          : failed ? `Ledger picks are unavailable for ${dateLabel}. No snapshot has loaded yet.`
+            : `Ledger picks for ${dateLabel} are up to date.`
+  const focusClass = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700'
   return <div className="daily-qualifying-stack">
-    <DailyAccumulatorSummary snapshot={ledgerSnapshot} stake={flatStake} onStakeChange={setFlatStake} throughDate={shiftIsoDate(today, -1)} loading={loading} failed={failed} />
-    <section className="analytics-card daily-qualifying-card">
-    <div className="section-header daily-qualifying-header"><div><span className="eyebrow">All Unique · all markets</span><h2 className="section-title">Ledger picks</h2></div>
-      <div className="daily-date-nav" aria-label="Choose qualifying match date">
-        <button type="button" className="daily-date-arrow" aria-label="Previous day" onClick={() => setDate(value => shiftIsoDate(value, -1))}>‹</button>
+    <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-base leading-relaxed text-slate-600" aria-live="polite">{status}</p>
+    <DailyAccumulatorSummary snapshot={ledgerSnapshot} stake={flatStake} onStakeChange={setFlatStake} throughDate={shiftIsoDate(today, -1)} loading={loading} failed={failed} stale={stale} />
+    <section className="rounded-xl border border-slate-200 bg-white overflow-hidden daily-qualifying-card">
+    <div className="section-header daily-qualifying-header"><div><span className="eyebrow">All Unique · all markets</span><h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">Ledger picks</h2></div>
+      <div className="daily-date-nav" role="group" aria-label="Choose qualifying match date">
+        <button type="button" className={`daily-date-arrow min-h-11 min-w-11 ${focusClass}`} aria-label="Previous day" onClick={() => setDate(value => shiftIsoDate(value, -1))}>‹</button>
         <div className="daily-date-strip">{dateOptions.map(option => {
           const optionDate = dateAtBlantyreNoon(option)
           const weekday = option === today ? 'Today' : new Intl.DateTimeFormat(undefined, { weekday: 'short', timeZone: 'Africa/Blantyre' }).format(optionDate)
           const day = new Intl.DateTimeFormat(undefined, { day: '2-digit', timeZone: 'Africa/Blantyre' }).format(optionDate)
-          return <button type="button" key={option} className={`daily-date-option${option === selectedDate ? ' selected' : ''}`} aria-pressed={option === selectedDate} aria-label={new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeZone: 'Africa/Blantyre' }).format(optionDate)} onClick={() => setDate(option)}><span>{weekday}</span><strong>{day}</strong></button>
+          return <button type="button" key={option} className={`daily-date-option min-h-11 ${focusClass}${option === selectedDate ? ' selected' : ''}`} aria-pressed={option === selectedDate} aria-label={new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeZone: 'Africa/Blantyre' }).format(optionDate)} onClick={() => setDate(option)}><span>{weekday}</span><strong>{day}</strong></button>
         })}</div>
-        {date !== today && <button type="button" className="daily-date-today" aria-label="Go to today" onClick={() => setDate(today)}>Today</button>}
-        <label className="daily-date-calendar" title="Choose date"><span aria-hidden="true">▦</span><input type="date" aria-label="Choose date" value={date} onChange={event => event.target.value && setDate(event.target.value)} /></label>
-        <button type="button" className="daily-date-arrow" aria-label="Next day" onClick={() => setDate(value => shiftIsoDate(value, 1))}>›</button>
+        {date !== today && <button type="button" className={`daily-date-today min-h-11 ${focusClass}`} aria-label="Go to today" onClick={() => setDate(today)}>Today</button>}
+        <label className="daily-date-calendar" title="Choose date"><span aria-hidden="true">▦</span><input className={analyticsInputClass} type="date" aria-label="Choose date" value={date} onChange={event => event.target.value && setDate(event.target.value)} /></label>
+        <button type="button" className={`daily-date-arrow min-h-11 min-w-11 ${focusClass}`} aria-label="Next day" onClick={() => setDate(value => shiftIsoDate(value, 1))}>›</button>
       </div>
     </div>
-    <span className="daily-selected-date">{dateLabel}</span>
+    <span className="daily-selected-date text-base text-slate-600">{dateLabel}</span>
+    {snapshotIsOtherDate && <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-base leading-relaxed text-amber-800" role="status">Showing the saved snapshot for {loadedDate}, not the selected date {date}.</p>}
     {loading && !daily ? <div className="daily-qualifying-status">Loading picks and results for {dateLabel}…</div>
         : failed && !daily ? <AnalyticsEmpty title="Ledger picks unavailable" body="Could not load All Unique picks for this date." compact />
         : daily && <>
-          <div className={`daily-qualifying-status${daily.qualifies ? ' qualifies' : ''}`}>
+          <div className={`daily-qualifying-status text-base leading-relaxed${daily.qualifies ? ' qualifies' : ''}`}>
             <strong>{daily.qualifies ? `${daily.qualifying_markets.length} markets meet the criteria` : 'No markets meet the criteria'}</strong>
             <span>All Unique Recommended Ledger since tracking began. Each market needs at least 5 unique picks and 10% ROI from priced, settled picks with frozen odds.</span>
           </div>
@@ -580,17 +654,18 @@ function DailyQualifyingMatches() {
             ? daily.rows.length > 0
               ? <><DailyQualifyingMatchTable rows={daily.rows} /><DailyAccumulatorPreview title="Ledger picks" rows={daily.rows} stake={flatStake} /></>
               : <AnalyticsEmpty {...emptyDayCopy(ungatedCount)} compact />
-            : <p className="matrix-note">Matches appear when a market meets both thresholds in the all-time All Unique Recommended Ledger.</p>}
+            : <p className="px-4 py-3 text-base leading-relaxed text-slate-600">Matches appear when a market meets both thresholds in the all-time All Unique Recommended Ledger. This is an empty result for the selected date, not a failed request.</p>}
         </>}
   </section>
   {daily && <UngatedDailyPicks daily={daily} />}
-  <section className="analytics-card daily-qualifying-card published-simulation-card" aria-labelledby="published-simulation-title">
-    <div className="section-header daily-qualifying-header"><div><span className="eyebrow">Published · Market × Model · 5% simulation</span><h2 className="section-title" id="published-simulation-title">Published simulation picks</h2></div></div>
-    <span className="daily-selected-date">For {dateLabel}</span>
+  <section className="rounded-xl border border-slate-200 bg-white overflow-hidden daily-qualifying-card published-simulation-card" aria-labelledby="published-simulation-title">
+    <div className="section-header daily-qualifying-header"><div><span className="eyebrow">Published · Market × Model · 5% simulation</span><h2 className="text-sm font-bold uppercase tracking-wide text-slate-600" id="published-simulation-title">Published simulation picks</h2></div></div>
+    <span className="daily-selected-date text-base text-slate-600">For {dateLabel}</span>
+    {snapshotIsOtherDate && <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-base leading-relaxed text-amber-800" role="status">Showing the Published simulation snapshot for {loadedDate}, not the selected date {date}.</p>}
     {loading && !daily ? <div className="daily-qualifying-status">Loading Published picks for {dateLabel}…</div>
       : failed && !daily ? <AnalyticsEmpty title="Published simulation unavailable" body="Could not load Published picks for this date." compact />
       : daily && <>
-        <div className={`daily-qualifying-status${daily.published_simulation.qualifies ? ' qualifies' : ''}`}>
+        <div className={`daily-qualifying-status text-base leading-relaxed${daily.published_simulation.qualifies ? ' qualifies' : ''}`}>
           <strong>{daily.published_simulation.qualifies ? `${daily.published_simulation.qualifying_combinations.length} Published combinations qualify` : 'No Published combinations meet the criteria'}</strong>
           <span>All-time Published Recommended Ledger. Each Market × Model combination needs at least 5 unique picks and 5% ROI from priced, settled picks with frozen odds.</span>
         </div>
@@ -604,7 +679,7 @@ function DailyQualifyingMatches() {
           ? daily.published_simulation.rows.length > 0
             ? <><DailyQualifyingMatchTable rows={daily.published_simulation.rows} /><DailyAccumulatorPreview title="Published simulation" rows={daily.published_simulation.rows} stake={flatStake} /></>
             : <AnalyticsEmpty title="No Published picks from qualifying combinations on this date" body="The all-time combinations meet the simulation thresholds, but none have a Published pick on the selected date." compact />
-          : <p className="matrix-note">Published matches appear when a Market × Model combination meets both all-time thresholds.</p>}
+          : <p className="px-4 py-3 text-base leading-relaxed text-slate-600">Published matches appear when a Market × Model combination meets both all-time thresholds. This is an empty result for the selected date, not a failed request.</p>}
       </>}
   </section></div>
 }
@@ -612,7 +687,7 @@ function DailyQualifyingMatches() {
 function DailyQualifyingMatchTable({ rows }: { rows: RecommendationPick[] }) {
   const sorted = [...rows].sort((a, b) => a.kickoff_at.localeCompare(b.kickoff_at))
   if (sorted.length === 0) return <AnalyticsEmpty title="No qualifying matches" body="The daily pick and ROI criteria are met, but there are no match rows to display." compact />
-  return <div className="analytics-table-wrap"><table className="analytics-table daily-qualifying-table"><thead><tr><th>Kickoff</th><th>Match</th><th>Market / pick</th><th>Sources</th><th>Odds</th><th>Result</th><th>P&amp;L</th></tr></thead><tbody>{sorted.map(row => <tr key={row.pick_id}><td>{new Date(row.kickoff_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Blantyre' })}</td><td><strong>{row.home_team} vs {row.away_team}</strong><small>{row.competition}</small></td><td><strong>{formatMarket(row.market)}</strong><small>{formatSelection(row.selection)}</small></td><td>{row.sources.map(item => item === 'published' ? 'Published' : 'Strongest').join(' + ')}</td><td>{row.odds == null ? '—' : row.odds.toFixed(2)}</td><td><strong>{row.home_goals != null && row.away_goals != null ? `${row.home_goals}–${row.away_goals}` : '—'}</strong><small className={`selection-outcome ${row.result}`}>{row.result}</small></td><td className={row.profit_loss == null ? '' : row.profit_loss >= 0 ? 'positive' : 'negative'}>{row.profit_loss == null ? '—' : fmtPnl(row.profit_loss)}</td></tr>)}</tbody></table></div>
+  return <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full min-w-[640px] border-collapse text-left text-sm [&_thead]:border-b [&_thead]:border-slate-200 [&_thead]:bg-slate-50 [&_thead]:text-sm [&_thead]:uppercase [&_thead]:tracking-wide [&_thead]:text-slate-600 [&_th]:px-3 [&_th]:py-3 [&_th]:font-semibold [&_tbody]:divide-y [&_tbody]:divide-slate-100 [&_td]:px-3 [&_td]:py-3 [&_tbody_tr:hover]:bg-slate-50/70 daily-qualifying-table"><thead><tr><th scope="col">Kickoff</th><th scope="col">Match</th><th scope="col">Market / pick</th><th scope="col">Sources</th><th scope="col">Odds</th><th scope="col">Result</th><th scope="col">P&amp;L</th></tr></thead><tbody>{sorted.map(row => <tr key={row.pick_id}><td>{new Date(row.kickoff_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Blantyre' })}</td><td><strong>{row.home_team} vs {row.away_team}</strong><small>{row.competition}</small></td><td><strong>{formatMarket(row.market)}</strong><small>{formatSelection(row.selection)}</small></td><td>{row.sources.map(item => item === 'published' ? 'Published' : 'Strongest').join(' + ')}</td><td>{row.odds == null ? '—' : row.odds.toFixed(2)}</td><td><strong>{row.home_goals != null && row.away_goals != null ? `${row.home_goals}–${row.away_goals}` : '—'}</strong><small className={`selection-outcome ${row.result}`}>{row.result}</small></td><td className={row.profit_loss == null ? '' : row.profit_loss >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'}>{row.profit_loss == null ? '—' : fmtPnl(row.profit_loss)}</td></tr>)}</tbody></table></div>
 }
 
 const GATE_LABELS: Record<MarketGateStatus['status'], string> = {
@@ -636,18 +711,18 @@ export function UngatedDailyPicks({ daily }: { daily: DailyUniquePicks }) {
   const dateLabel = new Intl.DateTimeFormat(undefined, {
     dateStyle: 'full', timeZone: 'Africa/Blantyre',
   }).format(dateAtBlantyreNoon(daily.date))
-  return <section className="analytics-card daily-qualifying-card ungated-picks-card" aria-labelledby="ungated-picks-title">
+  return <section className="rounded-xl border border-slate-200 bg-white overflow-hidden daily-qualifying-card ungated-picks-card" aria-labelledby="ungated-picks-title">
     <div className="section-header daily-qualifying-header">
-      <div><span className="eyebrow">Ungated · context only</span><h2 className="section-title" id="ungated-picks-title">Today’s system picks · all markets</h2></div>
+      <div><span className="eyebrow">Ungated · context only</span><h2 className="text-sm font-bold uppercase tracking-wide text-slate-600" id="ungated-picks-title">Today’s system picks · all markets</h2></div>
     </div>
-    <span className="daily-selected-date">{dateLabel}</span>
-    <div className="daily-qualifying-status">
+    <span className="daily-selected-date text-base text-slate-600">{dateLabel}</span>
+    <div className="daily-qualifying-status text-base leading-relaxed">
       <strong>{rows.length} {rows.length === 1 ? 'pick' : 'picks'} recorded for this date</strong>
       <span>Every pick the pipeline recorded, whatever its market. The badge shows whether that market clears the 5-pick / 10% rule behind the accumulator simulation above. This list never feeds that simulation, so showing it cannot change the simulation’s results.</span>
     </div>
     {rows.length === 0
       ? <AnalyticsEmpty title="No system picks for this date" body="Fixtures exist for this date, but the pipeline recorded no Published or Strongest pick yet." compact />
-      : <div className="analytics-table-wrap"><table className="analytics-table daily-qualifying-table"><thead><tr><th>Kickoff</th><th>Match</th><th>Market / pick</th><th>Sources</th><th>Odds</th><th>Result</th><th>All-time gate</th></tr></thead><tbody>{rows.map(row => {
+      : <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full min-w-[640px] border-collapse text-left text-sm [&_thead]:border-b [&_thead]:border-slate-200 [&_thead]:bg-slate-50 [&_thead]:text-sm [&_thead]:uppercase [&_thead]:tracking-wide [&_thead]:text-slate-600 [&_th]:px-3 [&_th]:py-3 [&_th]:font-semibold [&_tbody]:divide-y [&_tbody]:divide-slate-100 [&_td]:px-3 [&_td]:py-3 [&_tbody_tr:hover]:bg-slate-50/70 daily-qualifying-table"><thead><tr><th scope="col">Kickoff</th><th scope="col">Match</th><th scope="col">Market / pick</th><th scope="col">Sources</th><th scope="col">Odds</th><th scope="col">Result</th><th scope="col">All-time gate</th></tr></thead><tbody>{rows.map(row => {
         const entry = statusByMarket.get(row.market)
         const status = entry?.status ?? 'below_threshold'
         return <tr key={row.pick_id}>
@@ -706,13 +781,14 @@ function summarizeAccumulators(rows: RecommendationPick[], stake: number, throug
   }
 }
 
-function DailyAccumulatorSummary({ snapshot, stake, onStakeChange, throughDate, loading, failed }: {
+function DailyAccumulatorSummary({ snapshot, stake, onStakeChange, throughDate, loading, failed, stale }: {
   snapshot: DailyLedgerSnapshot | null
   stake: number
   onStakeChange: (value: number) => void
   throughDate: string
   loading: boolean
   failed: boolean
+  stale: boolean
 }) {
   const allUniqueMarkets = new Set(snapshot?.roi_combinations
     .filter(row => row.source === 'all' && row.unique_picks >= 5 && row.roi != null && row.roi >= 0.10)
@@ -746,30 +822,31 @@ function DailyAccumulatorSummary({ snapshot, stake, onStakeChange, throughDate, 
     ? 'No completed dates yet'
     : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'Africa/Blantyre' }).format(dateAtBlantyreNoon(throughDate))
 
-  return <section className="analytics-card daily-acca-summary-card" aria-labelledby="daily-acca-summary-title">
+  return <section className="rounded-xl border border-slate-200 bg-white overflow-hidden daily-acca-summary-card" aria-labelledby="daily-acca-summary-title">
     <div className="daily-acca-summary-header">
-      <div><span className="eyebrow">Ledger picks + Published simulation · walk-forward vs in-sample</span><h2 className="section-title" id="daily-acca-summary-title">Accumulator performance</h2><p>October 1, 2026 through {dateLabel}</p></div>
-      <label className="daily-acca-stake">Flat stake per ticket
-        <input type="number" min="0.01" step="any" value={stake} onChange={event => onStakeChange(Math.max(0, Number(event.target.value) || 0))} aria-label="Flat stake per accumulator ticket" />
+      <div><span className="eyebrow">Ledger picks + Published simulation · walk-forward vs in-sample</span><h2 className="text-sm font-bold uppercase tracking-wide text-slate-600" id="daily-acca-summary-title">Accumulator performance</h2><p>October 1, 2026 through {dateLabel}</p></div>
+      <label className="daily-acca-stake text-sm font-semibold text-slate-600">Flat stake per ticket
+        <input className={`${analyticsInputClass} w-28`} type="number" min="0.01" step="any" value={stake} onChange={event => onStakeChange(Math.max(0, Number(event.target.value) || 0))} aria-label="Flat stake per accumulator ticket" />
       </label>
     </div>
+    {stale && <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-base leading-relaxed text-amber-800" role="status">Accumulator results are from the last successful load and may not include the newest settlements.</p>}
     {loading && !snapshot
       ? <div className="daily-qualifying-status">Updating accumulator results...</div>
       : failed && !snapshot
         ? <AnalyticsEmpty title="Accumulator summary unavailable" body="Could not load the Recommended Ledger results." compact />
-        : <div className="analytics-table-wrap daily-acca-summary-table-wrap"><table className="analytics-table daily-acca-summary-table"><thead><tr><th>Accumulator set</th><th>Settled tickets</th><th>Won</th><th>Lost</th><th>Pending</th><th>Hit rate</th><th>Settled P&amp;L</th><th>ROI</th></tr></thead><tbody>
+        : <div className="analytics-table-wrap daily-acca-summary-table-wrap"><table className="w-full min-w-[640px] border-collapse text-left text-sm [&_thead]:border-b [&_thead]:border-slate-200 [&_thead]:bg-slate-50 [&_thead]:text-sm [&_thead]:uppercase [&_thead]:tracking-wide [&_thead]:text-slate-600 [&_th]:px-3 [&_th]:py-3 [&_th]:font-semibold [&_tbody]:divide-y [&_tbody]:divide-slate-100 [&_td]:px-3 [&_td]:py-3 [&_tbody_tr:hover]:bg-slate-50/70 daily-acca-summary-table"><thead><tr><th scope="col">Accumulator set</th><th scope="col">Settled tickets</th><th scope="col">Won</th><th scope="col">Lost</th><th scope="col">Pending</th><th scope="col">Hit rate</th><th scope="col">Settled P&amp;L</th><th scope="col">ROI</th></tr></thead><tbody>
           <AccumulatorSummaryRow label="Ledger picks — All Unique / 10% rule (walk-forward)" detail={walkForwardMarketDetail} totals={walkForwardAllUnique} />
           <AccumulatorSummaryRow label="Published simulation — 5% rule (walk-forward)" detail={walkForwardComboDetail} totals={walkForwardPublished} />
           <AccumulatorSummaryRow label="Ledger picks — All Unique / 10% rule (in-sample)" detail="Thresholds fitted on the full ledger, including this period" totals={allUnique} />
           <AccumulatorSummaryRow label="Published simulation — 5% rule (in-sample)" detail="Thresholds fitted on the full ledger, including this period" totals={published} />
         </tbody></table></div>}
-    <p className="daily-acca-summary-note">Walk-forward rows recompute the qualifying markets and combinations for each date using only picks strictly before that date, so a ticket cannot select its own winners. In-sample rows use thresholds fitted on the full ledger, including the period shown, and are kept for comparison. One flat stake per daily ticket. Hit rate is won / settled tickets; pending tickets are excluded from P&amp;L and ROI. P&amp;L and ROI use multiplied frozen pick odds; same-match combinations may receive a different bookmaker price.</p>
+    <p className="daily-acca-summary-note text-base leading-relaxed text-slate-600">Walk-forward rows recompute the qualifying markets and combinations for each date using only picks strictly before that date, so a ticket cannot select its own winners. In-sample rows use thresholds fitted on the full ledger, including the period shown, and are kept for comparison. One flat stake per daily ticket. Hit rate is won / settled tickets; pending tickets are excluded from P&amp;L and ROI. P&amp;L and ROI use multiplied frozen pick odds; same-match combinations may receive a different bookmaker price.</p>
   </section>
 }
 
 function AccumulatorSummaryRow({ label, detail, totals }: { label: string; detail?: string; totals: AccumulatorTotals }) {
   const summaryPct = (value: number | null) => value == null ? '—' : `${(Math.round((value * 100 + 0.00000001) * 10) / 10).toFixed(1)}%`
-  return <tr><td><strong>{label}</strong>{detail && <small>{detail}</small>}</td><td>{totals.settled}</td><td>{totals.won}</td><td>{totals.lost}</td><td>{totals.pending}</td><td>{totals.hitRate == null ? '—' : summaryPct(totals.hitRate)}</td><td className={totals.profitLoss >= 0 ? 'positive' : 'negative'}>{fmtPnl(totals.profitLoss)}</td><td className={totals.roi != null && totals.roi >= 0 ? 'positive' : 'negative'}>{totals.roi == null ? '—' : summaryPct(totals.roi)}</td></tr>
+  return <tr><td><strong>{label}</strong>{detail && <small>{detail}</small>}</td><td>{totals.settled}</td><td>{totals.won}</td><td>{totals.lost}</td><td>{totals.pending}</td><td>{totals.hitRate == null ? '—' : summaryPct(totals.hitRate)}</td><td className={totals.profitLoss >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'}>{fmtPnl(totals.profitLoss)}</td><td className={totals.roi != null && totals.roi >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'}>{totals.roi == null ? '—' : summaryPct(totals.roi)}</td></tr>
 }
 
 function DailyAccumulatorPreview({ title, rows, stake }: { title: string; rows: RecommendationPick[]; stake: number }) {
@@ -807,9 +884,9 @@ function DailyAccumulatorPreview({ title, rows, stake }: { title: string; rows: 
         : <div className="daily-acca-metrics">
           <div><span>Combined odds</span><strong>{combinedOdds.toFixed(2)}</strong></div>
           <div><span>{status === 'Open' ? 'Potential return' : 'Ticket return'}</span><strong>{displayedReturn == null ? '—' : fmt(displayedReturn)}</strong></div>
-          <div><span>{status === 'Open' ? 'Potential P&L' : 'Ticket P&L'}</span><strong className={net == null ? '' : net >= 0 ? 'positive' : 'negative'}>{net == null ? '—' : fmtPnl(net)}</strong></div>
+          <div><span>{status === 'Open' ? 'Potential P&L' : 'Ticket P&L'}</span><strong className={net == null ? '' : net >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'}>{net == null ? '—' : fmtPnl(net)}</strong></div>
         </div>}
-    <details className="daily-acca-legs"><summary>Review ticket legs</summary><ul>{rows.map(row => <li key={row.pick_id}>
+    <details className="daily-acca-legs"><summary className="min-h-11 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700">Review ticket legs</summary><ul className="text-base text-slate-600">{rows.map(row => <li key={row.pick_id}>
       <span><strong>{row.home_team} vs {row.away_team}</strong><small>{formatMarket(row.market)} · {formatSelection(row.selection)}</small></span>
       <span>{row.odds == null ? 'Odds unavailable' : row.odds.toFixed(2)} · {row.result}</span>
     </li>)}</ul></details>
@@ -827,7 +904,7 @@ function PickRoiCombinationTable({ rows }: { rows: PickRoiCombination[] }) {
     roi: row => row.roi,
   }, { key: 'roi', direction: 'desc' })
   if (rows.length === 0) return <AnalyticsEmpty title="No ROI combinations yet" body="Priced settled picks will appear here for the selected dates." compact />
-  return <div className="analytics-table-wrap"><table className="analytics-table"><thead><tr><th>Rank</th>{header('source', 'Source')}{header('market', 'Market')}{header('model', 'Model')}{header('picks', 'Picks')}{header('settled', 'Priced settled')}{header('roi', 'ROI')}</tr></thead><tbody>{sorted.map((row, index) => <tr key={`${row.source}-${row.market}-${row.model_version}`}><td>{index + 1}</td><td>{row.source === 'all' ? 'All unique' : row.source === 'overlap' ? 'Published + Strongest' : row.source === 'published' ? 'Published' : 'Strongest'}</td><td><strong>{formatMarket(row.market)}</strong></td><td>{row.model_version}</td><td>{row.unique_picks}</td><td>{row.priced_settled}</td><td className={row.roi != null && row.roi >= 0 ? 'positive' : 'negative'}>{row.roi == null ? '—' : pct(row.roi)}</td></tr>)}</tbody></table></div>
+  return <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full min-w-[640px] border-collapse text-left text-sm [&_thead]:border-b [&_thead]:border-slate-200 [&_thead]:bg-slate-50 [&_thead]:text-sm [&_thead]:uppercase [&_thead]:tracking-wide [&_thead]:text-slate-600 [&_th]:px-3 [&_th]:py-3 [&_th]:font-semibold [&_tbody]:divide-y [&_tbody]:divide-slate-100 [&_td]:px-3 [&_td]:py-3 [&_tbody_tr:hover]:bg-slate-50/70"><thead><tr><th scope="col">Rank</th>{header('source', 'Source')}{header('market', 'Market')}{header('model', 'Model')}{header('picks', 'Picks')}{header('settled', 'Priced settled')}{header('roi', 'ROI')}</tr></thead><tbody>{sorted.map((row, index) => <tr key={`${row.source}-${row.market}-${row.model_version}`}><td>{index + 1}</td><td>{row.source === 'all' ? 'All unique' : row.source === 'overlap' ? 'Published + Strongest' : row.source === 'published' ? 'Published' : 'Strongest'}</td><td><strong>{formatMarket(row.market)}</strong></td><td>{row.model_version}</td><td>{row.unique_picks}</td><td>{row.priced_settled}</td><td className={row.roi != null && row.roi >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'}>{row.roi == null ? '—' : pct(row.roi)}</td></tr>)}</tbody></table></div>
 }
 
 type PickSortKey = 'kickoff_at' | 'match' | 'market' | 'source' | 'q_score' | 'odds' | 'result' | 'profit_loss'
@@ -904,7 +981,7 @@ function groupRecommendationPicks(rows: RecommendationPick[], stake: number): Pi
 }
 
 function PickPeriodSummary({ level, label, metrics }: { level: 'year' | 'month' | 'date'; label: string; metrics: PickMetric }) {
-  const roiTone = metrics.roi == null ? '' : metrics.roi >= 0 ? 'positive' : 'negative'
+  const roiTone = metrics.roi == null ? '' : metrics.roi >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'
   return <div className={`pick-period-summary ${level}`}>
     <div className="pick-period-title"><span>{level}</span><strong className={level === 'date' ? 'event-date' : undefined}>{label}</strong></div>
     <div className="pick-period-stats">
@@ -912,7 +989,7 @@ function PickPeriodSummary({ level, label, metrics }: { level: 'year' | 'month' 
       <span><small>Settled / coverage</small><strong>{metrics.settled} · {pct(metrics.settlement_coverage)}</strong></span>
       <span><small>Won / lost / void</small><strong>{metrics.wins} / {metrics.losses} / {metrics.voids}</strong></span>
       <span><small>Hit rate</small><strong>{pct(metrics.hit_rate)}</strong></span>
-      <span><small>P&amp;L</small><strong className={metrics.profit_loss >= 0 ? 'positive' : 'negative'}>{fmtPnl(metrics.profit_loss)}</strong></span>
+      <span><small>P&amp;L</small><strong className={metrics.profit_loss >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'}>{fmtPnl(metrics.profit_loss)}</strong></span>
       <span><small>ROI</small><strong className={roiTone}>{pct(metrics.roi)}</strong></span>
     </div>
   </div>
@@ -931,17 +1008,17 @@ function RecommendationPickTable({ rows, stake }: { rows: RecommendationPick[]; 
   const change = (key: PickSortKey) => setSort(current => ({ key, direction: current.key === key && current.direction === 'desc' ? 'asc' : 'desc' }))
   const heading = (key: PickSortKey, label: string) => <SortableTh label={label} direction={sort.key === key ? sort.direction : null} onSort={() => change(key)} />
 
-  const table = (dateRows: RecommendationPick[]) => <div className="analytics-table-wrap"><table className="analytics-table pick-ledger-table"><thead><tr>{heading('kickoff_at', 'Kickoff / model')}{heading('match', 'Match / league')}{heading('market', 'Market / selection')}{heading('source', 'Source')}{heading('q_score', 'Decision evidence')}{heading('result', 'Result')}{heading('profit_loss', 'P&L')}</tr></thead><tbody>{dateRows.map(row => <tr key={row.pick_id}><td><strong className="kickoff-time">{new Date(row.kickoff_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong><small>Model {row.model_versions.join(', ')}</small></td><td><strong>{row.home_team} <span className="match-vs">vs</span> {row.away_team}</strong><small>{row.competition}</small></td><td>{!selectionRepeatsMarket(row.market, row.selection) && <span className="market-chip">{formatMarket(row.market)}</span>}<strong>{formatSelection(row.selection)}</strong>{row.revised_pick && <span className="pick-flag revised">Selection revised · {row.revision_count}</span>}</td><td><div className="pick-source-badges">{row.sources.map(item => <span key={item} className={`pick-source-badge ${item}`}>{item === 'published' ? 'Published' : `Strongest${row.strongest_rank ? ` #${row.strongest_rank}` : ''}`}</span>)}</div>{row.published_tiers.length > 0 && <small className="pick-tier-badges">{row.published_tiers.map(type => <span key={type} className={ticketTierBadgeClass(type)}>{formatTicketType(type)}</span>)}</small>}{row.reconstructed && <span className="pick-flag reconstructed">Reconstructed</span>}</td><td><div className="pick-evidence"><GradeBadge grade={row.q_grade} /><strong>Q {row.q_score.toFixed(1)}</strong></div><small>{pct(row.model_probability)} probability · {row.edge == null ? 'No edge' : `${(row.edge * 100).toFixed(1)} pp edge`}</small><small>{row.model_spread == null ? 'Spread unavailable' : `${(row.model_spread * 100).toFixed(1)} pp spread`} · {row.odds ? `@ ${row.odds.toFixed(2)}` : 'Odds unavailable'}</small></td><td>{row.home_goals != null && row.away_goals != null ? <strong>{row.home_goals}–{row.away_goals}</strong> : <strong>—</strong>}<span className={`selection-outcome ${row.result}`}><strong>{row.result}</strong></span></td><td className={row.profit_loss == null ? '' : row.profit_loss >= 0 ? 'positive' : 'negative'}><strong>{row.profit_loss == null ? '—' : fmtPnl(row.profit_loss)}</strong><small>{row.result === 'pending' ? 'Awaiting result' : 'Flat-stake result'}</small></td></tr>)}</tbody></table></div>
+  const table = (dateRows: RecommendationPick[]) => <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full min-w-[640px] border-collapse text-left text-sm [&_thead]:border-b [&_thead]:border-slate-200 [&_thead]:bg-slate-50 [&_thead]:text-sm [&_thead]:uppercase [&_thead]:tracking-wide [&_thead]:text-slate-600 [&_th]:px-3 [&_th]:py-3 [&_th]:font-semibold [&_tbody]:divide-y [&_tbody]:divide-slate-100 [&_td]:px-3 [&_td]:py-3 [&_tbody_tr:hover]:bg-slate-50/70 pick-ledger-table"><thead><tr>{heading('kickoff_at', 'Kickoff / model')}{heading('match', 'Match / league')}{heading('market', 'Market / selection')}{heading('source', 'Source')}{heading('q_score', 'Decision evidence')}{heading('result', 'Result')}{heading('profit_loss', 'P&L')}</tr></thead><tbody>{dateRows.map(row => <tr key={row.pick_id}><td><strong className="kickoff-time">{new Date(row.kickoff_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong><small>Model {row.model_versions.join(', ')}</small></td><td><strong>{row.home_team} <span className="match-vs">vs</span> {row.away_team}</strong><small>{row.competition}</small></td><td>{!selectionRepeatsMarket(row.market, row.selection) && <span className="market-chip">{formatMarket(row.market)}</span>}<strong>{formatSelection(row.selection)}</strong>{row.revised_pick && <span className="pick-flag revised">Selection revised · {row.revision_count}</span>}</td><td><div className="pick-source-badges">{row.sources.map(item => <span key={item} className={`pick-source-badge ${item}`}>{item === 'published' ? 'Published' : `Strongest${row.strongest_rank ? ` #${row.strongest_rank}` : ''}`}</span>)}</div>{row.published_tiers.length > 0 && <small className="pick-tier-badges">{row.published_tiers.map(type => <span key={type} className={ticketTierBadgeClass(type)}>{formatTicketType(type)}</span>)}</small>}{row.reconstructed && <span className="pick-flag reconstructed">Reconstructed</span>}</td><td><div className="pick-evidence"><GradeBadge grade={row.q_grade} /><strong>Q {row.q_score.toFixed(1)}</strong></div><small>{pct(row.model_probability)} probability · {row.edge == null ? 'No edge' : `${(row.edge * 100).toFixed(1)} pp edge`}</small><small>{row.model_spread == null ? 'Spread unavailable' : `${(row.model_spread * 100).toFixed(1)} pp spread`} · {row.odds ? `@ ${row.odds.toFixed(2)}` : 'Odds unavailable'}</small></td><td>{row.home_goals != null && row.away_goals != null ? <strong>{row.home_goals}–{row.away_goals}</strong> : <strong>—</strong>}<span className={`selection-outcome ${row.result}`}><strong>{row.result}</strong></span></td><td className={row.profit_loss == null ? '' : row.profit_loss >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'}><strong>{row.profit_loss == null ? '—' : fmtPnl(row.profit_loss)}</strong><small>{row.result === 'pending' ? 'Awaiting result' : 'Flat-stake result'}</small></td></tr>)}</tbody></table></div>
 
-  return <section className="analytics-card pick-ledger-table-card">
-    <div className="section-header"><div><span className="eyebrow">Pick-level evidence</span><h2 className="section-title">Recommendation ledger</h2></div><span className="section-subtitle">Year → month → exact date · one deduplicated row per selection</span></div>
+  return <section className="rounded-xl border border-slate-200 bg-white overflow-hidden pick-ledger-table-card">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3"><div><span className="eyebrow">Pick-level evidence</span><h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">Recommendation ledger</h2></div><span className="text-sm text-slate-600">Year → month → exact date · one deduplicated row per selection</span></div>
     {sorted.length === 0 ? <AnalyticsEmpty title="No picks match these filters" body="Reset the filters or choose another source." compact /> : <div className="pick-period-tree">
       {grouped.map(year => <details className="pick-period-group pick-year-group" key={year.key}>
-        <summary><PickPeriodSummary level="year" label={year.label} metrics={year.metrics} /></summary>
+        <summary className="min-h-11 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"><PickPeriodSummary level="year" label={year.label} metrics={year.metrics} /></summary>
         <div className="pick-year-body">{year.months.map(month => <details className="pick-period-group pick-month-group" key={month.key}>
-          <summary><PickPeriodSummary level="month" label={month.label} metrics={month.metrics} /></summary>
+          <summary className="min-h-11 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"><PickPeriodSummary level="month" label={month.label} metrics={month.metrics} /></summary>
           <div className="pick-month-body">{month.dates.map(date => <details className="pick-period-group pick-date-group" key={date.key}>
-            <summary><PickPeriodSummary level="date" label={date.label} metrics={date.metrics} /></summary>
+            <summary className="min-h-11 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"><PickPeriodSummary level="date" label={date.label} metrics={date.metrics} /></summary>
             {table(date.rows)}
           </details>)}</div>
         </details>)}</div>
@@ -954,12 +1031,12 @@ const EVIDENCE_ORDER = ['directional', 'moderate', 'strong']
 
 function ReliabilityMatrix({ rows }: { rows: ReliabilityRow[] }) {
   const { sorted, header } = useSortableRows(rows, { market: row => formatMarket(row.market), q: row => bandSortValue(row.q_band), spread: row => bandSortValue(row.spread_band), settled: row => row.settled, wins: row => row.wins, hit: row => row.hit_rate, roi: row => row.roi, evidence: row => EVIDENCE_ORDER.indexOf(row.confidence.toLowerCase()) }, { key: 'roi', direction: 'desc' })
-  return <section className="analytics-card reliability-card"><div className="section-header"><div><span className="eyebrow">Historical evidence</span><h2 className="section-title">Market Reliability Matrix</h2></div><span className="section-subtitle">Published picks · Market × Q-score × model spread</span></div>{sorted.length === 0 ? <AnalyticsEmpty title="No settled matrix data" body="The matrix appears after published selections have been settled." compact /> : <div className="analytics-table-wrap"><table className="analytics-table reliability-table"><thead><tr>{header('market', 'Market')}{header('q', 'Q band')}{header('spread', 'Spread')}{header('settled', 'Settled')}{header('wins', 'Won / lost')}{header('hit', 'Hit rate')}{header('roi', 'ROI')}{header('evidence', 'Evidence')}</tr></thead><tbody>{sorted.map((row, index) => <tr key={`${row.market}-${row.q_band}-${row.spread_band}-${index}`}><td><strong>{formatMarket(row.market)}</strong></td><td>{row.q_band}</td><td>{row.spread_band}</td><td>{row.settled}</td><td>{row.wins} / {row.losses}</td><td>{row.hit_rate == null ? '—' : pct(row.hit_rate)}</td><td className={row.roi != null && row.roi >= 0 ? 'positive' : 'negative'}>{row.roi == null ? '—' : pct(row.roi)}</td><td><span className={`evidence-pill ${row.confidence.toLowerCase()}`}>{row.confidence}</span></td></tr>)}</tbody></table></div>}<p className="matrix-note">Published-pick evidence only. Use it as historical context, not a guarantee. Prefer positive ROI cells with adequate sample size and low model spread; treat small samples as directional.</p></section>
+  return <section className="rounded-xl border border-slate-200 bg-white overflow-hidden reliability-card"><div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3"><div><span className="eyebrow">Historical evidence</span><h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">Market Reliability Matrix</h2></div><span className="text-sm text-slate-600">Published picks · Market × Q-score × model spread</span></div>{sorted.length === 0 ? <AnalyticsEmpty title="No settled matrix data" body="The matrix appears after published selections have been settled." compact /> : <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full min-w-[640px] border-collapse text-left text-sm [&_thead]:border-b [&_thead]:border-slate-200 [&_thead]:bg-slate-50 [&_thead]:text-sm [&_thead]:uppercase [&_thead]:tracking-wide [&_thead]:text-slate-600 [&_th]:px-3 [&_th]:py-3 [&_th]:font-semibold [&_tbody]:divide-y [&_tbody]:divide-slate-100 [&_td]:px-3 [&_td]:py-3 [&_tbody_tr:hover]:bg-slate-50/70 reliability-table"><thead><tr>{header('market', 'Market')}{header('q', 'Q band')}{header('spread', 'Spread')}{header('settled', 'Settled')}{header('wins', 'Won / lost')}{header('hit', 'Hit rate')}{header('roi', 'ROI')}{header('evidence', 'Evidence')}</tr></thead><tbody>{sorted.map((row, index) => <tr key={`${row.market}-${row.q_band}-${row.spread_band}-${index}`}><td><strong>{formatMarket(row.market)}</strong></td><td>{row.q_band}</td><td>{row.spread_band}</td><td>{row.settled}</td><td>{row.wins} / {row.losses}</td><td>{row.hit_rate == null ? '—' : pct(row.hit_rate)}</td><td className={row.roi != null && row.roi >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'}>{row.roi == null ? '—' : pct(row.roi)}</td><td><span className={`evidence-pill ${row.confidence.toLowerCase()}`}>{row.confidence}</span></td></tr>)}</tbody></table></div>}<p className="px-4 py-3 text-base leading-relaxed text-slate-600">Published-pick evidence only. Use it as historical context, not a guarantee. Prefer positive ROI cells with adequate sample size and low model spread; treat small samples as directional.</p></section>
 }
 
 function SortableIndividualTable({ title, rows, market = false }: { title: string; rows: IndividualRow[]; market?: boolean }) {
   const { sorted, header } = useSortableRows(rows, { label: row => market ? formatMarket(row.label) : row.label, settled: row => row.settled, wins: row => row.wins, staked: row => row.staked, pnl: row => row.pnl, roi: row => row.roi }, { key: 'label', direction: 'desc' })
-  return <section className="analytics-card journal-table-card"><div className="section-header"><h2 className="section-title">{title}</h2></div><div className="analytics-table-wrap"><table className="analytics-table"><thead><tr>{header('label', market ? 'Market' : 'Period')}{header('settled', 'Selections')}{header('wins', 'Won / lost')}{header('staked', 'Staked')}{header('pnl', 'P&L')}{header('roi', 'ROI')}</tr></thead><tbody>{sorted.map(r => <tr key={r.label}><td><strong>{market ? formatMarket(r.label) : r.label}</strong></td><td>{r.settled}</td><td>{r.wins} / {r.losses}</td><td>{fmt(r.staked)}</td><td className={r.pnl >= 0 ? 'positive' : 'negative'}>{fmtPnl(r.pnl)}</td><td className={r.roi >= 0 ? 'positive' : 'negative'}>{pct(r.roi)}</td></tr>)}</tbody></table></div></section>
+  return <section className="rounded-xl border border-slate-200 bg-white overflow-hidden journal-table-card"><div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3"><h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">{title}</h2></div><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full min-w-[640px] border-collapse text-left text-sm [&_thead]:border-b [&_thead]:border-slate-200 [&_thead]:bg-slate-50 [&_thead]:text-sm [&_thead]:uppercase [&_thead]:tracking-wide [&_thead]:text-slate-600 [&_th]:px-3 [&_th]:py-3 [&_th]:font-semibold [&_tbody]:divide-y [&_tbody]:divide-slate-100 [&_td]:px-3 [&_td]:py-3 [&_tbody_tr:hover]:bg-slate-50/70"><thead><tr>{header('label', market ? 'Market' : 'Period')}{header('settled', 'Selections')}{header('wins', 'Won / lost')}{header('staked', 'Staked')}{header('pnl', 'P&L')}{header('roi', 'ROI')}</tr></thead><tbody>{sorted.map(r => <tr key={r.label}><td><strong>{market ? formatMarket(r.label) : r.label}</strong></td><td>{r.settled}</td><td>{r.wins} / {r.losses}</td><td>{fmt(r.staked)}</td><td className={r.pnl >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'}>{fmtPnl(r.pnl)}</td><td className={r.roi >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'}>{pct(r.roi)}</td></tr>)}</tbody></table></div></section>
 }
 
 function ResearchPerformance({ data }: { data: ResearchSummary | null }) {
@@ -969,28 +1046,28 @@ function ResearchPerformance({ data }: { data: ResearchSummary | null }) {
   const [ciLow, ciHigh] = data.hit_rate_confidence_interval_95
   const portfolioRows = data.by_ticket_type
   return <>
-    <div className="validation-strip"><div><span className={`validation-dot ${hasSettled ? 'ready' : ''}`} /><strong>{hasSettled ? 'Settlement evidence available' : 'Paper-trading evidence accumulating'}</strong></div><span>Model {data.current_model_version} · {data.settled_tickets} of {data.published_tickets} tickets settled · {pct(coverage)} coverage</span></div>
-    <div className="research-kpis">
-      <MetricCard label="Net P&L" value={fmtPnl(data.profit_loss)} note={`${fmt(data.stake)} staked`} tone={data.profit_loss >= 0 ? 'positive' : 'negative'} />
-      <MetricCard label="ROI / yield" value={pct(data.roi)} note="Settled stakes only" tone={data.roi >= 0 ? 'positive' : 'negative'} />
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50/50 px-4 py-3 text-sm text-slate-600"><div><span className={`h-2 w-2 rounded-full ${hasSettled ? 'bg-emerald-500' : 'bg-slate-300'}`} /><strong>{hasSettled ? 'Settlement evidence available' : 'Paper-trading evidence accumulating'}</strong></div><span>Model {data.current_model_version} · {data.settled_tickets} of {data.published_tickets} tickets settled · {pct(coverage)} coverage</span></div>
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      <MetricCard label="Net P&L" value={fmtPnl(data.profit_loss)} note={`${fmt(data.stake)} staked`} tone={data.profit_loss >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'} />
+      <MetricCard label="ROI / yield" value={pct(data.roi)} note="Settled stakes only" tone={data.roi >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'} />
       <MetricCard label="Hit rate" value={pct(data.hit_rate)} note={`95% CI ${pct(ciLow)}–${pct(ciHigh)}`} />
       <MetricCard label="Max drawdown" value={fmt(data.max_drawdown_units)} note="Peak-to-trough units" tone="warning" />
       <MetricCard label="Brier score" value={score(data.brier_score)} note="Lower is better" />
       <MetricCard label="Calibration error" value={score(data.calibration_error)} note={`${data.selection_sample_size} settled selections`} />
     </div>
-    <div className="analytics-insight-grid">
-      <section className="analytics-card">
-        <div className="section-header"><div><span className="eyebrow">Portfolio lens</span><h2 className="section-title">By ticket type</h2></div><span className="section-subtitle">Published ticket tiers only</span></div>
-        {portfolioRows.length === 0 ? <AnalyticsEmpty title="No settled ticket cohorts yet" body="Breakdowns appear after result ingestion." compact /> : <div className="cohort-list">{portfolioRows.map(row => <div className={`cohort-row${row.observation_only ? ' observation-only' : ''}`} key={row.ticket_type}><div><span className={ticketTierBadgeClass(row.ticket_type)}>{row.ticket_type === 'my_accumulators' ? 'My Accumulators' : formatTicketType(row.ticket_type)}</span><small>{row.wins}/{row.tickets} won{row.observation_only ? ' · observation only' : ''}</small></div><div><span>Hit rate</span><strong>{pct(row.hit_rate)}</strong></div><div><span>ROI</span><strong className={row.roi >= 0 ? 'positive' : 'negative'}>{pct(row.roi)}</strong></div><div><span>P&amp;L</span><strong className={row.profit_loss >= 0 ? 'positive' : 'negative'}>{fmtPnl(row.profit_loss)}</strong></div></div>)}</div>}
-        {portfolioRows.some(row => row.observation_only) && <p className="matrix-note">Balanced is an administrator-only observation cohort. It is generated and settled for monitoring, but its rows are excluded from the headline P&amp;L, ROI, hit rate, drawdown and calibration totals above until it is restored.</p>}
-        <p className="matrix-note">Personal accumulator performance is tracked separately in Track → My accumulators.</p>
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(280px,.85fr)]">
+      <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3"><div><span className="eyebrow">Portfolio lens</span><h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">By ticket type</h2></div><span className="text-sm text-slate-600">Published ticket tiers only</span></div>
+        {portfolioRows.length === 0 ? <AnalyticsEmpty title="No settled ticket cohorts yet" body="Breakdowns appear after result ingestion." compact /> : <div className="divide-y divide-slate-100">{portfolioRows.map(row => <div className={`grid gap-3 px-4 py-3 text-sm sm:grid-cols-4 sm:items-center ${row.observation_only ? 'opacity-70' : ''}`} key={row.ticket_type}><div><span className={ticketTierBadgeClass(row.ticket_type)}>{row.ticket_type === 'my_accumulators' ? 'My Accumulators' : formatTicketType(row.ticket_type)}</span><small>{row.wins}/{row.tickets} won{row.observation_only ? ' · observation only' : ''}</small></div><div><span>Hit rate</span><strong>{pct(row.hit_rate)}</strong></div><div><span>ROI</span><strong className={row.roi >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'}>{pct(row.roi)}</strong></div><div><span>P&amp;L</span><strong className={row.profit_loss >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'}>{fmtPnl(row.profit_loss)}</strong></div></div>)}</div>}
+        {portfolioRows.some(row => row.observation_only) && <p className="px-4 py-3 text-base leading-relaxed text-slate-600">Balanced is an administrator-only observation cohort. It is generated and settled for monitoring, but its rows are excluded from the headline P&amp;L, ROI, hit rate, drawdown and calibration totals above until it is restored.</p>}
+        <p className="px-4 py-3 text-base leading-relaxed text-slate-600">Personal accumulator performance is tracked separately in Track → My accumulators.</p>
       </section>
-      <section className="analytics-card methodology-card">
-        <div className="section-header"><div><span className="eyebrow">Interpretation</span><h2 className="section-title">Evidence quality</h2></div></div>
+      <section className="rounded-xl border border-slate-200 bg-white overflow-hidden methodology-card">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3"><div><span className="eyebrow">Interpretation</span><h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">Evidence quality</h2></div></div>
         <EvidenceRow label="Settlement coverage" value={pct(coverage)} detail="Published tickets with an immutable result." />
         <EvidenceRow label="Calibration sample" value={data.selection_sample_size.toString()} detail="Settled selections used for scoring." />
         <EvidenceRow label="Uncertainty" value={`${pct(ciLow)}–${pct(ciHigh)}`} detail="95% Wilson interval around hit rate." />
-        <p>Small samples can make ROI and hit rate look unusually strong or weak. Read confidence and drawdown alongside headline returns.</p>
+        <p className="text-base leading-relaxed text-slate-600">Small samples can make ROI and hit rate look unusually strong or weak. Read confidence and drawdown alongside headline returns.</p>
       </section>
     </div>
   </>
@@ -1011,39 +1088,44 @@ function BacktestPanel({ currentModelVersion }: { currentModelVersion: string })
   }
   return <>
     <section className="backtest-console analytics-card">
-      <div><span className="eyebrow">Strict validation gate</span><h2>Closing-odds backtest</h2><p>No-lookahead checks, 5% slippage, quarter-Kelly sizing capped at 2%, walk-forward folds, and Monte Carlo resampling.</p></div>
+      <div><span className="eyebrow">Strict validation gate</span><h2 className="text-lg font-semibold text-slate-900">Closing-odds backtest</h2><p className="text-base leading-relaxed text-slate-600">No-lookahead checks, 5% slippage, quarter-Kelly sizing capped at 2%, walk-forward folds, and Monte Carlo resampling.</p></div>
       <form onSubmit={runBacktest}>
-        <label>From<input type="date" required value={form.period_start} onChange={e => setForm(f => ({ ...f, period_start: e.target.value }))} /></label>
-        <label>To<input type="date" required value={form.period_end} onChange={e => setForm(f => ({ ...f, period_end: e.target.value }))} /></label>
-        <label>Model<input required value={form.model_version} onChange={e => setForm(f => ({ ...f, model_version: e.target.value }))} /></label>
-        <label>Simulations<select value={form.simulations} onChange={e => setForm(f => ({ ...f, simulations: e.target.value }))}><option value="10000">10,000</option><option value="25000">25,000</option><option value="50000">50,000</option></select></label>
-        <button className="btn-primary" disabled={running}>{running ? 'Running validation…' : 'Run backtest'}</button>
+        <label className="flex flex-col gap-1 text-sm font-semibold text-slate-600">From<input className={analyticsInputClass} type="date" required value={form.period_start} onChange={e => setForm(f => ({ ...f, period_start: e.target.value }))} /></label>
+        <label className="flex flex-col gap-1 text-sm font-semibold text-slate-600">To<input className={analyticsInputClass} type="date" required value={form.period_end} onChange={e => setForm(f => ({ ...f, period_end: e.target.value }))} /></label>
+        <label className="flex flex-col gap-1 text-sm font-semibold text-slate-600">Model<input className={analyticsInputClass} required value={form.model_version} onChange={e => setForm(f => ({ ...f, model_version: e.target.value }))} /></label>
+        <label className="flex flex-col gap-1 text-sm font-semibold text-slate-600">Simulations<select className={analyticsInputClass} value={form.simulations} onChange={e => setForm(f => ({ ...f, simulations: e.target.value }))}><option value="10000">10,000</option><option value="25000">25,000</option><option value="50000">50,000</option></select></label>
+        <button type="submit" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700" disabled={running}>{running ? 'Running validation…' : 'Run backtest'}</button>
       </form>
     </section>
+    <div className="sr-only" aria-live="polite">{running ? 'Running closing-odds backtest.' : error ? `Backtest failed: ${error}` : result ? 'Backtest report ready.' : ''}</div>
     {error && <div className="error-bar backtest-error" role="alert"><div><strong>Validation could not complete</strong><span>{error}</span></div></div>}
-    {result ? <BacktestReport result={result} /> : !error && <div className="backtest-principles"><span>✓ Closing odds only</span><span>✓ Leakage rejection</span><span>✓ Walk-forward</span><span>✓ Monte Carlo interval</span></div>}
+    {result ? <BacktestReport result={result} /> : !error && <div className="flex flex-wrap gap-2 text-sm text-slate-600"><span>✓ Closing odds only</span><span>✓ Leakage rejection</span><span>✓ Walk-forward</span><span>✓ Monte Carlo interval</span></div>}
   </>
 }
 
 function BacktestReport({ result }: { result: BacktestResult }) {
   const metrics = result.metrics, monte = metrics.monte_carlo
   return <div className="backtest-report">
-    <div className={`validation-strip ${result.leakage_checks_passed ? '' : 'failed'}`}><div><span className={`validation-dot ${result.leakage_checks_passed ? 'ready' : ''}`} /><strong>{result.leakage_checks_passed ? 'No-lookahead gate passed' : 'Leakage gate failed'}</strong></div><span>Run #{result.backtest_run_id} · {result.status}</span></div>
+    <div className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3 text-sm ${result.leakage_checks_passed ? 'border-emerald-200 bg-emerald-50/50 text-slate-600' : 'border-red-200 bg-red-50 text-red-700'}`}><div><span className={`h-2 w-2 rounded-full ${result.leakage_checks_passed ? 'bg-emerald-500' : 'bg-red-500'}`} /><strong>{result.leakage_checks_passed ? 'No-lookahead gate passed' : 'Leakage gate failed'}</strong></div><span>Run #{result.backtest_run_id} · {result.status}</span></div>
     {result.error_details && <AnalyticsEmpty title="Validation note" body={result.error_details} compact />}
-    <div className="research-kpis">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
       <MetricCard label="Eligible selections" value={metrics.sample_size.toString()} note={`${metrics.candidate_rows} candidates`} />
-      <MetricCard label="Backtest ROI" value={pct(metrics.roi)} note={`${fmt(metrics.ending_bankroll)} ending bankroll`} tone={metrics.roi >= 0 ? 'positive' : 'negative'} />
+      <MetricCard label="Backtest ROI" value={pct(metrics.roi)} note={`${fmt(metrics.ending_bankroll)} ending bankroll`} tone={metrics.roi >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'} />
       <MetricCard label="Hit rate" value={pct(metrics.hit_rate)} note={`95% CI ${pct(metrics.hit_rate_confidence_interval_95[0])}–${pct(metrics.hit_rate_confidence_interval_95[1])}`} />
       <MetricCard label="Max drawdown" value={fmt(metrics.max_drawdown)} note="100-unit starting bankroll" tone="warning" />
       <MetricCard label="Brier score" value={score(metrics.brier_score)} note="Probability accuracy" />
       <MetricCard label="Calibration error" value={score(metrics.calibration_error)} note={`${metrics.missing_closing_odds_rows} missing price rows`} />
     </div>
-    <section className="analytics-card monte-card"><div className="section-header"><div><span className="eyebrow">Distribution, not point estimate</span><h2 className="section-title">Monte Carlo ROI range</h2></div><span className="section-subtitle">{monte.simulations.toLocaleString()} simulations</span></div><div className="monte-range"><div><span>5th percentile</span><strong>{pct(monte.roi_p05)}</strong></div><div className="median"><span>Median</span><strong>{pct(monte.roi_median)}</strong></div><div><span>95th percentile</span><strong>{pct(monte.roi_p95)}</strong></div><div><span>Positive ROI chance</span><strong>{pct(monte.probability_positive_roi)}</strong></div></div></section>
-    {metrics.by_market.length > 0 && <section className="analytics-card"><div className="section-header"><h2 className="section-title">Performance by market</h2><span className="section-subtitle">Closing-odds sample</span></div><div className="cohort-list">{metrics.by_market.map(row => <div className="cohort-row market" key={row.market}><div><strong>{row.market.replace(/_/g, ' ')}</strong><small>{row.sample_size} selections</small></div><div><span>Hit rate</span><strong>{pct(row.hit_rate)}</strong></div><div><span>ROI</span><strong className={row.roi >= 0 ? 'positive' : 'negative'}>{pct(row.roi)}</strong></div></div>)}</div></section>}
+    <section className="rounded-xl border border-slate-200 bg-white overflow-hidden monte-card"><div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3"><div><span className="eyebrow">Distribution, not point estimate</span><h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">Monte Carlo ROI range</h2></div><span className="text-sm text-slate-600">{monte.simulations.toLocaleString()} simulations</span></div><div className="monte-range"><div><span>5th percentile</span><strong>{pct(monte.roi_p05)}</strong></div><div className="median"><span>Median</span><strong>{pct(monte.roi_median)}</strong></div><div><span>95th percentile</span><strong>{pct(monte.roi_p95)}</strong></div><div><span>Positive ROI chance</span><strong>{pct(monte.probability_positive_roi)}</strong></div></div></section>
+    {metrics.by_market.length > 0 && <section className="rounded-xl border border-slate-200 bg-white overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3"><h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">Performance by market</h2><span className="text-sm text-slate-600">Closing-odds sample</span></div><div className="divide-y divide-slate-100">{metrics.by_market.map(row => <div className="cohort-row market" key={row.market}><div><strong>{row.market.replace(/_/g, ' ')}</strong><small>{row.sample_size} selections</small></div><div><span>Hit rate</span><strong>{pct(row.hit_rate)}</strong></div><div><span>ROI</span><strong className={row.roi >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'}>{pct(row.roi)}</strong></div></div>)}</div></section>}
   </div>
 }
 
-function MetricCard({ label, value, note, tone }: { label: string; value: string; note?: string; tone?: 'positive' | 'negative' | 'warning' }) { return <div className={`stat-card metric-card${tone ? ` ${tone}` : ''}`}><div className="kpi-label">{label}</div><div className="kpi-value">{value}</div>{note && <div className="kpi-note">{note}</div>}</div> }
-function EvidenceRow({ label, value, detail }: { label: string; value: string; detail: string }) { return <div className="evidence-row"><div><strong>{label}</strong><span>{detail}</span></div><b>{value}</b></div> }
-function AnalyticsEmpty({ title, body, compact = false }: { title: string; body: string; compact?: boolean }) { return <div className={`analytics-empty${compact ? ' compact' : ''}`}><strong>{title}</strong><span>{body}</span></div> }
-function AnalyticsSkeleton() { return <div className="research-kpis" aria-busy="true" aria-label="Loading analytics">{Array.from({ length: 6 }, (_, index) => <div className="stat-card skeleton-metric" key={index}><span className="skeleton-block" /><span className="skeleton-block" /></div>)}</div> }
+function MetricCard({ label, value, note, tone }: { label: string; value: string; note?: string; tone?: 'text-emerald-700 font-mono tabular-nums' | 'text-red-600 font-mono tabular-nums' | 'warning' | string }) {
+  const toneClass = tone === 'text-emerald-700 font-mono tabular-nums' || tone === 'text-emerald-700 font-mono tabular-nums' ? 'text-emerald-700' : tone === 'text-red-600 font-mono tabular-nums' || tone === 'text-red-600 font-mono tabular-nums' ? 'text-red-600' : tone === 'warning' ? 'text-amber-700' : 'text-slate-900'
+  const borderClass = tone === 'warning' ? 'border-l-4 border-l-amber-400' : ''
+  return <div className={`rounded-xl border border-slate-200 bg-white px-4 py-3 ${borderClass}`}><div className="text-sm font-medium text-slate-600">{label}</div><div className={`mt-1 font-mono text-xl font-bold tabular-nums ${toneClass}`}>{value}</div>{note && <div className="mt-1 text-sm text-slate-600">{note}</div>}</div>
+}
+function EvidenceRow({ label, value, detail }: { label: string; value: string; detail: string }) { return <div className="flex items-center justify-between gap-3 border-b border-slate-100 py-3 last:border-0"><div><strong className="block text-sm font-semibold text-slate-900">{label}</strong><span className="text-sm text-slate-600">{detail}</span></div><b className="font-mono text-sm font-bold tabular-nums text-slate-900">{value}</b></div> }
+function AnalyticsEmpty({ title, body, compact = false }: { title: string; body: string; compact?: boolean }) { return <div className={`rounded-xl border border-slate-200 bg-white text-center ${compact ? 'px-4 py-6' : 'px-6 py-10 sm:px-8 sm:py-12'} space-y-2`}><strong className="block text-base font-semibold text-slate-900">{title}</strong><span className="block text-base leading-relaxed text-slate-600">{body}</span></div> }
+function AnalyticsSkeleton() { return <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6" aria-busy="true" aria-label="Loading analytics">{Array.from({ length: 6 }, (_, index) => <div className="rounded-xl border border-slate-200 bg-white px-4 py-4 animate-pulse" key={index}><div className="h-2 w-16 rounded bg-slate-200" /><div className="mt-3 h-6 w-24 rounded bg-slate-200" /></div>)}</div> }

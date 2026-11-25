@@ -1,4 +1,6 @@
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { MatchHistoryArchive } from './Tracker'
 import { latestTicketCohorts } from '../components/PaperLedger'
 import type { TicketHistoryItem } from '../lib/api'
 import { groupMatchHistory } from '../lib/trackerGrouping'
@@ -41,5 +43,13 @@ describe('Tracker evidence helpers', () => {
     expect(groups.map(group => group.year)).toEqual([2026, 2025])
     expect(groups[0].months.map(month => month.month)).toEqual(['2026-09', '2026-08'])
     expect(groups[0].months[1].matchesByDate.map(date => date.date)).toEqual(['2026-08-30', '2026-08-29'])
+  })
+
+  it('keeps the full match archive collapsed and unmounted until disclosed', () => {
+    const html = renderToStaticMarkup(<MatchHistoryArchive isInternal={false} />)
+
+    expect(html).toContain('Show full match archive (all settled years)')
+    expect(html).not.toContain('<details open')
+    expect(html).not.toContain('Published match evidence')
   })
 })

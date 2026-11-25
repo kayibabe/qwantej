@@ -64,6 +64,11 @@ const MATCH_STATUSES: MatchDisplayState[] = ["finished", "live", "scheduled", "p
 const MATCH_SORT_KEYS: MatchSortKey[] = ["match", "kickoff", "league", "q", "fair", "markets", "spread", "edge"];
 const CHANCE_BLOCKS = [20, 30, 40, 50, 60, 70, 80, 90];
 
+const chipBase = "inline-flex min-h-11 items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium leading-normal transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed";
+const chipInactive = "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900";
+const chipActive = "bg-emerald-700 text-white";
+const inputBase = "h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-600 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700";
+
 function matchUrlParam(name: string) {
   return new URLSearchParams(window.location.search).get(`match_${name}`);
 }
@@ -100,8 +105,8 @@ type FilterDropdownOption = {
 };
 
 function CountBadge({ count }: { count: number }) {
-  if (count === 0) return <b className="picks-combo-count zero">no picks</b>;
-  return <b className="picks-combo-count">{count} picks</b>;
+  if (count === 0) return <b className="picks-combo-count zero ml-auto rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-sm font-semibold text-slate-600">no picks</b>;
+  return <b className="picks-combo-count ml-auto rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-sm font-semibold font-mono tabular-nums text-emerald-700">{count} picks</b>;
 }
 
 function FilterDropdown({
@@ -155,20 +160,20 @@ function FilterDropdown({
     });
   };
   return (
-    <div className="picks-combo" ref={rootRef}>
+    <div className="picks-combo relative" ref={rootRef}>
       <button
         type="button"
-        className="picks-combo-toggle"
+        className="picks-combo-toggle inline-flex h-11 min-w-[11rem] items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-left text-sm text-slate-900 hover:bg-slate-50 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
         onClick={() => (open ? setOpen(false) : openMenu())}
         aria-haspopup="listbox"
         aria-expanded={open}
         title={ariaLabel}
       >
-        <span className="picks-combo-text"><b>{selected?.text}</b>{selected?.count != null && <CountBadge count={selected.count} />}</span>
-        <span className="picks-combo-caret" aria-hidden="true">▾</span>
+        <span className="picks-combo-text flex min-w-0 flex-1 items-center gap-2"><b className="truncate font-medium">{selected?.text}</b>{selected?.count != null && <CountBadge count={selected.count} />}</span>
+        <span className="picks-combo-caret text-slate-600" aria-hidden="true">▾</span>
       </button>
       {open && (
-        <ul className="picks-combo-menu" role="listbox" aria-label={ariaLabel} ref={menuRef}>
+        <ul className="picks-combo-menu absolute z-30 mt-1 max-h-72 w-full min-w-[14rem] overflow-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg" role="listbox" aria-label={ariaLabel} ref={menuRef}>
           {options.map((option) => (
             <li
               key={option.value}
@@ -176,7 +181,7 @@ function FilterDropdown({
               tabIndex={-1}
               aria-selected={option.value === value}
               aria-disabled={option.disabled || undefined}
-              className={`${option.value === value ? "selected" : ""} ${option.disabled ? "disabled" : ""}`}
+              className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm leading-normal text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-2 focus:outline-offset-2 focus:outline-emerald-700 ${option.value === value ? "selected bg-emerald-50 text-emerald-800" : ""} ${option.disabled ? "disabled cursor-not-allowed opacity-50" : ""}`}
               onClick={() => selectOption(option)}
               onKeyDown={(event) => {
                 if (event.key === "ArrowDown") { event.preventDefault(); moveFocus(event.currentTarget, 1); }
@@ -184,7 +189,7 @@ function FilterDropdown({
                 else if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectOption(option); }
               }}
             >
-              <b>{option.text}</b>
+              <b className="font-medium">{option.text}</b>
               {option.count != null && <CountBadge count={option.count} />}
             </li>
           ))}
@@ -231,19 +236,19 @@ function BandMixPicker({
     };
   }, [open]);
   return (
-    <div className="picks-band-mix-control" ref={rootRef}>
+    <div className="picks-band-mix-control relative inline-flex" ref={rootRef}>
       <button
         type="button"
-        className={`picks-band-mix${on ? " active" : ""}`}
+        className={`picks-band-mix inline-flex min-h-11 items-center gap-1.5 rounded-l-lg border px-3 py-2 text-sm font-semibold transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${on ? "active border-emerald-700 bg-emerald-700 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
         aria-pressed={on}
         title={`One-click daily filter — any selected pair: ${label}`}
         onClick={onToggleAll}
       >
-        ⚡ Band mix <b>{count}</b>
+        ⚡ Band mix <b className={`font-mono tabular-nums ${on ? "text-emerald-100" : "text-slate-900"}`}>{count}</b>
       </button>
       <button
         type="button"
-        className="picks-band-mix-caret"
+        className={`picks-band-mix-caret inline-flex min-h-11 min-w-11 items-center justify-center rounded-r-lg border border-l-0 px-2 py-2 text-sm transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${on ? "border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
         aria-label="Choose band mix pairs"
         aria-expanded={open}
         title="Choose band mix pairs"
@@ -252,21 +257,22 @@ function BandMixPicker({
         ▾
       </button>
       {open && (
-        <div className="picks-band-mix-options" role="group" aria-label="Band mix pairs">
-          <p className="picks-band-mix-options-title">Show matches with <b>any</b> selected pair</p>
+        <div className="picks-band-mix-options absolute right-0 top-full z-30 mt-1 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-lg" role="group" aria-label="Band mix pairs">
+          <p className="picks-band-mix-options-title mb-2 text-sm leading-relaxed text-slate-600">Show matches with <b className="font-semibold text-slate-700">any</b> selected pair</p>
           {BAND_MIX_PAIRS.map(([model, market], index) => (
-            <label className="picks-band-mix-option" key={`${model}-${market}`}>
+            <label className="picks-band-mix-option flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-1.5 py-1.5 text-sm text-slate-700 hover:bg-slate-50" key={`${model}-${market}`}>
               <input
                 type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-700/30"
                 checked={selectedPairs.includes(index)}
                 onChange={() => onTogglePair(index)}
               />
-              <span>{model}% × {market}%</span>
+              <span className="font-mono tabular-nums">{model}% × {market}%</span>
             </label>
           ))}
-          <div className="picks-band-mix-actions">
-            <button type="button" onClick={onSelectAll}>All</button>
-            <button type="button" onClick={onClearAll}>None</button>
+          <div className="picks-band-mix-actions mt-2 flex gap-2 border-t border-slate-100 pt-2">
+            <button type="button" className="inline-flex min-h-11 items-center rounded-md px-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-50 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700" onClick={onSelectAll}>All</button>
+            <button type="button" className="inline-flex min-h-11 items-center rounded-md px-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700" onClick={onClearAll}>None</button>
           </div>
         </div>
       )}
@@ -482,6 +488,22 @@ export function AllMatches({
     + Number(recFilter !== "")
     + Number(outcomeFilter !== "")
     + Number(statusFilter !== "all");
+  const activeFilterLabels = [
+    focusMatchId != null && "Fixture focus",
+    query.trim() && `Search “${query.trim()}”`,
+    leagueFilter !== "all" && `Competition: ${leagueFilter}`,
+    marketFilter !== "all" && `Market: ${marketFilter}`,
+    chanceMin && `Model chance ≥ ${chanceMin}%`,
+    impliedMin && `Implied probability ≥ ${impliedMin}%`,
+    bandMixOn && `Band mix: ${selectedBandMixLabel}`,
+    edgeOnly && "Positive edge",
+    freshOnly && "Fresh quotes ≤8 h",
+    tightSpread && "Model aligned ≤5 pp",
+    clvOnly && "Beat the close",
+    recFilter && `Recommendation: ${recFilter}`,
+    outcomeFilter && `Outcome: ${outcomeFilter}`,
+    statusFilter !== "all" && `Status: ${statusFilter}`,
+  ].filter((label): label is string => Boolean(label));
   const sortedRows = [...filteredRows].sort(([, a], [, b]) => {
     const left = a[0];
     const right = b[0];
@@ -529,10 +551,10 @@ export function AllMatches({
   );
   const decidedCount = filteredResultCounts.won + filteredResultCounts.lost;
   const matchedPickCount = filteredRows.reduce((sum, [, selections]) => sum + selections.length, 0);
-  const netUnitsTone = filteredResultCounts.priced === 0 ? "muted"
-    : filteredResultCounts.netUnits > 0 ? "won"
-    : filteredResultCounts.netUnits < 0 ? "lost"
-    : "";
+  const netUnitsTone = filteredResultCounts.priced === 0 ? "text-slate-600"
+    : filteredResultCounts.netUnits > 0 ? "text-emerald-700"
+    : filteredResultCounts.netUnits < 0 ? "text-red-600"
+    : "text-slate-600";
   const changeSort = (key: MatchSortKey) =>
     setSort((current) =>
       current.key === key
@@ -633,18 +655,20 @@ export function AllMatches({
     count: number,
   ) => (
     <button
-      className={`${statusFilter === key ? "active" : ""} ${key}`}
+      type="button"
+      className={`${chipBase} ${statusFilter === key ? chipActive : chipInactive} ${key}`}
       onClick={() => setStatusFilter(key)}
       aria-pressed={statusFilter === key}
-      disabled={count === 0}
+      disabled={count === 0 && statusFilter !== key}
     >
-      {label} <b>{count}</b>
+      {label} <b className="font-mono tabular-nums">{count}</b>
     </button>
   );
-  return (
-    <section className="selection-panel all-matches-panel system-picks-panel">
+
+   return (
+    <section className="selection-panel all-matches-panel system-picks-panel rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       {rows.length === 0 ? (
-        <p className="panel-empty">
+        <p className="panel-empty px-4 py-10 text-center text-sm text-slate-600 sm:px-5">
           {bandMixOn
             ? "No band-mix selections are available for this date (Q gate off)."
             : "No Q ≥75 system picks are available for this date."}
@@ -652,34 +676,34 @@ export function AllMatches({
       ) : (
         <>
           {focusMatchId != null && focusLabel && (
-            <div className="picks-focus-chip" role="status">
-              <span>Showing picks for <b>{focusLabel}</b></span>
-              <button type="button" onClick={() => onClearFocus?.()} aria-label="Clear the fixture focus">✕ Clear</button>
+            <div className="picks-focus-chip flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-900 sm:px-5" role="status">
+              <span>Showing picks for <b className="font-semibold">{focusLabel}</b></span>
+              <button type="button" className="inline-flex min-h-11 items-center gap-1 rounded-lg border border-emerald-200 bg-white px-2.5 py-1 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700" onClick={() => onClearFocus?.()} aria-label="Clear the fixture focus">✕ Clear</button>
             </div>
           )}
-          <div className="picks-controls">
-            <div className="picks-controls-row picks-controls-search">
-              <label className="picks-field picks-search">
-                <span>Search</span>
-                <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Team or competition" />
+          <div className="picks-controls space-y-4 border-b border-slate-200 bg-slate-50/70 px-4 py-4 sm:px-5">
+            <div className="picks-controls-row picks-controls-search grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto]">
+              <label className="picks-field picks-search block">
+                <span className="mb-1.5 block text-sm font-semibold uppercase tracking-wide text-slate-600">Search</span>
+                <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Team or competition" className={inputBase} />
               </label>
-              <label className="picks-field">
-                <span>Competition</span>
-                <select value={leagueFilter} onChange={(event) => setLeagueFilter(event.target.value)}>
+              <label className="picks-field block">
+                <span className="mb-1.5 block text-sm font-semibold uppercase tracking-wide text-slate-600">Competition</span>
+                <select value={leagueFilter} onChange={(event) => setLeagueFilter(event.target.value)} className={inputBase}>
                   <option value="all">All competitions</option>
                   {leagues.map((league) => <option key={league} value={league}>{league}</option>)}
                 </select>
               </label>
-              <div className="picks-sort-group">
-                <label className="picks-field">
-                  <span>Sort by</span>
-                  <select aria-label="Sort matches" value={sort.key} onChange={(event) => changeSort(event.target.value as MatchSortKey)}>
+              <div className="picks-sort-group flex items-end gap-2">
+                <label className="picks-field block flex-1">
+                  <span className="mb-1.5 block text-sm font-semibold uppercase tracking-wide text-slate-600">Sort by</span>
+                  <select aria-label="Sort matches" value={sort.key} onChange={(event) => changeSort(event.target.value as MatchSortKey)} className={inputBase}>
                     <option value="kickoff">Kickoff</option><option value="match">Match</option><option value="league">Competition</option>
                     <option value="q">Q-score</option><option value="fair">Market probability (no-vig)</option><option value="markets">Markets</option><option value="spread">Model agreement</option><option value="edge">Model edge</option>
                   </select>
                 </label>
                 <button
-                  className="picks-sort-direction"
+                  className="picks-sort-direction h-11 shrink-0 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
                   type="button"
                   onClick={() => setSort((current) => ({ ...current, direction: current.direction === "asc" ? "desc" : "asc" }))}
                   title={`Sort ${sort.direction === "asc" ? "descending" : "ascending"}`}
@@ -688,18 +712,19 @@ export function AllMatches({
                 </button>
               </div>
             </div>
-            <div className="picks-controls-row picks-controls-filter">
-              <div className="match-status-filters" aria-label="Filter matches by status">
+
+            <div className="picks-controls-row picks-controls-filter flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+              <div className="match-status-filters flex flex-wrap gap-1.5" aria-label="Filter matches by status">
                 {filterButton("all", "All", discoveredRows.length)}
-                {statusCounts.finished > 0 && filterButton("finished", "Finished", statusCounts.finished)}
-                {statusCounts.live > 0 && filterButton("live", "In play", statusCounts.live)}
-                {statusCounts.scheduled > 0 && filterButton("scheduled", "Upcoming", statusCounts.scheduled)}
-                {statusCounts.postponed > 0 && filterButton("postponed", "Postponed", statusCounts.postponed)}
-                {statusCounts.cancelled > 0 && filterButton("cancelled", "Cancelled", statusCounts.cancelled)}
-                {statusCounts.abandoned > 0 && filterButton("abandoned", "Abandoned · review", statusCounts.abandoned)}
-                {statusCounts.awarded > 0 && filterButton("awarded", "Awarded · review", statusCounts.awarded)}
+                {(statusCounts.finished > 0 || statusFilter === "finished") && filterButton("finished", "Finished", statusCounts.finished)}
+                {(statusCounts.live > 0 || statusFilter === "live") && filterButton("live", "In play", statusCounts.live)}
+                {(statusCounts.scheduled > 0 || statusFilter === "scheduled") && filterButton("scheduled", "Upcoming", statusCounts.scheduled)}
+                {(statusCounts.postponed > 0 || statusFilter === "postponed") && filterButton("postponed", "Postponed", statusCounts.postponed)}
+                {(statusCounts.cancelled > 0 || statusFilter === "cancelled") && filterButton("cancelled", "Cancelled", statusCounts.cancelled)}
+                {(statusCounts.abandoned > 0 || statusFilter === "abandoned") && filterButton("abandoned", "Abandoned · review", statusCounts.abandoned)}
+                {(statusCounts.awarded > 0 || statusFilter === "awarded") && filterButton("awarded", "Awarded · review", statusCounts.awarded)}
               </div>
-              <div className="picks-controls-actions">
+              <div className="picks-controls-actions flex flex-wrap items-center gap-2">
                 <BandMixPicker
                   selectedPairs={bandMixPairs}
                   count={bandMixMatchCount}
@@ -709,13 +734,13 @@ export function AllMatches({
                   onSelectAll={() => setBandMixSelection([...ALL_BAND_MIX_PAIRS])}
                   onClearAll={() => setBandMixSelection([])}
                 />
-                <details className="picks-presets">
-                  <summary className="picks-presets-toggle">
+                <details className="picks-presets relative">
+                  <summary className="picks-presets-toggle list-none inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 [&::-webkit-details-marker]:hidden">
                     Presets{presets.length > 0 ? ` · ${presets.length}` : ""}
                   </summary>
-                  <div className="picks-presets-menu">
+                  <div className="picks-presets-menu absolute right-0 top-full z-30 mt-1 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
                     <form
-                      className="picks-presets-save"
+                      className="picks-presets-save flex gap-2"
                       onSubmit={(event) => {
                         event.preventDefault();
                         if (presetName.trim()) savePreset(presetName.trim());
@@ -727,15 +752,17 @@ export function AllMatches({
                         placeholder="Name this search…"
                         maxLength={40}
                         aria-label="Name for the current search filters"
+                        className="h-11 min-w-0 flex-1 rounded-lg border border-slate-200 px-2.5 text-sm text-slate-900 placeholder:text-slate-600 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700"
                       />
-                      <button type="submit" disabled={!presetName.trim()}>Save</button>
+                      <button type="submit" disabled={!presetName.trim()} className="inline-flex min-h-11 items-center rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700">Save</button>
                     </form>
                     {presets.length === 0 ? (
-                      <p className="picks-presets-empty">Save your best block combos to re-run them in one click.</p>
-                    ) : presets.map((preset) => (
-                      <div className="picks-presets-item" key={preset.id}>
+                      <p className="picks-presets-empty mt-2 text-sm leading-relaxed text-slate-600">Save your best block combos to re-run them in one click.</p>
+                    ) : <div className="mt-2 space-y-1">{presets.map((preset) => (
+                      <div className="picks-presets-item flex items-center gap-1" key={preset.id}>
                         <button
-                          className="picks-presets-load"
+                          type="button"
+                          className="picks-presets-load inline-flex min-h-11 min-w-0 flex-1 items-center rounded-md px-2 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-50 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
                           onClick={(event) => {
                             event.preventDefault();
                             applyPresetFilters(preset.filters);
@@ -744,157 +771,164 @@ export function AllMatches({
                         >
                           {preset.name}
                         </button>
-                        <button className="picks-presets-delete" aria-label={`Delete preset ${preset.name}`} onClick={() => deletePreset(preset.id)}>✕</button>
+                        <button type="button" className="picks-presets-delete inline-flex min-h-11 min-w-11 items-center justify-center rounded-md text-slate-600 hover:bg-red-50 hover:text-red-600 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700" aria-label={`Delete preset ${preset.name}`} onClick={() => deletePreset(preset.id)}>✕</button>
                       </div>
-                    ))}
+                    ))}</div>}
                   </div>
                 </details>
-                <button className="match-clear-filters" onClick={clearFilters} disabled={activeFilterCount === 0}>
+                <button type="button" className="match-clear-filters inline-flex min-h-11 items-center text-sm font-semibold text-emerald-800 underline underline-offset-2 hover:text-emerald-900 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline" onClick={clearFilters} disabled={activeFilterCount === 0}>
                   Clear filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
                 </button>
               </div>
             </div>
-            <div className="picks-search-blocks-row">
-              <span className="picks-row-label">Search blocks</span>
-              <div className="picks-search-blocks-content">
-                <span className="picks-block-caption" aria-hidden="true">Market</span>
-                <FilterDropdown
-                  value={marketFilter}
-                  options={marketOptions}
-                  onChange={setMarketFilter}
-                  ariaLabel="Filter by market"
-                />
-                <span className="picks-block-caption" aria-hidden="true">Model chance</span>
-                <FilterDropdown
-                  value={chanceMin}
-                  options={chanceOptions}
-                  onChange={(value) => { setChanceMin(value); if (value) setBandMixPairs([]); }}
-                  ariaLabel="Minimum model chance for picks"
-                />
-                <span className="picks-block-caption" aria-hidden="true">Bookmaker implied</span>
-                <FilterDropdown
-                  value={impliedMin}
-                  options={impliedOptions}
-                  onChange={(value) => { setImpliedMin(value); if (value) setBandMixPairs([]); }}
-                  ariaLabel="Minimum bookmaker implied probability for picks"
-                />
+
+            <div className="picks-search-blocks-row flex flex-col gap-2 lg:flex-row lg:items-center">
+              <span className="picks-row-label shrink-0 text-sm font-semibold uppercase tracking-wide text-slate-600 lg:w-28">Search blocks</span>
+              <div className="picks-search-blocks-content flex flex-wrap items-center gap-2">
+                <span className="picks-block-caption text-sm font-medium text-slate-600" aria-hidden="true">Market</span>
+                <FilterDropdown value={marketFilter} options={marketOptions} onChange={setMarketFilter} ariaLabel="Filter by market" />
+                <span className="picks-block-caption text-sm font-medium text-slate-600" aria-hidden="true">Model chance</span>
+                <FilterDropdown value={chanceMin} options={chanceOptions} onChange={(value) => { setChanceMin(value); if (value && bandMixOn) setBandMixSelection([]); }} ariaLabel="Minimum model chance for picks" />
+                <span className="picks-block-caption text-sm font-medium text-slate-600" aria-hidden="true">Bookmaker implied</span>
+                <FilterDropdown value={impliedMin} options={impliedOptions} onChange={(value) => { setImpliedMin(value); if (value && bandMixOn) setBandMixSelection([]); }} ariaLabel="Minimum bookmaker implied probability for picks" />
               </div>
             </div>
-            <div className="picks-controls-row picks-signal-row">
-              <span className="picks-row-label">Signals</span>
-              <div className="match-status-filters" aria-label="Signal filters">
-                <button className={edgeOnly ? "active" : ""} aria-pressed={edgeOnly} onClick={() => setEdgeOnly((value) => !value)}>
-                  Positive edge
+
+            <div className="picks-controls-row picks-signal-row flex flex-col gap-2 lg:flex-row lg:items-center">
+              <span className="picks-row-label shrink-0 text-sm font-semibold uppercase tracking-wide text-slate-600 lg:w-28">Signals</span>
+              <div className="match-status-filters flex flex-wrap items-center gap-1.5" aria-label="Signal filters">
+                <button type="button" className={`${chipBase} ${edgeOnly ? chipActive : chipInactive}`} aria-pressed={edgeOnly} onClick={() => setEdgeOnly((value) => !value)}>Positive edge</button>
+                <button type="button" className={`${chipBase} ${tightSpread ? chipActive : chipInactive}`} aria-pressed={tightSpread} onClick={() => setTightSpread((value) => !value)}>Model aligned ≤5 pp</button>
+                <button type="button" className={`${chipBase} ${freshOnly ? chipActive : chipInactive}`} aria-pressed={freshOnly} onClick={() => setFreshOnly((value) => !value)}>Fresh quotes ≤8 h</button>
+                <button type="button" className={`${chipBase} ${clvOnly ? chipActive : chipInactive}`} aria-pressed={clvOnly} onClick={() => setClvOnly((value) => !value)}>Beat the close</button>
+                <span className="picks-signal-divider px-1 text-slate-600" aria-hidden="true">|</span>
+                <button type="button" className={`policy ${chipBase} ${recFilter === "BET" ? "bg-sky-700 text-white" : chipInactive}`} aria-pressed={recFilter === "BET"} onClick={() => setRecFilter((value) => (value === "BET" ? "" : "BET"))}>
+                  BET <b className="font-mono tabular-nums">{recCounts.BET ?? 0}</b>
                 </button>
-                <button className={tightSpread ? "active" : ""} aria-pressed={tightSpread} onClick={() => setTightSpread((value) => !value)}>
-                  Model aligned ≤5 pp
-                </button>
-                <button className={freshOnly ? "active" : ""} aria-pressed={freshOnly} onClick={() => setFreshOnly((value) => !value)}>
-                  Fresh quotes ≤8 h
-                </button>
-                <button className={clvOnly ? "active" : ""} aria-pressed={clvOnly} onClick={() => setClvOnly((value) => !value)}>
-                  Beat the close
-                </button>
-                <span className="picks-signal-divider" aria-hidden="true">|</span>
-                <button className={`policy ${recFilter === "BET" ? "active" : ""}`} aria-pressed={recFilter === "BET"} onClick={() => setRecFilter((value) => (value === "BET" ? "" : "BET"))}>
-                  BET <b>{recCounts.BET ?? 0}</b>
-                </button>
-                <button className={`policy ${recFilter === "WATCH" ? "active" : ""}`} aria-pressed={recFilter === "WATCH"} onClick={() => setRecFilter((value) => (value === "WATCH" ? "" : "WATCH"))}>
-                  WATCH <b>{recCounts.WATCH ?? 0}</b>
+                <button type="button" className={`policy ${chipBase} ${recFilter === "WATCH" ? "bg-slate-900 text-white" : chipInactive}`} aria-pressed={recFilter === "WATCH"} onClick={() => setRecFilter((value) => (value === "WATCH" ? "" : "WATCH"))}>
+                  WATCH <b className="font-mono tabular-nums">{recCounts.WATCH ?? 0}</b>
                 </button>
               </div>
             </div>
-            <div className="picks-controls-row picks-outcome-row">
-              <span className="picks-row-label">Outcome</span>
-              <div className="match-status-filters" aria-label="Filter by settled outcome">
-                <button className={outcomeFilter === "" ? "active" : ""} onClick={() => setOutcomeFilter("")}>
-                  Any outcome <b>{Object.values(outcomeCounts).reduce((sum, count) => sum + count, 0)}</b>
+
+            <div className="picks-controls-row picks-outcome-row flex flex-col gap-2 lg:flex-row lg:items-center">
+              <span className="picks-row-label shrink-0 text-sm font-semibold uppercase tracking-wide text-slate-600 lg:w-28">Outcome</span>
+              <div className="match-status-filters flex flex-wrap gap-1.5" aria-label="Filter by settled outcome">
+                <button type="button" className={`${chipBase} ${outcomeFilter === "" ? chipActive : chipInactive}`} onClick={() => setOutcomeFilter("")}>
+                  Any outcome <b className="font-mono tabular-nums">{Object.values(outcomeCounts).reduce((sum, count) => sum + count, 0)}</b>
                 </button>
-                <button className={`${outcomeFilter === "won" ? "active" : ""} finished`} disabled={!outcomeCounts.won} onClick={() => setOutcomeFilter("won")}>
-                  Won <b>{outcomeCounts.won ?? 0}</b>
+                <button type="button" className={`${chipBase} ${outcomeFilter === "won" ? "bg-emerald-700 text-white" : chipInactive} finished`} disabled={!outcomeCounts.won} onClick={() => setOutcomeFilter("won")}>
+                  Won <b className="font-mono tabular-nums">{outcomeCounts.won ?? 0}</b>
                 </button>
-                <button className={`${outcomeFilter === "lost" ? "active" : ""} live`} disabled={!outcomeCounts.lost} onClick={() => setOutcomeFilter("lost")}>
-                  Lost <b>{outcomeCounts.lost ?? 0}</b>
+                <button type="button" className={`${chipBase} ${outcomeFilter === "lost" ? "bg-red-600 text-white" : chipInactive} live`} disabled={!outcomeCounts.lost} onClick={() => setOutcomeFilter("lost")}>
+                  Lost <b className="font-mono tabular-nums">{outcomeCounts.lost ?? 0}</b>
                 </button>
-                <button className={outcomeFilter === "pending" ? "active" : ""} disabled={!outcomeCounts.pending} onClick={() => setOutcomeFilter("pending")}>
-                  Pending <b>{outcomeCounts.pending ?? 0}</b>
+                <button type="button" className={`${chipBase} ${outcomeFilter === "pending" ? "bg-slate-900 text-white" : chipInactive}`} disabled={!outcomeCounts.pending} onClick={() => setOutcomeFilter("pending")}>
+                  Pending <b className="font-mono tabular-nums">{outcomeCounts.pending ?? 0}</b>
                 </button>
-                <button className={outcomeFilter === "void" ? "active" : ""} disabled={!outcomeCounts.void} onClick={() => setOutcomeFilter("void")}>
-                  Void <b>{outcomeCounts.void ?? 0}</b>
+                <button type="button" className={`${chipBase} ${outcomeFilter === "void" ? "bg-amber-600 text-white" : chipInactive}`} disabled={!outcomeCounts.void} onClick={() => setOutcomeFilter("void")}>
+                  Void <b className="font-mono tabular-nums">{outcomeCounts.void ?? 0}</b>
                 </button>
               </div>
             </div>
           </div>
 
           {bandMixOn && (
-            <p className="picks-band-mix-note" role="status">
-              <b>Band mix on:</b> showing matches with <b>any</b> of {selectedBandMixLabel} · exact model × market pairs only. <b>The Q ≥75 gate is off</b> while band mix is on, so lower-Q predictions can match. Stays on as you change date — bookmark the link to reuse it daily.
+            <p className="picks-band-mix-note border-b border-amber-200 bg-amber-50 px-4 py-3 text-base leading-relaxed text-amber-900 sm:px-5" role="status">
+              <b className="font-semibold">Band mix on:</b> showing matches with <b className="font-semibold">any</b> of {selectedBandMixLabel} · exact model × market pairs only. <b className="font-semibold">The Q ≥75 gate is off</b> while band mix is on, so lower-Q predictions can match. Stays on as you change date — bookmark the link to reuse it daily.
             </p>
           )}
 
-          <div className="picks-query-results" aria-live="polite">
-            <div className="picks-overview-counts">
-              <span><b>{sortedRows.length}</b> of <b>{rows.length}</b> matches shown</span>
-              <span><b>{matchedPickCount}</b> of <b>{loadedSelections}</b> picks matched</span>
-              <span><b>{loadedSelections}</b> of <b>{totalSelections}</b> picks loaded</span>
+          <div className="picks-query-results space-y-3 px-4 py-4 sm:px-5" aria-live="polite">
+            <div className="picks-overview-counts flex flex-wrap gap-x-4 gap-y-1 text-base leading-normal text-slate-600">
+              <span><b className="font-mono tabular-nums text-slate-900">{sortedRows.length}</b> of <b className="font-mono tabular-nums text-slate-900">{rows.length}</b> loaded matches shown</span>
+              <span><b className="font-mono tabular-nums text-slate-900">{matchedPickCount}</b> of <b className="font-mono tabular-nums text-slate-900">{loadedSelections}</b> loaded picks matched</span>
+              <span><b className="font-mono tabular-nums text-slate-900">{loadedSelections}</b> of <b className="font-mono tabular-nums text-slate-900">{totalSelections}</b> candidates loaded</span>
             </div>
+            {activeFilterLabels.length > 0 && (
+              <p className="picks-active-filters text-base leading-relaxed text-slate-600">
+                <b className="font-semibold text-slate-900">Active filters ({activeFilterLabels.length}):</b> {activeFilterLabels.join(" · ")}
+              </p>
+            )}
+            {loadedSelections < totalSelections && (
+              <p className="picks-truncated-note rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-base leading-relaxed text-amber-900" role="status">
+                Filters and counts cover only the {loadedSelections} loaded picks. Load more candidates to search the remaining {totalSelections - loadedSelections}.
+              </p>
+            )}
             {filteredResults.length > 0 && (
-              <div className="picks-outcome-strip" aria-label="Settled picks summary for this query">
-                <strong>Settled picks in this view</strong>
-                <span className="outcome"><small>Selections</small><b>{filteredResults.length}</b></span>
-                <span className="outcome won"><small>Won</small><b>{filteredResultCounts.won}</b></span>
-                <span className="outcome lost"><small>Lost</small><b>{filteredResultCounts.lost}</b></span>
-                <span className="outcome"><small>Hit rate</small><b>{decidedCount > 0 ? `${((filteredResultCounts.won / decidedCount) * 100).toFixed(1)}%` : "—"}</b></span>
-                <span className={`outcome ${netUnitsTone}`}><small>Net units</small><b>{filteredResultCounts.priced > 0 ? `${filteredResultCounts.netUnits >= 0 ? "+" : ""}${filteredResultCounts.netUnits.toFixed(2)}` : "—"}</b></span>
-                <span className={`outcome ${netUnitsTone}`}><small>ROI</small><b>{filteredResultCounts.priced > 0 ? `${((filteredResultCounts.netUnits / filteredResultCounts.priced) * 100).toFixed(1)}%` : "—"}</b></span>
-                <span className="outcome note"><small>{filteredResultCounts.matches.size} matches with settled picks · selected date only</small></span>
+              <div className="picks-outcome-strip grid gap-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3 sm:grid-cols-2 lg:grid-cols-8" aria-label="Settled picks summary for this query">
+                <strong className="text-base font-semibold text-slate-900 lg:col-span-2">Settled picks in this view</strong>
+                <span className="outcome flex flex-col"><small className="text-sm uppercase tracking-wide text-slate-600">Selections</small><b className="font-mono text-sm tabular-nums text-slate-900">{filteredResults.length}</b></span>
+                <span className="outcome won flex flex-col"><small className="text-sm uppercase tracking-wide text-slate-600">Won</small><b className="font-mono text-sm tabular-nums text-emerald-700">{filteredResultCounts.won}</b></span>
+                <span className="outcome lost flex flex-col"><small className="text-sm uppercase tracking-wide text-slate-600">Lost</small><b className="font-mono text-sm tabular-nums text-red-600">{filteredResultCounts.lost}</b></span>
+                <span className="outcome flex flex-col"><small className="text-sm uppercase tracking-wide text-slate-600">Hit rate</small><b className="font-mono text-sm tabular-nums text-slate-900">{decidedCount > 0 ? `${((filteredResultCounts.won / decidedCount) * 100).toFixed(1)}%` : "—"}</b></span>
+                <span className={`outcome flex flex-col ${netUnitsTone}`}><small className="text-sm uppercase tracking-wide text-slate-600">Net units</small><b className="font-mono text-sm tabular-nums">{filteredResultCounts.priced > 0 ? `${filteredResultCounts.netUnits >= 0 ? "+" : ""}${filteredResultCounts.netUnits.toFixed(2)}` : "—"}</b></span>
+                <span className={`outcome flex flex-col ${netUnitsTone}`}><small className="text-sm uppercase tracking-wide text-slate-600">ROI</small><b className="font-mono text-sm tabular-nums">{filteredResultCounts.priced > 0 ? `${((filteredResultCounts.netUnits / filteredResultCounts.priced) * 100).toFixed(1)}%` : "—"}</b></span>
+                <span className="outcome note flex flex-col lg:col-span-8"><small className="text-base leading-relaxed text-slate-600">{filteredResultCounts.matches.size} matches with settled picks · selected date only</small></span>
               </div>
             )}
-            <p className="picks-overview-note">
-              Q ≥75 selections only. Publication also applies price, edge, freshness, quality, and diversification gates.
+            <p className="picks-overview-note text-base leading-relaxed text-slate-600">
+              {bandMixOn
+                ? "Band mix searches the un-gated pool (Q ≥75 off). Publication still applies price, edge, freshness, quality, and diversification gates."
+                : "Q ≥75 selections only. Publication also applies price, edge, freshness, quality, and diversification gates."}
             </p>
             {filteredResults.length > 0 && (
-              <details className="picks-results-terms">
-                <summary>How the settled numbers are computed</summary>
-                <p>{filteredResultCounts.void} void picks excluded from hit rate and ROI. ROI assumes one unit per settled non-void pick with captured odds; priced picks: {filteredResultCounts.priced} of {decidedCount}. Net units and ROI exclude picks without valid captured odds. This one-date summary is not a strategy backtest or a profitability claim.</p>
+              <details className="picks-results-terms rounded-lg border border-slate-200 bg-white">
+                <summary className="inline-flex min-h-11 cursor-pointer items-center px-3 py-2 text-base font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 [&::-webkit-details-marker]:hidden">How the settled numbers are computed</summary>
+                <p className="border-t border-slate-100 px-3 py-2 text-base leading-relaxed text-slate-600">{filteredResultCounts.void} void picks excluded from hit rate and ROI. ROI assumes one unit per settled non-void pick with captured odds; priced picks: {filteredResultCounts.priced} of {decidedCount}. Net units and ROI exclude picks without valid captured odds. This one-date summary is not a strategy backtest or a profitability claim.</p>
               </details>
             )}
           </div>
 
           <details
-            className="picks-heatmap"
+            className="picks-heatmap border-t border-slate-200"
             open={perfOpen}
             onToggle={(event) => setPerfOpen(event.currentTarget.open)}
           >
-            <summary>Where winners came from · block performance, last {perfDays} days</summary>
-            <BlockHeatmap
-              performance={performance}
-              loading={perfLoading}
-              error={perfError}
-              days={perfDays}
-              onDaysChange={setPerfDays}
-              onCell={(market, kind, block) => {
-                setMarketFilter(formatMarket(market));
-                if (kind === "chance") setChanceMin(String(block));
-                else setImpliedMin(String(block));
-              }}
-            />
+            <summary className="inline-flex min-h-11 cursor-pointer items-center px-4 py-3 text-base font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 sm:px-5 [&::-webkit-details-marker]:hidden">Where winners came from · block performance, last {perfDays} days</summary>
+            <div className="border-t border-slate-100 px-4 py-4 sm:px-5">
+              {perfError && performance && (
+                <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-base leading-relaxed text-amber-900" role="status">
+                  <b className="font-semibold">Refresh failed; showing the last loaded {performance.window_days}-day heat map.</b> {perfError}
+                </p>
+              )}
+              {perfLoading && performance && !perfError && (
+                <p className="mb-3 text-base leading-relaxed text-slate-600" role="status">Refreshing the heat map… showing the last loaded {performance.window_days}-day result.</p>
+              )}
+              <BlockHeatmap
+                performance={performance}
+                loading={perfLoading}
+                error={perfError}
+                days={perfDays}
+                onDaysChange={setPerfDays}
+                onCell={(market, kind, block) => {
+                  setMarketFilter(formatMarket(market));
+                  // A threshold filters out low-probability band pairs; clear
+                  // band mix through the same path so the page restores Q≥75.
+                  if (bandMixOn) setBandMixSelection([]);
+                  if (kind === "chance") setChanceMin(String(block));
+                  else setImpliedMin(String(block));
+                }}
+              />
+            </div>
           </details>
-          <div className="picks-list-head" aria-hidden="true">
+
+          <div className="picks-list-head hidden border-t border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-slate-600 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,2fr)_minmax(0,0.8fr)_auto_auto] lg:gap-3 sm:px-5" aria-hidden="true">
             <span>Match</span>
-            <span className="picks-list-stats"><span>Kickoff</span><span>Q-score</span><span>Markets</span><span>Odds</span><span>Spread</span></span>
+            <span className="picks-list-stats grid grid-cols-5 gap-2"><span>Kickoff</span><span>Q-score</span><span>Markets</span><span>Odds</span><span>Spread</span></span>
             <span>Pick result</span>
             <span>Status</span>
             <span />
           </div>
+
           {sortedRows.length === 0 ? (
-            <p className="panel-empty">
+            <p className="panel-empty px-4 py-10 text-center text-sm text-slate-600 sm:px-5">
               {focusMatchId != null
                 ? `No loaded picks for ${focusLabel ?? "this fixture"}. Load the next 100 candidates, or clear the focus.`
                 : "No qualified matches match these filters."}
             </p>
           ) : (
-            <div className="match-card-grid">
+            <div className="match-card-grid divide-y divide-slate-200 border-t border-slate-200">
               {sortedRows.map(([matchId, selections]) => (
                 <MatchMarketGroup
                   key={matchId}
@@ -904,9 +938,13 @@ export function AllMatches({
               ))}
             </div>
           )}
-          {onLoadMore && loadedSelections < totalSelections && <button className="btn-ghost btn-sm" type="button" onClick={onLoadMore} disabled={loadingMore}>
-            {loadingMore ? "Loading more candidates…" : `Load next 100 candidates (${totalSelections - loadedSelections} remaining)`}
-          </button>}
+          {onLoadMore && loadedSelections < totalSelections && (
+            <div className="border-t border-slate-200 px-4 py-4 sm:px-5">
+              <button className="btn-ghost btn-sm inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 disabled:opacity-50" type="button" onClick={onLoadMore} disabled={loadingMore} aria-busy={loadingMore}>
+                {loadingMore ? "Loading more candidates…" : `Load next 100 candidates (${totalSelections - loadedSelections} remaining)`}
+              </button>
+            </div>
+          )}
         </>
       )}
     </section>
@@ -935,11 +973,11 @@ function MatchMarketGroup({
     },
     { won: 0, lost: 0, void: 0, pending: 0 },
   );
-  const statusTone = displayState === "live" ? "inplay"
-    : displayState === "finished" ? "finished"
-    : displayState === "scheduled" ? "scheduled"
-    : displayState === "postponed" || displayState === "cancelled" ? "void"
-    : "pending";
+  const statusTone = displayState === "live" ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+    : displayState === "finished" ? "text-slate-700 bg-slate-100 border-slate-200"
+    : displayState === "scheduled" ? "text-sky-700 bg-sky-50 border-sky-200"
+    : displayState === "postponed" || displayState === "cancelled" ? "text-amber-700 bg-amber-50 border-amber-200"
+    : "text-slate-600 bg-slate-100 border-slate-200";
   const sorted = [...selections].sort((a, b) => {
     const values: Record<typeof sort.key, [string | number, string | number]> =
       {
@@ -961,7 +999,8 @@ function MatchMarketGroup({
     );
   const button = (key: typeof sort.key, label: string) => (
     <button
-      className={sort.key === key ? "active" : ""}
+      type="button"
+      className={`inline-flex min-h-11 items-center rounded-md px-2 py-1 text-sm font-semibold transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${sort.key === key ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"}`}
       onClick={(event) => {
         event.preventDefault();
         changeSort(key);
@@ -973,30 +1012,37 @@ function MatchMarketGroup({
       )}
     </button>
   );
+
+  const outcomeClass = (outcome: "won" | "lost" | "void" | "pending") =>
+    outcome === "won" ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+    : outcome === "lost" ? "bg-red-50 text-red-700 border-red-200"
+    : outcome === "void" ? "bg-amber-50 text-amber-700 border-amber-200"
+    : "bg-slate-100 text-slate-600 border-slate-200";
+
   return (
-    <details className={`match-accordion match-card ${displayState}`}>
-      <summary className="match-card-summary match-row-summary">
-        <div className="match-row-match">
-          <span className="match-row-league">{first.competition}</span>
-          <strong className="match-row-teams" title={`${first.home_team} vs ${first.away_team}`}>
-            {first.home_team} <span className="leg-match-vs">vs</span>{" "}
+    <details className={`match-accordion match-card group ${displayState}`}>
+      <summary className="match-card-summary match-row-summary grid cursor-pointer list-none gap-3 px-4 py-4 hover:bg-slate-50/70 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,2fr)_minmax(0,0.8fr)_auto_auto] lg:items-center sm:px-5 [&::-webkit-details-marker]:hidden">
+        <div className="match-row-match min-w-0">
+          <span className="match-row-league block text-sm font-semibold uppercase tracking-wide text-slate-600">{first.competition}</span>
+          <strong className="match-row-teams block truncate text-sm font-semibold text-slate-900 sm:text-base" title={`${first.home_team} vs ${first.away_team}`}>
+            {first.home_team} <span className="leg-match-vs font-normal text-slate-600">vs</span>{" "}
             {first.away_team}
           </strong>
         </div>
-        <div className="match-row-stats">
-          <span><small>Kickoff</small><b className="kickoff-time">{formatKickoff(first.kickoff_at)}</b></span>
-          <span><small>Q-score</small><b>Q {best.q_score.toFixed(1)}</b></span>
-          <span><small>Markets</small><b>{selections.length}</b></span>
-          <span title={`Top pick: ${formatMarket(best.market)} · ${formatSelection(best.selection)}${best.source_bookmaker ? ` · ${best.source_bookmaker}` : ""}`}><small>Odds</small><b className="match-row-odds">{best.best_odds ? `${best.best_odds.toFixed(2)}×` : "—"}</b></span>
-          <span><small>Spread</small><b className={`spread-badge ${spreadTone(best.model_agreement)}`}>{best.model_agreement == null ? "—" : `${(best.model_agreement * 100).toFixed(1)} pp`}</b></span>
+        <div className="match-row-stats grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
+          <span className="flex flex-col"><small className="text-sm uppercase tracking-wide text-slate-600">Kickoff</small><b className="kickoff-time font-mono font-semibold tabular-nums text-slate-800">{formatKickoff(first.kickoff_at)}</b></span>
+          <span className="flex flex-col"><small className="text-sm uppercase tracking-wide text-slate-600">Q-score</small><b className="font-mono font-semibold tabular-nums text-slate-900">Q {best.q_score.toFixed(1)}</b></span>
+          <span className="flex flex-col"><small className="text-sm uppercase tracking-wide text-slate-600">Markets</small><b className="font-mono font-semibold tabular-nums text-slate-900">{selections.length}</b></span>
+          <span className="flex flex-col" title={`Top pick: ${formatMarket(best.market)} · ${formatSelection(best.selection)}${best.source_bookmaker ? ` · ${best.source_bookmaker}` : ""}`}><small className="text-sm uppercase tracking-wide text-slate-600">Odds</small><b className="match-row-odds font-mono font-semibold tabular-nums text-slate-900">{best.best_odds ? `${best.best_odds.toFixed(2)}×` : "—"}</b></span>
+          <span className="flex flex-col"><small className="text-sm uppercase tracking-wide text-slate-600">Spread</small><b className={`spread-badge inline-flex w-fit rounded-full border px-2 py-0.5 text-sm font-semibold ${(() => { const tone = spreadTone(best.model_agreement); return tone === "strong" || tone === "acceptable" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : tone === "caution" || tone === "high" ? "border-amber-200 bg-amber-50 text-amber-700" : "border-slate-200 bg-slate-50 text-slate-600"; })()}`}>{best.model_agreement == null ? "—" : `${(best.model_agreement * 100).toFixed(1)} pp`}</b></span>
         </div>
         <div className="match-row-picks">
-          <small>Pick result</small>
-          <span className="match-row-picks-badges">
+          <small className="block text-sm uppercase tracking-wide text-slate-600">Pick result</small>
+          <span className="match-row-picks-badges mt-1 flex flex-wrap gap-1">
             {(["won", "lost", "void", "pending"] as const)
               .filter((outcome) => pickOutcomes[outcome] > 0)
               .map((outcome) => (
-                <b key={outcome} className={`market-result ${outcome}`}>
+                <b key={outcome} className={`market-result inline-flex items-center rounded-full border px-2 py-0.5 text-sm font-semibold ${outcomeClass(outcome)} ${outcome}`}>
                   {selectionStatusLabel(outcome)}
                   {pickOutcomes[outcome] > 1 ? ` ×${pickOutcomes[outcome]}` : ""}
                 </b>
@@ -1004,69 +1050,74 @@ function MatchMarketGroup({
           </span>
         </div>
         <div className="match-row-status">
-          <b className={`match-result-badge ${statusTone}`}>{matchStatusText(first)}</b>
+          <b className={`match-result-badge inline-flex items-center rounded-full border px-2 py-0.5 text-sm font-semibold ${statusTone} ${statusTone}`}>{matchStatusText(first)}</b>
         </div>
         <div className="match-row-actions">
-          <span className="match-card-expand">View markets <b aria-hidden="true">⌄</b></span>
+          <span className="match-card-expand inline-flex items-center gap-1 text-sm font-semibold text-emerald-800">View markets <b aria-hidden="true" className="transition-transform group-open:rotate-180">⌄</b></span>
         </div>
       </summary>
-      <div className="market-table">
-        <div className="market-table-head">
-          <span className="market-sort-label">Sort markets</span>
+      <div className="market-table border-t border-slate-200 bg-slate-50/40 px-4 py-4 sm:px-5">
+        <div className="market-table-head mb-3 flex flex-wrap items-center gap-1.5">
+          <span className="market-sort-label mr-1 text-sm font-semibold uppercase tracking-wide text-slate-600">Sort markets</span>
           {button("market", "Market")}
           {button("q", "Q-score")}
           {button("odds", "Captured odds")}
           {button("spread", "Spread")}
           {button("edge", "Edge")}
         </div>
-        {sorted.map((row) => {
-          const freshness = quoteFreshness(row);
-          return <div className="market-row" key={row.prediction_id}>
-            <div className="market-row-identity">
-              {!selectionRepeatsMarket(row.market, row.selection) && <span className="market-row-market">{formatMarket(row.market)}</span>}
-              <strong className="market-row-selection">{formatSelection(row.selection)}</strong>
-              <span className="market-row-badges">
-                <b className={`grade-badge grade-${gradeTone(row.q_grade)}`}>
-                  {row.q_grade ?? "Qualified"}
-                </b>
-                <b className={`market-result ${row.result ?? "pending"}`}>{row.result === "won" ? "Won" : row.result === "lost" ? "Lost" : row.result === "void" ? "Void" : "Pending"}</b>
-              </span>
-              <div className="market-chance-evidence">
-                <span>Model chance <b>{percent(row.model_probability)}</b></span>
-                <span>Bookmaker implied <b>{percent(row.source_implied_probability ?? row.avg_implied)}</b> <em>margin included</em></span>
+        <div className="space-y-3">
+          {sorted.map((row) => {
+            const freshness = quoteFreshness(row);
+            const freshnessTone = freshness.state === "fresh" ? "text-emerald-700" : freshness.state === "aging" ? "text-amber-700" : freshness.state === "blocked" || freshness.state === "stale" ? "text-red-600" : "text-slate-600";
+            return <div className="market-row rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4" key={row.prediction_id}>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="market-row-identity min-w-0">
+                  {!selectionRepeatsMarket(row.market, row.selection) && <span className="market-row-market block text-sm font-semibold uppercase tracking-wide text-slate-600">{formatMarket(row.market)}</span>}
+                  <strong className="market-row-selection block text-sm font-semibold text-slate-900">{formatSelection(row.selection)}</strong>
+                  <span className="market-row-badges mt-1.5 flex flex-wrap gap-1.5">
+                    <b className={`grade-badge inline-flex items-center rounded-full border px-2 py-0.5 text-sm font-semibold ${gradeTone(row.q_grade) === "A" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : gradeTone(row.q_grade) === "B" ? "border-amber-200 bg-amber-50 text-amber-700" : "border-slate-200 bg-slate-100 text-slate-700"} grade-${gradeTone(row.q_grade)}`}>
+                      {row.q_grade ?? "Qualified"}
+                    </b>
+                    <b className={`market-result inline-flex items-center rounded-full border px-2 py-0.5 text-sm font-semibold ${outcomeClass((row.result as "won" | "lost" | "void" | null) ?? "pending")} ${row.result ?? "pending"}`}>{row.result === "won" ? "Won" : row.result === "lost" ? "Lost" : row.result === "void" ? "Void" : "Pending"}</b>
+                  </span>
+                  <div className="market-chance-evidence mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600">
+                    <span>Model chance <b className="font-mono font-semibold tabular-nums text-slate-900">{percent(row.model_probability)}</b></span>
+                    <span>Bookmaker implied <b className="font-mono font-semibold tabular-nums text-slate-900">{percent(row.source_implied_probability ?? row.avg_implied)}</b> <em className="not-italic text-slate-600">margin included</em></span>
+                  </div>
+                </div>
+                <div className="market-row-actions shrink-0">
+                  <button type="button" className="btn-ghost btn-sm inline-flex min-h-11 items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700" onClick={() => onSelect(row)}>
+                    Details
+                  </button>
+                </div>
               </div>
-            </div>
-            <div className="market-row-actions">
-              <button className="btn-ghost btn-sm" onClick={() => onSelect(row)}>
-                Details
-              </button>
-            </div>
-            <dl className="market-row-facts">
-              <div>
-                <dt>Q-score</dt>
-                <dd>Q {row.q_score.toFixed(1)}</dd>
-              </div>
-              <div>
-                <dt>Captured odds</dt>
-                <dd>{row.best_odds ? `${row.best_odds.toFixed(2)}×` : "—"}</dd>
-                <small className="market-quote-meta">{row.source_bookmaker ?? "Bookmaker unavailable"} · {quoteTime(row.source_odds_at)} · <b className={freshness.state}>{freshness.label}</b></small>
-              </div>
-              <div className={spreadTone(row.model_agreement)} title={`Model spread: ${spreadLabel(row.model_agreement)}`}>
-                <dt>Spread</dt>
-                <dd>{row.model_agreement == null ? "—" : `${(row.model_agreement * 100).toFixed(1)} pp`}</dd>
-              </div>
-              <div className={row.edge != null && row.edge > 0 ? "positive" : undefined}>
-                <dt>Edge</dt>
-                <dd>{row.edge != null ? `${(row.edge * 100).toFixed(1)}%` : "—"}</dd>
-              </div>
-              <div className={row.clv_percentage != null && row.clv_percentage > 0 ? "positive" : undefined}>
-                <dt>CLV</dt>
-                <dd>{row.clv_percentage != null ? `${(row.clv_percentage * 100).toFixed(1)}%` : "—"}</dd>
-                <small className="market-quote-meta">{row.closing_decimal_odds ? `Close ${row.closing_decimal_odds.toFixed(2)}×` : "No closing price yet"}</small>
-              </div>
-            </dl>
-          </div>;
-        })}
+              <dl className="market-row-facts mt-3 grid gap-3 border-t border-slate-100 pt-3 text-sm sm:grid-cols-2 lg:grid-cols-5">
+                <div>
+                  <dt className="text-sm font-semibold uppercase tracking-wide text-slate-600">Q-score</dt>
+                  <dd className="font-mono font-semibold tabular-nums text-slate-900">Q {row.q_score.toFixed(1)}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-semibold uppercase tracking-wide text-slate-600">Captured odds</dt>
+                  <dd className="font-mono font-semibold tabular-nums text-slate-900">{row.best_odds ? `${row.best_odds.toFixed(2)}×` : "—"}</dd>
+                  <small className="market-quote-meta block text-sm text-slate-600">{row.source_bookmaker ?? "Bookmaker unavailable"} · <span className="font-mono tabular-nums">{quoteTime(row.source_odds_at)}</span> · <b className={freshnessTone}>{freshness.label}</b></small>
+                </div>
+                <div className={(() => { const tone = spreadTone(row.model_agreement); return tone === "strong" || tone === "acceptable" ? "text-emerald-700" : tone === "caution" || tone === "high" ? "text-amber-700" : undefined; })()} title={`Model spread: ${spreadLabel(row.model_agreement)}`}>
+                  <dt className="text-sm font-semibold uppercase tracking-wide text-slate-600">Spread</dt>
+                  <dd className="font-mono font-semibold tabular-nums">{row.model_agreement == null ? "—" : `${(row.model_agreement * 100).toFixed(1)} pp`}</dd>
+                </div>
+                <div className={row.edge != null && row.edge > 0 ? "positive text-emerald-700" : undefined}>
+                  <dt className="text-sm font-semibold uppercase tracking-wide text-slate-600">Edge</dt>
+                  <dd className="font-mono font-semibold tabular-nums">{row.edge != null ? `${(row.edge * 100).toFixed(1)}%` : "—"}</dd>
+                </div>
+                <div className={row.clv_percentage != null && row.clv_percentage > 0 ? "positive text-emerald-700" : undefined}>
+                  <dt className="text-sm font-semibold uppercase tracking-wide text-slate-600">CLV</dt>
+                  <dd className="font-mono font-semibold tabular-nums">{row.clv_percentage != null ? `${(row.clv_percentage * 100).toFixed(1)}%` : "—"}</dd>
+                  <small className="market-quote-meta block text-sm text-slate-600">{row.closing_decimal_odds ? `Close ${row.closing_decimal_odds.toFixed(2)}×` : "No closing price yet"}</small>
+                </div>
+              </dl>
+            </div>;
+          })}
+        </div>
       </div>
     </details>
   );

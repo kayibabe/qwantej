@@ -64,6 +64,28 @@ describe('system picks fixture focus', () => {
   })
 })
 
+describe('result scope labels', () => {
+  it('keeps an active status chip visible when other filters leave it empty', () => {
+    window.history.replaceState({}, '', '/?match_status=finished')
+    const html = renderToStaticMarkup(<AllMatches rows={rows} onSelect={() => {}} />)
+
+    expect(html).toContain('aria-pressed="true"')
+    expect(html).toMatch(/Finished <b[^>]*>0<\/b>/)
+    expect(html).toContain('Active filters (1)')
+    expect(html).toContain('Status: finished')
+  })
+
+  it('says when filters cover only the loaded candidates', () => {
+    const html = renderToStaticMarkup(
+      <AllMatches rows={rows} totalSelections={250} loadedSelections={100} onSelect={() => {}} />,
+    )
+
+    expect(html).toContain('Filters and counts cover only the 100 loaded picks')
+    expect(html).toContain('remaining 150')
+    expect(html).not.toContain('250 matches shown')
+  })
+})
+
 afterEach(() => window.history.replaceState({}, '', '/'))
 
 const bandMixRows: [number, SelectionSummary[]][] = [
@@ -79,7 +101,7 @@ describe('one-click band mix filter', () => {
 
     expect(html).toContain('picks-band-mix')
     expect(html).toContain('Band mix')
-    expect(html).toContain('>⚡ Band mix <b>3</b>')
+    expect(html).toMatch(/>⚡ Band mix <b[^>]*>3<\/b>/)
   })
 
   it('keeps only the exact model × market pairs when enabled by URL state', () => {
@@ -103,7 +125,7 @@ describe('one-click band mix filter', () => {
     expect(html).toContain('BandMixTop')
     expect(html).not.toContain('BandMixEdge')
     expect(html).not.toContain('BandMixOutside')
-    expect(html).toContain('showing matches with <b>any</b> of &lt;50% × 85-90% · 95-100% × 70-75%')
+    expect(html).toMatch(/showing matches with <b[^>]*>any<\/b> of &lt;50% × 85-90% · 95-100% × 70-75%/)
   })
 })
 
@@ -155,6 +177,31 @@ describe('band mix pair selection', () => {
       expect(onBandMixChange).toHaveBeenLastCalledWith([0, 4])
       await act(async () => { boxes[0].click(); boxes[4].click() })
       expect(onBandMixChange).toHaveBeenLastCalledWith([])
+    } finally {
+      await act(async () => { root.unmount() })
+      container.remove()
+    }
+  })
+
+  it('notifies the page when a threshold replaces band mix so the Q gate is restored', async () => {
+    window.history.replaceState({}, '', '/?match_band_mix=1')
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    const onBandMixChange = vi.fn()
+    try {
+      await act(async () => { root.render(<AllMatches rows={bandMixRows} onSelect={() => {}} onBandMixChange={onBandMixChange} />) })
+      const chanceToggle = container.querySelector<HTMLButtonElement>('button[title="Minimum model chance for picks"]')!
+      await act(async () => { chanceToggle.click() })
+      const option = [...container.querySelectorAll<HTMLElement>('li[role="option"]')]
+        .find((item) => item.textContent?.includes('≥ 20%'))!
+      await act(async () => { option.click() })
+
+      expect(onBandMixChange).toHaveBeenLastCalledWith([])
+      expect(container.textContent).not.toContain('Band mix on:')
+      expect(container.textContent).toContain('Q ≥75 selections only')
+      expect(window.location.search).not.toContain('match_band_mix')
+      expect(window.location.search).toContain('match_chance=20')
     } finally {
       await act(async () => { root.unmount() })
       container.remove()

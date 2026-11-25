@@ -67,49 +67,55 @@ export default function AccountRecoveryPage({ mode }: Props) {
     }
   }
 
+  const errorId = 'recovery-error'
+  const statusId = 'recovery-status'
+  const passwordHintId = 'recovery-password-hint'
+  const errorDescription = error ? errorId : undefined
+  const statusDescription = message ? statusId : undefined
+  const passwordDescription = [errorDescription, statusDescription, passwordHintId].filter(Boolean).join(' ')
+  const inputClassName = 'min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base leading-normal text-slate-900 placeholder:text-slate-600 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700'
+  const labelClassName = 'grid gap-1.5 text-sm font-medium leading-normal text-slate-700'
+  const primaryButtonClassName = 'inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-700 px-4 py-2.5 text-base font-semibold leading-normal text-white transition-colors hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700'
+  const textLinkClassName = 'inline-flex min-h-11 w-full items-center justify-center rounded px-2 text-center text-base font-medium leading-normal transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700'
+
   return (
-    <section className="auth-page" aria-labelledby="account-recovery-title">
-      <div className="auth-card">
-        <div className="auth-card-body">
-          <div className="auth-form-panel">
-            <a className="auth-card-brand" href="/" aria-label="QwanEj home">
-              <picture>
-                <source media="(prefers-color-scheme: dark)" srcSet="/dark/logo.png?v=qwanej-1" />
-                <img src="/light/logo.png?v=qwanej-1" alt="QwanEj — Intelligence beyond numbers" />
-              </picture>
-            </a>
-            <h2 id="account-recovery-title">
-              {mode === 'verify' ? 'Verify your email' : token ? 'Choose a new password' : 'Reset your password'}
-            </h2>
+    <section className="min-h-screen bg-slate-50 px-4 py-10 sm:py-16" aria-labelledby="account-recovery-title">
+      <div className="mx-auto w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+        <a className="inline-flex min-h-11 flex-col justify-center text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700" href="/" aria-label="MatchSlip home">
+          <span className="text-xl font-bold tracking-tight [font-family:'Plus_Jakarta_Sans',sans-serif]">MatchSlip</span>
+          <span className="text-sm font-medium leading-normal text-slate-600">Built on evidence, not hunches.</span>
+        </a>
+        <h2 id="account-recovery-title" className="mt-6 text-2xl font-bold tracking-tight text-slate-900 [font-family:'Plus_Jakarta_Sans',sans-serif]">
+          {mode === 'verify' ? 'Verify your email' : token ? 'Choose a new password' : 'Reset your password'}
+        </h2>
 
-            {mode === 'verify' && !token && (
-              <p>Open the verification link from your email to confirm this address.</p>
-            )}
+        {mode === 'verify' && !token && (
+          <p className="mt-2 text-base leading-relaxed text-slate-700">Open the verification link from your email to confirm this address.</p>
+        )}
 
-            {mode === 'reset' && !token && (
-              <>
-                <p>Enter the email address for your account and we will send a reset link.</p>
-                <form onSubmit={requestReset}>
-                  <label>Email<input type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} required /></label>
-                  <button className="btn-primary" type="submit" disabled={busy}>{busy ? 'Sending…' : 'Send reset link'}</button>
-                </form>
-              </>
-            )}
+        {mode === 'reset' && !token && (
+          <>
+            <p className="mt-2 text-base leading-relaxed text-slate-700">Enter the email address for your account and we will send a reset link.</p>
+            <form className="mt-6 grid gap-4" onSubmit={requestReset}>
+              <label className={labelClassName}>Email<input className={inputClassName} type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} aria-describedby={[errorDescription, statusDescription].filter(Boolean).join(' ') || undefined} required /></label>
+              <button className={primaryButtonClassName} type="submit" disabled={busy}>{busy ? 'Sending…' : 'Send reset link'}</button>
+            </form>
+          </>
+        )}
 
-            {mode === 'reset' && token && !message && (
-              <form onSubmit={resetPassword}>
-                <label>New password<input type="password" autoComplete="new-password" minLength={8} value={password} onChange={event => setPassword(event.target.value)} required /></label>
-                <label>Confirm new password<input type="password" autoComplete="new-password" minLength={8} value={confirmation} onChange={event => setConfirmation(event.target.value)} required /></label>
-                <button className="btn-primary" type="submit" disabled={busy}>{busy ? 'Updating…' : 'Update password'}</button>
-              </form>
-            )}
+        {mode === 'reset' && token && !message && (
+          <form className="mt-6 grid gap-4" onSubmit={resetPassword}>
+            <label className={labelClassName}>New password<input className={inputClassName} type="password" autoComplete="new-password" minLength={8} value={password} onChange={event => setPassword(event.target.value)} aria-describedby={passwordDescription} required /></label>
+            <label className={labelClassName}>Confirm new password<input className={inputClassName} type="password" autoComplete="new-password" minLength={8} value={confirmation} onChange={event => setConfirmation(event.target.value)} aria-describedby={passwordDescription} required /></label>
+            <p id={passwordHintId} className="text-base leading-relaxed text-slate-700">Use at least eight characters in both fields.</p>
+            <button className={primaryButtonClassName} type="submit" disabled={busy}>{busy ? 'Updating…' : 'Update password'}</button>
+          </form>
+        )}
 
-            {error && <div className="auth-error" role="alert" aria-live="assertive">{error}</div>}
-            {message && <div className="auth-status" role="status" aria-live="polite">{message}</div>}
-            {message && <a className="btn-primary" href="/login">Sign in</a>}
-            <a className="auth-home-link" href="/">Back to home</a>
-          </div>
-        </div>
+        {error && <div id={errorId} className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-base leading-relaxed text-red-700" role="alert" aria-live="assertive">{error}</div>}
+        {message && <div id={statusId} className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-base leading-relaxed text-emerald-800" role="status" aria-live="polite">{message}</div>}
+        {message && <a className={`${primaryButtonClassName} mt-4 w-full`} href="/login">Sign in</a>}
+        <a className={`${textLinkClassName} mt-2 text-slate-700 hover:text-slate-900`} href="/">Back to home</a>
       </div>
     </section>
   )

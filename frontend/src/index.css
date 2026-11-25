@@ -1,548 +1,177 @@
-/* ── Token system ─────────────────────────────────────────── */
-:root {
-  --bg:         #0D1117;
-  --surface:    #161B22;
-  --surface-2:  #1C2333;
-  --border:     #30363D;
-  --border-2:   #21262D;
-  --text:       #E6EDF3;
-  --text-muted: #7D8590;
-  --text-dim:   #484F58;
+@import "tailwindcss";
 
-  --green:      #2DA44E;
-  --green-dim:  #1a6130;
-  --amber:      #D29922;
-  --amber-dim:  #7d5b14;
-  --red:        #F85149;
-  --blue:       #388BFD;
-  --orange:     #E09B3D;
+@theme {
+  --font-display: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-sans: "DM Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  /* Tier accent colours */
-  --conservative: #2DA44E;
-  --balanced:     #388BFD;
-  --high-odds:    #A855F7;
-  --purple:       #A371F7;
-
-  --radius-sm: 4px;
-  --radius:    8px;
-
-  font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
-  font-size: 100%;
-  line-height: 1.5;
-  color: var(--text);
-  background: var(--bg);
+  /*
+   * Readability floor. WCAG does not prescribe a minimum font size, but a
+   * 16px body / 14px compact-label baseline is the widely used accessibility
+   * convention (EN 301 549, GOV.UK, WAI guidance). Overriding the Tailwind
+   * type scale here raises every text-xs/text-sm consumer in one place instead
+   * of relying on each component to remember it. Rem units keep text zoomable.
+   */
+  --text-xs: 0.875rem; /* 14px */
+  --text-xs--line-height: 1.25rem;
+  --text-sm: 0.9375rem; /* 15px */
+  --text-sm--line-height: 1.375rem;
+  --text-base: 1rem; /* 16px */
+  --text-base--line-height: 1.5rem;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg:         #F6F8FA;
-    --surface:    #FFFFFF;
-    --surface-2:  #F0F3F6;
-    --border:     #D0D7DE;
-    --border-2:   #E8ECEF;
-    --text:       #1F2328;
-    --text-muted: #636C76;
-    --text-dim:   #A0AAB4;
+/*
+ * Page layout — single source of truth for the outer page margins/gutters.
+ *
+ * Tune these values to make the whole UI feel wider or narrower:
+ *   --page-gutter         edge inset on phones (both sides, every page)
+ *   --page-gutter-sm      edge inset from the `sm` breakpoint up
+ *   --page-menu-width     fixed side-menu width from `sm` up
+ *   --page-menu-width-lg  fixed side-menu width from `lg` up
+ *   --page-menu-gap       clear space between the side menu and page content
+ *   --page-menu-gap-lg    wider clear space from `lg` up
+ *
+ * Signed-in pages reserve the side-menu width plus a gap on the left and use
+ * the gutter on the right, so page content and the top bar stay aligned and
+ * never touch the sidebar. The menu width is shared with the sidebar itself
+ * to keep those values in sync.
+ */
+:root {
+  --page-gutter: 0.5rem; /* 8px  */
+  --page-gutter-sm: 0.75rem; /* 12px */
+  --page-menu-width: 14rem; /* 224px */
+  --page-menu-width-lg: 16rem; /* 256px */
+  --page-menu-gap: 1.5rem; /* 24px */
+  --page-menu-gap-lg: 2rem; /* 32px */
+}
 
-    --green-dim:  #d4f5e0;
-    --amber-dim:  #fef3cd;
+/* Guest (logged-out) pages: a symmetric gutter on both sides. */
+.page-inset-guest {
+  padding-left: var(--page-gutter);
+  padding-right: var(--page-gutter);
+}
+
+/* Signed-in pages: the left side also clears the fixed side menu. */
+.page-inset-app {
+  padding-left: var(--page-gutter);
+  padding-right: var(--page-gutter);
+}
+
+/* Width of the fixed side menu, driven by the same token as the inset. */
+.page-menu {
+  width: var(--page-menu-width);
+}
+
+@media (min-width: 40rem) {
+  .page-inset-guest {
+    padding-left: var(--page-gutter-sm);
+    padding-right: var(--page-gutter-sm);
+  }
+
+  .page-inset-app {
+    padding-left: calc(var(--page-menu-width) + var(--page-menu-gap));
+    padding-right: var(--page-gutter-sm);
   }
 }
 
-:root[data-theme="light"] {
-  --bg:         #F6F8FA;
-  --surface:    #FFFFFF;
-  --surface-2:  #F0F3F6;
-  --border:     #D0D7DE;
-  --border-2:   #E8ECEF;
-  --text:       #1F2328;
-  --text-muted: #636C76;
-  --text-dim:   #A0AAB4;
-  --green-dim:  #d4f5e0;
-  --amber-dim:  #fef3cd;
+@media (min-width: 64rem) {
+  .page-inset-app {
+    padding-left: calc(var(--page-menu-width-lg) + var(--page-menu-gap-lg));
+  }
+
+  .page-menu {
+    width: var(--page-menu-width-lg);
+  }
 }
 
-:root[data-theme="dark"] {
-  --bg:         #0D1117;
-  --surface:    #161B22;
-  --surface-2:  #1C2333;
-  --border:     #30363D;
-  --border-2:   #21262D;
-  --text:       #E6EDF3;
-  --text-muted: #7D8590;
-  --text-dim:   #484F58;
-  --green-dim:  #1a6130;
-  --amber-dim:  #7d5b14;
+@layer components {
+  /* Native input stretched over the calendar icon in DatePickerControl. Keep it
+     transparent but clickable and focusable so the picker stays accessible. */
+  .date-input-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .date-input-field::-webkit-calendar-picker-indicator {
+    opacity: 0.6;
+    cursor: pointer;
+  }
 }
 
-/* ── Reset ────────────────────────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { min-height: 100dvh; background: var(--bg); color: var(--text); }
-button { font: inherit; cursor: pointer; border: none; background: none; }
-a { color: inherit; text-decoration: none; }
+@layer base {
+  html {
+    /* 100% + text-size-adjust keeps browser text scaling and mobile zoom intact. */
+    font-size: 100%;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    font-family: var(--font-sans);
+    background-color: #f8fafc;
+    color: #0f172a;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 
-/* ── Layout ───────────────────────────────────────────────── */
-.app { display: flex; flex-direction: column; min-height: 100dvh; }
+  body {
+    line-height: 1.5;
+  }
 
-.header {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  padding: 0 24px;
-  height: 56px;
-  display: flex;
-  align-items: center;
-  gap: 24px;
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    line-height: 1.25;
+    text-wrap: balance;
+  }
+
+  p, li, dd {
+    text-wrap: pretty;
+  }
+
+  /* Tailwind preflight removes the UA outline; keep a consistent visible focus
+     indicator for any control that does not supply its own ring. */
+  :focus-visible {
+    outline: 2px solid #047857;
+    outline-offset: 2px;
+  }
 }
 
-.header-logo {
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: -0.4px;
-  color: var(--text);
-  flex-shrink: 0;
+@layer utilities {
+  /*
+   * Safety net for arbitrary fixed-pixel sizes that slipped into the markup.
+   * Components should use the rem-based scale above; this keeps any leftover
+   * 9-11px label readable (14px) even before it is migrated.
+   */
+  [class~="text-[9px]"],
+  [class~="text-[10px]"],
+  [class~="text-[11px]"] {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+
+  /* slate-400 (#94a3b8) is ~2.6:1 on white and fails WCAG 1.4.4 for text. */
+  .text-slate-400 {
+    color: #475569;
+  }
+
+  /* WCAG 2.2 SC 2.5.8 minimum target size (24px), using the comfortable 44px
+     recommendation for touch pointers. Apply only where explicitly requested. */
+  .tap-target {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
 }
-
-.header-logo span { color: var(--green); }
-
-.header-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-}
-
-.date-nav-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  color: var(--text-muted);
-  font-size: 15px;
-  transition: color 0.15s, border-color 0.15s;
-}
-
-.date-nav-btn:hover { color: var(--text); border-color: var(--text-muted); }
-
-.date-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.date-icon {
-  position: absolute;
-  left: 9px;
-  color: var(--text-muted);
-  pointer-events: none;
-  z-index: 1;
-}
-
-.date-input {
-  height: 32px;
-  padding: 0 10px 0 28px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--text);
-  font: inherit;
-  font-size: var(--type-body);
-  color-scheme: dark;
-  width: 148px;
-}
-
-:root[data-theme="light"] .date-input { color-scheme: light; }
-
-.date-input:focus { outline: 2px solid var(--green); outline-offset: 1px; }
-
-.date-input::-webkit-calendar-picker-indicator {
-  opacity: 0.45;
-  filter: invert(1);
-  cursor: pointer;
-}
-
-@media (prefers-color-scheme: light) {
-  .date-input { color-scheme: light; }
-  .date-input::-webkit-calendar-picker-indicator { filter: none; }
-}
-
-:root[data-theme="light"] .date-input { color-scheme: light; }
-:root[data-theme="light"] .date-input::-webkit-calendar-picker-indicator { filter: none; }
-:root[data-theme="dark"]  .date-input { color-scheme: dark; }
-:root[data-theme="dark"]  .date-input::-webkit-calendar-picker-indicator { filter: invert(1); }
-
-.today-btn {
-  height: 32px;
-  padding: 0 12px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  color: var(--text-muted);
-  font-size: var(--type-body);
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  transition: color 0.15s, border-color 0.15s;
-}
-
-.today-btn:hover { color: var(--text); border-color: var(--text-muted); }
-
-.theme-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  color: var(--text-muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.15s;
-}
-
-.theme-btn:hover { color: var(--text); }
-
-.theme-auto {
-  font-size: var(--type-small);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.main {
-  flex: 1;
-  padding: 24px;
-  max-width: 1400px;
-  width: 100%;
-  margin: 0 auto;
-}
-
-/* ── Page meta bar ────────────────────────────────────────── */
-.meta-bar {
-  display: flex;
-  align-items: baseline;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.meta-date {
-  font-size: 19px;
-  font-weight: 600;
-  letter-spacing: -0.3px;
-}
-
-.meta-pool {
-  font-size: var(--type-body);
-  color: var(--text-muted);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-/* ── Ticket grid ──────────────────────────────────────────── */
-.ticket-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  align-items: start;
-}
-
-@media (max-width: 1200px) {
-  .ticket-grid { grid-template-columns: repeat(2, 1fr); }
-}
-
-@media (max-width: 640px) {
-  .ticket-grid { grid-template-columns: 1fr; }
-}
-
-/* ── Ticket card ──────────────────────────────────────────── */
-.ticket-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-
-.ticket-header {
-  padding: 14px 16px 12px;
-  border-bottom: 1px solid var(--border-2);
-}
-
-.ticket-tier-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.tier-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.ticket-name {
-  font-size: var(--type-body);
-  font-weight: 600;
-  letter-spacing: 0.05em;
-}
-
-.ticket-stats {
-  display: flex;
-  gap: 16px;
-}
-
-.stat {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.stat-label {
-  font-size: var(--type-small);
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
-
-.stat-value {
-  font-size: 17px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.5px;
-  line-height: 1;
-}
-
-.stat-value.positive { color: var(--green); }
-.stat-value.neutral  { color: var(--text); }
-
-/* ── Leg table ────────────────────────────────────────────── */
-.leg-list {
-  list-style: none;
-}
-
-.leg-item {
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border-2);
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 4px 12px;
-  align-items: start;
-}
-
-.leg-item:last-child { border-bottom: none; }
-
-.leg-match {
-  font-size: var(--type-body);
-  font-weight: 500;
-  color: var(--text);
-  line-height: 1.3;
-}
-
-.leg-match-vs { color: var(--text-muted); font-weight: 400; }
-
-.leg-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-top: 3px;
-}
-
-.leg-comp {
-  font-size: var(--type-small);
-  color: var(--text-muted);
-}
-
-.leg-time {
-  font-size: var(--type-small);
-  color: var(--text-dim);
-  font-variant-numeric: tabular-nums;
-}
-
-.leg-market {
-  font-size: var(--type-small);
-  font-weight: 600;
-  color: var(--text-muted);
-  background: var(--surface-2);
-  padding: 1px 5px;
-  border-radius: 3px;
-  letter-spacing: 0.02em;
-}
-
-.leg-right {
-  text-align: right;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 3px;
-}
-
-.leg-odds {
-  font-size: 15px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.3px;
-  line-height: 1;
-}
-
-.leg-edge {
-  font-size: var(--type-small);
-  font-variant-numeric: tabular-nums;
-  color: var(--green);
-}
-
-.leg-q {
-  font-size: var(--type-small);
-  color: var(--text-dim);
-  font-variant-numeric: tabular-nums;
-}
-
-/* ── Grade badge ──────────────────────────────────────────── */
-.grade-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-size: var(--type-small);
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  line-height: 1.6;
-}
-
-.grade-a-plus { background: #1a6130; color: #4ade80; }
-.grade-a      { background: #1a6130; color: #4ade80; }
-.grade-b-plus { background: var(--green-dim); color: var(--green); }
-.grade-b      { background: var(--green-dim); color: var(--green); }
-.grade-c      { background: var(--amber-dim); color: var(--amber); }
-.grade-reject { background: var(--surface-2); color: var(--text-dim); }
-
-/* ── Research badge ───────────────────────────────────────── */
-.research-badge {
-  font-size: var(--type-small);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--purple);
-  border: 1px solid var(--purple);
-  padding: 1px 5px;
-  border-radius: 3px;
-  opacity: 0.8;
-}
-
-/* ── Empty / loading states ───────────────────────────────── */
-.empty-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 32px 24px;
-  text-align: center;
-}
-
-.empty-title {
-  font-size: var(--type-body);
-  font-weight: 600;
-  color: var(--text-muted);
-  margin-bottom: 6px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.empty-body {
-  font-size: var(--type-body);
-  color: var(--text-dim);
-  line-height: 1.6;
-  max-width: 220px;
-  margin: 0 auto;
-}
-
-.loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 48px;
-  color: var(--text-muted);
-  font-size: var(--type-body);
-}
-
-.spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--border);
-  border-top-color: var(--green);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-
-@keyframes spin { to { transform: rotate(360deg); } }
-
-.error-bar {
-  background: #2d1117;
-  border: 1px solid #f8514940;
-  border-radius: var(--radius);
-  padding: 12px 16px;
-  color: var(--red);
-  font-size: var(--type-body);
-  margin-bottom: 16px;
-}
-
-/* ── Debug override row ───────────────────────────────────── */
-.override-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
-
-.override-label {
-  font-size: var(--type-body);
-  color: var(--text-muted);
-}
-
-.override-input {
-  width: 80px;
-  height: 28px;
-  padding: 0 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--text);
-  font: inherit;
-  font-size: var(--type-body);
-  font-variant-numeric: tabular-nums;
-}
-
-.override-btn {
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--text-muted);
-  font-size: var(--type-body);
-  transition: color 0.15s;
-}
-
-.override-btn:hover { color: var(--text); }
-.override-btn.active { border-color: var(--amber); color: var(--amber); background: var(--amber-dim); }
 
 @media (prefers-reduced-motion: reduce) {
-  .spinner { animation: none; }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
-
-/* Shared typography baseline for the Windows 11 system font and calmer weight hierarchy. */
-:root { --system-font: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; }
-body, button, input, select, textarea { font-family: var(--system-font); }
-body :is(h1, h2, h3, h4, h5, h6) { font-weight: 600; }
-body :is(strong, b) { font-weight: 600; }
-body :is(.sidebar-label, .eyebrow, .metric small, .analysis-card small) { font-weight: 500; }
-body :is(.nav-tab, .brand-name, .status-pill, .ticket-label, .leg-result) { font-weight: 600; }
