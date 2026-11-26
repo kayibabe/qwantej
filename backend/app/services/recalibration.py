@@ -1,4 +1,4 @@
-"""Research-only probability recalibration for the Qwantej model.
+"""Research-only probability recalibration for the QwantEj model.
 
 Settled evidence shows the model is uniformly overconfident (negative
 calibration gap in every 5pp band), which makes raw model-minus-market edge

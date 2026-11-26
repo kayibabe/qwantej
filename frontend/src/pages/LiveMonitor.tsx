@@ -159,7 +159,7 @@ export default function LiveMonitorPage() {
         <div>
           <span className="inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-red-700"><span className="h-2 w-2 rounded-full bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.15)]" aria-hidden="true" /> Live centre</span>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Matches in play</h1>
-          <p className="mt-1 max-w-3xl text-base leading-relaxed text-slate-600">Live scores and match phases from MatchSlip’s stored fixture status. This view checks for updates every minute and lists only live matches.</p>
+          <p className="mt-1 max-w-3xl text-base leading-relaxed text-slate-600">Live scores and match phases from QwantEj’s stored fixture status. This view checks for updates every minute and lists only live matches.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 self-start">
           {lastChecked && <span className={`text-sm ${isStale ? 'font-semibold text-amber-800' : 'text-slate-600'}`}>{isStale ? 'Last successful check' : 'View checked'} {lastChecked.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}

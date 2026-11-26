@@ -115,7 +115,7 @@ class BillingPayment(Base):
 
 
 class BillingSubscription(Base):
-    """The customer's current Qwantej Pro entitlement from a recurring plan."""
+    """The customer's current QwantEj Pro entitlement from a recurring plan."""
 
     __tablename__ = "billing_subscriptions"
     __table_args__ = (UniqueConstraint("user_id", "provider", name="uq_billing_subscription_user_provider"),)

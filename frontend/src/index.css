@@ -1,23 +1,41 @@
 @import "tailwindcss";
 
 @theme {
-  --font-display: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
-  --font-sans: "DM Sans", system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  /*
+   * One UI family across the whole system, anchored to the side menu:
+   * Segoe UI Variable Text at 14px is the base for navigation, controls and
+   * body copy. Display is intentionally the same family so headings never
+   * switch typeface; only size and weight establish hierarchy.
+   * Numeric/data cells keep the Windows 11 monospace stack.
+   */
+  --font-sans: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Cascadia Mono", "Cascadia Code", Consolas, "SFMono-Regular", ui-monospace, monospace;
 
   /*
-   * Readability floor. WCAG does not prescribe a minimum font size, but a
-   * 16px body / 14px compact-label baseline is the widely used accessibility
-   * convention (EN 301 549, GOV.UK, WAI guidance). Overriding the Tailwind
-   * type scale here raises every text-xs/text-sm consumer in one place instead
-   * of relying on each component to remember it. Rem units keep text zoomable.
+   * Scale relative to the side menu's 14px link text:
+   *   13px dense metadata, 14px UI/body, 16px card titles, 18px sections,
+   *   20px page titles, 24/28/34px hero sizes. All values are rem-based, so
+   *   browser text zoom still works.
    */
-  --text-xs: 0.875rem; /* 14px */
-  --text-xs--line-height: 1.25rem;
-  --text-sm: 0.9375rem; /* 15px */
-  --text-sm--line-height: 1.375rem;
-  --text-base: 1rem; /* 16px */
-  --text-base--line-height: 1.5rem;
+  --text-xs: 0.8125rem; /* 13px */
+  --text-xs--line-height: 1.125rem;
+  --text-sm: 0.875rem; /* 14px — side menu baseline */
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.875rem; /* 14px — body copy matches the side menu */
+  --text-base--line-height: 1.375rem;
+  --text-lg: 1rem; /* 16px */
+  --text-lg--line-height: 1.5rem;
+  --text-xl: 1.125rem; /* 18px */
+  --text-xl--line-height: 1.625rem;
+  --text-2xl: 1.25rem; /* 20px */
+  --text-2xl--line-height: 1.75rem;
+  --text-3xl: 1.5rem; /* 24px */
+  --text-3xl--line-height: 2rem;
+  --text-4xl: 1.75rem; /* 28px */
+  --text-4xl--line-height: 2.25rem;
+  --text-5xl: 2.125rem; /* 34px */
+  --text-5xl--line-height: 2.625rem;
 }
 
 /*
@@ -43,6 +61,41 @@
   --page-menu-width-lg: 16rem; /* 256px */
   --page-menu-gap: 1.5rem; /* 24px */
   --page-menu-gap-lg: 2rem; /* 32px */
+
+  /* Legacy layout aliases used by retained component styles. */
+  --accent: #047857; /* emerald-700 */
+  --accent-bg: #ecfdf5; /* emerald-50 */
+  --positive: #047857;
+  --negative: #dc2626;
+  --warning: #b45309; /* amber-700 */
+  --muted: #475569; /* slate-600 */
+  --text: #0f172a; /* slate-900 */
+  --text2: #334155; /* slate-700 */
+  --surface: #ffffff;
+  --surface2: #f8fafc; /* slate-50 */
+  --border: #e2e8f0; /* slate-200 */
+  --line: #e2e8f0;
+  --ga-bg: #ecfdf5;
+  --ga-text: #047857;
+  --r-xs: 0.25rem;
+  --r-sm: 0.5rem;
+  --r: 0.5rem;
+  --r-md: 0.75rem;
+  --r-lg: 0.75rem;
+  --r-xl: 0.875rem;
+  --shadow-sm: 0 1px 2px 0 rgb(15 23 42 / 0.06);
+  --type-body: 0.875rem;
+  --type-small: 0.875rem;
+  --type-xs: 0.8125rem;
+  --type-table: 0.875rem;
+  --type-table-label: 0.8125rem;
+}
+
+/* Shared page shell: `main.page-inset-app` already supplies the gutters and
+   vertical padding, so this only caps line length on wide data pages. */
+.page-content {
+  max-width: 80rem;
+  margin-inline: auto;
 }
 
 /* Guest (logged-out) pages: a symmetric gutter on both sides. */
@@ -111,6 +164,7 @@
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
     font-family: var(--font-sans);
+    font-optical-sizing: auto;
     background-color: #f8fafc;
     color: #0f172a;
     -webkit-font-smoothing: antialiased;
@@ -122,7 +176,8 @@
   }
 
   h1, h2, h3, h4 {
-    font-family: var(--font-display);
+    /* Inherit the side-menu family; headings differ only in size/weight. */
+    font-family: var(--font-sans);
     line-height: 1.25;
     text-wrap: balance;
   }
@@ -143,13 +198,13 @@
   /*
    * Safety net for arbitrary fixed-pixel sizes that slipped into the markup.
    * Components should use the rem-based scale above; this keeps any leftover
-   * 9-11px label readable (14px) even before it is migrated.
+   * 9-11px label at the small-label size (13px) even before it is migrated.
    */
   [class~="text-[9px]"],
   [class~="text-[10px]"],
   [class~="text-[11px]"] {
-    font-size: 0.875rem;
-    line-height: 1.25rem;
+    font-size: 0.8125rem;
+    line-height: 1.125rem;
   }
 
   /* slate-400 (#94a3b8) is ~2.6:1 on white and fails WCAG 1.4.4 for text. */

@@ -102,8 +102,8 @@ export default function UpgradePage({ onBack, anonymous = false, onSignIn, onCre
   return (
     <section className="min-h-screen bg-slate-50 px-4 py-10 sm:py-16" aria-labelledby="upgrade-title">
       <div className="mx-auto grid w-full max-w-xl gap-5 rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-        <span className="text-sm font-bold uppercase leading-normal tracking-wide text-emerald-700">MatchSlip Pro · monthly access</span>
-        <h1 id="upgrade-title" className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl [font-family:'Plus_Jakarta_Sans',sans-serif]">{hasProAccess ? 'Your Pro access is active' : 'Unlock the full matchday workspace'}</h1>
+        <span className="text-sm font-bold uppercase leading-normal tracking-wide text-emerald-700">QwantEj Pro · monthly access</span>
+        <h1 id="upgrade-title" className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl font-display">{hasProAccess ? 'Your Pro access is active' : 'Unlock the full matchday workspace'}</h1>
         <p className="text-base leading-relaxed text-slate-700">{hasProAccess ? `Your ${user?.plan === 'pro' ? 'Pro' : 'admin'} account includes Pro features.` : 'Move from the daily published record to the exact selections, captured prices and model evidence behind each ticket.'}</p>
 
         {!hasProAccess && <>

@@ -1,14 +1,15 @@
-MatchSlip brand direction (2026-11-25)
+QwantEj brand direction
 
 Active identity:
-- Name: MatchSlip
+- Name: QwantEj
 - Tagline: Built on evidence, not hunches.
 - Primary: emerald #047857
 - Neutrals: slate-50 #f8fafc, slate-200 #e2e8f0, slate-900 #0f172a
-- Fonts: Plus Jakarta Sans (display), DM Sans (body), JetBrains Mono (numbers)
-- Icon: emerald rounded-square ticket/slip with white slip and emerald check (see public/favicon.svg)
+- Fonts: Segoe UI Variable Display (headings), Segoe UI Variable Text (body), Cascadia Mono / Consolas (numbers)
+- Icon: the Q / chart-dot app mark in public/icons/{light,dark}/, sourced from output/qwantej-brand-kit
 
-Legacy QwanEj raster prompts below are retained only as historical context for old assets in light/ and dark/.
+The prompts below are the historical generation prompts for the raster icons now
+used by the app. They are retained as provenance, not as current production prompts.
 
 Use case: logo-brand. Recreate the supplied QwanEj stacked logo reference as a polished high resolution production asset, closely preserving the exact identity, geometry and composition. Keep exact brand text \"QwanEj\" and exact tagline \"Intelligence Beyond Numbers.\" with thin rules. Dark navy wordmark, royal blue tagline, blue gradient Q for light surfaces. Remove background to actual transparency. Crisp vector-like edges, tasteful consistent spacing, preserve the diagonal Q tail. One asset only, no presentation board.
 

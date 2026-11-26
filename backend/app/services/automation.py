@@ -1,4 +1,4 @@
-"""Persistent checks that make Qwantej's in-process schedules self-healing."""
+"""Persistent checks that make QwantEj's in-process schedules self-healing."""
 
 from __future__ import annotations
 

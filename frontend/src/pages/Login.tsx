@@ -26,12 +26,12 @@ export default function LoginPage({ onSuccess }: { onSuccess: () => void }) {
   return (
     <section className="min-h-screen bg-slate-50 px-4 py-10 sm:py-16" aria-labelledby="auth-page-title">
       <div className="mx-auto w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-        <a className="inline-flex min-h-11 flex-col justify-center text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700" href="/" aria-label="MatchSlip home">
-          <span className="text-xl font-bold tracking-tight [font-family:'Plus_Jakarta_Sans',sans-serif]">MatchSlip</span>
+        <a className="inline-flex min-h-11 flex-col justify-center text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700" href="/" aria-label="QwantEj home">
+          <span className="text-xl font-bold tracking-tight font-display">QwantEj</span>
           <span className="text-sm font-medium leading-normal text-slate-600">Built on evidence, not hunches.</span>
         </a>
-        <h2 id="auth-page-title" className="mt-6 text-2xl font-bold tracking-tight text-slate-900 [font-family:'Plus_Jakarta_Sans',sans-serif]">{mode === 'login' ? 'Welcome back' : 'Create your account'}</h2>
-        <p className="mt-2 text-base leading-relaxed text-slate-700">{mode === 'login' ? 'Sign in to your MatchSlip workspace.' : 'Create an account to get started with MatchSlip.'}</p>
+        <h2 id="auth-page-title" className="mt-6 text-2xl font-bold tracking-tight text-slate-900 font-display">{mode === 'login' ? 'Welcome back' : 'Create your account'}</h2>
+        <p className="mt-2 text-base leading-relaxed text-slate-700">{mode === 'login' ? 'Sign in to your QwantEj workspace.' : 'Create an account to get started with QwantEj.'}</p>
         <form className="mt-6 grid gap-4" onSubmit={submit}>
           {mode === 'register' && <label className={labelClassName}>Username<input className={inputClassName} autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} aria-describedby={errorDescription} required /></label>}
           {mode === 'login'

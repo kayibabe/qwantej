@@ -722,7 +722,7 @@ async def probability_calibration_analysis(
     date_to: date | None = None,
     model_version: str | None = None,
 ) -> dict:
-    """Compare Qwantej model probability vs. market-implied probability across the whole system.
+    """Compare QwantEj model probability vs. market-implied probability across the whole system.
 
     Uses the same whole-system population as all_market_research_summary: every
     latest prediction (accepted into a ticket or rejected) with a pre-kickoff

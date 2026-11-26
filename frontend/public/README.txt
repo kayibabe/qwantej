@@ -1,12 +1,16 @@
-MatchSlip BRAND KIT (migrated 2026-11-25)
+QwantEj web brand assets
 
-The active web app now uses the MatchSlip visual identity:
-- Primary: emerald #047857
-- Neutrals: slate palette (bg #f8fafc, text #0f172a, borders #e2e8f0)
-- Fonts: DM Sans, Plus Jakarta Sans, JetBrains Mono
+The active web app uses the QwantEj identity and the raster icons copied from
+output/qwantej-brand-kit into public/icons/ (light and dark variants).
+- Name: QwantEj
 - Tagline: Built on evidence, not hunches.
-- Favicon/app icon: /favicon.svg
+- UI primary: emerald #047857
+- Neutrals: slate (#0f172a text, #64748b muted, #e2e8f0 borders, #f8fafc background, white surfaces)
+- Fonts: Segoe UI Variable Text (all UI and headings, 14px baseline), Cascadia Mono / Consolas (numeric/data)
 
-Legacy QwanEj raster assets in light/ and dark/ are retained as historical files
-and are no longer referenced by the frontend. Replace them when MatchSlip-native
-raster artwork is produced.
+Browser assets:
+- /icons/light/favicon.ico (16, 32, 48 and 64 pixel versions)
+- /icons/{light,dark}/favicon-{16,32,48,64}.png
+- /icons/{light,dark}/icon-{128,180,192,256,512}.png
+- /manifest.json uses the light-theme 128, 192 and 512 pixel icons
+- /favicon.svg is retained as a fallback asset for the bundled SPA

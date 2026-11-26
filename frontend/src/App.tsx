@@ -106,9 +106,9 @@ function NavIcon({ name }: { name: string }) {
 
 function BrandMark({ className = '', showTagline = true }: { className?: string; showTagline?: boolean }) {
   return <span className={`inline-flex items-center gap-2 ${className}`.trim()}>
-    <img src="/favicon.svg" alt="" className="h-8 w-8 rounded-lg" />
+    <img src="/icons/light/icon-128.png" alt="" className="h-8 w-8 rounded-lg" />
     <span className="flex flex-col">
-      <strong className="font-display text-base leading-6 font-bold tracking-tight text-slate-900">MatchSlip</strong>
+      <strong className="font-display text-base leading-6 font-bold tracking-tight text-slate-900">QwantEj</strong>
       {showTagline && <small className="text-sm leading-5 font-medium text-slate-600">Built on evidence, not hunches.</small>}
     </span>
   </span>
@@ -296,11 +296,11 @@ export default function App() {
     setMatchReturnTo(from)
     const extra: Record<string, string> = { from }
     if (nextPredictionId != null) extra.prediction_id = String(nextPredictionId)
-    window.history.pushState({ matchslipMatchReturn: true }, '', datePath(`/match/${nextMatchId}`, date, extra))
+    window.history.pushState({ qwantejMatchReturn: true }, '', datePath(`/match/${nextMatchId}`, date, extra))
   }
 
   function returnFromMatch() {
-    if (window.history.state?.matchslipMatchReturn || window.history.state?.qwantejMatchReturn) {
+    if (window.history.state?.qwantejMatchReturn) {
       window.history.back()
       return
     }
@@ -439,7 +439,7 @@ export default function App() {
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:inline-flex focus:min-h-11 focus:items-center focus:rounded-lg focus:bg-emerald-700 focus:px-3 focus:text-sm focus:font-semibold focus:text-white focus:outline-2 focus:outline-offset-2 focus:outline-emerald-700">Skip to content</a>
 
       <aside className="fixed top-0 bottom-0 left-0 z-30 hidden page-menu flex-col border-r border-slate-200 bg-white sm:flex">
-        <a className="flex h-16 items-center border-b border-slate-200 px-4" href={moduleHref('tickets')} aria-label="MatchSlip home" onClick={navClick('tickets')}>
+        <a className="flex h-16 items-center border-b border-slate-200 px-4" href={moduleHref('tickets')} aria-label="QwantEj home" onClick={navClick('tickets')}>
           <BrandMark />
         </a>
 
@@ -473,8 +473,8 @@ export default function App() {
           <button ref={mobileMenuButtonRef} type="button" className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 sm:hidden cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700" onClick={() => setMobileNavOpen(true)} aria-label="Open navigation" aria-expanded={mobileNavOpen} aria-controls={mobileNavOpen ? 'mobile-workspace-navigation' : undefined}>
             <Menu className="h-5 w-5" aria-hidden="true" />
           </button>
-          <a className="flex items-center sm:hidden" href={moduleHref('tickets')} aria-label="MatchSlip home" onClick={navClick('tickets')}>
-            <img src="/favicon.svg" alt="" className="h-8 w-8 rounded-lg" />
+          <a className="flex items-center sm:hidden" href={moduleHref('tickets')} aria-label="QwantEj home" onClick={navClick('tickets')}>
+            <img src="/icons/light/icon-128.png" alt="" className="h-8 w-8 rounded-lg" />
           </a>
 
           <div className="min-w-0 flex-1">

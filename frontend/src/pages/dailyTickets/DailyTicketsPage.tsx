@@ -650,7 +650,7 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
                       : data?.pipeline_run_id != null
                         ? `No generation record exists. Last stage: ${formatStage(data?.pipeline_current_stage ?? "unknown")}.${data?.pipeline_error ? ` ${data.pipeline_error}` : " The automation watchdog will retry a stale incomplete run within its bounded safety limit."}`
                         : date === TODAY
-                          ? "MatchSlip checks the latest due 00:15 or 05:00 CAT window on startup and every five minutes. If it was missed, it queues one full catch-up automatically."
+                          ? "QwantEj checks the latest due 00:15 or 05:00 CAT window on startup and every five minutes. If it was missed, it queues one full catch-up automatically."
                           : "The ticket cards are intentionally hidden because there is no evidence that candidate generation or publication ran for this date."}
                   </p>
                 </section>

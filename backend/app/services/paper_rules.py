@@ -75,7 +75,7 @@ RULES: dict[str, dict] = {
         model_band=[0.85, 0.90], market_band=[0.65, 0.70],
         earliest_kickoff_date='2026-11-08', minimum_review_date='2027-02-01',
         required_settled=60, required_matchdays=15,
-        rationale=('MatchSlip x Market disagreement cell 85-90 x 65-70: +8.2% ROI over 48 settled '
+        rationale=('QwantEj x Market disagreement cell 85-90 x 65-70: +8.2% ROI over 48 settled '
                    'picks (70.8% hit). Model moderately confident where the market prices lower.'),
         **_COMMON,
     ),
@@ -182,9 +182,9 @@ RULES: dict[str, dict] = {
             'No-Q validation: 61 picks, 26 matchdays, 91.8% hit, +8.11% ROI, '
             'day-cluster 95% CI [0.98%, 15.27%] from 2026-09-27 to 2026-11-20. '
             'The five band-mix pairs draw from all predictions because this rule '
-            'intentionally has no Q-score gate. Bands are: MatchSlip <50% x market implied '
-            '85-90%; MatchSlip 50-55% x market implied 90-95%; MatchSlip 55-60% x market implied '
-            '95-100%; MatchSlip 60-65% x market implied 90-95%; MatchSlip 95-100% x market implied '
+            'intentionally has no Q-score gate. Bands are: QwantEj <50% x market implied '
+            '85-90%; QwantEj 50-55% x market implied 90-95%; QwantEj 55-60% x market implied '
+            '95-100%; QwantEj 60-65% x market implied 90-95%; QwantEj 95-100% x market implied '
             '70-75%. Use source implied probability, one selection per fixture, and the '
             'first stored qualifying prediction for the fixture. Review prospectively from '
             '2026-11-22 with at least 150 settled picks across 30 matchdays from 2027-03-01.'

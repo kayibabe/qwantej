@@ -137,10 +137,10 @@ writeFileSync(portFile, `${port}\n`, 'utf8')
 process.on('exit', removePortFile)
 
 if (port === start) {
-  console.log(`\n  QwanEj dev server -> http://localhost:${port}\n`)
+  console.log(`\n  QwantEj dev server -> http://localhost:${port}\n`)
 } else {
   console.log(
-    `\n  QwanEj dev server -> http://localhost:${port}` +
+    `\n  QwantEj dev server -> http://localhost:${port}` +
       `\n  (port ${start} is unavailable on this machine, so the next free port was used)\n`,
   )
 }

@@ -399,7 +399,7 @@ class LeaguePerformance(Base):
 
 
 class EdgeBandCalibration(Base):
-    """Qwantej calibration by market-family x edge-band, feeding the selection gate.
+    """QwantEj calibration by market-family x edge-band, feeding the selection gate.
 
     Coarser than the per-band diagnostics in probability_calibration_analysis
     (which stays whole-history and read-only), but finer than ModelPerformance
@@ -512,7 +512,7 @@ class SinglesLedgerSnapshot(Base):
 
 
 class BandMixScan(Base):
-    """Once-per-day, insert-only scan of the best-performing Qwantej × market band mixes.
+    """Once-per-day, insert-only scan of the best-performing QwantEj × market band mixes.
 
     Captured before that day's band-mix candidates are listed, from settled
     evidence dated strictly before target_date, so the criteria used for a day
@@ -532,7 +532,7 @@ class BandMixScan(Base):
 
 
 class BandMixPairState(Base):
-    """Current research status for one Qwantej × market band pair."""
+    """Current research status for one QwantEj × market band pair."""
 
     __tablename__ = "band_mix_pair_states"
     __table_args__ = (

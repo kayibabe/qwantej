@@ -5,7 +5,7 @@ import type { SelectionSummary } from "../../lib/api";
  * from the saved filter. Each pair can be selected independently; selected
  * pairs combine with OR (any pair qualifies a match). Bands match the backend's
  * 5pp buckets in app/services/performance.py, so this view agrees with
- * Validate's combined matrix. MatchSlip band here means the model's predicted
+ * Validate's combined matrix. QwantEj band here means the model's predicted
  * probability, not the Q-score quality gate.
  */
 export const BAND_MIX_PAIRS: [string, string][] = [

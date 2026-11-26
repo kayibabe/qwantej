@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
+import './Analytics.css'
 import { fmt, fmtPnl } from '../utils/currency'
 import { handleArrowTab } from '../utils/tabs'
 import { formatMarket, formatSelection, formatTicketType, selectionRepeatsMarket, ticketTierBadgeClass } from '../lib/api'
@@ -316,7 +317,7 @@ function ProbabilityCalibration() {
   if (!data) return <AnalyticsEmpty title="No calibration data" body="Calibration bands appear once predictions have pre-kickoff prices and settled outcomes." />
 
   const s = data.summary
-  const betterModel = (s.qwantej_brier_score ?? 1) <= (s.market_brier_score ?? 1) ? 'MatchSlip' : 'Market'
+  const betterModel = (s.qwantej_brier_score ?? 1) <= (s.market_brier_score ?? 1) ? 'QwantEj' : 'Market'
   const stale = failed && data != null
   const scopeText = `${from ? `from ${from}` : 'all dates'} · ${to ? `to ${to}` : 'no end date'} · ${modelVersion || 'all models'}`
   const status = stale
@@ -338,17 +339,17 @@ function ProbabilityCalibration() {
     {exportError && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-base leading-relaxed text-amber-800" role="alert">Export failed. Check the API connection and try again. The on-screen analysis is unchanged.</div>}
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
       <MetricCard label="Sample size" value={s.sample_size.toString()} note={`${s.voids_excluded} void · ${s.unsupported_markets_excluded} unsupported excluded`} />
-      <MetricCard label="MatchSlip Brier score" value={score(s.qwantej_brier_score)} note="Lower is better" />
+      <MetricCard label="QwantEj Brier score" value={score(s.qwantej_brier_score)} note="Lower is better" />
       <MetricCard label="Market Brier score" value={score(s.market_brier_score)} note="Lower is better" />
-      <MetricCard label="Better calibrated" value={betterModel} note={`MatchSlip ${score(s.qwantej_calibration_error)} vs Market ${score(s.market_calibration_error)} calibration error`} tone={betterModel === 'MatchSlip' ? 'text-emerald-700 font-mono tabular-nums' : 'warning'} />
+      <MetricCard label="Better calibrated" value={betterModel} note={`QwantEj ${score(s.qwantej_calibration_error)} vs Market ${score(s.market_calibration_error)} calibration error`} tone={betterModel === 'QwantEj' ? 'text-emerald-700 font-mono tabular-nums' : 'warning'} />
     </div>
     {s.sample_size < 30 && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-base leading-relaxed text-amber-800">Small sample: only {s.sample_size} settled predictions in this scope. Treat bucket results as directional.</div>}
     <div className="grid gap-4">
-      <ProbabilityBucketTable title="MatchSlip model probability" subtitle="Bucketed by predicted win probability, 5pp bands" rows={data.qwantej_buckets} />
+      <ProbabilityBucketTable title="QwantEj model probability" subtitle="Bucketed by predicted win probability, 5pp bands" rows={data.qwantej_buckets} />
       <ProbabilityBucketTable title="Market implied probability" subtitle="Bucketed by 1/odds at pick time, 5pp bands" rows={data.market_buckets} />
     </div>
     <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3"><div><span className="eyebrow">Where the two views agree or diverge</span><h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">MatchSlip × Market combined matrix</h2></div><span className="text-sm text-slate-600">Every observed band pairing, sorted by probability band</span></div>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3"><div><span className="eyebrow">Where the two views agree or diverge</span><h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">QwantEj × Market combined matrix</h2></div><span className="text-sm text-slate-600">Every observed band pairing, sorted by probability band</span></div>
       <CombinedMatrixTable rows={data.combined_matrix} />
     </section>
     <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
@@ -356,7 +357,7 @@ function ProbabilityCalibration() {
       {data.best_combinations.length === 0 ? <AnalyticsEmpty title="No qualifying combinations yet" body="Combinations need at least 8 settled predictions to appear here." compact /> : <CombinedMatrixTable rows={data.best_combinations} />}
     </section>
     <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3"><div><span className="eyebrow">Value-betting signal</span><h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">Performance by edge (MatchSlip minus market)</h2></div><span className="text-sm text-slate-600">Positive edge should correlate with positive ROI if the model has real edge</span></div>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3"><div><span className="eyebrow">Value-betting signal</span><h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">Performance by edge (QwantEj minus market)</h2></div><span className="text-sm text-slate-600">Positive edge should correlate with positive ROI if the model has real edge</span></div>
       <EdgeBucketTable rows={data.edge_buckets} />
     </section>
     <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
@@ -378,14 +379,14 @@ function ProbabilityBucketTable({ title, subtitle, rows }: { title: string; subt
 function CombinedMatrixTable({ rows }: { rows: CombinedMatrixRow[] }) {
   const { sorted, header } = useSortableRows(rows, { qwantej: row => bandSortValue(row.qwantej_band), market: row => bandSortValue(row.market_band), n: row => row.sample_size, wins: row => row.wins, hit: row => row.hit_rate, roi: row => row.roi })
   if (rows.length === 0) return <AnalyticsEmpty title="No combined bands yet" body="Combinations appear once both probability sources have settled outcomes." compact />
-  return <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full min-w-[640px] border-collapse text-left text-sm [&_thead]:border-b [&_thead]:border-slate-200 [&_thead]:bg-slate-50 [&_thead]:text-sm [&_thead]:uppercase [&_thead]:tracking-wide [&_thead]:text-slate-600 [&_th]:px-3 [&_th]:py-3 [&_th]:font-semibold [&_tbody]:divide-y [&_tbody]:divide-slate-100 [&_td]:px-3 [&_td]:py-3 [&_tbody_tr:hover]:bg-slate-50/70"><thead><tr>{header('qwantej', 'MatchSlip band')}{header('market', 'Market band')}{header('n', 'N')}{header('wins', 'Won / lost')}{header('hit', 'Hit rate')}{header('roi', 'ROI')}</tr></thead><tbody>{sorted.map((row, index) => <tr key={`${row.qwantej_band}-${row.market_band}-${index}`}><td><strong>{row.qwantej_band}%</strong></td><td>{row.market_band}%</td><td>{row.sample_size}</td><td>{row.wins} / {row.losses}</td><td>{pct(row.hit_rate)}</td><td className={row.roi != null && row.roi >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'}>{row.roi == null ? '—' : pct(row.roi)}</td></tr>)}</tbody></table></div>
+  return <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full min-w-[640px] border-collapse text-left text-sm [&_thead]:border-b [&_thead]:border-slate-200 [&_thead]:bg-slate-50 [&_thead]:text-sm [&_thead]:uppercase [&_thead]:tracking-wide [&_thead]:text-slate-600 [&_th]:px-3 [&_th]:py-3 [&_th]:font-semibold [&_tbody]:divide-y [&_tbody]:divide-slate-100 [&_td]:px-3 [&_td]:py-3 [&_tbody_tr:hover]:bg-slate-50/70"><thead><tr>{header('qwantej', 'QwantEj band')}{header('market', 'Market band')}{header('n', 'N')}{header('wins', 'Won / lost')}{header('hit', 'Hit rate')}{header('roi', 'ROI')}</tr></thead><tbody>{sorted.map((row, index) => <tr key={`${row.qwantej_band}-${row.market_band}-${index}`}><td><strong>{row.qwantej_band}%</strong></td><td>{row.market_band}%</td><td>{row.sample_size}</td><td>{row.wins} / {row.losses}</td><td>{pct(row.hit_rate)}</td><td className={row.roi != null && row.roi >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'}>{row.roi == null ? '—' : pct(row.roi)}</td></tr>)}</tbody></table></div>
 }
 
 function MarketBreakdownTable({ rows }: { rows: MarketBreakdownRow[] }) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const { sorted, header } = useSortableRows(rows, { family: row => formatMarket(row.market_family), n: row => row.sample_size, wins: row => row.wins, hit: row => row.hit_rate, roi: row => row.roi, qwantejBrier: row => row.qwantej_brier_score, marketBrier: row => row.market_brier_score, qwantejError: row => row.qwantej_calibration_error, marketError: row => row.market_calibration_error })
   if (rows.length === 0) return <AnalyticsEmpty title="No market breakdown yet" body="Market families appear once predictions have settled outcomes." compact />
-  return <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full min-w-[640px] border-collapse text-left text-sm [&_thead]:border-b [&_thead]:border-slate-200 [&_thead]:bg-slate-50 [&_thead]:text-sm [&_thead]:uppercase [&_thead]:tracking-wide [&_thead]:text-slate-600 [&_th]:px-3 [&_th]:py-3 [&_th]:font-semibold [&_tbody]:divide-y [&_tbody]:divide-slate-100 [&_td]:px-3 [&_td]:py-3 [&_tbody_tr:hover]:bg-slate-50/70"><thead><tr>{header('family', 'Market family')}{header('n', 'N')}{header('wins', 'Won / lost')}{header('hit', 'Hit rate')}{header('roi', 'ROI')}{header('qwantejBrier', 'MatchSlip Brier')}{header('marketBrier', 'Market Brier')}{header('qwantejError', 'MatchSlip calib. error')}{header('marketError', 'Market calib. error')}<th scope="col"><span className="sr-only">Actions</span></th></tr></thead><tbody>{sorted.map(row => <Fragment key={row.market_family}>
+  return <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full min-w-[640px] border-collapse text-left text-sm [&_thead]:border-b [&_thead]:border-slate-200 [&_thead]:bg-slate-50 [&_thead]:text-sm [&_thead]:uppercase [&_thead]:tracking-wide [&_thead]:text-slate-600 [&_th]:px-3 [&_th]:py-3 [&_th]:font-semibold [&_tbody]:divide-y [&_tbody]:divide-slate-100 [&_td]:px-3 [&_td]:py-3 [&_tbody_tr:hover]:bg-slate-50/70"><thead><tr>{header('family', 'Market family')}{header('n', 'N')}{header('wins', 'Won / lost')}{header('hit', 'Hit rate')}{header('roi', 'ROI')}{header('qwantejBrier', 'QwantEj Brier')}{header('marketBrier', 'Market Brier')}{header('qwantejError', 'QwantEj calib. error')}{header('marketError', 'Market calib. error')}<th scope="col"><span className="sr-only">Actions</span></th></tr></thead><tbody>{sorted.map(row => <Fragment key={row.market_family}>
     <tr><td><strong>{formatMarket(row.market_family)}</strong></td><td>{row.sample_size}</td><td>{row.wins} / {row.losses}</td><td>{pct(row.hit_rate)}</td><td className={row.roi != null && row.roi >= 0 ? 'text-emerald-700 font-mono tabular-nums' : 'text-red-600 font-mono tabular-nums'}>{row.roi == null ? '—' : pct(row.roi)}</td><td>{score(row.qwantej_brier_score)}</td><td>{score(row.market_brier_score)}</td><td>{score(row.qwantej_calibration_error)}</td><td>{score(row.market_calibration_error)}</td><td><button type="button" className={analyticsButtonClass} onClick={() => setExpanded(current => current === row.market_family ? null : row.market_family)}>{expanded === row.market_family ? 'Hide edge' : 'Edge bands'}</button></td></tr>
     {expanded === row.market_family && <tr><td colSpan={10}><EdgeBucketTable rows={row.edge_buckets} /></td></tr>}
   </Fragment>)}</tbody></table></div>

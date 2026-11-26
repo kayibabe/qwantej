@@ -212,7 +212,7 @@ describe('audited ticket surfaces', () => {
       <SelectionDetail selection={ticket.legs[0]} modelVersion="0.2.1" publishedAt={ticket.published_at} onClose={() => undefined} />,
     )
     expect(html).toContain('Probability evidence')
-    expect(html).toContain('MatchSlip model')
+    expect(html).toContain('QwantEj model')
     expect(html).toContain('Market implied')
     expect(html).toContain('Probabilities are estimates, not guarantees')
     expect(html).toContain('0.2.1')
@@ -230,7 +230,7 @@ describe('audited ticket surfaces', () => {
     expect(html).toContain('Fair chance (margin removed)')
     expect(html).toContain('Quoted price implies')
     expect(html).toContain('Price vs fair')
-    expect(html).not.toContain('MatchSlip model')
+    expect(html).not.toContain('QwantEj model')
     expect(html).not.toContain('No positive edge')
     expect(html).not.toContain('Model spread')
   })

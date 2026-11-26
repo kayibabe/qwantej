@@ -81,11 +81,11 @@ export default function AccountRecoveryPage({ mode }: Props) {
   return (
     <section className="min-h-screen bg-slate-50 px-4 py-10 sm:py-16" aria-labelledby="account-recovery-title">
       <div className="mx-auto w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-        <a className="inline-flex min-h-11 flex-col justify-center text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700" href="/" aria-label="MatchSlip home">
-          <span className="text-xl font-bold tracking-tight [font-family:'Plus_Jakarta_Sans',sans-serif]">MatchSlip</span>
+        <a className="inline-flex min-h-11 flex-col justify-center text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700" href="/" aria-label="QwantEj home">
+          <span className="text-xl font-bold tracking-tight font-display">QwantEj</span>
           <span className="text-sm font-medium leading-normal text-slate-600">Built on evidence, not hunches.</span>
         </a>
-        <h2 id="account-recovery-title" className="mt-6 text-2xl font-bold tracking-tight text-slate-900 [font-family:'Plus_Jakarta_Sans',sans-serif]">
+        <h2 id="account-recovery-title" className="mt-6 text-2xl font-bold tracking-tight text-slate-900 font-display">
           {mode === 'verify' ? 'Verify your email' : token ? 'Choose a new password' : 'Reset your password'}
         </h2>
 

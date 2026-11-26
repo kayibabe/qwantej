@@ -1,4 +1,4 @@
-"""rename model probability band fields for Qwantej
+"""rename model probability band fields for QwantEj
 
 Revision ID: fe46b8d3c012
 Revises: fd35a7c2b901

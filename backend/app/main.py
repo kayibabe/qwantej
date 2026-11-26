@@ -1,5 +1,5 @@
 """
-MatchSlip — Football Intelligence & Accumulator Analytics Platform
+QwantEj — Football Intelligence & Accumulator Analytics Platform
 FastAPI application entry point — spec §32, §35.
 """
 
@@ -476,7 +476,7 @@ _CONTENT_SECURITY_POLICY = (
 )
 
 app = FastAPI(
-    title="MatchSlip Intelligence API",
+    title="QwantEj Intelligence API",
     description="Football Intelligence & Accumulator Analytics Platform — Internal API",
     version="0.2.0",
     lifespan=lifespan,

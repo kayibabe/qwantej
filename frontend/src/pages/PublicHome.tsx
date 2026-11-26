@@ -356,7 +356,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
   }
 
   const sectionKickerClass = 'text-sm font-bold uppercase leading-normal tracking-wide text-emerald-700'
-  const sectionTitleClass = 'mt-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl [font-family:\'Plus_Jakarta_Sans\',sans-serif]'
+  const sectionTitleClass = 'mt-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl font-display'
   const sectionCopyClass = 'mt-3 max-w-3xl text-base leading-relaxed text-slate-700'
   const primaryButtonClass = `inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-base font-semibold leading-normal text-white transition-colors hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer ${focusRingClass}`
   const secondaryButtonClass = `inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-base font-semibold leading-normal text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer ${focusRingClass}`
@@ -374,7 +374,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <a className={`inline-flex min-h-11 flex-col justify-center rounded text-slate-900 ${focusRingClass}`} href="/">
-            <span className="text-xl font-bold tracking-tight [font-family:'Plus_Jakarta_Sans',sans-serif]">MatchSlip</span>
+            <span className="text-xl font-bold tracking-tight font-display">QwantEj</span>
             <span className="text-sm font-medium leading-normal text-slate-600">Built on evidence, not hunches.</span>
             <span className="sr-only"> home</span>
           </a>
@@ -390,7 +390,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
         <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-center lg:py-16">
           <div>
             <span className={sectionKickerClass}>EVIDENCE-LED FOOTBALL RESEARCH</span>
-            <h1 id="public-hero-title" className="mt-3 max-w-3xl text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl [font-family:'Plus_Jakarta_Sans',sans-serif]">Football picks, <em className="not-italic text-emerald-700">with a record.</em></h1>
+            <h1 id="public-hero-title" className="mt-3 max-w-3xl text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl font-display">Football picks, <em className="not-italic text-emerald-700">with a record.</em></h1>
             <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-700">Free accounts follow dated published tickets: the matches, kickoff and final settlement. Pro adds each selection, the captured odds and the model chance behind it.</p>
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <button type="button" className={primaryButtonClass} onClick={onCreateAccount}>Follow the daily slate</button>
@@ -480,7 +480,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
                 <header className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <span className="text-sm font-bold uppercase leading-normal tracking-wide text-emerald-700">{activeTicketCursor === 0 ? 'Most recent' : 'Earlier'} {activeTicket.name} ticket</span>
-                    <h3 id="public-proof-ticket-title" className="mt-1 text-lg font-bold tracking-tight text-slate-900 [font-family:'Plus_Jakarta_Sans',sans-serif]">{activeTicket.name} · {formatProofDate(activeTicket.target_date)}</h3>
+                    <h3 id="public-proof-ticket-title" className="mt-1 text-lg font-bold tracking-tight text-slate-900 font-display">{activeTicket.name} · {formatProofDate(activeTicket.target_date)}</h3>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {activeTicket.profit_units != null && <span className={`inline-flex items-center rounded-full border border-slate-300 bg-slate-50 px-2.5 py-1 text-sm font-semibold leading-normal ${profitTone(activeTicket.profit_units)}`}>{formatUnits(activeTicket.profit_units)}</span>}
@@ -530,7 +530,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
 
       <nav className="border-y border-slate-200 bg-white" aria-label="Page sections">
         <div className="mx-auto flex max-w-6xl gap-2 overflow-x-auto px-4 py-2 sm:px-6">
-          {([['public-record', 'Record'], ['public-matches', 'Matches'], ['public-product', 'How MatchSlip works'], ['public-access', 'Plans'], ['public-faq', 'FAQs']] as const).map(([id, label]) => (
+          {([['public-record', 'Record'], ['public-matches', 'Matches'], ['public-product', 'How QwantEj works'], ['public-access', 'Plans'], ['public-faq', 'FAQs']] as const).map(([id, label]) => (
             <a key={id} className={`inline-flex min-h-11 shrink-0 items-center rounded-full px-4 text-sm font-semibold leading-normal transition-colors ${focusRingClass} ${activeSection === id ? 'bg-emerald-50 text-emerald-700' : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`} href={`#${id}`} aria-current={activeSection === id ? 'location' : undefined}>{label}</a>
           ))}
         </div>
@@ -659,7 +659,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
             ].map(({ num, title, copy, action }) => (
               <article key={num} className="rounded-xl border border-slate-200 bg-slate-50 p-5">
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-sm font-bold text-emerald-700">{num}</span>
-                <h3 className="mt-4 text-lg font-bold tracking-tight text-slate-900 [font-family:'Plus_Jakarta_Sans',sans-serif]">{title}</h3>
+                <h3 className="mt-4 text-lg font-bold tracking-tight text-slate-900 font-display">{title}</h3>
                 <p className="mt-2 text-base leading-relaxed text-slate-700">{copy}</p>
                 {action && <div className="mt-4">{action}</div>}
               </article>
@@ -676,7 +676,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
         </div>
         <div className="mt-8 grid gap-4 lg:grid-cols-3">
           <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div><span className="text-sm font-bold uppercase leading-normal tracking-wide text-slate-600">Public</span><h3 className="mt-2 text-lg font-bold text-slate-900 [font-family:'Plus_Jakarta_Sans',sans-serif]">Take a look around</h3></div>
+            <div><span className="text-sm font-bold uppercase leading-normal tracking-wide text-slate-600">Public</span><h3 className="mt-2 text-lg font-bold text-slate-900 font-display">Take a look around</h3></div>
             <ul className="mt-4 space-y-2 text-base leading-normal text-slate-700">
               <li>Fixtures by date and competition</li>
               <li>Live status and completed scores</li>
@@ -685,7 +685,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
             <a href="#public-matches" className={`${textLinkClass} mt-5`}>Open the match centre <span aria-hidden="true">→</span></a>
           </article>
           <article className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
-            <div><span className="text-sm font-bold uppercase leading-normal tracking-wide text-emerald-700">Free account</span><h3 className="mt-2 text-lg font-bold text-slate-900 [font-family:'Plus_Jakarta_Sans',sans-serif]">Follow the daily slate</h3></div>
+            <div><span className="text-sm font-bold uppercase leading-normal tracking-wide text-emerald-700">Free account</span><h3 className="mt-2 text-lg font-bold text-slate-900 font-display">Follow the daily slate</h3></div>
             <ul className="mt-4 space-y-2 text-base leading-normal text-slate-700">
               <li>Published Conservative tickets</li>
               <li>Match legs, kickoff and settlement</li>
@@ -696,7 +696,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
           <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <div>
               <span className="text-sm font-bold uppercase leading-normal tracking-wide text-slate-600">Pro</span>
-              <h3 className="mt-2 text-lg font-bold text-slate-900 [font-family:'Plus_Jakarta_Sans',sans-serif]">Open the evidence</h3>
+              <h3 className="mt-2 text-lg font-bold text-slate-900 font-display">Open the evidence</h3>
               <div className="mt-2 flex flex-wrap items-baseline gap-2"><span className="font-mono text-2xl font-bold tabular-nums text-slate-900">{formatProPrice(offer?.price)}</span><span className="text-base font-medium text-slate-700">/ month</span></div>
             </div>
             <ul className="mt-4 space-y-2 text-base leading-normal text-slate-700">
@@ -717,10 +717,10 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
           <div className="mt-6 divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
             {[
               ['What can I see without an account?', 'Public fixtures include the competition, teams, kickoff or live status, and scores when available. Personal account information and workspace tools stay behind sign-in.'],
-              ['What does MatchSlip do with recommendations?', 'Each ticket is dated and published before kickoff when possible, then settled against the final score. Free accounts see the match legs and settlement; Pro adds the selection, captured odds and model chance for every leg.'],
+              ['What does QwantEj do with recommendations?', 'Each ticket is dated and published before kickoff when possible, then settled against the final score. Free accounts see the match legs and settlement; Pro adds the selection, captured odds and model chance for every leg.'],
               ['What does Q ≥75 mean?', 'Q is a 0–100 evidence score for a selection. It combines the model’s probability, the value at the captured price, recent form, expected goals, market agreement and data quality. A pick needs 75 or more to qualify as a system pick. It is a screening score, not a guarantee.'],
-              ['Where do fixtures, scores and prices come from?', 'Fixtures, live scores and results come from a third-party football data provider. Captured prices are recorded when a ticket is published, so they can differ from your bookmaker or move before kickoff. If a feed is delayed or unavailable, MatchSlip shows the last record it holds rather than inventing a result.'],
-              ['Does MatchSlip guarantee wins or profit?', 'No. Football outcomes are uncertain. The published record above is a record of completed matches, not a forecast of future performance.'],
+              ['Where do fixtures, scores and prices come from?', 'Fixtures, live scores and results come from a third-party football data provider. Captured prices are recorded when a ticket is published, so they can differ from your bookmaker or move before kickoff. If a feed is delayed or unavailable, QwantEj shows the last record it holds rather than inventing a result.'],
+              ['Does QwantEj guarantee wins or profit?', 'No. Football outcomes are uncertain. The published record above is a record of completed matches, not a forecast of future performance.'],
             ].map(([q, a]) => (
               <details key={q} className="group px-4 py-3">
                 <summary className={`inline-flex min-h-11 cursor-pointer list-none items-center rounded py-1 text-base font-semibold leading-normal text-slate-900 ${focusRingClass}`}>{q}</summary>
@@ -729,7 +729,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
             ))}
           </div>
           <div className="mt-6 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div><strong className="block text-base font-semibold leading-normal text-slate-900">Ready to follow the next matchday?</strong><span className="block text-base leading-normal text-slate-700">Create a free account to open your MatchSlip workspace.</span></div>
+            <div><strong className="block text-base font-semibold leading-normal text-slate-900">Ready to follow the next matchday?</strong><span className="block text-base leading-normal text-slate-700">Create a free account to open your QwantEj workspace.</span></div>
             <button type="button" className={primaryButtonClass} onClick={onCreateAccount}>Get started for free <span aria-hidden="true">→</span></button>
           </div>
         </div>
@@ -737,7 +737,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
 
       <footer className="border-t border-slate-200 bg-slate-50">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-6 text-sm leading-normal text-slate-600 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <span>MatchSlip · Built on evidence, not hunches.</span>
+          <span>QwantEj · Built on evidence, not hunches.</span>
           <span>Information only.</span>
         </div>
       </footer>
