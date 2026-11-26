@@ -162,9 +162,9 @@ export default function AnalyticsPage() {
 
   return (
     <div className="page-content space-y-4">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div><span className="text-sm font-semibold text-slate-600">Evidence, not promises</span><h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Model validation</h1><p className="mt-1 max-w-3xl text-base leading-relaxed text-slate-600">Paper-trading performance, calibration, drawdown, and strict closing-odds backtests. Published-ticket performance uses the selected scope below; other research views use their own filters.</p></div>
-        <span className="inline-flex items-center gap-2 self-start rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-600 shadow-sm"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" /> Immutable research ledger</span>
+        <span className="inline-flex shrink-0 items-center gap-2 self-start whitespace-nowrap rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-600 shadow-sm"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" /> Immutable research ledger</span>
       </div>
       <DataFreshness run={latestRun} />
       {view === 'performance' && <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-base leading-relaxed text-slate-600" aria-live="polite" role={error ? 'status' : undefined}>{researchStatus}</p>}

@@ -273,7 +273,7 @@
 .daily-acca-summary-table { min-width: 920px; }
 .daily-acca-summary-table th:first-child, .daily-acca-summary-table td:first-child { min-width: 220px; text-align: left; }
 .daily-acca-summary-table td:first-child small { display: block; color: var(--muted); margin-top: 3px; font-size: var(--type-table-label); line-height: 1.35; }
-.daily-acca-summary-table td:not(:first-child), .daily-acca-summary-table th:not(:first-child) { text-align: center; }
+.daily-acca-summary-table td:not(:first-child):not(.num-col), .daily-acca-summary-table th:not(:first-child):not(.num-col) { text-align: center; }
 .daily-acca-summary-note { margin: 10px 0 0; padding-inline: var(--analytics-card-gutter); color: var(--muted); font-size: var(--type-xs); text-align: left; }
 .daily-date-nav { display: flex; align-items: center; gap: 7px; }
 .daily-date-strip { display: flex; align-items: stretch; gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface2); }
@@ -287,9 +287,11 @@
 .daily-date-calendar { position: relative; font-size: var(--text-xl); }
 .daily-date-calendar input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 .daily-selected-date { display: block; margin: -3px 0 11px; padding-inline: var(--analytics-card-gutter); color: var(--muted); font-size: var(--type-small); text-align: left; }
-.daily-qualifying-status { display: grid; gap: 3px; margin: 0 0 12px; padding: 10px var(--analytics-card-gutter); border-left: 3px solid var(--warning); background: color-mix(in srgb, var(--warning) 8%, var(--surface)); color: var(--muted); font-size: var(--type-small); text-align: left; }
+.daily-qualifying-status { position: relative; display: grid; gap: 3px; margin: 0 0 12px; padding: 10px var(--analytics-card-gutter); background: color-mix(in srgb, var(--warning) 8%, var(--surface)); color: var(--muted); font-size: var(--type-small); text-align: left; }
+.daily-qualifying-status::before { position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--warning); content: ''; }
 .daily-qualifying-status strong { color: var(--warning); }
-.daily-qualifying-status.qualifies { border-left-color: var(--positive); background: color-mix(in srgb, var(--positive) 8%, var(--surface)); }
+.daily-qualifying-status.qualifies { background: color-mix(in srgb, var(--positive) 8%, var(--surface)); }
+.daily-qualifying-status.qualifies::before { background: var(--positive); }
 .daily-qualifying-status.qualifies strong { color: var(--positive); }
 .daily-market-qualification-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; padding-inline: var(--analytics-card-gutter); }
 .daily-market-qualification-list > div { display: grid; gap: 2px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--positive) 24%, var(--border)); border-radius: var(--r-sm); background: color-mix(in srgb, var(--positive) 5%, var(--surface)); }
