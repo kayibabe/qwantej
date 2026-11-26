@@ -18,7 +18,7 @@ describe('Over 4.5 evidence', () => {
       checks: [{ key: 'projected_xg', value: null, threshold: 3.8, status: 'missing', required: true }],
       reasons: ['OVER45_CALIBRATION_UNVALIDATED'],
     }} />)
-    expect(html).toContain('REJECT · Probability grade A+')
+    expect(html).toContain('Reject · Probability grade A+')
     expect(html).toContain('Unvalidated estimate')
     expect(html).toContain('calibration unvalidated')
     expect(html).toContain('Unavailable')

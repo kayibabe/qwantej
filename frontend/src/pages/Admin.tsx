@@ -266,7 +266,7 @@ export default function AdminPage() {
     <div className="page-content space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1">
-          <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">System area</p>
+          <p className="text-sm font-semibold text-slate-600">System area</p>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Administration</h1>
           <p className="text-base leading-relaxed text-slate-600">Monitor publication, recover missed runs, and manage access.</p>
         </div>
@@ -379,7 +379,7 @@ export default function AdminPage() {
           )}
           <fieldset className="mt-4 space-y-3 rounded-lg border border-slate-200 p-4">
             <legend className="px-1 text-sm font-semibold text-slate-800">Manual recovery actions</legend>
-            <label className="flex flex-col gap-1 text-sm font-semibold uppercase tracking-wide text-slate-600">Pipeline target date
+            <label className="flex flex-col gap-1 text-sm font-semibold text-slate-600">Pipeline target date
               <input type="date" className={inputClass} value={pipelineDate} onChange={e => setPipelineDate(e.target.value)} />
             </label>
             <div className="flex flex-wrap items-center gap-2">
@@ -389,10 +389,10 @@ export default function AdminPage() {
             </div>
             <p className={hintClass}>Runs: ingest fixtures → fetch odds → enrich form data → prediction models.</p>
             <div className="flex flex-wrap items-end gap-2">
-              <label className="flex flex-col gap-1 text-sm font-semibold uppercase tracking-wide text-slate-600">From
+              <label className="flex flex-col gap-1 text-sm font-semibold text-slate-600">From
                 <input type="date" className={inputClass} value={historyStart} onChange={e => setHistoryStart(e.target.value)} aria-label="Historical sync start date" />
               </label>
-              <label className="flex flex-col gap-1 text-sm font-semibold uppercase tracking-wide text-slate-600">To
+              <label className="flex flex-col gap-1 text-sm font-semibold text-slate-600">To
                 <input type="date" className={inputClass} value={historyEnd} onChange={e => setHistoryEnd(e.target.value)} aria-label="Historical sync end date" />
               </label>
               <button type="button" className={secondaryBtnClass} onClick={() => void syncHistory()} disabled={syncingHistory} title="Ingest finished fixtures and settle tickets in this range">

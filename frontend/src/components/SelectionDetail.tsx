@@ -1,6 +1,6 @@
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
-import { fetchAccaPrices, fetchSelectionOdds, formatDate, formatKickoff, formatMarket, formatSelection, selectionRepeatsMarket, type AccaPrice, type OddsQuote } from '../lib/api'
+import { fetchAccaPrices, fetchSelectionOdds, formatDate, formatKickoff, formatMarket, formatResult, formatSelection, selectionRepeatsMarket, type AccaPrice, type OddsQuote } from '../lib/api'
 import GradeBadge from './GradeBadge'
 import Over45Qualification from './Over45Qualification'
 import OverGoalsQualification from './OverGoalsQualification'
@@ -284,7 +284,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
         <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur sm:px-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <span className="text-sm font-semibold uppercase tracking-wide text-slate-600">Selection evidence</span>
+              <span className="text-sm font-semibold text-slate-600">Selection evidence</span>
               <h2 id="selection-detail-title" className="mt-1 text-xl font-bold tracking-tight text-slate-900">{selection.home_team} <span className="text-slate-600">vs</span> {selection.away_team}</h2>
               <p className="mt-1 text-base text-slate-600">{selection.competition} · <span className="event-date font-mono tabular-nums">{formatDate(selection.kickoff_at)}</span> · <span className="kickoff-time font-mono tabular-nums">{formatKickoff(selection.kickoff_at)}</span></p>
             </div>
@@ -293,13 +293,13 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
           <div className="mt-3 flex flex-wrap gap-2">
             <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-sm font-semibold ${pillTone(priceState.state)}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{priceState.label}</span>
             <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-sm font-semibold ${pillTone(strength.tone)}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />Decision strength: <strong>{strength.label}</strong></span>
-            {selection.result && <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-sm font-semibold ${selection.result === 'won' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : selection.result === 'lost' ? 'border-red-200 bg-red-50 text-red-700' : selection.result === 'void' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>{selection.result === 'pending' && selection.home_goals != null ? 'Settlement pending' : selection.result}</span>}
+            {selection.result && <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-sm font-semibold ${selection.result === 'won' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : selection.result === 'lost' ? 'border-red-200 bg-red-50 text-red-700' : selection.result === 'void' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>{selection.result === 'pending' && selection.home_goals != null ? 'Settlement pending' : formatResult(selection.result)}</span>}
           </div>
         </div>
 
         <div className="space-y-4 px-4 py-4 sm:px-6 sm:py-6">
           <section className={sectionClass} aria-label="Selection evidence lifecycle">
-            <div className={sectionHead}><h3 className="text-sm font-bold uppercase tracking-wide text-slate-600">Evidence trail</h3><span className="text-sm text-slate-600">Capture → price → publish → settle</span></div>
+            <div className={sectionHead}><h3 className="text-sm font-bold text-slate-600">Evidence trail</h3><span className="text-sm text-slate-600">Capture → price → publish → settle</span></div>
             <ol className="grid gap-3 p-4 sm:grid-cols-4">
               {[
                 { label: 'Rated', value: selection.q_score != null ? `Q ${selection.q_score.toFixed(1)}` : selection.q_grade ?? 'Unrated', note: selection.recommendation_status ?? 'Captured at snapshot', tone: ratedTone },
@@ -307,7 +307,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
                 { label: 'Published', value: publishedAt ? 'In a ticket' : 'View only', note: lifecycleTime(publishedAt) ?? (modelVersion ? `Model ${modelVersion}` : 'No publication link'), tone: publishedTone },
                 { label: 'Settled', value: resultLabel, note: lifecycleTime(selection.selection_settled_at) ?? (selection.result ? 'Awaiting outcome' : `Kickoff ${formatKickoff(selection.kickoff_at)}`), tone: settledTone },
               ].map(step => <li key={step.label} className={`rounded-lg border px-3 py-2 ${pillTone(step.tone)}`}>
-                <span className="block text-sm font-semibold uppercase tracking-wide opacity-80">{step.label}</span>
+                <span className="block text-sm font-semibold opacity-80">{step.label}</span>
                 <strong className="mt-1 block text-sm font-semibold">{step.value}</strong>
                 <small className="mt-1 block text-sm opacity-80">{step.note}</small>
               </li>)}
@@ -315,7 +315,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
           </section>
 
           <section className={sectionClass} aria-label="Decision strength review">
-            <div className={sectionHead}><h3 className="text-sm font-bold uppercase tracking-wide text-slate-600">Decision strength</h3><span className="text-sm text-slate-600">Leg-level review · advisory</span></div>
+            <div className={sectionHead}><h3 className="text-sm font-bold text-slate-600">Decision strength</h3><span className="text-sm text-slate-600">Leg-level review · advisory</span></div>
             <div className="p-4 space-y-3">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <Metric label={label.prob} value={pct(selection.model_probability)} />
@@ -338,7 +338,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
           {selection.market === 'under_0.5' && <Under05Qualification assessment={selection.under05_qualification} />}
 
           <section className={sectionClass} aria-label="Recommendation explanation">
-            <div className={sectionHead}><h3 className="text-sm font-bold uppercase tracking-wide text-slate-600">Why this recommendation?</h3><span className="text-sm text-slate-600">Persisted decision evidence</span></div>
+            <div className={sectionHead}><h3 className="text-sm font-bold text-slate-600">Why this recommendation?</h3><span className="text-sm text-slate-600">Persisted decision evidence</span></div>
             <div className="grid gap-4 p-4 text-base leading-relaxed sm:grid-cols-2">
               <div><strong className="block text-slate-900">Why consider it</strong>{evidenceReasons.length ? <ul className="mt-2 list-disc space-y-1 pl-5 text-slate-700">{evidenceReasons.map(reason => <li key={reason}>{evidenceLabel(reason)}</li>)}</ul> : <span className="mt-2 block text-slate-600">No positive reason is available from the captured snapshot.</span>}</div>
               <div><strong className="block text-slate-900">Risks and unknowns</strong>{riskReasons.length ? <ul className="mt-2 list-disc space-y-1 pl-5 text-slate-700">{riskReasons.map(reason => <li key={reason}>{evidenceLabel(reason)}</li>)}</ul> : <span className="mt-2 block text-slate-600">No additional visible caution was recorded.</span>}</div>
@@ -352,7 +352,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
               ['Q grade', selection.q_grade ? <GradeBadge grade={selection.q_grade} /> : `Q ${selection.q_score == null ? '—' : selection.q_score.toFixed(1)}`],
               ['Match result', selection.home_goals != null && selection.away_goals != null ? `${selection.home_goals}–${selection.away_goals}` : 'Unplayed'],
               ['Market settlement', selection.result === 'pending' && selection.home_goals != null ? 'Pending' : selection.result ?? 'Pending'],
-            ].map(([k, v]) => <div key={String(k)} className="rounded-xl border border-slate-200 bg-white px-4 py-3"><span className="block text-sm font-medium uppercase tracking-wide text-slate-600">{k}</span><strong className="mt-1 block font-mono text-sm font-bold tabular-nums text-slate-900">{v as any}</strong></div>)}
+            ].map(([k, v]) => <div key={String(k)} className="rounded-xl border border-slate-200 bg-white px-4 py-3"><span className="block text-sm font-medium text-slate-600">{k}</span><strong className="mt-1 block font-mono text-sm font-bold tabular-nums text-slate-900">{v as any}</strong></div>)}
           </section>
 
           <div className="flex flex-wrap gap-2" role="tablist" aria-label="Match analysis" onKeyDown={onDetailTabKeyDown}>
@@ -374,13 +374,13 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
           </div>
           <div id={`detail-panel-${activeTab}`} className="space-y-4" role="tabpanel" aria-labelledby={`detail-tab-${activeTab}`} tabIndex={0}>
           {!form && ['overview', 'stats', 'h2h'].includes(activeTab) && <p className="rounded-xl border border-slate-200 bg-white p-4 text-base text-slate-600">Match context is not available in the saved evidence.</p>}
-          {form && activeTab === 'overview' && <section className={sectionClass}><div className={sectionHead}><h3 className="text-sm font-bold uppercase tracking-wide text-slate-600">Recent form</h3><span className="text-sm text-slate-600">Last {Math.max(form.home.matches, form.away.matches)} finished matches</span></div><div className="grid gap-4 p-4 sm:grid-cols-[1fr_auto_1fr] sm:items-center"><TeamForm team={form.home} /><span className="text-center text-sm font-semibold uppercase tracking-wide text-slate-600">vs</span><TeamForm team={form.away} /></div></section>}
-          {form && activeTab === 'stats' && <section className={sectionClass}><div className={sectionHead}><h3 className="text-sm font-bold uppercase tracking-wide text-slate-600">Recent team statistics</h3><span className="text-sm text-slate-600">Last five finished matches</span></div><div className="grid gap-4 p-4 sm:grid-cols-2"><TeamStats team={form.home} /><TeamStats team={form.away} /></div></section>}
-          {form && activeTab === 'h2h' && <section className={sectionClass}><div className={sectionHead}><h3 className="text-sm font-bold uppercase tracking-wide text-slate-600">Head-to-head</h3><span className="text-sm text-slate-600">Previous finished meetings</span></div>{form.h2h.length ? <div className="divide-y divide-slate-100">{form.h2h.map(game => <div key={game.date + game.score} className="flex items-center justify-between gap-3 px-4 py-3 text-sm"><span className="font-mono tabular-nums text-slate-600">{game.date}</span><strong className="text-slate-900">{game.home_team} <span className="font-mono tabular-nums">{game.score}</span> {game.away_team}</strong></div>)}</div> : <div className="p-4 text-base text-slate-600">No previous meetings found in the persisted data.</div>}</section>}
-          {activeTab === 'signals' && <section className={sectionClass}><div className={sectionHead}><h3 className="text-sm font-bold uppercase tracking-wide text-slate-600">QwantEj signal</h3><span className="text-sm text-slate-600">Current published selection</span></div><div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">{!selectionRepeatsMarket(selection.market, selection.selection) && <Metric label="Market" value={formatMarket(selection.market)} />}<Metric label="Selection" value={formatSelection(selection.selection)} /><Metric label={market ? label.prob : 'Model probability'} value={pct(selection.model_probability)} /><Metric label={market ? label.edge : 'Estimated edge'} value={pct(selection.edge, true)} /><Metric label="Q-score" value={selection.q_score == null ? '—' : `${selection.q_score.toFixed(1)} · ${selection.q_grade ? 'graded' : '—'}`} /><Metric label="Expected value" value={pct(selection.expected_value, true)} /></div></section>}
+          {form && activeTab === 'overview' && <section className={sectionClass}><div className={sectionHead}><h3 className="text-sm font-bold text-slate-600">Recent form</h3><span className="text-sm text-slate-600">Last {Math.max(form.home.matches, form.away.matches)} finished matches</span></div><div className="grid gap-4 p-4 sm:grid-cols-[1fr_auto_1fr] sm:items-center"><TeamForm team={form.home} /><span className="text-center text-sm font-semibold text-slate-600">vs</span><TeamForm team={form.away} /></div></section>}
+          {form && activeTab === 'stats' && <section className={sectionClass}><div className={sectionHead}><h3 className="text-sm font-bold text-slate-600">Recent team statistics</h3><span className="text-sm text-slate-600">Last five finished matches</span></div><div className="grid gap-4 p-4 sm:grid-cols-2"><TeamStats team={form.home} /><TeamStats team={form.away} /></div></section>}
+          {form && activeTab === 'h2h' && <section className={sectionClass}><div className={sectionHead}><h3 className="text-sm font-bold text-slate-600">Head-to-head</h3><span className="text-sm text-slate-600">Previous finished meetings</span></div>{form.h2h.length ? <div className="divide-y divide-slate-100">{form.h2h.map(game => <div key={game.date + game.score} className="flex items-center justify-between gap-3 px-4 py-3 text-sm"><span className="font-mono tabular-nums text-slate-600">{game.date}</span><strong className="text-slate-900">{game.home_team} <span className="font-mono tabular-nums">{game.score}</span> {game.away_team}</strong></div>)}</div> : <div className="p-4 text-base text-slate-600">No previous meetings found in the persisted data.</div>}</section>}
+          {activeTab === 'signals' && <section className={sectionClass}><div className={sectionHead}><h3 className="text-sm font-bold text-slate-600">QwantEj signal</h3><span className="text-sm text-slate-600">Current published selection</span></div><div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">{!selectionRepeatsMarket(selection.market, selection.selection) && <Metric label="Market" value={formatMarket(selection.market)} />}<Metric label="Selection" value={formatSelection(selection.selection)} /><Metric label={market ? label.prob : 'Model probability'} value={pct(selection.model_probability)} /><Metric label={market ? label.edge : 'Estimated edge'} value={pct(selection.edge, true)} /><Metric label="Q-score" value={selection.q_score == null ? '—' : `${selection.q_score.toFixed(1)} · ${selection.q_grade ? 'graded' : '—'}`} /><Metric label="Expected value" value={pct(selection.expected_value, true)} /></div></section>}
 
           {activeTab === 'probability' && <section className={sectionClass}>
-            <div className={sectionHead}><h3 className="text-sm font-bold uppercase tracking-wide text-slate-600">Probability evidence</h3><span className="text-sm text-slate-600">{label.subtitle}</span></div>
+            <div className={sectionHead}><h3 className="text-sm font-bold text-slate-600">Probability evidence</h3><span className="text-sm text-slate-600">{label.subtitle}</span></div>
             <div className="p-4 space-y-3">
               <ProbabilityRow label={label.probRow} value={selection.model_probability ?? null} tone="bg-emerald-500" />
               <ProbabilityRow label={label.impliedRow} value={implied} tone="bg-slate-400" />
@@ -413,7 +413,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
               ['Data quality', selection.data_quality_score == null ? 'Unavailable' : `${selection.data_quality_score.toFixed(0)}/100 · ${selection.data_quality_status ?? 'unknown'}`],
               ['Active models', selection.active_models?.length ? selection.active_models.join(', ') : 'Unavailable'],
               ['Settlement recorded', selection.selection_settled_at ? new Date(selection.selection_settled_at).toLocaleString() : selection.result && selection.result !== 'pending' ? 'Result recorded · timestamp unavailable' : 'Pending'],
-            ].map(([k, v]) => <div key={k} className="rounded-lg border border-slate-200 bg-white px-3 py-2"><span className="block text-sm uppercase tracking-wide text-slate-600">{k}</span><code className="mt-1 block font-mono text-sm text-slate-700 break-words">{v}</code></div>)}
+            ].map(([k, v]) => <div key={k} className="rounded-lg border border-slate-200 bg-white px-3 py-2"><span className="block text-sm text-slate-600">{k}</span><code className="mt-1 block font-mono text-sm text-slate-700 break-words">{v}</code></div>)}
             </section>
           </details>
 
@@ -443,13 +443,13 @@ function OddsComparison({ quotes, loading, failed, marketPrice, marketPriceLoadi
   return (
     <section className={sectionClass}>
       {canViewMarketPrices && <div className="border-b border-slate-200 p-4 space-y-3" aria-label="Accumulator price context">
-        <div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-bold uppercase tracking-wide text-slate-600">Ticket price context</h3><span className="text-sm text-slate-600">Fresh, pre-kickoff quote</span></div>
+        <div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-bold text-slate-600">Ticket price context</h3><span className="text-sm text-slate-600">Fresh, pre-kickoff quote</span></div>
         {marketPriceLoading && <div className="text-base text-slate-600"><span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-emerald-700 align-middle mr-2" />Checking Betway and comparable prices…</div>}
         {!marketPriceLoading && marketPriceFailed && <div className="text-base text-slate-600">Current ticket price context is unavailable.</div>}
         {!marketPriceLoading && !marketPriceFailed && !marketPrice && <div className="text-base text-slate-600">No fresh eligible quote is available for this fixture.</div>}
         {!marketPriceLoading && !marketPriceFailed && marketPrice && <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            {[['Selected source', marketPrice.bookmaker], ['Current odds', marketPrice.decimal_odds.toFixed(2)], ['Price break-even', pct(1 / marketPrice.decimal_odds)], [probabilityLabel, pct(modelProbability)], ['Price gap', modelProbability == null ? '—' : `${(modelProbability - 1 / marketPrice.decimal_odds >= 0 ? '+' : '')}${((modelProbability - 1 / marketPrice.decimal_odds) * 100).toFixed(1)} pp`]].map(([k, v]) => <div key={String(k)} className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2"><span className="block text-sm uppercase tracking-wide text-slate-600">{k}</span><strong className="mt-1 block font-mono text-sm tabular-nums text-slate-900">{v}</strong></div>)}
+            {[['Selected source', marketPrice.bookmaker], ['Current odds', marketPrice.decimal_odds.toFixed(2)], ['Price break-even', pct(1 / marketPrice.decimal_odds)], [probabilityLabel, pct(modelProbability)], ['Price gap', modelProbability == null ? '—' : `${(modelProbability - 1 / marketPrice.decimal_odds >= 0 ? '+' : '')}${((modelProbability - 1 / marketPrice.decimal_odds) * 100).toFixed(1)} pp`]].map(([k, v]) => <div key={String(k)} className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2"><span className="block text-sm text-slate-600">{k}</span><strong className="mt-1 block font-mono text-sm tabular-nums text-slate-900">{v}</strong></div>)}
           </div>
           <p className="text-base leading-relaxed text-slate-600">{marketPrice.pricing_mode === 'betway'
             ? 'Betway supplied this current quote.'
@@ -459,7 +459,7 @@ function OddsComparison({ quotes, loading, failed, marketPrice, marketPriceLoadi
         </>}
       </div>}
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-3">
-        <h3 className="text-sm font-bold uppercase tracking-wide text-slate-600">Bookmaker comparison</h3>
+        <h3 className="text-sm font-bold text-slate-600">Bookmaker comparison</h3>
         <span className="text-sm text-slate-600">{quotes.length > 1 ? `${spread.toFixed(2)} price spread` : 'Captured prices'}</span>
       </div>
       <div className="p-4">
@@ -468,7 +468,7 @@ function OddsComparison({ quotes, loading, failed, marketPrice, marketPriceLoadi
         {!loading && !failed && quotes.length === 0 && <div className="text-base text-slate-600">Only the odds captured at publication time are available.</div>}
         {!loading && quotes.length > 0 && (
           <div className="overflow-x-auto rounded-lg border border-slate-200" role="table" aria-label="Bookmaker odds comparison">
-            <div className="grid grid-cols-4 gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold uppercase tracking-wide text-slate-600" role="row">
+            <div className="grid grid-cols-4 gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600" role="row">
               {columnHeader('source', 'Source')}{columnHeader('opening', 'Opening')}{columnHeader('current', 'Current')}{columnHeader('move', 'Move')}
             </div>
             {sorted.map(quote => (
@@ -503,5 +503,5 @@ function ProbabilityRow({ label, value, tone }: { label: string; value: number |
 }
 
 function Metric({ label, value, note, hint }: { label: string; value: string; note?: string; hint?: string }) {
-  return <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2" title={hint}><span className="block text-sm font-medium uppercase tracking-wide text-slate-600">{label}{hint && <sup className="ml-0.5 text-slate-600" aria-label={hint}>?</sup>}</span><strong className="mt-1 block font-mono text-sm font-bold tabular-nums text-slate-900">{value}</strong>{note && <small className="mt-1 block text-sm text-slate-600">{note}</small>}</div>
+  return <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2" title={hint}><span className="block text-sm font-medium text-slate-600">{label}{hint && <sup className="ml-0.5 text-slate-600" aria-label={hint}>?</sup>}</span><strong className="mt-1 block font-mono text-sm font-bold tabular-nums text-slate-900">{value}</strong>{note && <small className="mt-1 block text-sm text-slate-600">{note}</small>}</div>
 }

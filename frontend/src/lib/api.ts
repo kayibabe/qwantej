@@ -948,5 +948,22 @@ export function ticketTierBadgeClass(type: string): string {
 }
 
 export function formatStage(stage: string): string {
-  return stage.replace(/_/g, ' ').replace(/\b\w/g, character => character.toUpperCase())
+  return formatSentence(stage)
+}
+
+const SENTENCE_ACRONYMS = new Set(['ROI', 'CLV', 'P&L', 'Q', 'EV', 'BTTS', 'XG'])
+
+/** Turn stored codes such as `no_bet` into sentence case while keeping known acronyms uppercase. */
+export function formatSentence(value: string): string {
+  return value.trim().replace(/[_-]+/g, ' ').split(/\s+/).filter(Boolean).map((word, index) => {
+    const upper = word.toUpperCase()
+    if (SENTENCE_ACRONYMS.has(upper)) return upper === 'XG' ? 'xG' : upper
+    const lower = word.toLowerCase()
+    return index === 0 ? lower.charAt(0).toUpperCase() + lower.slice(1) : lower
+  }).join(' ')
+}
+
+/** Sentence-case display for stored lowercase result codes such as `won`. */
+export function formatResult(result?: string | null): string {
+  return result ? result.charAt(0).toUpperCase() + result.slice(1) : 'Pending'
 }

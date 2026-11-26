@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Leg, Ticket } from '../lib/api'
-import { formatKickoff, formatMarket, formatSelection, selectionRepeatsMarket, selectionTone } from '../lib/api'
+import { formatKickoff, formatMarket, formatResult, formatSelection, selectionRepeatsMarket, selectionTone } from '../lib/api'
 import GradeBadge from './GradeBadge'
 import { fmt } from '../utils/currency'
 
@@ -61,7 +61,7 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
         <div className="px-4 py-4 border-b border-slate-200">
           <div className="flex items-center gap-2">
             <div className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />
-            <span className="text-sm font-bold uppercase tracking-wide" style={{ color }}>{tierName}</span>
+            <span className="text-sm font-bold" style={{ color }}>{tierName}</span>
             {research && <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-sm font-semibold text-violet-700">Research</span>}
           </div>
         </div>
@@ -114,7 +114,7 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <div className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />
-            <span className="text-sm font-bold uppercase tracking-wide" style={{ color }}>{tierName}</span>
+            <span className="text-sm font-bold" style={{ color }}>{tierName}</span>
             {research && <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-sm font-semibold text-violet-700">Research</span>}
             {ticket.relaxed_tier && (
               <span
@@ -151,11 +151,11 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
         ) : (
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2" title="Combined decimal odds for every leg">
-            <span className="block text-sm font-medium uppercase tracking-wide text-slate-600">Ticket odds</span>
+            <span className="block text-sm font-medium text-slate-600">Ticket odds</span>
             <span className="mt-1 block font-mono text-xl font-bold tabular-nums text-slate-900">{ticket.combined_odds == null ? 'Unavailable' : `${ticket.combined_odds.toFixed(2)}×`}</span>
           </div>
           <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2" title={marketPriced ? "Estimated joint chance from each bookmaker fair probability, assuming the legs are independent" : 'Estimated ticket probability after the configured correlation adjustment'}>
-            <span className="block text-sm font-medium uppercase tracking-wide text-slate-600">Estimated chance</span>
+            <span className="block text-sm font-medium text-slate-600">Estimated chance</span>
             <span className="mt-1 block font-mono text-xl font-bold tabular-nums text-slate-900">
               {ticket.adjusted_probability == null
                 ? 'Unavailable'
@@ -167,14 +167,14 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
           </div>
           {marketPriced ? (
             <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2" title="Estimated long-run return per unit staked at the recorded odds. Negative means below break-even.">
-              <span className="block text-sm font-medium uppercase tracking-wide text-slate-600">Return / unit</span>
+              <span className="block text-sm font-medium text-slate-600">Return / unit</span>
               <span className="mt-1 block font-mono text-xl font-bold tabular-nums text-slate-900">
                 {ticket.expected_value == null ? 'Unavailable' : PCT(ticket.expected_value)}
               </span>
             </div>
           ) : (<>
           <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2" title={flaggedLegs.length > 0 ? 'Provisional expected value: one or more legs require a value review' : 'Expected value based on the recorded model probabilities and odds'}>
-            <span className="block text-sm font-medium uppercase tracking-wide text-slate-600">Ticket EV</span>
+            <span className="block text-sm font-medium text-slate-600">Ticket EV</span>
             <span className={`mt-1 block font-mono text-xl font-bold tabular-nums ${flaggedLegs.length > 0 ? 'text-amber-700' : evPositive ? 'text-emerald-700' : 'text-slate-900'}`}>
               {flaggedLegs.length > 0 ? 'Unverified' : ticket.expected_value == null ? 'Unavailable' : PCT(ticket.expected_value)}
             </span>
@@ -209,7 +209,7 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
           <span className="text-sm text-slate-700"><span>{legsExpanded ? 'Click to hide legs' : 'Click to expand and view legs'}</span> <strong className="font-mono tabular-nums text-slate-900">{ticket.legs.length} legs</strong></span>
           <div className="flex flex-wrap items-center gap-1.5" aria-label="Leg outcomes">
             {(['won', 'lost', 'void', 'pending'] as const).filter(result => resultCounts[result]).map(result => (
-              <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-sm font-semibold ${statusBadgeTone(result)}`} key={result}><b className="font-mono tabular-nums">{resultCounts[result]}</b> {result}</span>
+              <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-sm font-semibold ${statusBadgeTone(result)}`} key={result}><b className="font-mono tabular-nums">{resultCounts[result]}</b> {formatResult(result)}</span>
             ))}
           </div>
           <span className={`text-slate-600 transition-transform ${legsExpanded ? 'rotate-180' : ''}`} aria-hidden="true">⌄</span>
@@ -232,16 +232,16 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
           <div className="mt-3 space-y-3">
             {locked ? <p className="text-base text-slate-600">Risk, average Q-score and average edge are available on Pro.</p> : <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-lg border border-slate-200 bg-white px-3 py-2" title="Higher scores indicate a riskier accumulator">
-                <span className="block text-sm font-medium uppercase tracking-wide text-slate-600">Risk score</span>
+                <span className="block text-sm font-medium text-slate-600">Risk score</span>
                 <span className={`mt-1 block font-mono text-lg font-bold tabular-nums ${riskTone}`}>{ticket.risk_score == null ? 'Unavailable' : `${ticket.risk_score.toFixed(0)}/100`}</span>
               </div>
               {!marketPriced && <>
                 <div className="rounded-lg border border-slate-200 bg-white px-3 py-2" title="Average Q-score across all ticket legs">
-                  <span className="block text-sm font-medium uppercase tracking-wide text-slate-600">Average Q-score</span>
+                  <span className="block text-sm font-medium text-slate-600">Average Q-score</span>
                   <span className="mt-1 block font-mono text-lg font-bold tabular-nums text-slate-900">{ticket.avg_q_score == null ? 'Unavailable' : ticket.avg_q_score.toFixed(1)}</span>
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-white px-3 py-2" title="Average model edge across all ticket legs">
-                  <span className="block text-sm font-medium uppercase tracking-wide text-slate-600">Average edge</span>
+                  <span className="block text-sm font-medium text-slate-600">Average edge</span>
                   <span className={`mt-1 block font-mono text-lg font-bold tabular-nums ${flaggedLegs.length > 0 ? 'text-amber-700' : ticket.avg_edge == null ? 'text-slate-900' : 'text-emerald-700'}`}>{flaggedLegs.length > 0 ? 'Review' : ticket.avg_edge == null ? '—' : PCT(ticket.avg_edge)}</span>
                 </div>
               </>}
@@ -252,7 +252,7 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
             </div>
           </div>
         </details>
-        {flatStake != null && ticket.combined_odds != null && <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-base"><div><span className="block text-sm uppercase tracking-wide text-slate-600">Flat stake</span><strong className="font-mono text-lg tabular-nums text-slate-900">{fmt(flatStake)}</strong></div><div className="flex flex-wrap gap-4 text-slate-600"><span>Potential return <b className="font-mono tabular-nums text-slate-900">{fmt(flatStake * ticket.combined_odds)}</b></span><span>Potential profit <b className="font-mono tabular-nums text-emerald-700">+{fmt(flatStake * (ticket.combined_odds - 1))}</b></span></div></div>}
+        {flatStake != null && ticket.combined_odds != null && <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-base"><div><span className="block text-sm text-slate-600">Flat stake</span><strong className="font-mono text-lg tabular-nums text-slate-900">{fmt(flatStake)}</strong></div><div className="flex flex-wrap gap-4 text-slate-600"><span>Potential return <b className="font-mono tabular-nums text-slate-900">{fmt(flatStake * ticket.combined_odds)}</b></span><span>Potential profit <b className="font-mono tabular-nums text-emerald-700">+{fmt(flatStake * (ticket.combined_odds - 1))}</b></span></div></div>}
       </div>
 
       <ul hidden={!legsExpanded} className="leg-list divide-y divide-slate-100 border-t border-slate-200" id={`ticket-leg-list-${tierName.toLowerCase().replace(/\s+/g, '-')}`}>

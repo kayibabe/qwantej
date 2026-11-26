@@ -170,7 +170,7 @@ export default function CommandPalette({ open, actions, onClose }: Props) {
             const previous = results[index - 1]
             return (
               <Fragment key={action.id}>
-                {(!previous || previous.group !== action.group) && <div className="px-3 pb-1 pt-3 text-sm font-semibold uppercase leading-5 tracking-wide text-slate-600" role="presentation">{action.group}</div>}
+                {(!previous || previous.group !== action.group) && <div className="px-3 pb-1 pt-3 text-sm font-semibold leading-5 text-slate-600" role="presentation">{action.group}</div>}
                 <button
                   id={`${listId}-${index}`}
                   type="button"

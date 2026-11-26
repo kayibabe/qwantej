@@ -157,7 +157,7 @@ export default function LiveMonitorPage() {
     <section className="page-content space-y-4">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <span className="inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-red-700"><span className="h-2 w-2 rounded-full bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.15)]" aria-hidden="true" /> Live centre</span>
+          <span className="inline-flex items-center gap-2 text-sm font-semibold text-red-700"><span className="h-2 w-2 rounded-full bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.15)]" aria-hidden="true" /> Live centre</span>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Matches in play</h1>
           <p className="mt-1 max-w-3xl text-base leading-relaxed text-slate-600">Live scores and match phases from QwantEj’s stored fixture status. This view checks for updates every minute and lists only live matches.</p>
         </div>
@@ -174,7 +174,7 @@ export default function LiveMonitorPage() {
         {alertMessage && <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-base leading-relaxed text-slate-700">{alertMessage}</p>}
       </div>
       <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
-        <label className="flex flex-col gap-1 text-sm font-semibold uppercase tracking-wide text-slate-600">Competition
+        <label className="flex flex-col gap-1 text-sm font-semibold text-slate-600">Competition
           <select className="h-11 min-w-[220px] rounded-lg border border-slate-200 bg-white px-3 text-base font-medium normal-case tracking-normal text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700" value={competition} onChange={(event) => setCompetition(event.target.value)}>
             <option value="all">All competitions</option>
             {competitions.map((name) => <option key={name} value={name}>{name}</option>)}
@@ -201,7 +201,7 @@ export default function LiveMonitorPage() {
           {visibleFixtures.map((fixture) => (
             <article className="overflow-hidden rounded-xl border border-slate-200 border-t-4 border-t-red-500 bg-white p-4" key={fixture.match_id}>
               <div className="flex flex-wrap items-start justify-between gap-2 text-sm text-slate-600">
-                <span className="font-semibold uppercase tracking-wide text-slate-700">{fixture.competition}</span>
+                <span className="font-semibold text-slate-700">{fixture.competition}</span>
                 <div className="flex flex-wrap items-center gap-2">
                   <span>Kickoff <time className="event-date font-mono tabular-nums text-slate-800" dateTime={fixture.kickoff_at}>{formatDate(fixture.kickoff_at)}</time> · <time className="kickoff-time font-mono tabular-nums text-slate-800" dateTime={fixture.kickoff_at}>{formatKickoff(fixture.kickoff_at)}</time></span>
                   <span className="inline-flex items-center gap-1.5 font-semibold text-red-700"><span className="h-1.5 w-1.5 rounded-full bg-red-500" aria-hidden="true" />{phaseLabel(fixture)}{fixture.elapsed_minutes != null ? ` · ${fixture.elapsed_minutes}′` : ''}</span>

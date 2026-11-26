@@ -684,11 +684,11 @@ export function AllMatches({
           <div className="picks-controls space-y-4 border-b border-slate-200 bg-slate-50/70 px-4 py-4 sm:px-5">
             <div className="picks-controls-row picks-controls-search grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto]">
               <label className="picks-field picks-search block">
-                <span className="mb-1.5 block text-sm font-semibold uppercase tracking-wide text-slate-600">Search</span>
+                <span className="mb-1.5 block text-sm font-semibold text-slate-600">Search</span>
                 <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Team or competition" className={inputBase} />
               </label>
               <label className="picks-field block">
-                <span className="mb-1.5 block text-sm font-semibold uppercase tracking-wide text-slate-600">Competition</span>
+                <span className="mb-1.5 block text-sm font-semibold text-slate-600">Competition</span>
                 <select value={leagueFilter} onChange={(event) => setLeagueFilter(event.target.value)} className={inputBase}>
                   <option value="all">All competitions</option>
                   {leagues.map((league) => <option key={league} value={league}>{league}</option>)}
@@ -696,7 +696,7 @@ export function AllMatches({
               </label>
               <div className="picks-sort-group flex items-end gap-2">
                 <label className="picks-field block flex-1">
-                  <span className="mb-1.5 block text-sm font-semibold uppercase tracking-wide text-slate-600">Sort by</span>
+                  <span className="mb-1.5 block text-sm font-semibold text-slate-600">Sort by</span>
                   <select aria-label="Sort matches" value={sort.key} onChange={(event) => changeSort(event.target.value as MatchSortKey)} className={inputBase}>
                     <option value="kickoff">Kickoff</option><option value="match">Match</option><option value="league">Competition</option>
                     <option value="q">Q-score</option><option value="fair">Market probability (no-vig)</option><option value="markets">Markets</option><option value="spread">Model agreement</option><option value="edge">Model edge</option>
@@ -783,7 +783,7 @@ export function AllMatches({
             </div>
 
             <div className="picks-search-blocks-row flex flex-col gap-2 lg:flex-row lg:items-center">
-              <span className="picks-row-label shrink-0 text-sm font-semibold uppercase tracking-wide text-slate-600 lg:w-28">Search blocks</span>
+              <span className="picks-row-label shrink-0 text-sm font-semibold text-slate-600 lg:w-28">Search blocks</span>
               <div className="picks-search-blocks-content flex flex-wrap items-center gap-2">
                 <span className="picks-block-caption text-sm font-medium text-slate-600" aria-hidden="true">Market</span>
                 <FilterDropdown value={marketFilter} options={marketOptions} onChange={setMarketFilter} ariaLabel="Filter by market" />
@@ -795,7 +795,7 @@ export function AllMatches({
             </div>
 
             <div className="picks-controls-row picks-signal-row flex flex-col gap-2 lg:flex-row lg:items-center">
-              <span className="picks-row-label shrink-0 text-sm font-semibold uppercase tracking-wide text-slate-600 lg:w-28">Signals</span>
+              <span className="picks-row-label shrink-0 text-sm font-semibold text-slate-600 lg:w-28">Signals</span>
               <div className="match-status-filters flex flex-wrap items-center gap-1.5" aria-label="Signal filters">
                 <button type="button" className={`${chipBase} ${edgeOnly ? chipActive : chipInactive}`} aria-pressed={edgeOnly} onClick={() => setEdgeOnly((value) => !value)}>Positive edge</button>
                 <button type="button" className={`${chipBase} ${tightSpread ? chipActive : chipInactive}`} aria-pressed={tightSpread} onClick={() => setTightSpread((value) => !value)}>Model aligned ≤5 pp</button>
@@ -803,16 +803,16 @@ export function AllMatches({
                 <button type="button" className={`${chipBase} ${clvOnly ? chipActive : chipInactive}`} aria-pressed={clvOnly} onClick={() => setClvOnly((value) => !value)}>Beat the close</button>
                 <span className="picks-signal-divider px-1 text-slate-600" aria-hidden="true">|</span>
                 <button type="button" className={`policy ${chipBase} ${recFilter === "BET" ? "bg-sky-700 text-white" : chipInactive}`} aria-pressed={recFilter === "BET"} onClick={() => setRecFilter((value) => (value === "BET" ? "" : "BET"))}>
-                  BET <b className="font-mono tabular-nums">{recCounts.BET ?? 0}</b>
+                  Bet <b className="font-mono tabular-nums">{recCounts.BET ?? 0}</b>
                 </button>
                 <button type="button" className={`policy ${chipBase} ${recFilter === "WATCH" ? "bg-slate-900 text-white" : chipInactive}`} aria-pressed={recFilter === "WATCH"} onClick={() => setRecFilter((value) => (value === "WATCH" ? "" : "WATCH"))}>
-                  WATCH <b className="font-mono tabular-nums">{recCounts.WATCH ?? 0}</b>
+                  Watch <b className="font-mono tabular-nums">{recCounts.WATCH ?? 0}</b>
                 </button>
               </div>
             </div>
 
             <div className="picks-controls-row picks-outcome-row flex flex-col gap-2 lg:flex-row lg:items-center">
-              <span className="picks-row-label shrink-0 text-sm font-semibold uppercase tracking-wide text-slate-600 lg:w-28">Outcome</span>
+              <span className="picks-row-label shrink-0 text-sm font-semibold text-slate-600 lg:w-28">Outcome</span>
               <div className="match-status-filters flex flex-wrap gap-1.5" aria-label="Filter by settled outcome">
                 <button type="button" className={`${chipBase} ${outcomeFilter === "" ? chipActive : chipInactive}`} onClick={() => setOutcomeFilter("")}>
                   Any outcome <b className="font-mono tabular-nums">{Object.values(outcomeCounts).reduce((sum, count) => sum + count, 0)}</b>
@@ -858,12 +858,12 @@ export function AllMatches({
             {filteredResults.length > 0 && (
               <div className="picks-outcome-strip grid gap-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3 sm:grid-cols-2 lg:grid-cols-8" aria-label="Settled picks summary for this query">
                 <strong className="text-base font-semibold text-slate-900 lg:col-span-2">Settled picks in this view</strong>
-                <span className="outcome flex flex-col"><small className="text-sm uppercase tracking-wide text-slate-600">Selections</small><b className="font-mono text-sm tabular-nums text-slate-900">{filteredResults.length}</b></span>
-                <span className="outcome won flex flex-col"><small className="text-sm uppercase tracking-wide text-slate-600">Won</small><b className="font-mono text-sm tabular-nums text-emerald-700">{filteredResultCounts.won}</b></span>
-                <span className="outcome lost flex flex-col"><small className="text-sm uppercase tracking-wide text-slate-600">Lost</small><b className="font-mono text-sm tabular-nums text-red-600">{filteredResultCounts.lost}</b></span>
-                <span className="outcome flex flex-col"><small className="text-sm uppercase tracking-wide text-slate-600">Hit rate</small><b className="font-mono text-sm tabular-nums text-slate-900">{decidedCount > 0 ? `${((filteredResultCounts.won / decidedCount) * 100).toFixed(1)}%` : "—"}</b></span>
-                <span className={`outcome flex flex-col ${netUnitsTone}`}><small className="text-sm uppercase tracking-wide text-slate-600">Net units</small><b className="font-mono text-sm tabular-nums">{filteredResultCounts.priced > 0 ? `${filteredResultCounts.netUnits >= 0 ? "+" : ""}${filteredResultCounts.netUnits.toFixed(2)}` : "—"}</b></span>
-                <span className={`outcome flex flex-col ${netUnitsTone}`}><small className="text-sm uppercase tracking-wide text-slate-600">ROI</small><b className="font-mono text-sm tabular-nums">{filteredResultCounts.priced > 0 ? `${((filteredResultCounts.netUnits / filteredResultCounts.priced) * 100).toFixed(1)}%` : "—"}</b></span>
+                <span className="outcome flex flex-col"><small className="text-sm text-slate-600">Selections</small><b className="font-mono text-sm tabular-nums text-slate-900">{filteredResults.length}</b></span>
+                <span className="outcome won flex flex-col"><small className="text-sm text-slate-600">Won</small><b className="font-mono text-sm tabular-nums text-emerald-700">{filteredResultCounts.won}</b></span>
+                <span className="outcome lost flex flex-col"><small className="text-sm text-slate-600">Lost</small><b className="font-mono text-sm tabular-nums text-red-600">{filteredResultCounts.lost}</b></span>
+                <span className="outcome flex flex-col"><small className="text-sm text-slate-600">Hit rate</small><b className="font-mono text-sm tabular-nums text-slate-900">{decidedCount > 0 ? `${((filteredResultCounts.won / decidedCount) * 100).toFixed(1)}%` : "—"}</b></span>
+                <span className={`outcome flex flex-col ${netUnitsTone}`}><small className="text-sm text-slate-600">Net units</small><b className="font-mono text-sm tabular-nums">{filteredResultCounts.priced > 0 ? `${filteredResultCounts.netUnits >= 0 ? "+" : ""}${filteredResultCounts.netUnits.toFixed(2)}` : "—"}</b></span>
+                <span className={`outcome flex flex-col ${netUnitsTone}`}><small className="text-sm text-slate-600">ROI</small><b className="font-mono text-sm tabular-nums">{filteredResultCounts.priced > 0 ? `${((filteredResultCounts.netUnits / filteredResultCounts.priced) * 100).toFixed(1)}%` : "—"}</b></span>
                 <span className="outcome note flex flex-col lg:col-span-8"><small className="text-base leading-relaxed text-slate-600">{filteredResultCounts.matches.size} matches with settled picks · selected date only</small></span>
               </div>
             )}
@@ -913,7 +913,7 @@ export function AllMatches({
             </div>
           </details>
 
-          <div className="picks-list-head hidden border-t border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-slate-600 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,2fr)_minmax(0,0.8fr)_auto_auto] lg:gap-3 sm:px-5" aria-hidden="true">
+          <div className="picks-list-head hidden border-t border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,2fr)_minmax(0,0.8fr)_auto_auto] lg:gap-3 sm:px-5" aria-hidden="true">
             <span>Match</span>
             <span className="picks-list-stats grid grid-cols-5 gap-2"><span>Kickoff</span><span>Q-score</span><span>Markets</span><span>Odds</span><span>Spread</span></span>
             <span>Pick result</span>
@@ -1023,21 +1023,21 @@ function MatchMarketGroup({
     <details className={`match-accordion match-card group ${displayState}`}>
       <summary className="match-card-summary match-row-summary grid cursor-pointer list-none gap-3 px-4 py-4 hover:bg-slate-50/70 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,2fr)_minmax(0,0.8fr)_auto_auto] lg:items-center sm:px-5 [&::-webkit-details-marker]:hidden">
         <div className="match-row-match min-w-0">
-          <span className="match-row-league block text-sm font-semibold uppercase tracking-wide text-slate-600">{first.competition}</span>
+          <span className="match-row-league block text-sm font-semibold text-slate-600">{first.competition}</span>
           <strong className="match-row-teams block truncate text-sm font-semibold text-slate-900 sm:text-base" title={`${first.home_team} vs ${first.away_team}`}>
             {first.home_team} <span className="leg-match-vs font-normal text-slate-600">vs</span>{" "}
             {first.away_team}
           </strong>
         </div>
         <div className="match-row-stats grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
-          <span className="flex flex-col"><small className="text-sm uppercase tracking-wide text-slate-600">Kickoff</small><b className="kickoff-time font-mono font-semibold tabular-nums text-slate-800">{formatKickoff(first.kickoff_at)}</b></span>
-          <span className="flex flex-col"><small className="text-sm uppercase tracking-wide text-slate-600">Q-score</small><b className="font-mono font-semibold tabular-nums text-slate-900">Q {best.q_score.toFixed(1)}</b></span>
-          <span className="flex flex-col"><small className="text-sm uppercase tracking-wide text-slate-600">Markets</small><b className="font-mono font-semibold tabular-nums text-slate-900">{selections.length}</b></span>
-          <span className="flex flex-col" title={`Top pick: ${formatMarket(best.market)} · ${formatSelection(best.selection)}${best.source_bookmaker ? ` · ${best.source_bookmaker}` : ""}`}><small className="text-sm uppercase tracking-wide text-slate-600">Odds</small><b className="match-row-odds font-mono font-semibold tabular-nums text-slate-900">{best.best_odds ? `${best.best_odds.toFixed(2)}×` : "—"}</b></span>
-          <span className="flex flex-col"><small className="text-sm uppercase tracking-wide text-slate-600">Spread</small><b className={`spread-badge inline-flex w-fit rounded-full border px-2 py-0.5 text-sm font-semibold ${(() => { const tone = spreadTone(best.model_agreement); return tone === "strong" || tone === "acceptable" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : tone === "caution" || tone === "high" ? "border-amber-200 bg-amber-50 text-amber-700" : "border-slate-200 bg-slate-50 text-slate-600"; })()}`}>{best.model_agreement == null ? "—" : `${(best.model_agreement * 100).toFixed(1)} pp`}</b></span>
+          <span className="flex flex-col"><small className="text-sm text-slate-600">Kickoff</small><b className="kickoff-time font-mono font-semibold tabular-nums text-slate-800">{formatKickoff(first.kickoff_at)}</b></span>
+          <span className="flex flex-col"><small className="text-sm text-slate-600">Q-score</small><b className="font-mono font-semibold tabular-nums text-slate-900">Q {best.q_score.toFixed(1)}</b></span>
+          <span className="flex flex-col"><small className="text-sm text-slate-600">Markets</small><b className="font-mono font-semibold tabular-nums text-slate-900">{selections.length}</b></span>
+          <span className="flex flex-col" title={`Top pick: ${formatMarket(best.market)} · ${formatSelection(best.selection)}${best.source_bookmaker ? ` · ${best.source_bookmaker}` : ""}`}><small className="text-sm text-slate-600">Odds</small><b className="match-row-odds font-mono font-semibold tabular-nums text-slate-900">{best.best_odds ? `${best.best_odds.toFixed(2)}×` : "—"}</b></span>
+          <span className="flex flex-col"><small className="text-sm text-slate-600">Spread</small><b className={`spread-badge inline-flex w-fit rounded-full border px-2 py-0.5 text-sm font-semibold ${(() => { const tone = spreadTone(best.model_agreement); return tone === "strong" || tone === "acceptable" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : tone === "caution" || tone === "high" ? "border-amber-200 bg-amber-50 text-amber-700" : "border-slate-200 bg-slate-50 text-slate-600"; })()}`}>{best.model_agreement == null ? "—" : `${(best.model_agreement * 100).toFixed(1)} pp`}</b></span>
         </div>
         <div className="match-row-picks">
-          <small className="block text-sm uppercase tracking-wide text-slate-600">Pick result</small>
+          <small className="block text-sm text-slate-600">Pick result</small>
           <span className="match-row-picks-badges mt-1 flex flex-wrap gap-1">
             {(["won", "lost", "void", "pending"] as const)
               .filter((outcome) => pickOutcomes[outcome] > 0)
@@ -1058,7 +1058,7 @@ function MatchMarketGroup({
       </summary>
       <div className="market-table border-t border-slate-200 bg-slate-50/40 px-4 py-4 sm:px-5">
         <div className="market-table-head mb-3 flex flex-wrap items-center gap-1.5">
-          <span className="market-sort-label mr-1 text-sm font-semibold uppercase tracking-wide text-slate-600">Sort markets</span>
+          <span className="market-sort-label mr-1 text-sm font-semibold text-slate-600">Sort markets</span>
           {button("market", "Market")}
           {button("q", "Q-score")}
           {button("odds", "Captured odds")}
@@ -1072,7 +1072,7 @@ function MatchMarketGroup({
             return <div className="market-row rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4" key={row.prediction_id}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="market-row-identity min-w-0">
-                  {!selectionRepeatsMarket(row.market, row.selection) && <span className="market-row-market block text-sm font-semibold uppercase tracking-wide text-slate-600">{formatMarket(row.market)}</span>}
+                  {!selectionRepeatsMarket(row.market, row.selection) && <span className="market-row-market block text-sm font-semibold text-slate-600">{formatMarket(row.market)}</span>}
                   <strong className="market-row-selection block text-sm font-semibold text-slate-900">{formatSelection(row.selection)}</strong>
                   <span className="market-row-badges mt-1.5 flex flex-wrap gap-1.5">
                     <b className={`grade-badge inline-flex items-center rounded-full border px-2 py-0.5 text-sm font-semibold ${gradeTone(row.q_grade) === "A" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : gradeTone(row.q_grade) === "B" ? "border-amber-200 bg-amber-50 text-amber-700" : "border-slate-200 bg-slate-100 text-slate-700"} grade-${gradeTone(row.q_grade)}`}>
@@ -1093,24 +1093,24 @@ function MatchMarketGroup({
               </div>
               <dl className="market-row-facts mt-3 grid gap-3 border-t border-slate-100 pt-3 text-sm sm:grid-cols-2 lg:grid-cols-5">
                 <div>
-                  <dt className="text-sm font-semibold uppercase tracking-wide text-slate-600">Q-score</dt>
+                  <dt className="text-sm font-semibold text-slate-600">Q-score</dt>
                   <dd className="font-mono font-semibold tabular-nums text-slate-900">Q {row.q_score.toFixed(1)}</dd>
                 </div>
                 <div>
-                  <dt className="text-sm font-semibold uppercase tracking-wide text-slate-600">Captured odds</dt>
+                  <dt className="text-sm font-semibold text-slate-600">Captured odds</dt>
                   <dd className="font-mono font-semibold tabular-nums text-slate-900">{row.best_odds ? `${row.best_odds.toFixed(2)}×` : "—"}</dd>
                   <small className="market-quote-meta block text-sm text-slate-600">{row.source_bookmaker ?? "Bookmaker unavailable"} · <span className="font-mono tabular-nums">{quoteTime(row.source_odds_at)}</span> · <b className={freshnessTone}>{freshness.label}</b></small>
                 </div>
                 <div className={(() => { const tone = spreadTone(row.model_agreement); return tone === "strong" || tone === "acceptable" ? "text-emerald-700" : tone === "caution" || tone === "high" ? "text-amber-700" : undefined; })()} title={`Model spread: ${spreadLabel(row.model_agreement)}`}>
-                  <dt className="text-sm font-semibold uppercase tracking-wide text-slate-600">Spread</dt>
+                  <dt className="text-sm font-semibold text-slate-600">Spread</dt>
                   <dd className="font-mono font-semibold tabular-nums">{row.model_agreement == null ? "—" : `${(row.model_agreement * 100).toFixed(1)} pp`}</dd>
                 </div>
                 <div className={row.edge != null && row.edge > 0 ? "positive text-emerald-700" : undefined}>
-                  <dt className="text-sm font-semibold uppercase tracking-wide text-slate-600">Edge</dt>
+                  <dt className="text-sm font-semibold text-slate-600">Edge</dt>
                   <dd className="font-mono font-semibold tabular-nums">{row.edge != null ? `${(row.edge * 100).toFixed(1)}%` : "—"}</dd>
                 </div>
                 <div className={row.clv_percentage != null && row.clv_percentage > 0 ? "positive text-emerald-700" : undefined}>
-                  <dt className="text-sm font-semibold uppercase tracking-wide text-slate-600">CLV</dt>
+                  <dt className="text-sm font-semibold text-slate-600">CLV</dt>
                   <dd className="font-mono font-semibold tabular-nums">{row.clv_percentage != null ? `${(row.clv_percentage * 100).toFixed(1)}%` : "—"}</dd>
                   <small className="market-quote-meta block text-sm text-slate-600">{row.closing_decimal_odds ? `Close ${row.closing_decimal_odds.toFixed(2)}×` : "No closing price yet"}</small>
                 </div>

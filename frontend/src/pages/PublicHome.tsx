@@ -355,7 +355,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
     )
   }
 
-  const sectionKickerClass = 'text-sm font-bold uppercase leading-normal tracking-wide text-emerald-700'
+  const sectionKickerClass = 'text-sm font-bold leading-normal text-emerald-700'
   const sectionTitleClass = 'mt-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl font-display'
   const sectionCopyClass = 'mt-3 max-w-3xl text-base leading-relaxed text-slate-700'
   const primaryButtonClass = `inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-base font-semibold leading-normal text-white transition-colors hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer ${focusRingClass}`
@@ -465,9 +465,9 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
                   })}
                 </div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-3" aria-live="polite">
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3"><span className="block text-sm font-semibold uppercase leading-normal tracking-wide text-slate-600">Hit rate</span><strong className="mt-1 block font-mono text-xl font-bold tabular-nums text-slate-900">{proofPercent(activeTier.win_rate)}</strong><span className="block text-sm leading-normal text-slate-600">{activeTier.won}W · {activeTier.lost}L{activeTier.void > 0 ? ` · ${activeTier.void}V` : ''}</span></div>
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3"><span className="block text-sm font-semibold uppercase leading-normal tracking-wide text-slate-600">Paper P&amp;L</span><strong className={`mt-1 block font-mono text-xl font-bold tabular-nums ${profitTone(activeTier.profit_units)}`}>{formatUnits(activeTier.profit_units)}</strong><span className="block text-sm leading-normal text-slate-600">{activeTier.staked_units.toLocaleString('en-GB', { maximumFractionDigits: 0 })} decided stakes</span></div>
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3"><span className="block text-sm font-semibold uppercase leading-normal tracking-wide text-slate-600">ROI</span><strong className={`mt-1 block font-mono text-xl font-bold tabular-nums ${profitTone(activeTier.roi)}`}>{formatRoi(activeTier.roi)}</strong><span className="block text-sm leading-normal text-slate-600">P&amp;L ÷ staked</span></div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3"><span className="block text-sm font-semibold leading-normal text-slate-600">Hit rate</span><strong className="mt-1 block font-mono text-xl font-bold tabular-nums text-slate-900">{proofPercent(activeTier.win_rate)}</strong><span className="block text-sm leading-normal text-slate-600">{activeTier.won}W · {activeTier.lost}L{activeTier.void > 0 ? ` · ${activeTier.void}V` : ''}</span></div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3"><span className="block text-sm font-semibold leading-normal text-slate-600">Paper P&amp;L</span><strong className={`mt-1 block font-mono text-xl font-bold tabular-nums ${profitTone(activeTier.profit_units)}`}>{formatUnits(activeTier.profit_units)}</strong><span className="block text-sm leading-normal text-slate-600">{activeTier.staked_units.toLocaleString('en-GB', { maximumFractionDigits: 0 })} decided stakes</span></div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3"><span className="block text-sm font-semibold leading-normal text-slate-600">ROI</span><strong className={`mt-1 block font-mono text-xl font-bold tabular-nums ${profitTone(activeTier.roi)}`}>{formatRoi(activeTier.roi)}</strong><span className="block text-sm leading-normal text-slate-600">P&amp;L ÷ staked</span></div>
                 </div>
                 <div className="mt-5">
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-3"><strong className="text-base font-semibold leading-normal text-slate-900">Equity, cumulative units</strong><span className="text-sm leading-normal text-slate-600">{activeTier.name}</span></div>
@@ -479,7 +479,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
               <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6" aria-labelledby="public-proof-ticket-title">
                 <header className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <span className="text-sm font-bold uppercase leading-normal tracking-wide text-emerald-700">{activeTicketCursor === 0 ? 'Most recent' : 'Earlier'} {activeTicket.name} ticket</span>
+                    <span className="text-sm font-bold leading-normal text-emerald-700">{activeTicketCursor === 0 ? 'Most recent' : 'Earlier'} {activeTicket.name} ticket</span>
                     <h3 id="public-proof-ticket-title" className="mt-1 text-lg font-bold tracking-tight text-slate-900 font-display">{activeTicket.name} · {formatProofDate(activeTicket.target_date)}</h3>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -552,7 +552,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
                   const shortDay = value.toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase()
                   return (
                     <button key={offset} type="button" className={`inline-flex min-h-14 flex-col items-center justify-center rounded-lg border px-3 py-2 text-left transition-colors cursor-pointer ${focusRingClass} ${selected ? 'border-emerald-600 bg-emerald-50 text-emerald-800' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`} onClick={() => selectDate(tabDate)} aria-current={selected ? 'date' : undefined}>
-                      <span className="block text-sm font-semibold leading-normal uppercase tracking-wide">{shortDay}</span>
+                      <span className="block text-sm font-semibold leading-normal">{shortDay}</span>
                       <strong className="block font-mono text-base font-bold tabular-nums">{value.getDate()}</strong>
                       {tabDate === today && <span className="block text-sm font-semibold leading-normal text-emerald-700">Today</span>}
                       <span className="sr-only"> — {fullDate}</span>
@@ -676,7 +676,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
         </div>
         <div className="mt-8 grid gap-4 lg:grid-cols-3">
           <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div><span className="text-sm font-bold uppercase leading-normal tracking-wide text-slate-600">Public</span><h3 className="mt-2 text-lg font-bold text-slate-900 font-display">Take a look around</h3></div>
+            <div><span className="text-sm font-bold leading-normal text-slate-600">Public</span><h3 className="mt-2 text-lg font-bold text-slate-900 font-display">Take a look around</h3></div>
             <ul className="mt-4 space-y-2 text-base leading-normal text-slate-700">
               <li>Fixtures by date and competition</li>
               <li>Live status and completed scores</li>
@@ -685,7 +685,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
             <a href="#public-matches" className={`${textLinkClass} mt-5`}>Open the match centre <span aria-hidden="true">→</span></a>
           </article>
           <article className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
-            <div><span className="text-sm font-bold uppercase leading-normal tracking-wide text-emerald-700">Free account</span><h3 className="mt-2 text-lg font-bold text-slate-900 font-display">Follow the daily slate</h3></div>
+            <div><span className="text-sm font-bold leading-normal text-emerald-700">Free account</span><h3 className="mt-2 text-lg font-bold text-slate-900 font-display">Follow the daily slate</h3></div>
             <ul className="mt-4 space-y-2 text-base leading-normal text-slate-700">
               <li>Published Conservative tickets</li>
               <li>Match legs, kickoff and settlement</li>
@@ -695,7 +695,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
           </article>
           <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <div>
-              <span className="text-sm font-bold uppercase leading-normal tracking-wide text-slate-600">Pro</span>
+              <span className="text-sm font-bold leading-normal text-slate-600">Pro</span>
               <h3 className="mt-2 text-lg font-bold text-slate-900 font-display">Open the evidence</h3>
               <div className="mt-2 flex flex-wrap items-baseline gap-2"><span className="font-mono text-2xl font-bold tabular-nums text-slate-900">{formatProPrice(offer?.price)}</span><span className="text-base font-medium text-slate-700">/ month</span></div>
             </div>
@@ -713,7 +713,7 @@ export default function PublicHome({ date, onDateChange, onSignIn, onCreateAccou
 
       <section className="border-t border-slate-200 bg-white" id="public-faq" aria-labelledby="public-faq-title">
         <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
-          <div><span className={sectionKickerClass}>GOOD TO KNOW</span><h2 id="public-faq-title" className={sectionTitleClass}>A few quick answers.</h2></div>
+          <div><span className={sectionKickerClass}>Good to know</span><h2 id="public-faq-title" className={sectionTitleClass}>A few quick answers.</h2></div>
           <div className="mt-6 divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
             {[
               ['What can I see without an account?', 'Public fixtures include the competition, teams, kickoff or live status, and scores when available. Personal account information and workspace tools stay behind sign-in.'],

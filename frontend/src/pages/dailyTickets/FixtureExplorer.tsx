@@ -133,7 +133,7 @@ export function FixtureExplorer({ fixtures, pickCounts, onOpenPicks, countsStale
           </label>
         </div>
         <div className="match-sort-controls fixture-sort-controls flex flex-wrap items-center gap-1.5" aria-label="Sort fixtures">
-          <span className="text-sm font-semibold uppercase tracking-wide text-slate-600">Sort</span>
+          <span className="text-sm font-semibold text-slate-600">Sort</span>
           {(['kickoff', 'match', 'league'] as FixtureSort[]).map(key => (
             <button key={key} className={`${chipBase} ${sort.key === key ? chipActive : chipInactive}`} onClick={() => changeSort(key)} aria-pressed={sort.key === key}>
               {key === 'kickoff' ? 'Kickoff' : key === 'match' ? 'Match' : 'Competition'}
@@ -221,10 +221,10 @@ export function FixtureExplorer({ fixtures, pickCounts, onOpenPicks, countsStale
                       <span className="fixture-kickoff kickoff-time font-mono text-sm tabular-nums text-slate-600">{formatKickoff(fixture.kickoff_at)}</span>
                     </summary>
                     <div className="fixture-drilldown grid gap-3 border-t border-slate-100 bg-slate-50/50 px-4 py-3 text-base leading-relaxed sm:grid-cols-2 lg:grid-cols-4 sm:px-5">
-                      <span className="flex flex-col gap-0.5"><small className="text-sm font-semibold uppercase tracking-wide text-slate-600">Competition</small><b className="font-medium text-slate-900">{fixture.competition}</b></span>
-                      <span className="flex flex-col gap-0.5"><small className="text-sm font-semibold uppercase tracking-wide text-slate-600">Kickoff</small><b className="font-medium text-slate-900"><span className="event-date">{formatDate(fixture.kickoff_at)}</span> <span className="kickoff-time font-mono tabular-nums">{formatKickoff(fixture.kickoff_at)}</span></b></span>
-                      <span className="flex flex-col gap-0.5"><small className="text-sm font-semibold uppercase tracking-wide text-slate-600">Status</small><b className="font-medium text-slate-900">{fixture.status === 'live' && fixture.elapsed_minutes != null ? `In play · ${fixture.elapsed_minutes}'` : fixture.status === 'live' && fixture.live_phase ? `In play · ${fixture.live_phase}` : fixtureStatusLabel(fixture.status)}</b></span>
-                      {score && <span className="flex flex-col gap-0.5"><small className="text-sm font-semibold uppercase tracking-wide text-slate-600">Result</small><b className="font-mono font-semibold tabular-nums text-slate-900">{score}</b></span>}
+                      <span className="flex flex-col gap-0.5"><small className="text-sm font-semibold text-slate-600">Competition</small><b className="font-medium text-slate-900">{fixture.competition}</b></span>
+                      <span className="flex flex-col gap-0.5"><small className="text-sm font-semibold text-slate-600">Kickoff</small><b className="font-medium text-slate-900"><span className="event-date">{formatDate(fixture.kickoff_at)}</span> <span className="kickoff-time font-mono tabular-nums">{formatKickoff(fixture.kickoff_at)}</span></b></span>
+                      <span className="flex flex-col gap-0.5"><small className="text-sm font-semibold text-slate-600">Status</small><b className="font-medium text-slate-900">{fixture.status === 'live' && fixture.elapsed_minutes != null ? `In play · ${fixture.elapsed_minutes}'` : fixture.status === 'live' && fixture.live_phase ? `In play · ${fixture.live_phase}` : fixtureStatusLabel(fixture.status)}</b></span>
+                      {score && <span className="flex flex-col gap-0.5"><small className="text-sm font-semibold text-slate-600">Result</small><b className="font-mono font-semibold tabular-nums text-slate-900">{score}</b></span>}
                       <span className="fixture-pro-note col-span-full text-base leading-relaxed text-slate-600">Market selections and model analysis are available with Pro.</span>
                     </div>
                   </details>

@@ -674,7 +674,7 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
                     </div>
                     {leadingRejectionReasons.length > 0 && (
                       <div className="space-y-2">
-                        <strong className="block text-sm font-semibold uppercase tracking-wide text-slate-600">Leading gate failures</strong>
+                        <strong className="block text-sm font-semibold text-slate-600">Leading gate failures</strong>
                         <div className="flex flex-wrap gap-2">
                           {leadingRejectionReasons.map(([reason, count]) => (
                             <span key={reason} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-sm text-slate-600"><b className="font-mono tabular-nums text-slate-900">{count}</b> {reasonLabel(reason)}</span>
@@ -695,7 +695,7 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
                 <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
                   <header className="flex flex-col gap-1 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                      <strong className="block text-sm font-bold uppercase tracking-wide text-slate-600">Published accumulator tickets</strong>
+                      <strong className="block text-sm font-bold text-slate-600">Published accumulator tickets</strong>
                       <small className="block mt-1 text-sm text-slate-600">{canExploreMarkets ? `Combined odds, estimated chance, and full legs for ${publicPublishedTickets.length} published tier${publicPublishedTickets.length === 1 ? "" : "s"}.` : `Match legs and settlement status for ${publicPublishedTickets.length} published tier${publicPublishedTickets.length === 1 ? "" : "s"}. Pro reveals the selections, odds and model evidence.`}</small>
                     </div>
                   </header>
@@ -775,7 +775,7 @@ export default function DailyTicketsPage({ date, initialTab = "fixtures", mode =
 function ViewIntro({ eyebrow, title, body }: { eyebrow: string; title: string; body: string }) {
   return (
     <div className="space-y-1">
-      <span className="text-sm font-bold uppercase tracking-wide text-emerald-700">{eyebrow}</span>
+      <span className="text-sm font-bold text-emerald-700">{eyebrow}</span>
       <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">{title}</h2>
       <p className="text-base leading-relaxed text-slate-600 max-w-3xl">{body}</p>
     </div>
@@ -891,7 +891,7 @@ function PassedMatches({ rows, onSelect }: { rows: SelectionSummary[]; onSelect:
     <section className="rounded-xl border border-slate-200 bg-white overflow-hidden" aria-labelledby="passed-matches-title">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-4">
         <div className="space-y-1">
-          <span className="text-sm font-bold uppercase tracking-wide text-slate-600">Transparent rejection ledger</span>
+          <span className="text-sm font-bold text-slate-600">Transparent rejection ledger</span>
           <h2 id="passed-matches-title" className="text-xl font-bold tracking-tight text-slate-900">Rejected opportunities and why</h2>
           <p className="text-base leading-relaxed text-slate-600">A rejection marked Passed avoided a losing result; one marked Failed excluded a winning result.</p>
         </div>
@@ -933,7 +933,7 @@ function PassedMatches({ rows, onSelect }: { rows: SelectionSummary[]; onSelect:
         </div>
 
         <div className="space-y-2" aria-label="Rejection audit by odds band">
-          <span className="text-sm font-bold uppercase tracking-wide text-slate-600">Rejection audit by odds band</span>
+          <span className="text-sm font-bold text-slate-600">Rejection audit by odds band</span>
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
             {bandStats.map(band => (
               <div key={band.label} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 space-y-0.5">
@@ -959,7 +959,7 @@ function PassedMatches({ rows, onSelect }: { rows: SelectionSummary[]; onSelect:
         ) : (
           <div className="relative overflow-x-auto rounded-xl border border-slate-200 bg-white">
             <table className="w-full min-w-[980px] border-collapse text-left text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-sm uppercase tracking-wide text-slate-600">
+              <thead className="border-b border-slate-200 bg-slate-50 text-sm text-slate-600">
                 <tr>
                   <th className="px-3 py-2 font-semibold">Match</th>
                   <th className="px-3 py-2 font-semibold">Selection</th>

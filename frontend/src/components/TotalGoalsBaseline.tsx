@@ -12,7 +12,7 @@ export default function TotalGoalsBaseline({ distribution }: { distribution?: Di
       {distribution.raw_combined_projected_goals != null && <p>Raw combined projection: {distribution.raw_combined_projected_goals.toFixed(2)} goals.</p>}
       {distribution.forecast_id && <p className="text-sm text-slate-600"><small>Forecast {distribution.forecast_id} · model {distribution.model_version ?? 'unknown'} · captured {distribution.created_at ?? 'timestamp unavailable'}</small></p>}
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table className="w-full border-collapse text-left text-sm"><thead className="border-b border-slate-200 bg-slate-50 text-sm font-semibold uppercase tracking-wide text-slate-600"><tr><th className="px-3 py-2">Market</th><th className="px-3 py-2">Shared baseline</th></tr></thead><tbody className="divide-y divide-slate-100">
+        <table className="w-full border-collapse text-left text-sm"><thead className="border-b border-slate-200 bg-slate-50 text-sm font-semibold text-slate-600"><tr><th className="px-3 py-2">Market</th><th className="px-3 py-2">Shared baseline</th></tr></thead><tbody className="divide-y divide-slate-100">
           {markets.map(market => <tr key={market} className="hover:bg-slate-50/70"><td className="px-3 py-2 text-slate-700">{market.replace('_', ' ')}</td><td className="px-3 py-2 font-mono tabular-nums text-slate-900">{(distribution.markets[market] * 100).toFixed(1)}%</td></tr>)}
         </tbody></table>
       </div>

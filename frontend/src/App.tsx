@@ -141,7 +141,7 @@ function DateNav({ date, onChange, context }: { date: string; onChange: (value: 
       })}
     </div>
     <div className="flex items-center gap-1.5">
-      {date !== TODAY && <button className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold uppercase tracking-wide text-emerald-700 transition-colors hover:border-emerald-700 hover:bg-emerald-50 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700" onClick={() => onChange(TODAY)} aria-label="Jump to today">Today</button>}
+      {date !== TODAY && <button className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-emerald-700 transition-colors hover:border-emerald-700 hover:bg-emerald-50 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700" onClick={() => onChange(TODAY)} aria-label="Jump to today">Today</button>}
       <label className="relative inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-emerald-700 hover:text-emerald-700 focus-within:border-emerald-700 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-emerald-700" title="Choose any date">
         <span aria-hidden="true" className="text-base">▦</span>
         <input
@@ -460,7 +460,7 @@ export default function App() {
         </nav>
 
         <div className="border-t border-slate-200 px-4 py-4 space-y-3">
-          <span className="inline-flex items-center gap-2 text-sm leading-5 font-semibold uppercase tracking-wide text-slate-600"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />{isInternal ? 'Paper-trading workspace' : 'Dated publishing record'}</span>
+          <span className="inline-flex items-center gap-2 text-sm leading-5 font-semibold text-slate-600"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />{isInternal ? 'Paper-trading workspace' : 'Dated publishing record'}</span>
           <p className="text-sm leading-relaxed text-slate-600">{isInternal || user?.plan === 'pro' ? 'Evidence stays with every published pick.' : 'Pro adds prices and leg evidence.'}</p>
           <button type="button" className="flex min-h-11 w-full items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium leading-5 text-slate-600 transition-colors hover:bg-white hover:text-slate-900 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700" onClick={() => setPaletteOpen(true)}>
             <span>Search or jump</span><kbd className="rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono text-sm text-slate-600">⌘K</kbd>
@@ -478,7 +478,7 @@ export default function App() {
           </a>
 
           <div className="min-w-0 flex-1">
-            <div className="hidden text-sm leading-5 font-semibold uppercase tracking-wide text-slate-600 sm:block">{workspace === 'research' ? 'Research workspace' : 'Football workspace'}</div>
+            <div className="hidden text-sm leading-5 font-semibold text-slate-600 sm:block">{workspace === 'research' ? 'Research workspace' : 'Football workspace'}</div>
             <div className="text-base leading-6 font-bold tracking-tight text-slate-900">{pageTitle(page)}</div>
           </div>
 
@@ -541,7 +541,7 @@ export default function App() {
         {page === 'insights' && (user.plan === 'pro' || isInternal
           ? <InsightsPage />
           : <section className="mx-auto max-w-2xl rounded-xl border border-slate-200 bg-white p-8 text-center space-y-3" aria-labelledby="insights-pro-gate-title">
-              <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-sm leading-5 font-semibold uppercase tracking-wide text-emerald-700">Pro</span>
+              <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-sm leading-5 font-semibold text-emerald-700">Pro</span>
               <h1 id="insights-pro-gate-title" className="text-2xl font-bold tracking-tight text-slate-900">Stats &amp; trends is part of Pro</h1>
               <p className="text-base leading-relaxed text-slate-600">Review league results, team form and historical performance alongside the picks and tickets they came from.</p>
               <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
@@ -553,7 +553,7 @@ export default function App() {
         {page === 'match' && matchId != null && (user?.plan === 'pro' || isInternal) && <MatchIntelligencePage matchId={matchId} selectedPredictionId={predictionId} onBack={returnFromMatch} returnLabel={matchReturnLabel(matchReturnTo)} />}
         {page === 'match' && matchId != null && user?.plan !== 'pro' && !isInternal && (
           <section className="mx-auto max-w-2xl rounded-xl border border-slate-200 bg-white p-8 text-center space-y-3" aria-labelledby="match-pro-gate-title">
-            <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-sm leading-5 font-semibold uppercase tracking-wide text-emerald-700">Pro</span>
+            <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-sm leading-5 font-semibold text-emerald-700">Pro</span>
             <h1 id="match-pro-gate-title" className="text-2xl font-bold tracking-tight text-slate-900">Match intelligence is part of Pro</h1>
             <p className="text-base leading-relaxed text-slate-600">Open every qualified selection for this match with its captured price, model chance, spread and recorded evidence.</p>
             <div className="flex flex-wrap items-center justify-center gap-2 pt-2">

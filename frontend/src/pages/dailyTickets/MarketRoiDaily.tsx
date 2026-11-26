@@ -169,7 +169,7 @@ export function MarketRoiDaily({ data, error }: { data: MarketRoiDailyData | nul
       <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 space-y-4">
           <div className="space-y-2">
-            <span className="text-sm font-semibold uppercase tracking-wide text-slate-600">Daily market scan · research only</span>
+            <span className="text-sm font-semibold text-slate-600">Daily market scan · research only</span>
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Hit rate and ROI by market</h2>
             <p className="text-base leading-relaxed text-slate-600 max-w-3xl">
               Compare historical market results, then inspect the selected date’s qualifying research candidates. Small samples remain exploratory; the <a href="#market-roi-method" className={`font-semibold text-emerald-800 underline underline-offset-2 hover:text-emerald-900 ${focusRing}`}>method and caveats</a> apply to every panel.

@@ -39,7 +39,7 @@ export default function PipelineRibbon({ steps, active, onSelect }: Props) {
             aria-label={`${step.label}: ${step.value}. ${step.note}${step.disabled ? ' (unavailable)' : ''}`}
             title={`${step.label}: ${step.note}`}
           >
-            <span className={`text-sm font-semibold uppercase tracking-wide ${isActive ? 'text-emerald-800' : 'text-slate-600'}`}>
+            <span className={`text-sm font-semibold ${isActive ? 'text-emerald-800' : 'text-slate-600'}`}>
               {step.label}
             </span>
             <strong className={`font-mono text-xl font-bold tabular-nums ${isActive ? 'text-emerald-900' : 'text-slate-900'}`}>

@@ -61,11 +61,11 @@ export default function TrackerPage({ isInternal, onOpenValidation }: { isIntern
   return <div className="page-content space-y-4">
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <span className="text-sm font-semibold uppercase tracking-wide text-slate-600">Auditable portfolio</span>
+        <span className="text-sm font-semibold text-slate-600">Auditable portfolio</span>
         <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Tracker</h1>
         <p className="mt-1 max-w-3xl text-base leading-relaxed text-slate-600">Settled paper evidence for every published ticket and selection, plus the frozen prospective experiment.</p>
       </div>
-      <span className="inline-flex items-center gap-2 self-start rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold uppercase tracking-wide text-slate-600 shadow-sm">
+      <span className="inline-flex items-center gap-2 self-start rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 shadow-sm">
         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" /> {badge}
       </span>
     </div>
